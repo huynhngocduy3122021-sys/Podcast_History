@@ -37,7 +37,7 @@ public class DatabaseSeeder implements ApplicationRunner {
 
     private void seedRole(String code, String name) {
         jdbcTemplate.update("""
-                INSERT INTO role (role_id, role_code, role_name, description, created_at)
+                INSERT INTO "Role" (role_id, role_code, role_name, description, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT (role_code) DO NOTHING
                 """,
