@@ -33,6 +33,9 @@ public class ProducerProfile extends UpdatedEntity {
     @Column(name = "verification_status", nullable = false, length = 30)
     private String verificationStatus;
 
+    @Column(name = "review_note", nullable = true, columnDefinition = "text")
+    private String reviewNote;
+
     public ProducerProfile() {
     }
 
@@ -97,6 +100,14 @@ public class ProducerProfile extends UpdatedEntity {
 
     public void setVerificationStatus(String verificationStatus) {
         this.verificationStatus = verificationStatus;
+    }
+
+    public String getReviewNote() {
+        return reviewNote;
+    }
+
+    public void setReviewNote(String reviewNote) {
+        this.reviewNote = reviewNote;
     }
 
 }

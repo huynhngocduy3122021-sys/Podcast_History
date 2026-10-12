@@ -52,13 +52,14 @@ public class SecurityConfig {
                                 "/v3/api-docs/**")
                         .permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/staff/**").hasRole("STAFF")
                         .requestMatchers("/api/creator/**").hasRole("CREATOR")
                         .requestMatchers("/api/uploads/**").authenticated()
                         .requestMatchers("/api/creator-applications/**").authenticated()
                         .requestMatchers("/api/auth/me")
                         .authenticated()
                         .anyRequest()
-                        .permitAll())
+                        .authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .build();

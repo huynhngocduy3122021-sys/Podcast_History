@@ -23,7 +23,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/creator-applications")
-@Tag(name = "Creator applications", description = "Đăng ký trở thành Creator")
+@Tag(name = "Creator applications", description = "Đăng ký Creator, trạng thái lưu tại Creator_profile.verification_status")
 @SecurityRequirement(name = "bearerAuth")
 public class CreatorApplicationController {
 

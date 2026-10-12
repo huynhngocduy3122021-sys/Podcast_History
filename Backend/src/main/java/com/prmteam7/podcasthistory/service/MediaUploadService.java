@@ -36,11 +36,31 @@ public class MediaUploadService {
     }
 
     public MediaUploadResponse upload(MultipartFile file, UUID userId) {
-        if (file == null || file.isEmpty()) {
-            throw new InvalidMediaUploadException("Vui lòng chọn một file ảnh hoặc video.");
+        UploadFileType fileType = validateAndResolveFile(file);
+        if (!fileType.contentType().startsWith("image/")) {
+            throw new InvalidMediaUploadException(
+                    "Video phải được upload qua API của podcast để liên kết đúng podcast.");
         }
+        return store(file, userId, null, fileType);
+    }
 
-        UploadFileType fileType = resolveFileType(file);
+    public MediaUploadResponse uploadPodcastVideo(MultipartFile file, UUID userId, UUID podcastId) {
+        UploadFileType fileType = validateAndResolveFile(file);
+        if (!fileType.contentType().startsWith("video/")) {
+            throw new InvalidMediaUploadException("API này chỉ chấp nhận file video.");
+        }
+        return store(file, userId, podcastId, fileType);
+    }
+
+    private UploadFileType validateAndResolveFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new InvalidMediaUploadException("Vui lòng chọn file media.");
+        }
+        return resolveFileType(file);
+    }
+
+    private MediaUploadResponse store(
+            MultipartFile file, UUID userId, UUID podcastId, UploadFileType fileType) {
         S3Client client = s3Client();
         Path tempFile = null;
 
@@ -48,8 +68,9 @@ public class MediaUploadService {
             tempFile = Files.createTempFile("podcast-history-upload-", safeExtension(file.getOriginalFilename()));
             file.transferTo(tempFile.toFile());
 
-            String objectKey = normalizeFolder(properties.getFolder())
-                    + "/" + userId + "/" + UUID.randomUUID() + safeExtension(file.getOriginalFilename());
+            String objectKey = normalizeFolder(properties.getFolder()) + "/" + userId
+                    + (podcastId == null ? "" : "/podcasts/" + podcastId)
+                    + "/" + UUID.randomUUID() + safeExtension(file.getOriginalFilename());
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(properties.getBucketName().trim())
                     .key(objectKey)
