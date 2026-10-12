@@ -8,16 +8,26 @@ import java.util.UUID;
 @Table(name = "\"Podcast\"", uniqueConstraints = {
         @UniqueConstraint(name = "uk_podcast_series_id_slug", columnNames = {"series_id", "slug"})
     }, indexes = {
-        @Index(name = "idx_podcast_series_id", columnList = "series_id")
+        @Index(name = "idx_podcast_series_id", columnList = "series_id"),
+        @Index(name = "idx_podcast_producer_profile_id", columnList = "producer_profile_id"),
+        @Index(name = "idx_podcast_category_id", columnList = "category_id")
     })
 public class Podcast extends UpdatedEntity {
     @Id
     @Column(name = "podcast_id", nullable = false, updatable = false)
     private UUID podcastId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "series_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "series_id", nullable = true)
     private Series series;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "producer_profile_id", nullable = false)
+    private ProducerProfile producerProfile;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "category_id", nullable = false)
+    private Category category;
 
     @Column(name = "title", nullable = false, length = 220)
     private String title;
@@ -28,10 +38,10 @@ public class Podcast extends UpdatedEntity {
     @Column(name = "description", nullable = true, columnDefinition = "text")
     private String description;
 
-    @Column(name = "media_url", nullable = false, columnDefinition = "text")
+    @Column(name = "media_url", nullable = true, columnDefinition = "text")
     private String mediaUrl;
 
-    @Column(name = "media_type", nullable = false, length = 20)
+    @Column(name = "media_type", nullable = true, length = 20)
     private String mediaType;
 
     @Column(name = "thumbnail_url", nullable = true, columnDefinition = "text")
@@ -45,6 +55,9 @@ public class Podcast extends UpdatedEntity {
 
     @Column(name = "status", nullable = false, length = 30)
     private String status;
+
+    @Column(name = "is_exclusive", nullable = false)
+    private Boolean isExclusive = false;
 
     @Column(name = "published_at", nullable = true)
     private Instant publishedAt;
@@ -73,6 +86,22 @@ public class Podcast extends UpdatedEntity {
 
     public void setSeries(Series series) {
         this.series = series;
+    }
+
+    public ProducerProfile getProducerProfile() {
+        return producerProfile;
+    }
+
+    public void setProducerProfile(ProducerProfile producerProfile) {
+        this.producerProfile = producerProfile;
+    }
+
+    public Category getCategory() {
+        return category;
+    }
+
+    public void setCategory(Category category) {
+        this.category = category;
     }
 
     public String getTitle() {
@@ -145,6 +174,14 @@ public class Podcast extends UpdatedEntity {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public Boolean getIsExclusive() {
+        return isExclusive;
+    }
+
+    public void setIsExclusive(Boolean isExclusive) {
+        this.isExclusive = isExclusive;
     }
 
     public Instant getPublishedAt() {

@@ -47,6 +47,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, message);
     }
 
+    @ExceptionHandler(InvalidFlowRequestException.class)
+    ResponseEntity<ApiError> handleInvalidFlowRequest(InvalidFlowRequestException exception) {
+        return error(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
     @ExceptionHandler(InvalidMediaUploadException.class)
     ResponseEntity<ApiError> handleInvalidMediaUpload(InvalidMediaUploadException exception) {
         return error(HttpStatus.BAD_REQUEST, exception.getMessage());
@@ -65,6 +70,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(R2UploadException.class)
     ResponseEntity<ApiError> handleR2Upload(R2UploadException exception) {
         return error(HttpStatus.BAD_GATEWAY, exception.getMessage());
+    }
+
+    @ExceptionHandler(MediaPlaybackException.class)
+    ResponseEntity<ApiError> handleMediaPlayback(MediaPlaybackException exception) {
+        return error(HttpStatus.BAD_GATEWAY, exception.getMessage());
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    ResponseEntity<ApiError> handleResourceNotFound(ResourceNotFoundException exception) {
+        return error(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(ResourceForbiddenException.class)
+    ResponseEntity<ApiError> handleResourceForbidden(ResourceForbiddenException exception) {
+        return error(HttpStatus.FORBIDDEN, exception.getMessage());
+    }
+
+    @ExceptionHandler(ResourceConflictException.class)
+    ResponseEntity<ApiError> handleResourceConflict(ResourceConflictException exception) {
+        return error(HttpStatus.CONFLICT, exception.getMessage());
     }
 
     private ResponseEntity<ApiError> error(HttpStatus status, String message) {

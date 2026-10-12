@@ -41,7 +41,7 @@ public class AdminCreatorApplicationController {
     }
 
     @PostMapping("/{applicationId}/approve")
-    @Operation(summary = "Duyệt hồ sơ và tạo kênh Creator")
+    @Operation(summary = "Duyệt hồ sơ Creator và chuyển vai trò User thành CREATOR")
     public CreatorApplicationResponse approve(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID applicationId,
@@ -51,7 +51,7 @@ public class AdminCreatorApplicationController {
     }
 
     @PostMapping("/{applicationId}/reject")
-    @Operation(summary = "Từ chối hồ sơ Creator")
+    @Operation(summary = "Từ chối hồ sơ Creator đang có verification_status=PENDING")
     public CreatorApplicationResponse reject(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID applicationId,
