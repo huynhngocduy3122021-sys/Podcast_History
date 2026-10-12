@@ -5,11 +5,11 @@ import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.prmteam7.podcasthistory.dto.response.ApiError;
-
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -45,6 +45,26 @@ public class GlobalExceptionHandler {
                 .map(fieldError -> fieldError.getDefaultMessage())
                 .orElse("Dữ liệu gửi lên không hợp lệ.");
         return error(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(InvalidMediaUploadException.class)
+    ResponseEntity<ApiError> handleInvalidMediaUpload(InvalidMediaUploadException exception) {
+        return error(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException exception) {
+        return error(HttpStatus.PAYLOAD_TOO_LARGE, "Dung lượng file vượt quá giới hạn cho phép.");
+    }
+
+    @ExceptionHandler(R2NotConfiguredException.class)
+    ResponseEntity<ApiError> handleR2NotConfigured(R2NotConfiguredException exception) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());
+    }
+
+    @ExceptionHandler(R2UploadException.class)
+    ResponseEntity<ApiError> handleR2Upload(R2UploadException exception) {
+        return error(HttpStatus.BAD_GATEWAY, exception.getMessage());
     }
 
     private ResponseEntity<ApiError> error(HttpStatus status, String message) {

@@ -7,8 +7,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "\"Comment\"", indexes = {
         @Index(name = "idx_comment_user_id", columnList = "user_id"),
-        @Index(name = "idx_comment_podcast_id", columnList = "podcast_id"),
-        @Index(name = "idx_comment_parent_comment_id", columnList = "parent_comment_id")
+        @Index(name = "idx_comment_podcast_id", columnList = "podcast_id")
     })
 public class Comment extends UpdatedEntity {
     @Id
@@ -22,10 +21,6 @@ public class Comment extends UpdatedEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "podcast_id", nullable = false)
     private Podcast podcast;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "parent_comment_id", nullable = true)
-    private Comment parentComment;
 
     @Column(name = "content", nullable = false, columnDefinition = "text")
     private String content;
@@ -68,14 +63,6 @@ public class Comment extends UpdatedEntity {
 
     public void setPodcast(Podcast podcast) {
         this.podcast = podcast;
-    }
-
-    public Comment getParentComment() {
-        return parentComment;
-    }
-
-    public void setParentComment(Comment parentComment) {
-        this.parentComment = parentComment;
     }
 
     public String getContent() {

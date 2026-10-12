@@ -10,10 +10,9 @@ import org.hibernate.annotations.Check;
         @Index(name = "idx_report_user_id", columnList = "user_id"),
         @Index(name = "idx_report_podcast_id", columnList = "podcast_id"),
         @Index(name = "idx_report_comment_id", columnList = "comment_id"),
-        @Index(name = "idx_report_message_id", columnList = "message_id"),
         @Index(name = "idx_report_livestream_id", columnList = "livestream_id")
     })
-@Check(constraints = "num_nonnulls(podcast_id, comment_id, message_id, livestream_id) = 1")
+@Check(constraints = "num_nonnulls(podcast_id, comment_id, livestream_id) = 1")
 public class Report extends BaseEntity {
     @Id
     @Column(name = "report_id", nullable = false, updatable = false)
@@ -30,10 +29,6 @@ public class Report extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "comment_id", nullable = true)
     private Comment comment;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "message_id", nullable = true)
-    private Message message;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "livestream_id", nullable = true)
@@ -91,14 +86,6 @@ public class Report extends BaseEntity {
 
     public void setComment(Comment comment) {
         this.comment = comment;
-    }
-
-    public Message getMessage() {
-        return message;
-    }
-
-    public void setMessage(Message message) {
-        this.message = message;
     }
 
     public Livestream getLivestream() {

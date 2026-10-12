@@ -1,6 +1,5 @@
 package com.prmteam7.podcasthistory.config;
 
-import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
@@ -24,15 +23,6 @@ public class DatabaseSeeder implements ApplicationRunner {
         seedRole("LISTENER", "Listener");
         seedRole("CREATOR", "Creator");
         seedRole("ADMIN", "Administrator");
-
-        Instant now = Instant.now();
-        jdbcTemplate.update("""
-                INSERT INTO system_wallet
-                    (system_wallet_id, wallet_code, name, balance, currency, status, created_at, updated_at)
-                VALUES (?, 'PLATFORM_MAIN', 'Platform main wallet', ?, 'VND', 'ACTIVE', ?, ?)
-                ON CONFLICT (wallet_code) DO NOTHING
-                """,
-                UUID.randomUUID(), BigDecimal.ZERO, Timestamp.from(now), Timestamp.from(now));
     }
 
     private void seedRole(String code, String name) {

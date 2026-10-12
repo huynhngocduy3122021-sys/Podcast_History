@@ -10,12 +10,11 @@ import org.hibernate.annotations.Check;
 @Entity
 @Table(name = "\"Wallet_Transaction\"", indexes = {
         @Index(name = "idx_wallet_transaction_user_wallet_id", columnList = "user_wallet_id"),
-        @Index(name = "idx_wallet_transaction_system_wallet_id", columnList = "system_wallet_id"),
-        @Index(name = "idx_wallet_transaction_producer_earning_id", columnList = "producer_earning_id"),
         @Index(name = "idx_wallet_transaction_withdrawal_request_id", columnList = "withdrawal_request_id"),
-        @Index(name = "idx_wallet_transaction_contract_id", columnList = "contract_id")
+        @Index(name = "idx_wallet_transaction_contract_id", columnList = "contract_id"),
+        @Index(name = "idx_wallet_transaction_payment_id", columnList = "payment_id")
     })
-@Check(constraints = "amount > 0 AND (user_wallet_id IS NOT NULL OR system_wallet_id IS NOT NULL OR contract_id IS NOT NULL)")
+@Check(constraints = "amount > 0 AND (user_wallet_id IS NOT NULL OR contract_id IS NOT NULL OR withdrawal_request_id IS NOT NULL OR payment_id IS NOT NULL)")
 public class WalletTransaction extends BaseEntity {
     @Id
     @Column(name = "wallet_transaction_id", nullable = false, updatable = false)
@@ -26,20 +25,16 @@ public class WalletTransaction extends BaseEntity {
     private UserWallet userWallet;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "system_wallet_id", nullable = true)
-    private SystemWallet systemWallet;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "producer_earning_id", nullable = true)
-    private ProducerEarning producerEarning;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "withdrawal_request_id", nullable = true)
     private WithdrawalRequest withdrawalRequest;
 
     @OneToOne(fetch = FetchType.LAZY, optional = true)
     @JoinColumn(name = "contract_id", nullable = true, unique = true)
     private Contract contract;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "payment_id", nullable = true)
+    private Payment payment;
 
     @Column(name = "transaction_type", nullable = false, length = 30)
     private String transactionType;
@@ -89,22 +84,6 @@ public class WalletTransaction extends BaseEntity {
         this.userWallet = userWallet;
     }
 
-    public SystemWallet getSystemWallet() {
-        return systemWallet;
-    }
-
-    public void setSystemWallet(SystemWallet systemWallet) {
-        this.systemWallet = systemWallet;
-    }
-
-    public ProducerEarning getProducerEarning() {
-        return producerEarning;
-    }
-
-    public void setProducerEarning(ProducerEarning producerEarning) {
-        this.producerEarning = producerEarning;
-    }
-
     public WithdrawalRequest getWithdrawalRequest() {
         return withdrawalRequest;
     }
@@ -119,6 +98,14 @@ public class WalletTransaction extends BaseEntity {
 
     public void setContract(Contract contract) {
         this.contract = contract;
+    }
+
+    public Payment getPayment() {
+        return payment;
+    }
+
+    public void setPayment(Payment payment) {
+        this.payment = payment;
     }
 
     public String getTransactionType() {

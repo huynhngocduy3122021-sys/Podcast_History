@@ -35,7 +35,7 @@ $env:DB_PASSWORD = '<your PostgreSQL password>'
 mvn spring-boot:run
 ```
 
-The backend maps 42 tables: the 32 tables in the latest ERD plus 10 legacy tables retained for existing project features. Hibernate creates or updates mapped tables on startup; it does not drop existing tables or data. The application seeds the three system roles and the `PLATFORM_MAIN` system wallet.
+The backend maps 34 tables: the 32 tables in the latest ERD plus 2 supporting tables for refresh-token authentication and creator applications. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds the three system roles.
 
 The server listens on `http://localhost:8081`. Check that it is running at:
 
@@ -48,6 +48,14 @@ It returns:
 ```json
 {"status":"UP","service":"podcast-history-backend"}
 ```
+
+## Cloudflare R2 image and video uploads
+
+Create an R2 bucket and an R2 API token with Object Read & Write permission for that bucket. Fill `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in `Backend/.env`. The endpoint format is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; R2 uses region `auto`. Spring Boot loads `.env` when started from either the repository root or the `Backend` directory. `Backend/.env` is ignored by Git; `.env.example` lists the variables. Restart the backend after changing the file.
+
+`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
+
+To test from Swagger, register and log in, authorize with the returned `accessToken`, then open `POST /api/uploads`, choose a small image or video for `file`, and execute it. A successful upload returns HTTP 201 with `objectKey`, `bucket`, `publicUrl`, `contentType`, and `bytes`. Verify that the object appears in the configured Cloudflare R2 bucket.
 
 For Flutter on an Android emulator, use `http://10.0.2.2:8081` as the API base URL. For Flutter on a physical device, use the computer's LAN IP address and ensure both devices are on the same network.
 
@@ -70,6 +78,8 @@ Content-Type: application/json
 ```
 
 Successful login returns `accessToken` (10 minutes) and `refreshToken` (7 days), plus the public user profile. Send `accessToken` in the `Authorization: Bearer <token>` header to call `GET /api/auth/me`. `POST /api/auth/refresh` accepts the current refresh token, revokes it, and returns a new token pair. Reusing a rotated token revokes the remaining token in that session. `POST /api/auth/logout` revokes the refresh-token session. Invalid credentials or refresh tokens receive HTTP 401.
+
+Set `JWT_SECRET` in `.env` to a private random string with at least 32 UTF-8 bytes. If it is omitted, the app creates a temporary key for local development, so tokens stop working after a restart.
 
 Open Swagger UI at `http://localhost:8081/swagger-ui.html`; the OpenAPI document is at `http://localhost:8081/v3/api-docs`. In Swagger, call `POST /api/auth/register`, then `POST /api/auth/login`; copy `accessToken`, choose **Authorize**, enter the access token, and call `GET /api/auth/me`. Use `refreshToken` only with the refresh and logout endpoints.
 

@@ -6,12 +6,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "\"Livetream\"", indexes = {
+        @Index(name = "idx_livestream_user_id", columnList = "user_id"),
         @Index(name = "idx_livestream_producer_profile_id", columnList = "producer_profile_id")
     })
 public class Livestream extends UpdatedEntity {
     @Id
     @Column(name = "livestream_id", nullable = false, updatable = false)
     private UUID livestreamId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_livestream_user"))
+    private AppUser user;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "producer_profile_id", nullable = false)
@@ -60,6 +65,14 @@ public class Livestream extends UpdatedEntity {
 
     public void setLivestreamId(UUID livestreamId) {
         this.livestreamId = livestreamId;
+    }
+
+    public AppUser getUser() {
+        return user;
+    }
+
+    public void setUser(AppUser user) {
+        this.user = user;
     }
 
     public ProducerProfile getProducerProfile() {
