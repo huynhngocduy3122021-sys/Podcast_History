@@ -2,6 +2,35 @@ import 'package:flutter/material.dart';
 
 void main() => runApp(const VietCastApp());
 
+enum UserRole { listener, creator, admin }
+
+class MockAccount {
+  const MockAccount(this.email, this.password, this.name, this.role);
+  final String email, password, name;
+  final UserRole role;
+}
+
+const mockAccounts = <MockAccount>[
+  MockAccount(
+    'listener@vietcast.local',
+    'Listener@123',
+    'Nguoi nghe',
+    UserRole.listener,
+  ),
+  MockAccount(
+    'creator@vietcast.local',
+    'Creator@123',
+    'Nguoi sang tao',
+    UserRole.creator,
+  ),
+  MockAccount(
+    'admin@vietcast.local',
+    'Admin@123',
+    'Quan tri vien',
+    UserRole.admin,
+  ),
+];
+
 class VietCastApp extends StatefulWidget {
   const VietCastApp({super.key});
   @override
@@ -10,6 +39,7 @@ class VietCastApp extends StatefulWidget {
 
 class _AppState extends State<VietCastApp> {
   ThemeMode mode = ThemeMode.light;
+  MockAccount? account;
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'VietCast',
@@ -30,12 +60,29 @@ class _AppState extends State<VietCastApp> {
         brightness: Brightness.dark,
       ),
     ),
-    home: Shell(
-      onTheme: () => setState(
-        () => mode = mode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light,
-      ),
-    ),
+    home: account == null
+        ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
+        : switch (account!.role) {
+            UserRole.listener => Shell(
+              onTheme: toggleTheme,
+              onLogout: logout,
+            ),
+            UserRole.creator => CreatorShell(
+              onTheme: toggleTheme,
+              onLogout: logout,
+            ),
+            UserRole.admin => AdminShell(
+              onTheme: toggleTheme,
+              onLogout: logout,
+            ),
+          },
   );
+
+  void toggleTheme() => setState(
+    () => mode = mode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light,
+  );
+
+  void logout() => setState(() => account = null);
 }
 
 class Show {
@@ -85,8 +132,9 @@ const shows = <Show>[
 ];
 
 class Shell extends StatefulWidget {
-  const Shell({super.key, required this.onTheme});
+  const Shell({super.key, required this.onTheme, required this.onLogout});
   final VoidCallback onTheme;
+  final VoidCallback onLogout;
   @override
   State<Shell> createState() => _ShellState();
 }
@@ -106,7 +154,7 @@ class _ShellState extends State<Shell> {
       Discover(onPlay: play),
       const LibraryPage(),
       const AlertPage(),
-      Profile(onTheme: widget.onTheme),
+      Profile(onTheme: widget.onTheme, onLogout: widget.onLogout),
     ];
     return Scaffold(
       body: SafeArea(bottom: false, child: pages[tab]),
@@ -170,6 +218,78 @@ class _ShellState extends State<Shell> {
   );
 }
 
+class CreatorShell extends StatelessWidget {
+  const CreatorShell({super.key, required this.onTheme, required this.onLogout});
+  final VoidCallback onTheme, onLogout;
+
+  @override
+  Widget build(BuildContext context) => ActorShell(
+    title: 'Creator Studio',
+    pages: [
+      const CreatorPage(),
+      const RequestPage(),
+      const WalletPage(),
+      Profile(onTheme: onTheme, onLogout: onLogout),
+    ],
+    destinations: const [
+      NavigationDestination(icon: Icon(Icons.mic), label: 'Studio'),
+      NavigationDestination(icon: Icon(Icons.assignment_outlined), label: 'Yeu cau'),
+      NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: 'Vi'),
+      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Ca nhan'),
+    ],
+  );
+}
+
+class AdminShell extends StatelessWidget {
+  const AdminShell({super.key, required this.onTheme, required this.onLogout});
+  final VoidCallback onTheme, onLogout;
+
+  @override
+  Widget build(BuildContext context) => ActorShell(
+    title: 'Admin VietCast',
+    pages: [
+      const AdminPage(),
+      const AlertPage(),
+      Profile(onTheme: onTheme, onLogout: onLogout),
+    ],
+    destinations: const [
+      NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
+      NavigationDestination(icon: Icon(Icons.notifications_none), label: 'Thong bao'),
+      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Ca nhan'),
+    ],
+  );
+}
+
+class ActorShell extends StatefulWidget {
+  const ActorShell({
+    super.key,
+    required this.title,
+    required this.pages,
+    required this.destinations,
+  });
+  final String title;
+  final List<Widget> pages;
+  final List<NavigationDestination> destinations;
+
+  @override
+  State<ActorShell> createState() => _ActorShellState();
+}
+
+class _ActorShellState extends State<ActorShell> {
+  int tab = 0;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(widget.title)),
+    body: SafeArea(child: widget.pages[tab]),
+    bottomNavigationBar: NavigationBar(
+      selectedIndex: tab,
+      onDestinationSelected: (index) => setState(() => tab = index),
+      destinations: widget.destinations,
+    ),
+  );
+}
+
 class Home extends StatelessWidget {
   const Home({super.key, required this.onPlay, required this.onSearch});
   final ValueChanged<Show> onPlay;
@@ -225,7 +345,7 @@ class Home extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               scrollDirection: Axis.horizontal,
               itemCount: shows.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
               itemBuilder: (_, i) => SizedBox(
                 width: 156,
                 child: ShowCard(show: shows[i], onPlay: () => onPlay(shows[i])),
@@ -509,8 +629,9 @@ class AlertPage extends StatelessWidget {
 }
 
 class Profile extends StatelessWidget {
-  const Profile({super.key, required this.onTheme});
+  const Profile({super.key, required this.onTheme, required this.onLogout});
   final VoidCallback onTheme;
+  final VoidCallback onLogout;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Ca nhan')),
@@ -537,24 +658,9 @@ class Profile extends StatelessWidget {
           onTap: onTheme,
         ),
         Setting(
-          icon: Icons.lock_outline,
-          title: 'Dang nhap / Dang ky',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AuthPage()),
-          ),
-        ),
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.dashboard_customize_outlined),
-            title: const Text('Trung tam VietCast'),
-            subtitle: const Text('Creator, vi, yeu cau, Admin, membership'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HubPage()),
-            ),
-          ),
+          icon: Icons.logout,
+          title: 'Dang xuat',
+          onTap: onLogout,
         ),
       ],
     ),
@@ -581,28 +687,70 @@ class Setting extends StatelessWidget {
 }
 
 class AuthPage extends StatefulWidget {
-  const AuthPage({super.key});
+  const AuthPage({super.key, required this.onAuthenticated});
+  final ValueChanged<MockAccount> onAuthenticated;
   @override
   State<AuthPage> createState() => _AuthState();
 }
 
 class _AuthState extends State<AuthPage> {
   bool register = false;
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  String? error;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
+
+  void login(MockAccount account) => widget.onAuthenticated(account);
+
+  void submit() {
+    if (register) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Dang ky mock thanh cong. Ban co the dang nhap ngay.')),
+      );
+      setState(() => register = false);
+      return;
+    }
+    final account = mockAccounts.where(
+      (item) => item.email == emailController.text.trim() &&
+          item.password == passwordController.text,
+    );
+    if (account.isEmpty) {
+      setState(() => error = 'Email hoac mat khau mock khong dung.');
+      return;
+    }
+    login(account.first);
+  }
+
   @override
   Widget build(BuildContext context) => PageFrame(
-    title: register ? 'Dang ky' : 'Dang nhap',
+    title: register ? 'Dang ky VietCast' : 'Dang nhap VietCast',
     children: [
+      const Icon(Icons.mic_external_on, size: 56, color: Color(0xFFB3261E)),
       Text(
         register ? 'Tao tai khoan VietCast' : 'Chao mung ban tro lai',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 20),
-      const TextField(decoration: InputDecoration(labelText: 'Email')),
+      TextField(
+        controller: emailController,
+        decoration: const InputDecoration(labelText: 'Email'),
+      ),
       const SizedBox(height: 12),
-      const TextField(
+      TextField(
+        controller: passwordController,
         obscureText: true,
         decoration: InputDecoration(labelText: 'Mat khau'),
       ),
+      if (error != null) ...[
+        const SizedBox(height: 8),
+        Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+      ],
       if (register) ...[
         const SizedBox(height: 16),
         const Text('Chu de quan tam'),
@@ -621,78 +769,35 @@ class _AuthState extends State<AuthPage> {
       ],
       const SizedBox(height: 20),
       FilledButton(
-        onPressed: () {},
+        onPressed: submit,
         child: Text(register ? 'Dang ky' : 'Dang nhap'),
       ),
+      if (!register) ...[
+        const SizedBox(height: 20),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Dang nhap nhanh bang tai khoan mock'),
+        ),
+        const SizedBox(height: 8),
+        ...mockAccounts.map(
+          (account) => OutlinedButton.icon(
+            onPressed: () => login(account),
+            icon: Icon(
+              switch (account.role) {
+                UserRole.listener => Icons.headphones,
+                UserRole.creator => Icons.mic,
+                UserRole.admin => Icons.admin_panel_settings,
+              },
+            ),
+            label: Text('${account.name} (${account.email})'),
+          ),
+        ),
+      ],
       TextButton(
         onPressed: () => setState(() => register = !register),
         child: Text(register ? 'Da co tai khoan?' : 'Chua co tai khoan?'),
       ),
     ],
-  );
-}
-
-class HubPage extends StatelessWidget {
-  const HubPage({super.key});
-  @override
-  Widget build(BuildContext context) => PageFrame(
-    title: 'Trung tam VietCast',
-    children: [
-      Text(
-        'Khong gian lam viec',
-        style: Theme.of(context).textTheme.headlineSmall,
-      ),
-      const SizedBox(height: 8),
-      const Text('Mock data san sang thay bang repository/API.'),
-      const SizedBox(height: 16),
-      HubTile(
-        title: 'Creator Studio',
-        icon: Icons.mic_external_on_outlined,
-        page: const CreatorPage(),
-      ),
-      HubTile(
-        title: 'Yeu cau podcast',
-        icon: Icons.assignment_outlined,
-        page: const RequestPage(),
-      ),
-      HubTile(
-        title: 'Vi Creator',
-        icon: Icons.account_balance_wallet_outlined,
-        page: const WalletPage(),
-      ),
-      HubTile(
-        title: 'Admin',
-        icon: Icons.admin_panel_settings_outlined,
-        page: const AdminPage(),
-      ),
-      HubTile(
-        title: 'Membership kenh',
-        icon: Icons.workspace_premium_outlined,
-        page: const MembershipPage(),
-      ),
-    ],
-  );
-}
-
-class HubTile extends StatelessWidget {
-  const HubTile({
-    super.key,
-    required this.title,
-    required this.icon,
-    required this.page,
-  });
-  final String title;
-  final IconData icon;
-  final Widget page;
-  @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      trailing: const Icon(Icons.chevron_right),
-      onTap: () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => page)),
-    ),
   );
 }
 
