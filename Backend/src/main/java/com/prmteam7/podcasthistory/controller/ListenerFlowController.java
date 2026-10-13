@@ -29,7 +29,6 @@ import com.prmteam7.podcasthistory.dto.request.ListenerRequests.ReportCreate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.ReportUpdate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestCreate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestUpdate;
-import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CategoryItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CreatorItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.FollowItem;
@@ -76,14 +75,8 @@ public class ListenerFlowController {
 
     @GetMapping("/podcasts/{podcastId}")
     @Operation(summary = "Xem chi tiết podcast")
-    public PodcastItem getPodcast(@PathVariable UUID podcastId) {
-        return listenerFlowService.getPodcast(podcastId);
-    }
-
-    @GetMapping("/categories")
-    @Operation(summary = "Danh sách category đang hoạt động")
-    public List<CategoryItem> getCategories() {
-        return listenerFlowService.getCategories();
+    public PodcastItem getPodcast(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
+        return listenerFlowService.getPodcast(userId(jwt), podcastId);
     }
 
     @GetMapping("/creators")

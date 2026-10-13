@@ -30,6 +30,11 @@ public class DatabaseSeeder implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        new ResourceDatabasePopulator(
+                new ClassPathResource("db/migrations/allow_podcast_drafts_without_media.sql"),
+                new ClassPathResource("db/migrations/remove_podcast_slug.sql"))
+                .execute(dataSource);
+
         seedRole("LISTENER", "Listener");
         seedRole("CREATOR", "Creator");
         seedRole("STAFF", "Staff");

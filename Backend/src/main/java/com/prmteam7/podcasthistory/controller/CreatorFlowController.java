@@ -100,7 +100,8 @@ public class CreatorFlowController {
     }
 
     @GetMapping("/podcasts/{podcastId}")
-    @Operation(summary = "Xem một podcast thuộc kênh Creator hiện tại")
+    @Operation(summary = "Xem podcast của Creator kèm URL video",
+            description = "Trả videoUrl và videoUrlExpiresAt; chưa upload hoặc đã xóa thì videoUrl là null.")
     public PodcastItem getPodcast(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
         return creatorFlowService.getPodcast(userId(jwt), podcastId);
     }

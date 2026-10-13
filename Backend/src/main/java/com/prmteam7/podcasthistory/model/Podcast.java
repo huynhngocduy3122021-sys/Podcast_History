@@ -5,9 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "\"Podcast\"", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_podcast_series_id_slug", columnNames = {"series_id", "slug"})
-    }, indexes = {
+@Table(name = "\"Podcast\"", indexes = {
         @Index(name = "idx_podcast_series_id", columnList = "series_id"),
         @Index(name = "idx_podcast_producer_profile_id", columnList = "producer_profile_id"),
         @Index(name = "idx_podcast_category_id", columnList = "category_id")
@@ -31,9 +29,6 @@ public class Podcast extends UpdatedEntity {
 
     @Column(name = "title", nullable = false, length = 220)
     private String title;
-
-    @Column(name = "slug", nullable = false, length = 240)
-    private String slug;
 
     @Column(name = "description", nullable = true, columnDefinition = "text")
     private String description;
@@ -110,14 +105,6 @@ public class Podcast extends UpdatedEntity {
 
     public void setTitle(String title) {
         this.title = title;
-    }
-
-    public String getSlug() {
-        return slug;
-    }
-
-    public void setSlug(String slug) {
-        this.slug = slug;
     }
 
     public String getDescription() {

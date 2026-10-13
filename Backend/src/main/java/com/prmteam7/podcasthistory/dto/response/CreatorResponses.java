@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.dto.response;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.prmteam7.podcasthistory.enums.PodcastVisibility;
 
 public final class CreatorResponses {
 
@@ -29,14 +30,16 @@ public final class CreatorResponses {
             UUID categoryId,
             String categoryName,
             String title,
-            String slug,
             String description,
             String mediaKey,
             String mediaType,
+            String videoUrl,
+            Instant videoUrlExpiresAt,
             String thumbnailUrl,
             Integer durationSeconds,
             Integer episodeNumber,
             Boolean exclusive,
+            PodcastVisibility visibility,
             String status,
             Instant publishedAt,
             Instant createdAt,
@@ -65,6 +68,8 @@ public final class CreatorResponses {
             String thumbnailUrl,
             Integer durationSeconds,
             Boolean exclusive,
+            PodcastVisibility visibility,
+            String status,
             Instant submittedAt) {
     }
 

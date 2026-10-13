@@ -142,8 +142,8 @@ public class ListenerFlowService {
     }
 
     @Transactional(readOnly = true)
-    public PodcastItem getPodcast(UUID podcastId) {
-        return toPodcastItem(requirePublishedPodcast(podcastId));
+    public PodcastItem getPodcast(UUID userId, UUID podcastId) {
+        return toPodcastItem(requireVisiblePodcast(userId, podcastId));
     }
 
     @Transactional(readOnly = true)
@@ -166,7 +166,7 @@ public class ListenerFlowService {
 
     @Transactional(readOnly = true)
     public PlaybackItem getPlayback(UUID userId, UUID podcastId) {
-        Podcast podcast = requirePublishedPodcast(podcastId);
+        Podcast podcast = requireVisiblePodcast(userId, podcastId);
         assertCanPlay(userId, podcast);
         String storedMedia = podcast.getMediaUrl();
         R2PlaybackUrlService.PlaybackUrl playback = playbackUrlService.create(
@@ -179,7 +179,7 @@ public class ListenerFlowService {
 
     @Transactional
     public ListeningHistoryItem saveProgress(UUID userId, UUID podcastId, ListeningProgress request) {
-        Podcast podcast = requirePublishedPodcast(podcastId);
+        Podcast podcast = requireVisiblePodcast(userId, podcastId);
         assertCanPlay(userId, podcast);
         AppUser user = requireUser(userId);
         ListeningHistory history = listeningHistoryRepository
@@ -497,7 +497,7 @@ public class ListenerFlowService {
     }
 
     private void assertCanPlay(UUID userId, Podcast podcast) {
-        if (!Boolean.TRUE.equals(podcast.getIsExclusive())) {
+        if (isOwner(userId, podcast) || !Boolean.TRUE.equals(podcast.getIsExclusive())) {
             return;
         }
         Instant now = Instant.now();
@@ -508,6 +508,30 @@ public class ListenerFlowService {
         if (!subscribed) {
             throw new ResourceForbiddenException("Podcast này dành riêng cho thành viên của kênh.");
         }
+    }
+
+    @Transactional(readOnly = true)
+    public void requireReferenceAccess(UUID userId, UUID podcastId) {
+        assertCanPlay(userId, requireVisiblePodcast(userId, podcastId));
+    }
+
+    private boolean isOwner(UUID userId, Podcast podcast) {
+        var profile = podcast.getProducerProfile();
+        var owner = profile.getUser();
+        return owner.getUserId().equals(userId)
+                && Boolean.TRUE.equals(owner.getIsActive())
+                && owner.getRole() != null && "CREATOR".equalsIgnoreCase(owner.getRole().getRoleCode())
+                && "APPROVED".equalsIgnoreCase(profile.getVerificationStatus());
+    }
+
+    private Podcast requireVisiblePodcast(UUID userId, UUID podcastId) {
+        requireUser(userId);
+        Podcast podcast = podcastRepository.findByPodcastId(podcastId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy podcast."));
+        if (!"DELETED".equalsIgnoreCase(podcast.getStatus()) && isOwner(userId, podcast)) {
+            return podcast;
+        }
+        return requirePublishedPodcast(podcastId);
     }
 
     private Podcast requirePublishedPodcast(UUID podcastId) {
@@ -581,10 +605,12 @@ public class ListenerFlowService {
         var series = podcast.getSeries();
         var creator = podcast.getProducerProfile();
         var category = podcast.getCategory();
-        return new PodcastItem(podcast.getPodcastId(), podcast.getTitle(), podcast.getSlug(),
+        return new PodcastItem(podcast.getPodcastId(), podcast.getTitle(),
                 podcast.getDescription(), podcast.getMediaType(), podcast.getThumbnailUrl(),
                 podcast.getDurationSeconds(), podcast.getEpisodeNumber(),
-                Boolean.TRUE.equals(podcast.getIsExclusive()), podcast.getPublishedAt(),
+                Boolean.TRUE.equals(podcast.getIsExclusive()),
+                com.prmteam7.podcasthistory.enums.PodcastVisibility.fromExclusive(podcast.getIsExclusive()),
+                podcast.getPublishedAt(),
                 series == null ? null : series.getSeriesId(), series == null ? null : series.getTitle(),
                 category.getCategoryId(), category.getName(),
                 creator.getProducerProfileId(), creator.getChannelName());

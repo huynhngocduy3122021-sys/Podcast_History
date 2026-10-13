@@ -15,24 +15,26 @@ import com.prmteam7.podcasthistory.model.Podcast;
 
 public interface PodcastRepository extends JpaRepository<Podcast, UUID> {
 
+    @EntityGraph(attributePaths = {"series", "category", "producerProfile", "producerProfile.user", "producerProfile.user.role"})
+    Optional<Podcast> findByPodcastId(UUID podcastId);
+
     @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
     List<Podcast> findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(UUID creatorId);
 
     @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
     Optional<Podcast> findByPodcastIdAndProducerProfile_ProducerProfileId(UUID podcastId, UUID creatorId);
 
-    boolean existsBySeries_SeriesIdAndSlugIgnoreCaseAndPodcastIdNot(UUID seriesId, String slug, UUID podcastId);
-
-    boolean existsByProducerProfile_ProducerProfileIdAndSlugIgnoreCase(UUID creatorId, String slug);
-
-    boolean existsByProducerProfile_ProducerProfileIdAndSlugIgnoreCaseAndPodcastIdNot(
-            UUID creatorId, String slug, UUID podcastId);
-
     @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
     List<Podcast> findAllBySeries_SeriesId(UUID seriesId);
 
     @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
     List<Podcast> findAllByStatusIgnoreCaseOrderByUpdatedAtAsc(String status);
+
+    @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
+    List<Podcast> findAllByOrderByCreatedAtDesc();
+
+    @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
+    List<Podcast> findAllByStatusIgnoreCaseOrderByCreatedAtDesc(String status);
 
     @Query("""
             select podcast from Podcast podcast
