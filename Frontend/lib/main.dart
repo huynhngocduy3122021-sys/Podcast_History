@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/theme/app_theme.dart';
+import 'features/creator_studio/presentation/views/creator_main_shell.dart';
+import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
-void main() => runApp(const VietCastApp());
+void main() => runApp(const ProviderScope(child: VietCastApp()));
 
 enum UserRole { listener, creator, admin }
 
@@ -41,27 +45,27 @@ class _AppState extends State<VietCastApp> {
   ThemeMode mode = ThemeMode.light;
   MockAccount? account;
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'VietCast',
-    debugShowCheckedModeBanner: false,
-    themeMode: mode,
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFB3261E),
-        brightness: Brightness.light,
-      ),
-      scaffoldBackgroundColor: const Color(0xFFFBF7F0),
-    ),
-    darkTheme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFE8665D),
-        brightness: Brightness.dark,
-      ),
-    ),
-    home: account == null
-        ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
+  Widget build(BuildContext context) => ProviderScope(
+    child: MaterialApp(
+      title: 'VietCast',
+      debugShowCheckedModeBanner: false,
+      themeMode: mode,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return ColoredBox(
+          color: isDark ? const Color(0xFF121212) : const Color(0xFFEFE8DE),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        );
+      },
+      home: account == null
+          ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
         : switch (account!.role) {
             UserRole.listener => Shell(onTheme: toggleTheme, onLogout: logout),
             UserRole.creator => CreatorShell(
@@ -73,6 +77,7 @@ class _AppState extends State<VietCastApp> {
               onLogout: logout,
             ),
           },
+    ),
   );
 
   void toggleTheme() => setState(
@@ -408,26 +413,9 @@ class CreatorShell extends StatelessWidget {
   final VoidCallback onTheme, onLogout;
 
   @override
-  Widget build(BuildContext context) => ActorShell(
-    title: 'Creator Studio',
-    pages: [
-      const CreatorPage(),
-      const RequestPage(),
-      const WalletPage(),
-      Profile(onTheme: onTheme, onLogout: onLogout),
-    ],
-    destinations: const [
-      NavigationDestination(icon: Icon(Icons.mic), label: 'Studio'),
-      NavigationDestination(
-        icon: Icon(Icons.assignment_outlined),
-        label: 'Yeu cau',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.account_balance_wallet_outlined),
-        label: 'Vi',
-      ),
-      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Ca nhan'),
-    ],
+  Widget build(BuildContext context) => CreatorMainShell(
+    onTheme: onTheme,
+    onLogout: onLogout,
   );
 }
 
@@ -1854,6 +1842,13 @@ class Profile extends StatelessWidget {
         ),
         const Center(child: Text('Nguoi nghe lich su Viet Nam')),
         const SizedBox(height: 20),
+        Setting(
+          icon: Icons.mic_rounded,
+          title: 'Dang ky lam Creator',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CreatorRegistrationScreen()),
+          ),
+        ),
         Setting(
           icon: Icons.dark_mode_outlined,
           title: 'Giao dien toi',
