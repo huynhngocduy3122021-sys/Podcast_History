@@ -1,0 +1,737 @@
+import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:podcast_history/core/theme/app_colors.dart';
+import 'package:podcast_history/core/theme/app_spacing.dart';
+import 'package:podcast_history/core/theme/app_typography.dart';
+import 'package:podcast_history/core/utils/formatters.dart';
+import 'package:podcast_history/core/widgets/app_button.dart';
+import 'package:podcast_history/core/widgets/error_state_widget.dart';
+import 'package:podcast_history/core/widgets/metric_card.dart';
+import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
+import 'package:podcast_history/core/widgets/status_chip.dart';
+import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+
+class CreatorDashboardScreen extends ConsumerStatefulWidget {
+  final Function(int tabIndex)? onNavigateTab;
+
+  const CreatorDashboardScreen({super.key, this.onNavigateTab});
+
+  @override
+  ConsumerState<CreatorDashboardScreen> createState() => _CreatorDashboardScreenState();
+}
+
+class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen> {
+  int _chartPeriodIndex = 0; // 0: 7 ngày, 1: 4 tuần, 2: 12 tháng
+
+  @override
+  Widget build(BuildContext context) {
+    final profileAsync = ref.watch(creatorProfileProvider);
+    final podcastsAsync = ref.watch(creatorPodcastsProvider);
+    final requestsAsync = ref.watch(creatorRequestsProvider);
+    final walletAsync = ref.watch(walletProvider);
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Creator Studio'),
+        actions: [
+          IconButton(
+            tooltip: 'Làm mới',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () {
+              ref.read(creatorProfileProvider.notifier).loadProfile();
+              ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+              ref.read(creatorRequestsProvider.notifier).loadRequests();
+              ref.read(walletProvider.notifier).loadWallet();
+            },
+          ),
+          IconButton(
+            tooltip: 'Hội viên kênh',
+            icon: const Icon(Icons.stars_rounded, color: AppColors.secondaryLight),
+            onPressed: () {
+              widget.onNavigateTab?.call(4);
+            },
+          ),
+        ],
+      ),
+      body: profileAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => ErrorStateWidget(
+          onRetry: () => ref.read(creatorProfileProvider.notifier).loadProfile(),
+        ),
+        data: (profile) {
+          final podcasts = podcastsAsync.value ?? [];
+          final requests = requestsAsync.value ?? [];
+          final wallet = walletAsync.value;
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              await ref.read(creatorProfileProvider.notifier).loadProfile();
+              await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+              await ref.read(creatorRequestsProvider.notifier).loadRequests();
+              await ref.read(walletProvider.notifier).loadWallet();
+            },
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.screenMargin),
+              children: [
+                // Header kênh
+                _buildChannelHeader(context, profile, isDark),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Banner gói Free vs Premium
+                _buildPlanLimitBanner(context, profile, isDark),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Lưới chỉ số thống kê (Metrics)
+                Text(
+                  'Tổng quan tháng này',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  children: [
+                    Expanded(
+                      child: MetricCard(
+                        title: 'Tổng lượt nghe',
+                        value: '45.2K',
+                        icon: Icons.headphones_rounded,
+                        trendText: '+18%',
+                        isPositiveTrend: true,
+                        onTap: () => widget.onNavigateTab?.call(1),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: MetricCard(
+                        title: 'Người theo dõi',
+                        value: AppFormatters.formatCompactNumber(profile.followersCount),
+                        icon: Icons.group_rounded,
+                        iconColor: AppColors.tertiaryLight,
+                        trendText: '+12%',
+                        isPositiveTrend: true,
+                        onTap: () => widget.onNavigateTab?.call(1),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: MetricCard(
+                        title: 'Doanh thu tháng',
+                        value: AppFormatters.formatVND(wallet?.available ?? 6850000),
+                        icon: Icons.account_balance_wallet_rounded,
+                        iconColor: AppColors.success,
+                        trendText: '+24%',
+                        isPositiveTrend: true,
+                        onTap: () => widget.onNavigateTab?.call(3),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: MetricCard(
+                        title: 'Chờ release',
+                        value: AppFormatters.formatVND(wallet?.pending ?? 1200000),
+                        icon: Icons.hourglass_bottom_rounded,
+                        iconColor: AppColors.warning,
+                        subtitle: 'Từ 2 đơn hoàn tất',
+                        onTap: () => widget.onNavigateTab?.call(3),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // Biểu đồ lượt nghe
+                _buildGrowthChart(context, isDark),
+                const SizedBox(height: AppSpacing.xl),
+
+                // Yêu cầu podcast cần xử lý nhanh
+                _buildQuickRequestsSection(context, requests, isDark),
+                const SizedBox(height: AppSpacing.xl),
+
+                // Podcast mới đăng & trạng thái
+                _buildRecentPodcastsSection(context, podcasts, isDark),
+                const SizedBox(height: AppSpacing.xxl),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildChannelHeader(BuildContext context, CreatorProfile profile, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E2631),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF25221F), const Color(0xFF151311)]
+              : [const Color(0xFF222C3A), const Color(0xFF141A23)],
+        ),
+        borderRadius: AppSpacing.roundedMd,
+        image: DecorationImage(
+          image: NetworkImage(profile.bannerUrl),
+          fit: BoxFit.cover,
+          onError: (e, s) {},
+          colorFilter: ColorFilter.mode(
+            Colors.black.withValues(alpha: 0.72),
+            BlendMode.darken,
+          ),
+        ),
+        border: Border.all(color: isDark ? AppColors.outlineDark : const Color(0xFF334155)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 34,
+                  backgroundImage: NetworkImage(profile.avatarUrl),
+                  backgroundColor: AppColors.surfaceVariantLight,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            profile.name,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.3,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (profile.isVerified) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF60A5FA)),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      profile.handle,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        color: Color(0xFFE2E8F0),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        if (profile.isPremium)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: AppSpacing.roundedPill,
+                              border: Border.all(color: const Color(0xFFF59E0B)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.workspace_premium_rounded, size: 14, color: Color(0xFFB45309)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Studio Premium ★',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: AppSpacing.roundedPill,
+                              border: Border.all(color: Colors.white38),
+                            ),
+                            child: const Text(
+                              'Gói Creator Free',
+                              style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            profile.bio,
+            style: const TextStyle(fontSize: 13, color: Color(0xFFF1F5F9), height: 1.45, fontWeight: FontWeight.w400),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1, color: Colors.white24),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              _buildHeaderStat('Tracks', '${profile.currentPodcastCount}'),
+              const SizedBox(width: AppSpacing.xl),
+              _buildHeaderStat('Followers', AppFormatters.formatCompactNumber(profile.followersCount)),
+              const Spacer(),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.cloud_upload_rounded, size: 16),
+                label: const Text('Đăng bài mới', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryLight,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: const Size(0, 36),
+                ),
+                onPressed: () => widget.onNavigateTab?.call(1),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderStat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w700, letterSpacing: 0.6),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPlanLimitBanner(BuildContext context, CreatorProfile profile, bool isDark) {
+    if (profile.isPremium) return const SizedBox.shrink();
+
+    final remaining = profile.maxFreePodcasts - profile.currentPodcastCount;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.secondaryLight.withValues(alpha: 0.15),
+            AppColors.primaryLight.withValues(alpha: 0.08),
+          ],
+        ),
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(color: AppColors.secondaryLight.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: const BoxDecoration(
+              color: AppColors.secondaryLight,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.workspace_premium_rounded, size: 24, color: Colors.white),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Đã đăng ${profile.currentPodcastCount}/${profile.maxFreePodcasts} podcast',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  remaining > 0
+                      ? 'Bạn còn $remaining lượt đăng podcast miễn phí.'
+                      : 'Đã đạt giới hạn gói Free. Nâng cấp để đăng không giới hạn.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          AppButton(
+            label: 'Nâng cấp',
+            height: 36,
+            onPressed: () {
+              widget.onNavigateTab?.call(4); // Sang tab Thêm / Premium
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGrowthChart(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Tăng trưởng lượt nghe',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              SegmentedButton<int>(
+                segments: const [
+                  ButtonSegment(value: 0, label: Text('7N', style: TextStyle(fontSize: 11))),
+                  ButtonSegment(value: 1, label: Text('4T', style: TextStyle(fontSize: 11))),
+                  ButtonSegment(value: 2, label: Text('12T', style: TextStyle(fontSize: 11))),
+                ],
+                selected: {_chartPeriodIndex},
+                onSelectionChanged: (set) {
+                  setState(() => _chartPeriodIndex = set.first);
+                },
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+                    strokeWidth: 0.5,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 32,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}K',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        const days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+                        if (value.toInt() >= 0 && value.toInt() < days.length) {
+                          return Text(
+                            days[value.toInt()],
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: const [
+                      FlSpot(0, 3.2),
+                      FlSpot(1, 4.5),
+                      FlSpot(2, 4.0),
+                      FlSpot(3, 6.8),
+                      FlSpot(4, 5.9),
+                      FlSpot(5, 8.4),
+                      FlSpot(6, 9.6),
+                    ],
+                    isCurved: true,
+                    color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: true),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.15),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickRequestsSection(BuildContext context, List<PodcastRequest> requests, bool isDark) {
+    final pendingRequests = requests.where((r) => r.status == CustomRequestStatus.sent).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Yêu cầu podcast mới từ người nghe',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            TextButton(
+              onPressed: () => widget.onNavigateTab?.call(2), // Sang tab Đơn đặt
+              child: const Text('Xem tất cả'),
+            ),
+          ],
+        ),
+        if (pendingRequests.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+              borderRadius: AppSpacing.roundedMd,
+              border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.mark_email_read_rounded, color: AppColors.success),
+                const SizedBox(width: AppSpacing.md),
+                Text(
+                  'Không có đơn yêu cầu mới cần xử lý.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ...pendingRequests.take(2).map(
+            (req) => Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                borderRadius: AppSpacing.roundedMd,
+                border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundImage: NetworkImage(req.listenerAvatar),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            req.listenerName,
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        AppFormatters.formatVND(req.totalBudget),
+                        style: AppTypography.tabularNumbers(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    req.topic,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    req.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      AppButton(
+                        label: 'Xem chi tiết đơn',
+                        height: 36,
+                        onPressed: () => widget.onNavigateTab?.call(2),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRecentPodcastsSection(BuildContext context, List<CreatorPodcast> podcasts, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Tracks vừa xuất bản',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
+            TextButton(
+              onPressed: () => widget.onNavigateTab?.call(1), // Sang tab Podcast
+              child: const Text('Xem tất cả tracks'),
+            ),
+          ],
+        ),
+        ...podcasts.take(3).map(
+          (pod) => Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+              borderRadius: AppSpacing.roundedMd,
+              border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: AppSpacing.roundedSm,
+                      child: Image.network(
+                        pod.coverUrl,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            pod.title,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              StatusChip(
+                                label: pod.statusDisplay,
+                                type: pod.statusType,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Text(
+                                AppFormatters.formatDuration(pod.duration),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                // Mini waveform preview kiểu SoundCloud
+                const SoundCloudWaveform(
+                  progress: 0.4,
+                  height: 30,
+                  showComments: false,
+                  isInteractive: false,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
