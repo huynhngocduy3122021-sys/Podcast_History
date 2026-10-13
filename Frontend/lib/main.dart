@@ -1007,6 +1007,23 @@ class _AudioResultTile extends StatelessWidget {
   );
 }
 
+class PlaylistData {
+  PlaylistData({
+    required this.name,
+    required this.description,
+    required this.showTitles,
+    required this.colors,
+    this.isDefault = false,
+    this.coverIndex = 0,
+  });
+  String name;
+  String description;
+  final List<String> showTitles;
+  final List<Color> colors;
+  final bool isDefault;
+  int coverIndex;
+}
+
 class LibraryPage extends StatefulWidget {
   const LibraryPage({
     super.key,
@@ -1024,32 +1041,41 @@ class LibraryPage extends StatefulWidget {
 
 class _LibraryPageState extends State<LibraryPage> {
   String selected = 'liked';
-  final playlists = <String, Set<String>>{};
+  final customPlaylists = <PlaylistData>[];
 
   List<Show> get liked =>
       shows.where((show) => widget.likedTitles.contains(show.title)).toList();
 
-  List<Show> get saved =>
-      shows.where((show) => widget.savedTitles.contains(show.title)).toList();
+  PlaylistData get listenLater => PlaylistData(
+    name: 'Nghe sau',
+    description: 'Nhung podcast ban da luu de nghe sau',
+    showTitles: widget.savedTitles.toList(),
+    colors: const [Color(0xFF7A3F31), Color(0xFFE0B84A)],
+    isDefault: true,
+  );
 
-  List<Show> get playlistShows => selected == 'liked'
-      ? liked
-      : selected == 'playlist'
-      ? saved
-      : shows
-            .where((show) => playlists[selected]?.contains(show.title) ?? false)
-            .toList();
+  List<PlaylistData> get allPlaylists => [listenLater, ...customPlaylists];
 
   Future<void> createPlaylist() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+    final nameController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final result = await showDialog<(String, String)>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Tao playlist'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Ten playlist'),
+        title: const Text('Tao playlist moi'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Ten playlist'),
+            ),
+            TextField(
+              controller: descriptionController,
+              decoration: const InputDecoration(labelText: 'Mo ta'),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -1057,108 +1083,486 @@ class _LibraryPageState extends State<LibraryPage> {
             child: const Text('Huy'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Tao'),
+            onPressed: () => Navigator.pop(context, (
+              nameController.text.trim(),
+              descriptionController.text.trim(),
+            )),
+            child: const Text('Tao playlist'),
           ),
         ],
       ),
     );
-    controller.dispose();
-    if (!mounted || name == null || name.isEmpty) return;
+    nameController.dispose();
+    descriptionController.dispose();
+    if (!mounted || result == null || result.$1.isEmpty) return;
     setState(() {
-      playlists[name] = {...widget.savedTitles};
-      selected = name;
+      customPlaylists.add(
+        PlaylistData(
+          name: result.$1,
+          description: result.$2.isEmpty
+              ? 'Playlist ca nhan cua ban'
+              : result.$2,
+          showTitles: widget.savedTitles.toList(),
+          colors: const [Color(0xFF254A50), Color(0xFF93B4A4)],
+        ),
+      );
     });
   }
+
+  Future<void> openPlaylist(PlaylistData playlist) async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            PlaylistDetailScreen(playlist: playlist, onOpen: widget.onOpen),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => CustomScrollView(
+    slivers: [
+      const SliverAppBar(title: Text('Thu vien'), pinned: true),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'liked', label: Text('Da thich')),
+              ButtonSegment(value: 'playlist', label: Text('Playlist')),
+            ],
+            selected: {selected},
+            onSelectionChanged: (value) =>
+                setState(() => selected = value.first),
+          ),
+        ),
+      ),
+      if (selected == 'liked') ...[
+        if (liked.isEmpty)
+          const SliverToBoxAdapter(child: PlaylistEmptyState(kind: 'liked'))
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (_, index) => _LikedAudioTile(
+                show: liked[index],
+                onOpen: () => widget.onOpen(liked[index]),
+              ),
+              childCount: liked.length,
+            ),
+          ),
+      ] else ...[
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Playlist cua ban',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: createPlaylist,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Tao moi'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: PlaylistList(playlists: allPlaylists, onOpen: openPlaylist),
+        ),
+      ],
+      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    ],
+  );
+}
+
+class PlaylistList extends StatelessWidget {
+  const PlaylistList({
+    super.key,
+    required this.playlists,
+    required this.onOpen,
+  });
+  final List<PlaylistData> playlists;
+  final ValueChanged<PlaylistData> onOpen;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Column(
+      children: playlists
+          .map(
+            (playlist) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: PlaylistCard(
+                playlist: playlist,
+                onTap: () => onOpen(playlist),
+              ),
+            ),
+          )
+          .toList(),
+    ),
+  );
+}
+
+class PlaylistCard extends StatelessWidget {
+  const PlaylistCard({super.key, required this.playlist, required this.onTap});
+  final PlaylistData playlist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            PlaylistArtwork(playlist: playlist, size: 76),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    playlist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${playlist.showTitles.length} podcast',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    playlist.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onTap,
+              tooltip: 'Mo playlist',
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class PlaylistArtwork extends StatelessWidget {
+  const PlaylistArtwork({
+    super.key,
+    required this.playlist,
+    required this.size,
+  });
+  final PlaylistData playlist;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(14),
+      gradient: LinearGradient(
+        colors: playlist.coverIndex.isEven
+            ? playlist.colors
+            : playlist.colors.reversed.toList(),
+      ),
+    ),
+    child: const Icon(Icons.queue_music, color: Colors.white, size: 30),
+  );
+}
+
+class PlaylistEmptyState extends StatelessWidget {
+  const PlaylistEmptyState({super.key, required this.kind});
+  final String kind;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(32, 80, 32, 40),
+    child: Column(
+      children: [
+        Icon(
+          kind == 'liked' ? Icons.favorite_border : Icons.queue_music,
+          size: 64,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(height: 16),
+        Text(
+          kind == 'liked'
+              ? 'Chua co audio yeu thich'
+              : 'Playlist nay chua co podcast',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Kham pha podcast moi va luu lai de nghe sau.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 18),
+        FilledButton.tonalIcon(
+          onPressed: () {},
+          icon: const Icon(Icons.explore_outlined),
+          label: const Text('Kham pha podcast'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _LikedAudioTile extends StatelessWidget {
+  const _LikedAudioTile({required this.show, required this.onOpen});
+  final Show show;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    child: ListTile(
+      onTap: onOpen,
+      contentPadding: const EdgeInsets.all(10),
+      leading: Art(show: show, size: 64),
+      title: Text(show.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+      subtitle: Text('${show.channel}  •  ${show.duration}'),
+      trailing: IconButton(
+        onPressed: onOpen,
+        icon: const Icon(Icons.play_circle_outline),
+      ),
+    ),
+  );
+}
+
+class PlaylistDetailScreen extends StatefulWidget {
+  const PlaylistDetailScreen({
+    super.key,
+    required this.playlist,
+    required this.onOpen,
+  });
+  final PlaylistData playlist;
+  final ValueChanged<Show> onOpen;
+
+  @override
+  State<PlaylistDetailScreen> createState() => _PlaylistDetailScreenState();
+}
+
+class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
+  List<Show> get playlistShows => widget.playlist.showTitles
+      .map((title) => shows.where((show) => show.title == title).firstOrNull)
+      .whereType<Show>()
+      .toList();
+
+  String get totalDuration {
+    final minutes = playlistShows.fold<int>(0, (sum, show) {
+      final parts = show.duration.split(':');
+      return sum + (int.tryParse(parts.first) ?? 0);
+    });
+    return '${minutes ~/ 60}h ${minutes % 60}m';
+  }
+
+  Future<void> editPlaylist() async {
+    final nameController = TextEditingController(text: widget.playlist.name);
+    final descriptionController = TextEditingController(
+      text: widget.playlist.description,
+    );
+    final result = await showDialog<(String, String)>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Chinh sua playlist'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Ten playlist'),
+            ),
+            TextField(
+              controller: descriptionController,
+              decoration: const InputDecoration(labelText: 'Mo ta'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Huy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, (
+              nameController.text.trim(),
+              descriptionController.text.trim(),
+            )),
+            child: const Text('Luu'),
+          ),
+        ],
+      ),
+    );
+    nameController.dispose();
+    descriptionController.dispose();
+    if (!mounted || result == null || result.$1.isEmpty) return;
+    setState(() {
+      widget.playlist.name = result.$1;
+      widget.playlist.description = result.$2;
+    });
+  }
+
+  void removeAt(int index) => setState(() {
+    widget.playlist.showTitles.removeAt(index);
+  });
+
+  void reorder(int oldIndex, int newIndex) => setState(() {
+    final title = widget.playlist.showTitles.removeAt(oldIndex);
+    widget.playlist.showTitles.insert(newIndex, title);
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = playlistShows;
-    return CustomScrollView(
-      slivers: [
-        const SliverAppBar(title: Text('Thu vien'), pinned: true),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'liked', label: Text('Da thich')),
-                ButtonSegment(value: 'playlist', label: Text('Playlist')),
-              ],
-              selected: {selected == 'liked' ? 'liked' : 'playlist'},
-              onSelectionChanged: (value) =>
-                  setState(() => selected = value.first),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.playlist.name),
+        actions: [
+          if (!widget.playlist.isDefault)
+            IconButton(
+              onPressed: editPlaylist,
+              tooltip: 'Chinh sua playlist',
+              icon: const Icon(Icons.edit_outlined),
             ),
-          ),
-        ),
-        if (selected == 'playlist')
+        ],
+      ),
+      body: CustomScrollView(
+        slivers: [
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Column(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FilledButton.tonalIcon(
-                    onPressed: createPlaylist,
-                    icon: const Icon(Icons.create_new_folder_outlined),
-                    label: const Text('Tao playlist moi'),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
+                  Stack(
                     children: [
-                      ChoiceChip(
-                        label: Text('Nghe sau (${saved.length})'),
-                        selected: selected == 'playlist',
-                        onSelected: (_) =>
-                            setState(() => selected = 'playlist'),
-                      ),
-                      ...playlists.keys.map(
-                        (name) => ChoiceChip(
-                          label: Text(name),
-                          selected: selected == name,
-                          onSelected: (_) => setState(() => selected = name),
+                      PlaylistArtwork(playlist: widget.playlist, size: 120),
+                      if (!widget.playlist.isDefault)
+                        Positioned(
+                          right: 4,
+                          bottom: 4,
+                          child: IconButton.filledTonal(
+                            onPressed: () => setState(
+                              () => widget.playlist.coverIndex =
+                                  (widget.playlist.coverIndex + 1) % 4,
+                            ),
+                            tooltip: 'Doi anh bia',
+                            icon: const Icon(Icons.image_outlined, size: 18),
+                          ),
                         ),
-                      ),
                     ],
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.playlist.name,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(widget.playlist.description),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${items.length} podcast  •  $totalDuration',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-        if (items.isEmpty)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                selected == 'liked'
-                    ? 'Chua co audio yeu thich.'
-                    : 'Chua co audio trong playlist nay.',
-              ),
-            ),
-          )
-        else
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (_, index) => Card(
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: ListTile(
-                  onTap: () => widget.onOpen(items[index]),
-                  contentPadding: const EdgeInsets.all(10),
-                  leading: Art(show: items[index], size: 64),
-                  title: Text(items[index].title),
-                  subtitle: Text(items[index].channel),
-                  trailing: IconButton(
-                    onPressed: () => widget.onOpen(items[index]),
-                    tooltip: 'Mo va phat',
-                    icon: const Icon(Icons.play_circle_outline),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: items.isEmpty
+                          ? null
+                          : () => widget.onOpen(items.first),
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Phat tat ca'),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  IconButton.filledTonal(
+                    onPressed: items.isEmpty
+                        ? null
+                        : () {
+                            final shuffled = [...items]..shuffle();
+                            widget.onOpen(shuffled.first);
+                          },
+                    tooltip: 'Phat ngau nhien',
+                    icon: const Icon(Icons.shuffle),
+                  ),
+                ],
               ),
-              childCount: items.length,
             ),
           ),
-      ],
+          if (items.isEmpty)
+            const SliverToBoxAdapter(
+              child: PlaylistEmptyState(kind: 'playlist'),
+            )
+          else
+            SliverReorderableList(
+              itemCount: items.length,
+              itemBuilder: (_, index) {
+                final show = items[index];
+                return Card(
+                  key: ValueKey('${widget.playlist.name}-${show.title}'),
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: ListTile(
+                    leading: ReorderableDragStartListener(
+                      index: index,
+                      child: Art(show: show, size: 56),
+                    ),
+                    title: Text(
+                      show.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text('${show.channel}  •  ${show.duration}'),
+                    onTap: () => widget.onOpen(show),
+                    trailing: PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'remove') removeAt(index);
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'remove',
+                          child: Text('Xoa khoi playlist'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+              onReorderItem: reorder,
+            ),
+        ],
+      ),
     );
   }
 }
