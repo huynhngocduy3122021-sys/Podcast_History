@@ -50,12 +50,6 @@ public class R2PlaybackUrlService {
         }
 
         String objectKey = storedMediaUrl.trim().replaceFirst("^/+", "");
-        if (properties.getPublicBaseUrl() != null
-                && !properties.getPublicBaseUrl().isBlank()
-                && !exclusive) {
-            String baseUrl = properties.getPublicBaseUrl().replaceAll("/+$", "");
-            return new PlaybackUrl(baseUrl + "/" + objectKey, null);
-        }
 
         try {
             var request = GetObjectRequest.builder()

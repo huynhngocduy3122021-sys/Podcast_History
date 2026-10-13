@@ -9,5 +9,6 @@ import com.prmteam7.podcasthistory.model.SeriesRequest;
 
 public interface SeriesRequestRepository extends JpaRepository<SeriesRequest, UUID> {
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"producerProfile"})
     List<SeriesRequest> findAllByUser_UserIdOrderByCreatedAtDesc(UUID userId);
 }

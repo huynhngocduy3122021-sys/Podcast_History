@@ -2,6 +2,19 @@
 
 REST API for the Flutter application, built with Java 17, Maven, Spring Boot 4.1.1, Spring Data JPA, and PostgreSQL 18.
 
+## Admin and Staff operations
+
+See [Admin/Staff API guide](../docs/ADMIN_STAFF_API.md) for dashboard, user access,
+reports, moderation preview/history, appeals, contract disputes, membership plans,
+manual payment reconciliation/refunds and withdrawal review. Staff handles content;
+Admin handles users, roles and finance. AI moderation is deferred.
+
+The additive schema migration is `db/migrations/2026-10-13_admin_operations.sql`.
+With the current `ddl-auto=update`, restarting applies entity schema additions.
+Builds do not update a running backend process. Local CORS is enabled; configure
+`APP_CORS_ALLOWED_ORIGINS` for a deployed frontend. Locking users or changing their
+roles revokes old sessions using `User.token_version`.
+
 ## Package layout
 
 Application code is organized by responsibility under `com.prmteam7.podcasthistory`:
@@ -122,3 +135,7 @@ For an existing database, apply [`db/migrations/2026-10-12_optional_podcast_seri
 Each video upload is explicitly linked by the route's `podcastId`: `POST /api/creator/podcasts/{podcastId}/video`. The service checks channel ownership. Uploading a replacement video for an already approved podcast moves it to `DRAFT` for review again. Submission requires a video and changes the state to `PENDING_REVIEW`. Admin endpoints are `GET /api/admin/podcasts/pending-review`, `POST /api/admin/podcasts/{podcastId}/approve`, and `POST /api/admin/podcasts/{podcastId}/reject`. Decisions are recorded in `Moderation_Review`; on approval the podcast becomes `APPROVED` and gets `published_at`.
 
 Creators can read and post comments using the existing podcast comment APIs with their access token. The current Comment model has no parent-comment field, so threaded replies to a specific comment are not represented. The ERD's `Membership_Plan` and `Subscription` model listener support for a specific channel, so they are not reused for Creator Premium. Creator Premium billing, interaction forms, livestream, and automatic AI moderation still need their own business rules/integration; the current review queue is handled manually by Admin.
+
+## API regression tests
+
+Run: python scripts/api_regression.py (Java 17, Maven, PostgreSQL 18 and Python 3 required). Uses an isolated disposable database and local S3 stub. See ../docs/API_REGRESSION_RESULTS_2026-10-13.md for results and limitations.
