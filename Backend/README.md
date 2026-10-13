@@ -66,7 +66,7 @@ It returns:
 
 Create an R2 bucket and an R2 API token with Object Read & Write permission for that bucket. Fill `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in `Backend/.env`. The endpoint format is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; R2 uses region `auto`. Spring Boot loads `.env` when started from either the repository root or the `Backend` directory. `Backend/.env` is ignored by Git; `.env.example` lists the variables. Restart the backend after changing the file.
 
-`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file` and is for images. Podcast videos must use `POST /api/creator/podcasts/{podcastId}/video`; the backend checks that the podcast belongs to the signed-in Creator, uploads under a podcast-specific object key, and stores that key and content type in the Podcast row. This prevents an uploaded video from being left unattached to a podcast. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
+`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It accepts image, video, and audio media and returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
 
 To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its video with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. An Admin reviews the queue at `GET /api/admin/podcasts/pending-review` and approves or rejects it. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series. Images can still be uploaded through `POST /api/uploads`.
 
@@ -126,16 +126,29 @@ An Admin approves with `POST /api/admin/creator-applications/{applicationId}/app
 
 Development credentials and the startup seeding behavior are documented in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role and cannot access `/api/admin/**`.
 
-## Content Creator podcast flow
+```sql
+UPDATE "User"
+SET role_id = (SELECT role_id FROM "Role" WHERE role_code = 'ADMIN')
+WHERE email = 'admin@example.com';
+```
 
-Only a user with role `CREATOR`, an active account, and `Creator_profile.verification_status=APPROVED` can manage Creator content. Use `/api/creator/series` for series CRUD and `/api/creator/podcasts` for podcast CRUD. A podcast belongs directly to the Creator's channel and a category; `seriesId` is optional. The create/update podcast body requires `categoryId`, `title`, `slug`, `durationSeconds`, and `exclusive`, but does not require a series. A Creator may attach or detach the podcast from a series they own without changing its approval state or its category. `GET /api/creator/series/{seriesId}/podcasts` lists its assigned podcasts, and the listener catalog can filter by `seriesId`. Archiving a series detaches its podcasts, which remain on the channel. Podcast delete is a soft `DELETED` state. A podcast starts as `DRAFT`; its video is optional until upload and is stored as an R2 object key in `Podcast.media_url`. Editing an already approved podcast moves it back to draft and requires Admin approval again before it appears publicly.
+## Listener podcast requests and milestones
 
-For an existing database, apply [`db/migrations/2026-10-12_optional_podcast_series.sql`](db/migrations/2026-10-12_optional_podcast_series.sql) before starting this version. It copies the creator and category of every existing podcast from its current series, then makes `series_id` nullable. The old series links are preserved. For a newly created empty database, Hibernate's default `ddl-auto=update` creates the new columns.
+Apply `db/migrations/2026-10-13_podcast_request_milestones.sql` to an existing database before deploying this workflow. It adds milestone amounts, upload/revision/dispute history, and a unique payment-per-milestone constraint. New installations using Hibernate `ddl-auto=update` create the mapped tables automatically.
 
-Each video upload is explicitly linked by the route's `podcastId`: `POST /api/creator/podcasts/{podcastId}/video`. The service checks channel ownership. Uploading a replacement video for an already approved podcast moves it to `DRAFT` for review again. Submission requires a video and changes the state to `PENDING_REVIEW`. Admin endpoints are `GET /api/admin/podcasts/pending-review`, `POST /api/admin/podcasts/{podcastId}/approve`, and `POST /api/admin/podcasts/{podcastId}/reject`. Decisions are recorded in `Moderation_Review`; on approval the podcast becomes `APPROVED` and gets `published_at`.
+All amounts are decimal values with up to two fractional digits; currency defaults to `USD` and is stored as a three-letter code.
 
-Creators can read and post comments using the existing podcast comment APIs with their access token. The current Comment model has no parent-comment field, so threaded replies to a specific comment are not represented. The ERD's `Membership_Plan` and `Subscription` model listener support for a specific channel, so they are not reused for Creator Premium. Creator Premium billing, interaction forms, livestream, and automatic AI moderation still need their own business rules/integration; the current review queue is handled manually by Admin.
+- `POST /api/requests` — Listener submits `creatorProfileId`, `requestedTitle`, `description`, and optional `requestFee`/`currency`.
+- `GET /api/requests/me` — Listener lists submitted requests.
+- `GET /api/creator/requests/incoming` — Creator lists pending incoming requests.
+- `POST /api/creator/requests/{requestId}/accept` — Creator accepts and defines `responseText` and a non-empty `milestones` array (`name`, optional `description`, `amount`).
+- `POST /api/creator/requests/{requestId}/reject` — Creator rejects with `responseText`.
+- `GET /api/requests/{requestId}/milestones` — Request participants retrieve milestones and related payment IDs.
+- `POST /api/creator/milestones/{milestoneId}/submissions` — Creator submits a file and optional note as multipart form data. Audio files such as MP3, M4A, WAV, OGG, Opus, and FLAC are supported by the shared upload service.
+- `GET /api/milestones/{milestoneId}/submissions` — Participants (and Admin) view submission history.
+- `POST /api/listener/milestones/{milestoneId}/approve` — The Listener who created the request approves the submitted milestone.
+- `POST /api/listener/milestones/{milestoneId}/revision` — That Listener requests a revision with a `reason`.
+- `POST /api/milestones/{milestoneId}/disputes` — Either contract participant opens a dispute with a `reason`.
+- `GET /api/admin/disputes/open` and `POST /api/admin/disputes/{disputeId}/resolve` — Admin lists and resolves disputes. Resolution decision is `APPROVE_MILESTONE` or `REQUEST_REVISION`, with a required `note`.
 
-## API regression tests
-
-Run: python scripts/api_regression.py (Java 17, Maven, PostgreSQL 18 and Python 3 required). Uses an isolated disposable database and local S3 stub. See ../docs/API_REGRESSION_RESULTS_2026-10-13.md for results and limitations.
+Approval creates one `Payment` with status `PENDING` and returns its ID. This project does not yet integrate a payment provider; `PENDING` is not proof of payment, and a provider callback/confirmation endpoint must be integrated before treating the milestone as paid. Business-rule violations return HTTP 409; missing workflow records return HTTP 404.
