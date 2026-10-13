@@ -1,183 +1,213 @@
 package com.prmteam7.podcasthistory.model;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import org.hibernate.annotations.Check;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "\"Payment\"", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_payment_provider_transaction_id", columnNames = {"provider_transaction_id"})
-    }, indexes = {
-        @Index(name = "idx_payment_user_id", columnList = "user_id"),
-        @Index(name = "idx_payment_subscription_id", columnList = "subscription_id"),
-        @Index(name = "idx_payment_series_request_id", columnList = "series_request_id"),
-        @Index(name = "idx_payment_contract_stage_id", columnList = "contract_stage_id")
+@Table(
+    name = "\"Payment\"",
+    uniqueConstraints = {
+      @UniqueConstraint(
+          name = "uk_payment_provider_transaction_id",
+          columnNames = {"provider_transaction_id"})
+    },
+    indexes = {
+      @Index(name = "idx_payment_user_id", columnList = "user_id"),
+      @Index(name = "idx_payment_subscription_id", columnList = "subscription_id"),
+      @Index(name = "idx_payment_series_request_id", columnList = "series_request_id"),
+      @Index(name = "idx_payment_contract_stage_id", columnList = "contract_stage_id")
     })
-@Check(constraints = "(subscription_id IS NOT NULL AND series_request_id IS NULL AND contract_stage_id IS NULL) OR (subscription_id IS NULL AND series_request_id IS NOT NULL AND contract_stage_id IS NULL) OR (subscription_id IS NULL AND series_request_id IS NULL AND contract_stage_id IS NOT NULL)")
+@Check(
+    constraints =
+        "(subscription_id IS NOT NULL AND series_request_id IS NULL AND contract_stage_id IS NULL)"
+            + " OR (subscription_id IS NULL AND series_request_id IS NOT NULL AND contract_stage_id"
+            + " IS NULL) OR (subscription_id IS NULL AND series_request_id IS NULL AND"
+            + " contract_stage_id IS NOT NULL)")
 public class Payment extends BaseEntity {
-    @Id
-    @Column(name = "payment_id", nullable = false, updatable = false)
-    private UUID paymentId;
+  @Column(name = "refund_reference", length = 180, unique = true)
+  private String refundReference;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private AppUser user;
+  @Column(name = "refunded_at")
+  private Instant refundedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "subscription_id", nullable = true)
-    private Subscription subscription;
+  public String getRefundReference() {
+    return refundReference;
+  }
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "series_request_id", nullable = true)
-    private SeriesRequest seriesRequest;
+  public void setRefundReference(String value) {
+    refundReference = value;
+  }
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = true)
-    @JoinColumn(name = "contract_stage_id", nullable = true)
-    private ContractStage contractStage;
+  public Instant getRefundedAt() {
+    return refundedAt;
+  }
 
-    @OneToMany(mappedBy = "payment", fetch = FetchType.LAZY)
-    private Set<PaymentMethod> paymentMethods = new HashSet<>();
+  public void setRefundedAt(Instant value) {
+    refundedAt = value;
+  }
 
-    @Column(name = "amount", nullable = false, precision = 12, scale = 2)
-    private BigDecimal amount;
+  @Id
+  @Column(name = "payment_id", nullable = false, updatable = false)
+  private UUID paymentId;
 
-    @JdbcTypeCode(SqlTypes.CHAR)
-    @Column(name = "currency", nullable = false, length = 3, columnDefinition = "char(3)")
-    private String currency;
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "user_id", nullable = false)
+  private AppUser user;
 
-    @Column(name = "payment_method_code", nullable = true, length = 40)
-    private String paymentMethod;
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  @JoinColumn(name = "subscription_id", nullable = true)
+  private Subscription subscription;
 
-    @Column(name = "provider", nullable = true, length = 60)
-    private String provider;
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  @JoinColumn(name = "series_request_id", nullable = true)
+  private SeriesRequest seriesRequest;
 
-    @Column(name = "provider_transaction_id", nullable = true, length = 180)
-    private String providerTransactionId;
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  @JoinColumn(name = "contract_stage_id", nullable = true)
+  private ContractStage contractStage;
 
-    @Column(name = "status", nullable = false, length = 30)
-    private String status;
+  @OneToMany(mappedBy = "payment", fetch = FetchType.LAZY)
+  private Set<PaymentMethod> paymentMethods = new HashSet<>();
 
-    @Column(name = "paid_at", nullable = true)
-    private Instant paidAt;
+  @Column(name = "amount", nullable = false, precision = 12, scale = 2)
+  private BigDecimal amount;
 
-    public Payment() {
+  @JdbcTypeCode(SqlTypes.CHAR)
+  @Column(name = "currency", nullable = false, length = 3, columnDefinition = "char(3)")
+  private String currency;
+
+  @Column(name = "payment_method_code", nullable = true, length = 40)
+  private String paymentMethod;
+
+  @Column(name = "provider", nullable = true, length = 60)
+  private String provider;
+
+  @Column(name = "provider_transaction_id", nullable = true, length = 180)
+  private String providerTransactionId;
+
+  @Column(name = "status", nullable = false, length = 30)
+  private String status;
+
+  @Column(name = "paid_at", nullable = true)
+  private Instant paidAt;
+
+  public Payment() {}
+
+  @PrePersist
+  private void assignId() {
+    if (paymentId == null) {
+      paymentId = UUID.randomUUID();
     }
+  }
 
-    @PrePersist
-    private void assignId() {
-        if (paymentId == null) {
-            paymentId = UUID.randomUUID();
-        }
-    }
+  public UUID getPaymentId() {
+    return paymentId;
+  }
 
-    public UUID getPaymentId() {
-        return paymentId;
-    }
+  public void setPaymentId(UUID paymentId) {
+    this.paymentId = paymentId;
+  }
 
-    public void setPaymentId(UUID paymentId) {
-        this.paymentId = paymentId;
-    }
+  public AppUser getUser() {
+    return user;
+  }
 
-    public AppUser getUser() {
-        return user;
-    }
+  public void setUser(AppUser user) {
+    this.user = user;
+  }
 
-    public void setUser(AppUser user) {
-        this.user = user;
-    }
+  public Subscription getSubscription() {
+    return subscription;
+  }
 
-    public Subscription getSubscription() {
-        return subscription;
-    }
+  public void setSubscription(Subscription subscription) {
+    this.subscription = subscription;
+  }
 
-    public void setSubscription(Subscription subscription) {
-        this.subscription = subscription;
-    }
+  public SeriesRequest getSeriesRequest() {
+    return seriesRequest;
+  }
 
-    public SeriesRequest getSeriesRequest() {
-        return seriesRequest;
-    }
+  public void setSeriesRequest(SeriesRequest seriesRequest) {
+    this.seriesRequest = seriesRequest;
+  }
 
-    public void setSeriesRequest(SeriesRequest seriesRequest) {
-        this.seriesRequest = seriesRequest;
-    }
+  public ContractStage getContractStage() {
+    return contractStage;
+  }
 
-    public ContractStage getContractStage() {
-        return contractStage;
-    }
+  public void setContractStage(ContractStage contractStage) {
+    this.contractStage = contractStage;
+  }
 
-    public void setContractStage(ContractStage contractStage) {
-        this.contractStage = contractStage;
-    }
+  public Set<PaymentMethod> getPaymentMethods() {
+    return paymentMethods;
+  }
 
-    public Set<PaymentMethod> getPaymentMethods() {
-        return paymentMethods;
-    }
+  public void setPaymentMethods(Set<PaymentMethod> paymentMethods) {
+    this.paymentMethods = paymentMethods;
+  }
 
-    public void setPaymentMethods(Set<PaymentMethod> paymentMethods) {
-        this.paymentMethods = paymentMethods;
-    }
+  public BigDecimal getAmount() {
+    return amount;
+  }
 
-    public BigDecimal getAmount() {
-        return amount;
-    }
+  public void setAmount(BigDecimal amount) {
+    this.amount = amount;
+  }
 
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
+  public String getCurrency() {
+    return currency;
+  }
 
-    public String getCurrency() {
-        return currency;
-    }
+  public void setCurrency(String currency) {
+    this.currency = currency;
+  }
 
-    public void setCurrency(String currency) {
-        this.currency = currency;
-    }
+  public String getPaymentMethod() {
+    return paymentMethod;
+  }
 
-    public String getPaymentMethod() {
-        return paymentMethod;
-    }
+  public void setPaymentMethod(String paymentMethod) {
+    this.paymentMethod = paymentMethod;
+  }
 
-    public void setPaymentMethod(String paymentMethod) {
-        this.paymentMethod = paymentMethod;
-    }
+  public String getProvider() {
+    return provider;
+  }
 
-    public String getProvider() {
-        return provider;
-    }
+  public void setProvider(String provider) {
+    this.provider = provider;
+  }
 
-    public void setProvider(String provider) {
-        this.provider = provider;
-    }
+  public String getProviderTransactionId() {
+    return providerTransactionId;
+  }
 
-    public String getProviderTransactionId() {
-        return providerTransactionId;
-    }
+  public void setProviderTransactionId(String providerTransactionId) {
+    this.providerTransactionId = providerTransactionId;
+  }
 
-    public void setProviderTransactionId(String providerTransactionId) {
-        this.providerTransactionId = providerTransactionId;
-    }
+  public String getStatus() {
+    return status;
+  }
 
-    public String getStatus() {
-        return status;
-    }
+  public void setStatus(String status) {
+    this.status = status;
+  }
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+  public Instant getPaidAt() {
+    return paidAt;
+  }
 
-    public Instant getPaidAt() {
-        return paidAt;
-    }
-
-    public void setPaidAt(Instant paidAt) {
-        this.paidAt = paidAt;
-    }
-
+  public void setPaidAt(Instant paidAt) {
+    this.paidAt = paidAt;
+  }
 }

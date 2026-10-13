@@ -95,10 +95,10 @@ Nếu yêu cầu được xử lý như podcast đặt làm có hợp đồng, m
 | Phát podcast và lưu tiến độ | Đã có API | `GET /api/podcasts/{id}/playback`; `PUT /api/podcasts/{id}/listening-progress`; CRUD lịch sử dưới `/api/me/listening-history`. URL R2 riêng tư có chữ ký sống 5 phút. |
 | Like, comment, realtime comment, report | Đã có API | Like idempotent; comment có CRUD/xóa mềm và SSE tại `/api/podcasts/{id}/comments/stream`; report CRUD chỉ cho báo cáo của chính user, chỉ sửa/rút khi còn `PENDING`. |
 | Follow creator và danh sách đã lưu | Đã có API | CRUD follow và `SavedPodcast` trên `/api/me`; chưa hỗ trợ playlist tùy chỉnh nhiều danh sách. |
-| Membership và nội dung độc quyền | Một phần | Đã đọc plan, tạo checkout `PENDING`, xem/hủy subscription; chưa có cổng thanh toán/callback nên checkout chưa kích hoạt membership. Podcast có `is_exclusive`; backend kiểm tra subscription khi cấp playback URL. Bucket phải private và podcast phải lưu objectKey R2 để bảo vệ nội dung độc quyền. |
+| Membership và nội dung độc quyền | Có đối soát thủ công, chưa có gateway tự động | Admin quản lý plan và xác minh chuyển khoản qua `/api/admin/payments/{id}/reconcile`; PAID kích hoạt membership ACTIVE. Listener tạo checkout PENDING, xem/hủy subscription. Bucket phải private để bảo vệ media độc quyền. Xem ADMIN_STAFF_API.md. |
 | Gửi yêu cầu creator từ membership | Đã có API phía Listener | CRUD yêu cầu của chính Listener dưới `/api/me/series-requests`; tạo mới cần membership `ACTIVE` cùng kênh. API creator phản hồi yêu cầu thuộc luồng CC, chưa nằm trong Flow 1. |
 
-Các API của Flow 1 dùng JWT và lấy chủ sở hữu từ claim `user_id`; client không gửi user ID để thao tác thay người khác. Danh sách được phân trang và giới hạn tối đa 100 phần tử mỗi trang. Checkout membership hiện chỉ ghi `Payment` và `Subscription` ở trạng thái `PENDING`; không có endpoint client tự xác nhận thanh toán. Cổng thanh toán và callback ký số là phần tích hợp tiếp theo.
+Các API của Flow 1 dùng JWT và lấy chủ sở hữu từ claim `user_id`; client không gửi user ID để thao tác thay người khác. Các API trả Page giới hạn tối đa 100 phần tử mỗi trang; một số API List cũ vẫn chưa phân trang. Checkout membership ghi Payment và Subscription PENDING; Listener không tự xác nhận thanh toán. Admin có thể đối soát chuyển khoản thủ công để kích hoạt ACTIVE; gateway/webhook ký số là phần tích hợp tiếp theo.
 
 ### 1.11. Các quyết định cần chốt trước khi triển khai
 
@@ -126,7 +126,9 @@ Các API của Flow 1 dùng JWT và lấy chủ sở hữu từ claim `user_id`;
 2. Xem các dashboard.
 3. Quản lý người dùng và duyệt người dùng/đơn đăng ký trở thành Content Creator.
 4. Xử lý báo cáo do người dùng gửi và các yêu cầu cần Admin giải quyết.
-5. Podcast được AI kiểm duyệt tự động trước. Admin xem xét những podcast mà AI không duyệt được.
+5. Admin/Staff xem video/PDF và kiểm duyệt thủ công. AI moderation chưa triển khai theo yêu cầu hiện tại.
+
+Các API quản trị đã bổ sung: dashboard, user/Staff, report, preview/history podcast, khiếu nại, hợp đồng/tranh chấp, membership-plan, đối soát/hoàn tiền thủ công, ví và duyệt rút tiền. Staff chỉ xử lý nội dung/report/khiếu nại và xem dashboard; Admin quản lý quyền/tài khoản/tài chính. Xem [ADMIN_STAFF_API.md](ADMIN_STAFF_API.md) để biết endpoint, body, trạng thái và các giới hạn tích hợp.
 
 ## 3. Nhà sáng tạo nội dung (CC)
 
@@ -172,4 +174,4 @@ Premium Creator, giới hạn số podcast theo gói, biểu mẫu tương tác,
 
 - Chỉ giải ngân từng mốc podcast theo yêu cầu sau khi người dùng phê duyệt mốc đó.
 - Khi rút tiền thất bại, số tiền đã giữ phải được hoàn lại để không làm mất số dư của CC.
-- Luồng kiểm duyệt podcast có bước AI trước, Admin xử lý các trường hợp AI không duyệt được.
+- Hiện kiểm duyệt podcast thủ công qua Admin/Staff; bước AI được hoãn. Chuyển khoản/rút tiền đang được Admin đối soát thủ công, không tự gọi ngân hàng.

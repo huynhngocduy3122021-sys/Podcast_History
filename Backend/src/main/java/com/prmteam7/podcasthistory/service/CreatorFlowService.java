@@ -204,7 +204,21 @@ public class CreatorFlowService {
         Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
         requireEditable(podcast);
 
+        String previousKey = podcast.getMediaUrl();
         MediaUploadResponse media = mediaUploadService.uploadPodcastVideo(file, userId, podcastId);
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    String key = status == STATUS_COMMITTED ? previousKey : media.objectKey();
+                    try {
+                        mediaUploadService.deletePodcastVideo(key, userId, podcastId);
+                    } catch (RuntimeException failure) {
+                        org.slf4j.LoggerFactory.getLogger(CreatorFlowService.class)
+                            .warn("Không thể dọn video R2 của podcast {}", podcastId, failure);
+                    }
+                }
+            });
         podcast.setMediaUrl(media.objectKey());
         podcast.setMediaType(media.contentType());
         podcastRepository.save(podcast);
