@@ -1,30 +1,54 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:podcast_history/main.dart';
+import 'test_helper.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  setUpAll(() {
+    HttpOverrides.global = TestHttpOverrides();
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('VietCast starts at auth and enters listener home', (tester) async {
+    await tester.pumpWidget(const VietCastApp());
+    expect(find.text('Dang nhap VietCast'), findsOneWidget);
+    expect(find.text('Nguoi nghe (listener@vietcast.local)'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.tap(find.text('Nguoi nghe (listener@vietcast.local)'));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Minh Anh'), findsOneWidget);
+    expect(find.text('Danh cho ban'), findsOneWidget);
+  });
+
+  testWidgets('VietCast enters Creator Studio', (tester) async {
+    await tester.pumpWidget(const VietCastApp());
+    expect(find.text('Nguoi sang tao (creator@vietcast.local)'), findsOneWidget);
+
+    await tester.tap(find.text('Nguoi sang tao (creator@vietcast.local)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Creator Studio'), findsOneWidget);
+    expect(find.text('Tổng quan tháng này'), findsOneWidget);
+
+    // Verify bottom navigation bar buttons work
+    await tester.tap(find.text('Podcast'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quản lý Podcast'), findsOneWidget);
+
+    await tester.tap(find.text('Đơn đặt'));
+    await tester.pumpAndSettle();
+    expect(find.text('Đơn đặt Podcast (Custom Request)'), findsOneWidget);
+
+    await tester.tap(find.text('Ví tiền'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ví & Thu nhập Creator'), findsOneWidget);
+
+    await tester.tap(find.text('Tiện ích'));
+    await tester.pumpAndSettle();
+    expect(find.text('Công cụ & Cài đặt Studio'), findsOneWidget);
+
+    await tester.tap(find.text('Tổng quan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Creator Studio'), findsOneWidget);
   });
 }

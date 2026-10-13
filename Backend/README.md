@@ -2,6 +2,19 @@
 
 REST API for the Flutter application, built with Java 17, Maven, Spring Boot 4.1.1, Spring Data JPA, and PostgreSQL 18.
 
+## Admin and Staff operations
+
+See [Admin/Staff API guide](../docs/ADMIN_STAFF_API.md) for dashboard, user access,
+reports, moderation preview/history, appeals, contract disputes, membership plans,
+manual payment reconciliation/refunds and withdrawal review. Staff handles content;
+Admin handles users, roles and finance. AI moderation is deferred.
+
+The additive schema migration is `db/migrations/2026-10-13_admin_operations.sql`.
+With the current `ddl-auto=update`, restarting applies entity schema additions.
+Builds do not update a running backend process. Local CORS is enabled; configure
+`APP_CORS_ALLOWED_ORIGINS` for a deployed frontend. Locking users or changing their
+roles revokes old sessions using `User.token_version`.
+
 ## Package layout
 
 Application code is organized by responsibility under `com.prmteam7.podcasthistory`:
@@ -35,7 +48,7 @@ $env:DB_PASSWORD = '<your PostgreSQL password>'
 mvn spring-boot:run
 ```
 
-The backend maps 34 tables: the 32 tables in the latest ERD plus 2 supporting tables for refresh-token authentication and creator applications. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds the three system roles.
+The backend maps the latest ERD plus a supporting refresh-token table. Creator applications use `Creator_profile.verification_status`; there is no separate creator-application table. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds system roles and, in the default local `dev` profile, the shared development accounts described in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md).
 
 The server listens on `http://localhost:8081`. Check that it is running at:
 
@@ -55,9 +68,27 @@ Create an R2 bucket and an R2 API token with Object Read & Write permission for 
 
 `POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It accepts image, video, and audio media and returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
 
-To test from Swagger, register and log in, authorize with the returned `accessToken`, then open `POST /api/uploads`, choose a small image or video for `file`, and execute it. A successful upload returns HTTP 201 with `objectKey`, `bucket`, `publicUrl`, `contentType`, and `bytes`. Verify that the object appears in the configured Cloudflare R2 bucket.
+To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its video with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. An Admin reviews the queue at `GET /api/admin/podcasts/pending-review` and approves or rejects it. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series. Images can still be uploaded through `POST /api/uploads`.
 
 For Flutter on an Android emulator, use `http://10.0.2.2:8081` as the API base URL. For Flutter on a physical device, use the computer's LAN IP address and ensure both devices are on the same network.
+
+## Listener flow API
+
+All `/api` routes below require `Authorization: Bearer <accessToken>`, except health, authentication and Swagger. User-specific writes take the owner ID from the JWT.
+
+| Feature | Routes |
+|---|---|
+| Explore | `GET /api/podcasts?q=&categoryId=&creatorId=&seriesId=&page=0&size=20`, `GET /api/podcasts/{podcastId}`, `GET /api/categories`, `GET /api/creators`, `GET /api/creators/{creatorId}` |
+| Playback/history | `GET /api/podcasts/{podcastId}/playback`; `PUT /api/podcasts/{podcastId}/listening-progress`; `GET /api/me/listening-history`; `GET/DELETE /api/me/listening-history/{podcastId}` |
+| Likes | `GET /api/podcasts/{podcastId}/likes`; `PUT/DELETE /api/podcasts/{podcastId}/like` |
+| Comments | `GET/POST /api/podcasts/{podcastId}/comments`; `GET /api/podcasts/{podcastId}/comments/stream` (SSE); `PUT/DELETE /api/comments/{commentId}` |
+| Reports | `POST /api/reports`; `GET /api/me/reports`; `PATCH/DELETE /api/me/reports/{reportId}`. Only `PENDING` reports can be edited or withdrawn. |
+| Following | `GET /api/me/follows`; `PUT/DELETE /api/creators/{creatorId}/follow` |
+| Saved podcasts | `GET /api/me/saved-podcasts`; `PUT/DELETE /api/me/saved-podcasts/{podcastId}` |
+| Membership | `GET /api/creators/{creatorId}/membership-plans`; `GET/POST /api/me/subscriptions`; `DELETE /api/me/subscriptions/{subscriptionId}` |
+| Creator requests | `GET /api/me/series-requests`; `POST /api/creators/{creatorId}/series-requests`; `PUT/DELETE /api/me/series-requests/{requestId}` |
+
+Membership checkout currently creates a `PENDING` subscription and payment record. It does not grant access or mark payment successful; connect a payment provider and verify its signed callback before enabling membership. Listener series requests start with a zero request fee; any paid custom-production contract belongs to Flow 4. The `is_exclusive` column defaults to `false` and is added by Hibernate `ddl-auto=update` or `db/migrations/2026-10-12_add_podcast_exclusive.sql`. For exclusive media, store the R2 object key in `Podcast.media_url` and keep the R2 bucket private; playback responses use a five-minute signed URL.
 
 ## Authentication API and Swagger
 
@@ -89,11 +120,11 @@ The database stores refresh-token hashes, not raw refresh tokens, and checks tha
 
 ## Creator channel approval
 
-A logged-in Listener submits a channel application through `POST /api/creator-applications` with `channelName`, `introduction`, and optional `portfolioUrl`. They can check the latest result through `GET /api/creator-applications/me`. Applications are stored as `PENDING` and appear for admins at `GET /api/admin/creator-applications/pending`.
+A logged-in Listener submits a channel application through `POST /api/creator-applications` with `channelName`, `introduction`, and optional `portfolioUrl`. The request is stored on `Creator_profile` with `verification_status=PENDING`; the user remains a Listener while waiting. They can check the status through `GET /api/creator-applications/me`. Pending profiles appear for admins at `GET /api/admin/creator-applications/pending`.
 
-An Admin approves with `POST /api/admin/creator-applications/{applicationId}/approve` (optional `note`) or rejects with `POST /api/admin/creator-applications/{applicationId}/reject` (required `note`). Approval creates the Creator profile and changes the user's role to `CREATOR`; requests under `/api/creator/**` require that role. The account should refresh its JWT or log in again to receive a token containing the new role.
+An Admin approves with `POST /api/admin/creator-applications/{applicationId}/approve` (optional `note`) or rejects with `POST /api/admin/creator-applications/{applicationId}/reject` (required `note`). Approval changes `Creator_profile.verification_status` to `APPROVED` and the user's role to `CREATOR`; requests under `/api/creator/**` require that role. The account should refresh its JWT or log in again to receive a token containing the new role.
 
-The seeder creates the `ADMIN` role, but does not create an admin account. To initialize one, register the account normally and run this once in PostgreSQL, replacing the email with that account's email; then log in again:
+Development credentials and the startup seeding behavior are documented in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role and cannot access `/api/admin/**`.
 
 ```sql
 UPDATE "User"
