@@ -39,6 +39,7 @@ public class CreatorFlowService {
     private final SeriesRepository seriesRepository;
     private final PodcastRepository podcastRepository;
     private final MediaUploadService mediaUploadService;
+    private final R2PlaybackUrlService playbackUrlService;
 
     public CreatorFlowService(
             AppUserRepository appUserRepository,
@@ -46,13 +47,15 @@ public class CreatorFlowService {
             CategoryRepository categoryRepository,
             SeriesRepository seriesRepository,
             PodcastRepository podcastRepository,
-            MediaUploadService mediaUploadService) {
+            MediaUploadService mediaUploadService,
+            R2PlaybackUrlService playbackUrlService) {
         this.appUserRepository = appUserRepository;
         this.producerProfileRepository = producerProfileRepository;
         this.categoryRepository = categoryRepository;
         this.seriesRepository = seriesRepository;
         this.podcastRepository = podcastRepository;
         this.mediaUploadService = mediaUploadService;
+        this.playbackUrlService = playbackUrlService;
     }
 
     @Transactional(readOnly = true)
@@ -139,21 +142,19 @@ public class CreatorFlowService {
     @Transactional(readOnly = true)
     public PodcastItem getPodcast(UUID userId, UUID podcastId) {
         ProducerProfile profile = approvedCreator(userId);
-        return toPodcastItem(ownedPodcast(podcastId, profile.getProducerProfileId()));
+        return toPodcastItem(ownedPodcast(podcastId, profile.getProducerProfileId()), true);
     }
 
     @Transactional
     public PodcastItem createPodcast(UUID userId, PodcastWrite request) {
         ProducerProfile profile = approvedCreator(userId);
         Category category = activeCategory(request.categoryId());
-        String slug = normalizeSlug(request.slug());
-        ensurePodcastSlugAvailable(profile.getProducerProfileId(), slug, null);
 
         Podcast podcast = new Podcast();
         podcast.setProducerProfile(profile);
         podcast.setCategory(category);
         podcast.setSeries(null);
-        applyPodcastWrite(podcast, request, slug);
+        applyPodcastWrite(podcast, request);
         podcast.setMediaUrl(null);
         podcast.setMediaType(null);
         podcast.setStatus("DRAFT");
@@ -167,11 +168,9 @@ public class CreatorFlowService {
         Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
         requireEditable(podcast);
         Category category = activeCategory(request.categoryId());
-        String slug = normalizeSlug(request.slug());
-        ensurePodcastSlugAvailable(profile.getProducerProfileId(), slug, podcastId);
 
         podcast.setCategory(category);
-        applyPodcastWrite(podcast, request, slug);
+        applyPodcastWrite(podcast, request);
         return toPodcastItem(podcastRepository.save(podcast));
     }
 
@@ -184,10 +183,6 @@ public class CreatorFlowService {
         }
         Series series = ownedSeries(seriesId, profile.getProducerProfileId());
         ensureSeriesCanReceivePodcast(series);
-        if (podcastRepository.existsBySeries_SeriesIdAndSlugIgnoreCaseAndPodcastIdNot(
-                seriesId, podcast.getSlug(), podcastId)) {
-            throw new ResourceConflictException("Series đã có podcast cùng slug.");
-        }
         podcast.setSeries(series);
         return toPodcastItem(podcastRepository.save(podcast));
     }
@@ -245,6 +240,17 @@ public class CreatorFlowService {
         return toPodcastItem(podcastRepository.save(podcast));
     }
 
+    Podcast requireOwnedPodcast(UUID userId, UUID podcastId) {
+        ProducerProfile profile = approvedCreator(userId);
+        return ownedPodcast(podcastId, profile.getProducerProfileId());
+    }
+
+    Podcast requireEditableOwnedPodcast(UUID userId, UUID podcastId) {
+        Podcast podcast = requireOwnedPodcast(userId, podcastId);
+        requireEditable(podcast);
+        return podcast;
+    }
+
     private ProducerProfile approvedCreator(UUID userId) {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản."));
@@ -297,16 +303,6 @@ public class CreatorFlowService {
         }
     }
 
-    private void ensurePodcastSlugAvailable(UUID creatorId, String slug, UUID currentPodcastId) {
-        boolean exists = currentPodcastId == null
-                ? podcastRepository.existsByProducerProfile_ProducerProfileIdAndSlugIgnoreCase(creatorId, slug)
-                : podcastRepository.existsByProducerProfile_ProducerProfileIdAndSlugIgnoreCaseAndPodcastIdNot(
-                        creatorId, slug, currentPodcastId);
-        if (exists) {
-            throw new ResourceConflictException("Slug podcast đã được sử dụng trong kênh.");
-        }
-    }
-
     private void requireEditable(Podcast podcast) {
         String status = podcast.getStatus() == null ? "" : podcast.getStatus().toUpperCase(Locale.ROOT);
         if (status.equals("APPROVED") || status.equals("PUBLISHED")) {
@@ -319,14 +315,13 @@ public class CreatorFlowService {
         }
     }
 
-    private void applyPodcastWrite(Podcast podcast, PodcastWrite request, String slug) {
+    private void applyPodcastWrite(Podcast podcast, PodcastWrite request) {
         podcast.setTitle(request.title().trim());
-        podcast.setSlug(slug);
         podcast.setDescription(trimToNull(request.description()));
         podcast.setThumbnailUrl(trimToNull(request.thumbnailUrl()));
         podcast.setDurationSeconds(request.durationSeconds());
         podcast.setEpisodeNumber(request.episodeNumber());
-        podcast.setIsExclusive(request.exclusive());
+        podcast.setIsExclusive(request.resolvedVisibility().isExclusive());
     }
 
     private String normalizeSlug(String value) {
@@ -359,7 +354,16 @@ public class CreatorFlowService {
     }
 
     private PodcastItem toPodcastItem(Podcast podcast) {
+        return toPodcastItem(podcast, false);
+    }
+
+    private PodcastItem toPodcastItem(Podcast podcast, boolean includeVideoUrl) {
         Series series = podcast.getSeries();
+        R2PlaybackUrlService.PlaybackUrl video = null;
+        if (includeVideoUrl && !"DELETED".equalsIgnoreCase(podcast.getStatus())
+                && podcast.getMediaUrl() != null && !podcast.getMediaUrl().isBlank()) {
+            video = playbackUrlService.create(podcast.getMediaUrl(), Boolean.TRUE.equals(podcast.getIsExclusive()));
+        }
         return new PodcastItem(
                 podcast.getPodcastId(),
                 series == null ? null : series.getSeriesId(),
@@ -367,14 +371,16 @@ public class CreatorFlowService {
                 podcast.getCategory().getCategoryId(),
                 podcast.getCategory().getName(),
                 podcast.getTitle(),
-                podcast.getSlug(),
                 podcast.getDescription(),
                 podcast.getMediaUrl(),
                 podcast.getMediaType(),
+                video == null ? null : video.url(),
+                video == null ? null : video.expiresAt(),
                 podcast.getThumbnailUrl(),
                 podcast.getDurationSeconds(),
                 podcast.getEpisodeNumber(),
                 podcast.getIsExclusive(),
+                com.prmteam7.podcasthistory.enums.PodcastVisibility.fromExclusive(podcast.getIsExclusive()),
                 podcast.getStatus(),
                 podcast.getPublishedAt(),
                 podcast.getCreatedAt(),

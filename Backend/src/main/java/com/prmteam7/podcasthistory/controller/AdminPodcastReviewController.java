@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prmteam7.podcasthistory.dto.request.CreatorRequests.ReviewNote;
@@ -32,6 +33,13 @@ public class AdminPodcastReviewController {
 
     public AdminPodcastReviewController(PodcastReviewService podcastReviewService) {
         this.podcastReviewService = podcastReviewService;
+    }
+
+    @GetMapping
+    @Operation(summary = "Tất cả podcast hoặc lọc theo trạng thái",
+            description = "Bỏ status để lấy tất cả. Hỗ trợ DRAFT, PENDING_REVIEW, APPROVED, REJECTED, PUBLISHED, DELETED.")
+    public List<PodcastReviewItem> listPodcasts(@RequestParam(required = false) String status) {
+        return podcastReviewService.listPodcasts(status);
     }
 
     @GetMapping("/pending-review")

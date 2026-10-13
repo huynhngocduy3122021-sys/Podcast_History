@@ -3,6 +3,7 @@ package com.prmteam7.podcasthistory.dto.response;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import com.prmteam7.podcasthistory.enums.PodcastVisibility;
 
 public final class ListenerResponses {
 
@@ -23,13 +24,13 @@ public final class ListenerResponses {
     public record PodcastItem(
             UUID podcastId,
             String title,
-            String slug,
             String description,
             String mediaType,
             String thumbnailUrl,
             Integer durationSeconds,
             Integer episodeNumber,
             Boolean exclusive,
+            PodcastVisibility visibility,
             Instant publishedAt,
             UUID seriesId,
             String seriesTitle,

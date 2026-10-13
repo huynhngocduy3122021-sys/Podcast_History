@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -35,6 +36,21 @@ public class PodcastReviewService {
         this.appUserRepository = appUserRepository;
         this.podcastRepository = podcastRepository;
         this.moderationReviewRepository = moderationReviewRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<PodcastReviewItem> listPodcasts(String status) {
+        if (status == null || status.isBlank()) {
+            return podcastRepository.findAllByOrderByCreatedAtDesc()
+                    .stream().map(this::toReviewItem).toList();
+        }
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED", "PUBLISHED", "DELETED")
+                .contains(normalized)) {
+            throw new InvalidFlowRequestException("Trạng thái podcast không hợp lệ.");
+        }
+        return podcastRepository.findAllByStatusIgnoreCaseOrderByCreatedAtDesc(normalized)
+                .stream().map(this::toReviewItem).toList();
     }
 
     @Transactional(readOnly = true)
@@ -104,6 +120,8 @@ public class PodcastReviewService {
                 podcast.getThumbnailUrl(),
                 podcast.getDurationSeconds(),
                 podcast.getIsExclusive(),
+                com.prmteam7.podcasthistory.enums.PodcastVisibility.fromExclusive(podcast.getIsExclusive()),
+                podcast.getStatus(),
                 podcast.getUpdatedAt());
     }
 }

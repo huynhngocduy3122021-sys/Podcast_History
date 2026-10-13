@@ -24,6 +24,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 @Service
 public class MediaUploadService {
@@ -52,6 +53,43 @@ public class MediaUploadService {
         return store(file, userId, podcastId, fileType);
     }
 
+    public MediaUploadResponse uploadPodcastReferencePdf(
+            MultipartFile file, UUID userId, UUID podcastId, UUID referenceId) {
+        if (file == null || file.isEmpty()) {
+            throw new InvalidMediaUploadException("Vui lòng chọn file PDF nguồn.");
+        }
+        String type = file.getContentType();
+        if (type != null && !type.equalsIgnoreCase("application/pdf")
+                && !type.equalsIgnoreCase("application/octet-stream")) {
+            throw new InvalidMediaUploadException("Tài liệu nguồn chỉ chấp nhận PDF.");
+        }
+        if (!"pdf".equals(extensionOf(file.getOriginalFilename()))) {
+            throw new InvalidMediaUploadException("Tài liệu nguồn phải có đuôi .pdf.");
+        }
+        try (var input = file.getInputStream()) {
+            byte[] signature = input.readNBytes(5);
+            if (!java.util.Arrays.equals(signature, "%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
+                throw new InvalidMediaUploadException("Nội dung file không phải PDF hợp lệ.");
+            }
+        } catch (IOException exception) {
+            throw new InvalidMediaUploadException("Không đọc được file PDF.");
+        }
+        return store(file, userId, podcastId, referenceId, new UploadFileType("application/pdf"));
+    }
+
+    public void deletePodcastReferenceFile(String key, UUID userId, UUID podcastId, UUID referenceId) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        String prefix = normalizeFolder(properties.getFolder()) + "/" + userId
+                + "/podcasts/" + podcastId + "/references/" + referenceId + "/";
+        if (!key.startsWith(prefix)) {
+            throw new InvalidMediaUploadException("Object key không thuộc tài liệu nguồn này.");
+        }
+        s3Client().deleteObject(DeleteObjectRequest.builder()
+                .bucket(properties.getBucketName().trim()).key(key).build());
+    }
+
     private UploadFileType validateAndResolveFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new InvalidMediaUploadException("Vui lòng chọn file media.");
@@ -61,6 +99,11 @@ public class MediaUploadService {
 
     private MediaUploadResponse store(
             MultipartFile file, UUID userId, UUID podcastId, UploadFileType fileType) {
+        return store(file, userId, podcastId, null, fileType);
+    }
+
+    private MediaUploadResponse store(
+            MultipartFile file, UUID userId, UUID podcastId, UUID referenceId, UploadFileType fileType) {
         S3Client client = s3Client();
         Path tempFile = null;
 
@@ -70,6 +113,7 @@ public class MediaUploadService {
 
             String objectKey = normalizeFolder(properties.getFolder()) + "/" + userId
                     + (podcastId == null ? "" : "/podcasts/" + podcastId)
+                    + (referenceId == null ? "" : "/references/" + referenceId)
                     + "/" + UUID.randomUUID() + safeExtension(file.getOriginalFilename());
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(properties.getBucketName().trim())

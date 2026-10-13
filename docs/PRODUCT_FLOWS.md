@@ -140,6 +140,8 @@ Các API của Flow 1 dùng JWT và lấy chủ sở hữu từ claim `user_id`;
 
 **API Content Creator đã có:** `GET/POST /api/creator/series`, `GET/PUT/DELETE /api/creator/series/{seriesId}`, `GET /api/creator/series/{seriesId}/podcasts`, `GET/POST /api/creator/podcasts`, `GET/PUT/DELETE /api/creator/podcasts/{podcastId}`, `PUT/DELETE /api/creator/podcasts/{podcastId}/series`, `POST /api/creator/podcasts/{podcastId}/video`, `POST /api/creator/podcasts/{podcastId}/submit`. Duyệt Admin: `GET /api/admin/podcasts/pending-review`, `POST /api/admin/podcasts/{podcastId}/approve`, `POST /api/admin/podcasts/{podcastId}/reject`.
 
+CC có thể thêm nguồn tham khảo và upload PDF gắn vào podcast qua CRUD `/api/creator/podcasts/{podcastId}/references`. Admin xem nguồn/tải PDF khi duyệt; Listener chỉ đọc nguồn của podcast đã duyệt sau khi kiểm tra quyền thành viên với nội dung độc quyền. Xem [luồng nguồn và PDF](CREATOR_UPLOAD_SOURCES.md) để gọi API theo thứ tự.
+
 Gói Premium dành cho CC là gói của creator; gói thành viên ở mục Người dùng là gói hỗ trợ một kênh cụ thể. Đây là hai luồng gói dịch vụ khác nhau theo mô tả nghiệp vụ.
 
 Premium Creator, giới hạn số podcast theo gói, biểu mẫu tương tác, livestream và bộ máy AI moderation chưa được triển khai: ERD/model hiện tại chưa có mô hình billing Premium Creator, và hàng đợi duyệt hiện do Admin xử lý thủ công.
