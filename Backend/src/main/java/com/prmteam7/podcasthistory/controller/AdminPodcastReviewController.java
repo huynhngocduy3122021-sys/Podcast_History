@@ -1,8 +1,15 @@
 package com.prmteam7.podcasthistory.controller;
 
+import com.prmteam7.podcasthistory.dto.request.CreatorRequests.ReviewNote;
+import com.prmteam7.podcasthistory.dto.response.CreatorResponses.PodcastReviewItem;
+import com.prmteam7.podcasthistory.dto.response.CreatorResponses.PodcastReviewResult;
+import com.prmteam7.podcasthistory.service.PodcastReviewService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
-
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,60 +20,90 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.prmteam7.podcasthistory.dto.request.CreatorRequests.ReviewNote;
-import com.prmteam7.podcasthistory.dto.response.CreatorResponses.PodcastReviewItem;
-import com.prmteam7.podcasthistory.dto.response.CreatorResponses.PodcastReviewResult;
-import com.prmteam7.podcasthistory.service.PodcastReviewService;
-
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-
 @RestController
-@RequestMapping("/api/admin/podcasts")
+@RequestMapping({"/api/admin/podcasts", "/api/staff/podcasts"})
 @Tag(name = "Admin - podcast moderation", description = "Duyệt podcast do Content Creator gửi")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminPodcastReviewController {
 
-    private final PodcastReviewService podcastReviewService;
+  private final PodcastReviewService podcastReviewService;
 
-    public AdminPodcastReviewController(PodcastReviewService podcastReviewService) {
-        this.podcastReviewService = podcastReviewService;
-    }
+  public AdminPodcastReviewController(PodcastReviewService podcastReviewService) {
+    this.podcastReviewService = podcastReviewService;
+  }
 
-    @GetMapping
-    @Operation(summary = "Tất cả podcast hoặc lọc theo trạng thái",
-            description = "Bỏ status để lấy tất cả. Hỗ trợ DRAFT, PENDING_REVIEW, APPROVED, REJECTED, PUBLISHED, DELETED.")
-    public List<PodcastReviewItem> listPodcasts(@RequestParam(required = false) String status) {
-        return podcastReviewService.listPodcasts(status);
-    }
+  @GetMapping("/page")
+  @Operation(summary = "Danh sách podcast có phân trang")
+  public org.springframework.data.domain.Page<PodcastReviewItem> page(
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return podcastReviewService.page(userId(jwt), status, page, size);
+  }
 
-    @GetMapping("/pending-review")
-    @Operation(summary = "Danh sách podcast chờ Admin duyệt")
-    public List<PodcastReviewItem> pendingReview() {
-        return podcastReviewService.pendingReview();
-    }
+  @GetMapping("/{podcastId}")
+  @Operation(summary = "Chi tiết podcast và 20 quyết định gần nhất")
+  public com.prmteam7.podcasthistory.dto.response.AdminResponses.PodcastDetail detail(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
+    return podcastReviewService.detail(userId(jwt), podcastId);
+  }
 
-    @PostMapping("/{podcastId}/approve")
-    @Operation(summary = "Duyệt podcast")
-    public PodcastReviewResult approve(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID podcastId,
-            @Valid @RequestBody(required = false) ReviewNote request) {
-        return podcastReviewService.approve(userId(jwt), podcastId, request == null ? null : request.note());
-    }
+  @GetMapping("/{podcastId}/preview")
+  @Operation(summary = "Lấy signed video URL để duyệt, hiệu lực 5 phút")
+  public com.prmteam7.podcasthistory.dto.response.AdminResponses.Preview preview(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
+    return podcastReviewService.preview(userId(jwt), podcastId);
+  }
 
-    @PostMapping("/{podcastId}/reject")
-    @Operation(summary = "Từ chối podcast; Creator có thể chỉnh sửa và gửi lại")
-    public PodcastReviewResult reject(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID podcastId,
-            @Valid @RequestBody ReviewNote request) {
-        return podcastReviewService.reject(userId(jwt), podcastId, request.note());
-    }
+  @GetMapping("/{podcastId}/reviews")
+  @Operation(summary = "Lịch sử xét duyệt có phân trang")
+  public org.springframework.data.domain.Page<
+          com.prmteam7.podcasthistory.dto.response.AdminResponses.ReviewItem>
+      reviews(
+          @AuthenticationPrincipal Jwt jwt,
+          @PathVariable UUID podcastId,
+          @RequestParam(defaultValue = "0") int page,
+          @RequestParam(defaultValue = "20") int size) {
+    return podcastReviewService.history(userId(jwt), podcastId, page, size);
+  }
 
-    private UUID userId(Jwt jwt) {
-        return UUID.fromString(jwt.getClaimAsString("user_id"));
-    }
+  @GetMapping
+  @Operation(
+      summary = "Tất cả podcast hoặc lọc theo trạng thái",
+      description =
+          "Bỏ status để lấy tất cả. Hỗ trợ DRAFT, PENDING_REVIEW, APPROVED, REJECTED, PUBLISHED,"
+              + " DELETED.")
+  public List<PodcastReviewItem> listPodcasts(@RequestParam(required = false) String status) {
+    return podcastReviewService.listPodcasts(status);
+  }
+
+  @GetMapping("/pending-review")
+  @Operation(summary = "Danh sách podcast chờ Admin duyệt")
+  public List<PodcastReviewItem> pendingReview() {
+    return podcastReviewService.pendingReview();
+  }
+
+  @PostMapping("/{podcastId}/approve")
+  @Operation(summary = "Duyệt podcast")
+  public PodcastReviewResult approve(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID podcastId,
+      @Valid @RequestBody(required = false) ReviewNote request) {
+    return podcastReviewService.approve(
+        userId(jwt), podcastId, request == null ? null : request.note());
+  }
+
+  @PostMapping("/{podcastId}/reject")
+  @Operation(summary = "Từ chối podcast; Creator có thể chỉnh sửa và gửi lại")
+  public PodcastReviewResult reject(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID podcastId,
+      @Valid @RequestBody ReviewNote request) {
+    return podcastReviewService.reject(userId(jwt), podcastId, request.note());
+  }
+
+  private UUID userId(Jwt jwt) {
+    return UUID.fromString(jwt.getClaimAsString("user_id"));
+  }
 }

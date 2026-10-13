@@ -13,5 +13,6 @@ public interface SavedPodcastRepository extends JpaRepository<SavedPodcast, UUID
 
     Optional<SavedPodcast> findByUser_UserIdAndPodcast_PodcastId(UUID userId, UUID podcastId);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"podcast", "podcast.producerProfile"})
     Page<SavedPodcast> findAllByUser_UserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 }

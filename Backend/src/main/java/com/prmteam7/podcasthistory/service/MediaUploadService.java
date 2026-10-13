@@ -94,7 +94,42 @@ public class MediaUploadService {
         if (file == null || file.isEmpty()) {
             throw new InvalidMediaUploadException("Vui lòng chọn file media.");
         }
-        return resolveFileType(file);
+        UploadFileType type = resolveFileType(file);
+        validateSignature(file, type.contentType());
+        return type;
+    }
+
+    private void validateSignature(MultipartFile file, String type) {
+        try (var input = file.getInputStream()) {
+            byte[] bytes = input.readNBytes(64);
+            String ascii = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1);
+            boolean bmff = bytes.length >= 12 && ascii.startsWith("ftyp", 4);
+            boolean valid = switch (type) {
+                case "image/png" -> bytes.length >= 8 && java.util.Arrays.equals(
+                        java.util.Arrays.copyOf(bytes, 8), new byte[]{(byte)137,80,78,71,13,10,26,10});
+                case "image/jpeg" -> bytes.length >= 3 && (bytes[0]&255)==255 && (bytes[1]&255)==216 && (bytes[2]&255)==255;
+                case "image/gif" -> ascii.startsWith("GIF87a") || ascii.startsWith("GIF89a");
+                case "image/webp" -> ascii.startsWith("RIFF") && ascii.startsWith("WEBP",8);
+                case "image/avif" -> bmff && (ascii.contains("avif") || ascii.contains("avis"));
+                case "image/heic", "image/heif" -> bmff && (ascii.contains("heic") || ascii.contains("heix") || ascii.contains("mif1"));
+                case "video/mp4", "video/quicktime", "video/x-m4v", "video/3gpp" -> bmff;
+                case "video/webm", "video/x-matroska" -> bytes.length >= 4 && (bytes[0]&255)==26 && (bytes[1]&255)==69 && (bytes[2]&255)==223 && (bytes[3]&255)==163;
+                case "video/x-msvideo", "video/avi" -> ascii.startsWith("RIFF") && ascii.startsWith("AVI ",8);
+                default -> false;
+            };
+            if (!valid) throw new InvalidMediaUploadException("Nội dung file không khớp định dạng ảnh/video được hỗ trợ.");
+        } catch (IOException exception) {
+            throw new InvalidMediaUploadException("Không đọc được file media.");
+        }
+    }
+
+    public void deletePodcastVideo(String key, UUID userId, UUID podcastId) {
+        if (key == null || key.isBlank() || key.startsWith("http://") || key.startsWith("https://")) return;
+        String prefix = normalizeFolder(properties.getFolder()) + "/" + userId + "/podcasts/" + podcastId + "/";
+        if (!key.startsWith(prefix) || key.substring(prefix.length()).contains("/")) {
+            throw new InvalidMediaUploadException("Object key không thuộc video của podcast này.");
+        }
+        s3Client().deleteObject(DeleteObjectRequest.builder().bucket(properties.getBucketName().trim()).key(key).build());
     }
 
     private MediaUploadResponse store(
@@ -125,7 +160,7 @@ public class MediaUploadService {
             return new MediaUploadResponse(
                     objectKey,
                     properties.getBucketName().trim(),
-                    publicUrl(objectKey),
+                    podcastId == null ? publicUrl(objectKey) : null,
                     fileType.contentType(),
                     file.getSize());
         } catch (IOException | RuntimeException exception) {
