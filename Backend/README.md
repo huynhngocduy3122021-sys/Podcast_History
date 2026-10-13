@@ -53,7 +53,7 @@ It returns:
 
 Create an R2 bucket and an R2 API token with Object Read & Write permission for that bucket. Fill `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in `Backend/.env`. The endpoint format is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; R2 uses region `auto`. Spring Boot loads `.env` when started from either the repository root or the `Backend` directory. `Backend/.env` is ignored by Git; `.env.example` lists the variables. Restart the backend after changing the file.
 
-`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
+`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It accepts image, video, and audio media and returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
 
 To test from Swagger, register and log in, authorize with the returned `accessToken`, then open `POST /api/uploads`, choose a small image or video for `file`, and execute it. A successful upload returns HTTP 201 with `objectKey`, `bucket`, `publicUrl`, `contentType`, and `bytes`. Verify that the object appears in the configured Cloudflare R2 bucket.
 
@@ -100,3 +100,24 @@ UPDATE "User"
 SET role_id = (SELECT role_id FROM "Role" WHERE role_code = 'ADMIN')
 WHERE email = 'admin@example.com';
 ```
+
+## Listener podcast requests and milestones
+
+Apply `db/migrations/2026-10-13_podcast_request_milestones.sql` to an existing database before deploying this workflow. It adds milestone amounts, upload/revision/dispute history, and a unique payment-per-milestone constraint. New installations using Hibernate `ddl-auto=update` create the mapped tables automatically.
+
+All amounts are decimal values with up to two fractional digits; currency defaults to `USD` and is stored as a three-letter code.
+
+- `POST /api/requests` — Listener submits `creatorProfileId`, `requestedTitle`, `description`, and optional `requestFee`/`currency`.
+- `GET /api/requests/me` — Listener lists submitted requests.
+- `GET /api/creator/requests/incoming` — Creator lists pending incoming requests.
+- `POST /api/creator/requests/{requestId}/accept` — Creator accepts and defines `responseText` and a non-empty `milestones` array (`name`, optional `description`, `amount`).
+- `POST /api/creator/requests/{requestId}/reject` — Creator rejects with `responseText`.
+- `GET /api/requests/{requestId}/milestones` — Request participants retrieve milestones and related payment IDs.
+- `POST /api/creator/milestones/{milestoneId}/submissions` — Creator submits a file and optional note as multipart form data. Audio files such as MP3, M4A, WAV, OGG, Opus, and FLAC are supported by the shared upload service.
+- `GET /api/milestones/{milestoneId}/submissions` — Participants (and Admin) view submission history.
+- `POST /api/listener/milestones/{milestoneId}/approve` — The Listener who created the request approves the submitted milestone.
+- `POST /api/listener/milestones/{milestoneId}/revision` — That Listener requests a revision with a `reason`.
+- `POST /api/milestones/{milestoneId}/disputes` — Either contract participant opens a dispute with a `reason`.
+- `GET /api/admin/disputes/open` and `POST /api/admin/disputes/{disputeId}/resolve` — Admin lists and resolves disputes. Resolution decision is `APPROVE_MILESTONE` or `REQUEST_REVISION`, with a required `note`.
+
+Approval creates one `Payment` with status `PENDING` and returns its ID. This project does not yet integrate a payment provider; `PENDING` is not proof of payment, and a provider callback/confirmation endpoint must be integrated before treating the milestone as paid. Business-rule violations return HTTP 409; missing workflow records return HTTP 404.

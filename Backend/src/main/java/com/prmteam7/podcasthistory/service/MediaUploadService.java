@@ -37,7 +37,7 @@ public class MediaUploadService {
 
     public MediaUploadResponse upload(MultipartFile file, UUID userId) {
         if (file == null || file.isEmpty()) {
-            throw new InvalidMediaUploadException("Vui lòng chọn một file ảnh hoặc video.");
+            throw new InvalidMediaUploadException("Vui lòng chọn một file ảnh, video hoặc audio.");
         }
 
         UploadFileType fileType = resolveFileType(file);
@@ -114,8 +114,11 @@ public class MediaUploadService {
             if (normalizedType.startsWith("video/")) {
                 return new UploadFileType(normalizedType);
             }
+            if (normalizedType.startsWith("audio/")) {
+                return new UploadFileType(normalizedType);
+            }
             if (!normalizedType.isBlank() && !normalizedType.equals("application/octet-stream")) {
-                throw new InvalidMediaUploadException("Chỉ chấp nhận file ảnh hoặc video.");
+                throw new InvalidMediaUploadException("Chỉ chấp nhận file ảnh, video hoặc audio.");
             }
         }
 
@@ -135,8 +138,15 @@ public class MediaUploadService {
             case "mkv" -> new UploadFileType("video/x-matroska");
             case "3gp" -> new UploadFileType("video/3gpp");
             case "avi" -> new UploadFileType("video/x-msvideo");
+            case "mp3" -> new UploadFileType("audio/mpeg");
+            case "m4a" -> new UploadFileType("audio/mp4");
+            case "aac" -> new UploadFileType("audio/aac");
+            case "wav" -> new UploadFileType("audio/wav");
+            case "ogg", "oga" -> new UploadFileType("audio/ogg");
+            case "opus" -> new UploadFileType("audio/opus");
+            case "flac" -> new UploadFileType("audio/flac");
             default -> throw new InvalidMediaUploadException(
-                    "Không xác định được file ảnh hoặc video. Hãy gửi Content-Type hợp lệ.");
+                    "Không xác định được file ảnh, video hoặc audio. Hãy gửi Content-Type hợp lệ.");
         };
     }
 
