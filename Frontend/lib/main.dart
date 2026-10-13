@@ -1,35 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import 'api_service.dart';
 
 void main() => runApp(const VietCastApp());
 
 enum UserRole { listener, creator, admin }
 
-class MockAccount {
-  const MockAccount(this.email, this.password, this.name, this.role);
-  final String email, password, name;
+class Account {
+  const Account({
+    required this.email,
+    required this.name,
+    required this.role,
+    required this.session,
+  });
+  final String email, name;
   final UserRole role;
+  final AuthSession session;
 }
-
-const mockAccounts = <MockAccount>[
-  MockAccount(
-    'listener@vietcast.local',
-    'Listener@123',
-    'Nguoi nghe',
-    UserRole.listener,
-  ),
-  MockAccount(
-    'creator@vietcast.local',
-    'Creator@123',
-    'Nguoi sang tao',
-    UserRole.creator,
-  ),
-  MockAccount(
-    'admin@vietcast.local',
-    'Admin@123',
-    'Quan tri vien',
-    UserRole.admin,
-  ),
-];
 
 class VietCastApp extends StatefulWidget {
   const VietCastApp({super.key});
@@ -39,7 +28,7 @@ class VietCastApp extends StatefulWidget {
 
 class _AppState extends State<VietCastApp> {
   ThemeMode mode = ThemeMode.light;
-  MockAccount? account;
+  Account? account;
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'VietCast',
@@ -63,7 +52,11 @@ class _AppState extends State<VietCastApp> {
     home: account == null
         ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
         : switch (account!.role) {
-            UserRole.listener => Shell(onTheme: toggleTheme, onLogout: logout),
+            UserRole.listener => Shell(
+              session: account!.session,
+              onTheme: toggleTheme,
+              onLogout: logout,
+            ),
             UserRole.creator => CreatorShell(
               onTheme: toggleTheme,
               onLogout: logout,
@@ -79,7 +72,17 @@ class _AppState extends State<VietCastApp> {
     () => mode = mode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light,
   );
 
-  void logout() => setState(() => account = null);
+  Future<void> logout() async {
+    final session = account?.session;
+    setState(() => account = null);
+    if (session != null) {
+      try {
+        await AuthApi().logout(session.refreshToken);
+      } catch (_) {
+        // The local session is already cleared even if the network is offline.
+      }
+    }
+  }
 }
 
 class Show {
@@ -90,16 +93,22 @@ class Show {
     this.duration,
     this.colors, {
     this.member = false,
+    this.id,
+    this.creatorId,
+    this.durationSeconds,
   });
   final String title, channel, period, duration;
   final List<Color> colors;
   final bool member;
+  final String? id;
+  final String? creatorId;
+  final int? durationSeconds;
 }
 
 String _formatVnd(int amount) =>
     '${amount.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} VND';
 
-const shows = <Show>[
+final fallbackShows = <Show>[
   Show(
     'Nhung ngay dau cua nen doc lap',
     'Su Viet ke chuyen',
@@ -131,8 +140,16 @@ const shows = <Show>[
   ),
 ];
 
+List<Show> shows = List<Show>.of(fallbackShows);
+
 class Shell extends StatefulWidget {
-  const Shell({super.key, required this.onTheme, required this.onLogout});
+  const Shell({
+    super.key,
+    required this.session,
+    required this.onTheme,
+    required this.onLogout,
+  });
+  final AuthSession session;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   @override
@@ -140,6 +157,12 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
+  late final ListenerApi api;
+  bool apiLoading = true;
+  String? apiError;
+  final commentsByPodcast = <String, List<CommentData>>{};
+  final creatorDetails = <String, Map<String, dynamic>>{};
+  StreamSubscription<String>? commentSubscription;
   int tab = 0;
   Show? current;
   bool playing = false;
@@ -169,6 +192,108 @@ class _ShellState extends State<Shell> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    api = ListenerApi(accessToken: widget.session.accessToken);
+    _loadListenerFlow();
+  }
+
+  Future<void> _loadListenerFlow() async {
+    try {
+      final results = await Future.wait<dynamic>([
+        api.searchPodcasts(),
+        api.listeningHistory(),
+        api.savedPodcasts(),
+        api.follows(),
+        api.reports(),
+        api.subscriptions(),
+        api.seriesRequests(),
+        api.categories(),
+        api.creators(),
+      ]);
+      final podcasts = results[0] as List<ListenerPodcast>;
+      final creatorList = results[8] as List<Map<String, dynamic>>;
+      final creatorIds = creatorList
+          .map((item) => item['creatorProfileId']?.toString())
+          .whereType<String>()
+          .toSet();
+      final creatorResponses = await Future.wait(
+        creatorIds.map((id) async => MapEntry(id, await api.creator(id))),
+      );
+      creatorDetails.addEntries(creatorResponses);
+      if (podcasts.isNotEmpty) {
+        shows = podcasts.asMap().entries.map((entry) {
+          final podcast = entry.value;
+          final colorSets = [
+            [const Color(0xFF6D3026), const Color(0xFFC68C58)],
+            [const Color(0xFF254A50), const Color(0xFF93B4A4)],
+            [const Color(0xFF803E31), const Color(0xFFE0B84A)],
+          ];
+          final colors = colorSets[entry.key % colorSets.length];
+          final duration = podcast.durationSeconds;
+          return Show(
+            podcast.title,
+            podcast.creatorChannelName,
+            'Podcast',
+            _formatDuration(duration),
+            colors,
+            member: podcast.visibility == 'MEMBERS_ONLY',
+            id: podcast.id,
+            creatorId: podcast.creatorId,
+            durationSeconds: duration,
+          );
+        }).toList();
+        final interactionResponses = await Future.wait(
+          podcasts.map(
+            (podcast) async => (
+              likes: await api.likes(podcast.id),
+              comments: await api.comments(podcast.id),
+            ),
+          ),
+        );
+        for (var index = 0; index < podcasts.length; index++) {
+          final podcast = podcasts[index];
+          final interaction = interactionResponses[index];
+          if (interaction.likes['likedByMe'] == true) {
+            likedShowTitles.add(podcast.title);
+          }
+          commentsByPodcast[podcast.id] = interaction.comments
+              .map(
+                (comment) => CommentData(
+                  '${comment['displayName'] ?? comment['username'] ?? 'Listener'}',
+                  '${comment['content'] ?? ''}',
+                  '00:00',
+                ),
+              )
+              .toList();
+        }
+      }
+      for (final item in results[1] as List<Map<String, dynamic>>) {
+        final title = '${item['podcastTitle'] ?? ''}';
+        final seconds = (item['progressSeconds'] as num?)?.toInt() ?? 0;
+        if (title.isNotEmpty) progressByShow[title] = seconds / 86400;
+      }
+      for (final item in results[2] as List<Map<String, dynamic>>) {
+        final title = '${item['title'] ?? ''}';
+        if (title.isNotEmpty) savedShowTitles.add(title);
+      }
+      if (mounted) setState(() => apiLoading = false);
+    } catch (exception) {
+      if (mounted) {
+        setState(() {
+          apiLoading = false;
+          apiError = exception.toString();
+        });
+      }
+    }
+  }
+
+  static String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    return '${minutes.toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
   void play(Show s) => setState(() {
     current = s;
     playing = true;
@@ -176,7 +301,22 @@ class _ShellState extends State<Shell> {
 
   void openShow(Show show) {
     play(show);
+    commentSubscription?.cancel();
+    if (show.id != null) {
+      unawaited(api.playback(show.id!));
+      unawaited(api.listeningHistoryForPodcast(show.id!));
+      commentSubscription = api.commentStream(show.id!).listen(
+        (_) {},
+        onError: (_) {},
+      );
+    }
     _showPlayer(show);
+  }
+
+  @override
+  void dispose() {
+    commentSubscription?.cancel();
+    super.dispose();
   }
 
   void updateLiked(Show show, bool liked) => setState(() {
@@ -185,6 +325,9 @@ class _ShellState extends State<Shell> {
     } else {
       likedShowTitles.remove(show.title);
     }
+    if (show.id != null) {
+      unawaited(liked ? api.like(show.id!) : api.unlike(show.id!));
+    }
   });
 
   void updateSaved(Show show, bool saved) => setState(() {
@@ -192,6 +335,11 @@ class _ShellState extends State<Shell> {
       savedShowTitles.add(show.title);
     } else {
       savedShowTitles.remove(show.title);
+    }
+    if (show.id != null) {
+      unawaited(
+        saved ? api.savePodcast(show.id!) : api.unsavePodcast(show.id!),
+      );
     }
   });
 
@@ -203,75 +351,104 @@ class _ShellState extends State<Shell> {
       show: show,
       onSubmitted: (reason) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Da gui bao cao "$reason" cho admin.')),
-        );
+        final future = show.id == null
+            ? Future<void>.value()
+            : api.createReport(
+                targetType: 'PODCAST',
+                targetId: show.id!,
+                reasonCode: 'INAPPROPRIATE',
+                description: reason,
+              );
+        future
+            .then((_) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Da gui bao cao "$reason" cho admin.')),
+              );
+            })
+            .catchError((_) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Khong the gui bao cao luc nay.')),
+              );
+            });
       },
     ),
   );
 
-  void _showMembership(Show show) {
-    const price = 79000;
-    if (walletBalance < price) {
+  Future<void> _showMembership(Show show) async {
+    if (show.creatorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Podcast nay chua co creator ID.')),
+      );
+      return;
+    }
+    try {
+      final plans = await api.membershipPlans(show.creatorId!);
+      if (!mounted) return;
+      if (plans.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Creator chua co goi membership active.'),
+          ),
+        );
+        return;
+      }
+      final plan = plans.first;
+      final planId = '${plan['membershipPlanId']}';
+      final planName = '${plan['name'] ?? 'Membership'}';
+      final price = '${plan['price'] ?? ''} ${plan['currency'] ?? 'VND'}';
       showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('So du khong du'),
+          title: Text('Dang ky $planName'),
           content: Text(
-            'Goi thanh vien co gia 79.000 VND. Vi cua ban con ${_formatVnd(walletBalance)}.',
+            'Goi cua ${show.channel}: $price. Backend se tao checkout o trang thai cho thanh toan.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('De sau'),
+              child: const Text('Huy'),
             ),
-            FilledButton.icon(
-              onPressed: () {
+            FilledButton(
+              onPressed: () async {
                 Navigator.pop(context);
-                setState(() {
-                  walletBalance += 200000;
-                  tab = 3;
-                });
+                try {
+                  final checkout = await api.checkout(planId);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Checkout ${checkout['subscriptionStatus'] ?? 'PENDING'} - chua xac nhan thanh toan.',
+                      ),
+                    ),
+                  );
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Khong the tao checkout.')),
+                  );
+                }
               },
-              icon: const Icon(Icons.account_balance_wallet),
-              label: const Text('Nap them'),
+              child: const Text('Tao checkout'),
             ),
           ],
         ),
       );
-      return;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Khong the tai goi membership.')),
+        );
+      }
     }
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Xac nhan dang ky'),
-        content: Text(
-          'Ban co chac chan dang ky goi thanh vien cua ${show.channel} voi gia 79.000 VND khong?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Huy'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => walletBalance -= price);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dang ky thanh vien thanh cong.')),
-              );
-            },
-            child: const Text('Xac nhan'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showCreatorProfile(Show creatorShow) => Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => CreatorProfilePanel(
         show: creatorShow,
+        api: api,
         onOpen: (audio) {
           Navigator.pop(context);
           openShow(audio);
@@ -294,7 +471,36 @@ class _ShellState extends State<Shell> {
       initialProgress: progressByShow[show.title] ?? 0,
       initialLiked: likedShowTitles.contains(show.title),
       initialSaved: savedShowTitles.contains(show.title),
-      onProgressChanged: (value) => progressByShow[show.title] = value,
+      initialComments: show.id == null ? null : commentsByPodcast[show.id!],
+      onProgressChanged: (value) {
+        progressByShow[show.title] = value;
+        if (show.id != null) {
+          unawaited(
+            api.saveProgress(
+              show.id!,
+              progressSeconds: ((show.durationSeconds ?? 0) * value).round(),
+              completed: value >= .99,
+            ),
+          );
+        }
+      },
+      onComment: show.id == null
+          ? null
+          : (text) async {
+              try {
+                await api.createComment(show.id!, text);
+                return true;
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Khong the luu comment len may chu.'),
+                    ),
+                  );
+                }
+                return false;
+              }
+            },
       onLikedChanged: (value) => updateLiked(show, value),
       onSavedChanged: (value) => updateSaved(show, value),
       onReport: () => _showReport(show),
@@ -317,9 +523,11 @@ class _ShellState extends State<Shell> {
       ),
       Discover(onOpen: openShow),
       LibraryPage(
+        api: api,
         likedTitles: likedShowTitles,
         savedTitles: savedShowTitles,
         onOpen: openShow,
+        onOpenCreator: _showCreatorProfile,
       ),
       ListenerWalletPage(
         balance: walletBalance,
@@ -1027,13 +1235,17 @@ class PlaylistData {
 class LibraryPage extends StatefulWidget {
   const LibraryPage({
     super.key,
+    required this.api,
     required this.likedTitles,
     required this.savedTitles,
     required this.onOpen,
+    required this.onOpenCreator,
   });
+  final ListenerApi api;
   final Set<String> likedTitles;
   final Set<String> savedTitles;
   final ValueChanged<Show> onOpen;
+  final ValueChanged<Show> onOpenCreator;
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -1042,6 +1254,36 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   String selected = 'liked';
   final customPlaylists = <PlaylistData>[];
+  List<Map<String, dynamic>> followedCreators = const [];
+  bool loadingCreators = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowedCreators();
+  }
+
+  Future<void> _loadFollowedCreators() async {
+    try {
+      final result = await widget.api.follows(size: 100);
+      if (!mounted) return;
+      setState(() {
+        followedCreators = result;
+        loadingCreators = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => loadingCreators = false);
+    }
+  }
+
+  Show _creatorShow(Map<String, dynamic> creator) => Show(
+    '${creator['channelName'] ?? 'Content Creator'}',
+    '${creator['channelName'] ?? 'Content Creator'}',
+    'Creator',
+    '',
+    const [Color(0xFF254A50), Color(0xFF93B4A4)],
+    creatorId: '${creator['creatorProfileId']}',
+  );
 
   List<Show> get liked =>
       shows.where((show) => widget.likedTitles.contains(show.title)).toList();
@@ -1131,6 +1373,7 @@ class _LibraryPageState extends State<LibraryPage> {
             segments: const [
               ButtonSegment(value: 'liked', label: Text('Da thich')),
               ButtonSegment(value: 'playlist', label: Text('Playlist')),
+              ButtonSegment(value: 'creators', label: Text('Content Creator')),
             ],
             selected: {selected},
             onSelectionChanged: (value) =>
@@ -1151,7 +1394,7 @@ class _LibraryPageState extends State<LibraryPage> {
               childCount: liked.length,
             ),
           ),
-      ] else ...[
+      ] else if (selected == 'playlist') ...[
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
@@ -1174,6 +1417,47 @@ class _LibraryPageState extends State<LibraryPage> {
         SliverToBoxAdapter(
           child: PlaylistList(playlists: allPlaylists, onOpen: openPlaylist),
         ),
+      ] else ...[
+        if (loadingCreators)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (followedCreators.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Center(
+                child: Text('Ban chua theo doi Content Creator nao.'),
+              ),
+            ),
+          )
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate((_, index) {
+              final creator = followedCreators[index];
+              final show = _creatorShow(creator);
+              return Card(
+                margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: show.colors.first,
+                    child: const Icon(Icons.mic, color: Colors.white),
+                  ),
+                  title: Text(show.channel),
+                  subtitle: Text(
+                    '${creator['description'] ?? 'Content Creator VietCast'}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => widget.onOpenCreator(show),
+                ),
+              );
+            }, childCount: followedCreators.length),
+          ),
       ],
       const SliverToBoxAdapter(child: SizedBox(height: 24)),
     ],
@@ -1886,46 +2170,89 @@ class Setting extends StatelessWidget {
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key, required this.onAuthenticated});
-  final ValueChanged<MockAccount> onAuthenticated;
+  final ValueChanged<Account> onAuthenticated;
   @override
   State<AuthPage> createState() => _AuthState();
 }
 
 class _AuthState extends State<AuthPage> {
   bool register = false;
+  bool loading = false;
+  final usernameController = TextEditingController();
+  final displayNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   String? error;
+  final authApi = AuthApi();
 
   @override
   void dispose() {
+    usernameController.dispose();
+    displayNameController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
-  void login(MockAccount account) => widget.onAuthenticated(account);
+  UserRole _roleFromApi(String role) => switch (role) {
+    'ADMIN' => UserRole.admin,
+    'CREATOR' => UserRole.creator,
+    _ => UserRole.listener,
+  };
 
-  void submit() {
-    if (register) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dang ky mock thanh cong. Ban co the dang nhap ngay.'),
-        ),
-      );
-      setState(() => register = false);
-      return;
-    }
-    final account = mockAccounts.where(
-      (item) =>
-          item.email == emailController.text.trim() &&
-          item.password == passwordController.text,
+  void _completeLogin(AuthSession session) {
+    widget.onAuthenticated(
+      Account(
+        email: session.user.email,
+        name: session.user.displayName,
+        role: _roleFromApi(session.user.role),
+        session: session,
+      ),
     );
-    if (account.isEmpty) {
-      setState(() => error = 'Email hoac mat khau mock khong dung.');
-      return;
+  }
+
+  Future<void> submit() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      if (register) {
+        final username = usernameController.text.trim();
+        final displayName = displayNameController.text.trim();
+        final email = emailController.text.trim();
+        if (username.length < 3 || displayName.isEmpty || email.isEmpty) {
+          throw const ApiException(
+            'Vui long dien day du thong tin dang ky.',
+            400,
+          );
+        }
+        await authApi.register(
+          username: username,
+          email: email,
+          password: passwordController.text,
+          displayName: displayName,
+        );
+        final session = await authApi.login(
+          identifier: username,
+          password: passwordController.text,
+        );
+        _completeLogin(session);
+      } else {
+        final session = await authApi.login(
+          identifier: emailController.text.trim(),
+          password: passwordController.text,
+        );
+        _completeLogin(session);
+      }
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => error = exception.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Khong the ket noi den may chu API.');
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
-    login(account.first);
   }
 
   @override
@@ -1938,9 +2265,28 @@ class _AuthState extends State<AuthPage> {
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 20),
+      if (register) ...[
+        TextField(
+          controller: usernameController,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(labelText: 'Username'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: displayNameController,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(labelText: 'Ten hien thi'),
+        ),
+        const SizedBox(height: 12),
+      ],
       TextField(
         controller: emailController,
-        decoration: const InputDecoration(labelText: 'Email'),
+        keyboardType: register
+            ? TextInputType.emailAddress
+            : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: register ? 'Email' : 'Username hoac email',
+        ),
       ),
       const SizedBox(height: 12),
       TextField(
@@ -1973,28 +2319,15 @@ class _AuthState extends State<AuthPage> {
       ],
       const SizedBox(height: 20),
       FilledButton(
-        onPressed: submit,
-        child: Text(register ? 'Dang ky' : 'Dang nhap'),
+        onPressed: loading ? null : submit,
+        child: loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(register ? 'Dang ky' : 'Dang nhap'),
       ),
-      if (!register) ...[
-        const SizedBox(height: 20),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Dang nhap nhanh bang tai khoan mock'),
-        ),
-        const SizedBox(height: 8),
-        ...mockAccounts.map(
-          (account) => OutlinedButton.icon(
-            onPressed: () => login(account),
-            icon: Icon(switch (account.role) {
-              UserRole.listener => Icons.headphones,
-              UserRole.creator => Icons.mic,
-              UserRole.admin => Icons.admin_panel_settings,
-            }),
-            label: Text('${account.name} (${account.email})'),
-          ),
-        ),
-      ],
       TextButton(
         onPressed: () => setState(() => register = !register),
         child: Text(register ? 'Da co tai khoan?' : 'Chua co tai khoan?'),
@@ -2380,7 +2713,9 @@ class Player extends StatefulWidget {
     required this.initialProgress,
     required this.initialLiked,
     required this.initialSaved,
+    this.initialComments,
     required this.onProgressChanged,
+    this.onComment,
     required this.onLikedChanged,
     required this.onSavedChanged,
     required this.onReport,
@@ -2392,7 +2727,9 @@ class Player extends StatefulWidget {
   final bool playing;
   final double initialProgress;
   final bool initialLiked, initialSaved;
+  final List<CommentData>? initialComments;
   final ValueChanged<double> onProgressChanged;
+  final Future<bool> Function(String)? onComment;
   final ValueChanged<bool> onLikedChanged, onSavedChanged;
   final VoidCallback onReport, onMembership, onCreatorProfile;
   final VoidCallback onToggle;
@@ -2406,7 +2743,7 @@ class _PlayerState extends State<Player> {
   late double progress = widget.initialProgress;
   late bool liked = widget.initialLiked;
   final commentController = TextEditingController();
-  final comments = <CommentData>[
+  late final comments = widget.initialComments ?? <CommentData>[
     const CommentData('Thu Ha', 'Mot lat cat lich su rat dang nghe.', '02:35'),
     const CommentData(
       'Quang Minh',
@@ -2435,10 +2772,16 @@ class _PlayerState extends State<Player> {
   void submitComment() {
     final text = commentController.text.trim();
     if (text.isEmpty) return;
-    setState(() {
-      comments.insert(0, CommentData('Minh Anh', text, _timestamp));
-      commentController.clear();
-    });
+    unawaited(addComment(text));
+    commentController.clear();
+  }
+
+  Future<void> addComment(String text) async {
+    final saved = await widget.onComment?.call(text) ?? true;
+    if (!saved || !mounted) return;
+    setState(
+      () => comments.insert(0, CommentData('Minh Anh', text, _timestamp)),
+    );
   }
 
   String get _timestamp {
@@ -2467,9 +2810,7 @@ class _PlayerState extends State<Player> {
     backgroundColor: const Color(0xFF181818),
     builder: (_) => CommentsPanel(
       comments: comments,
-      onSubmit: (text) => setState(
-        () => comments.insert(0, CommentData('Minh Anh', text, _timestamp)),
-      ),
+      onSubmit: (text) => unawaited(addComment(text)),
     ),
   );
 
@@ -3143,24 +3484,91 @@ class _ReportPanelState extends State<ReportPanel> {
   );
 }
 
-class CreatorProfilePanel extends StatelessWidget {
+class CreatorProfilePanel extends StatefulWidget {
   const CreatorProfilePanel({
     super.key,
     required this.show,
+    required this.api,
     required this.onOpen,
   });
   final Show show;
+  final ListenerApi api;
   final ValueChanged<Show> onOpen;
+
+  @override
+  State<CreatorProfilePanel> createState() => _CreatorProfilePanelState();
+}
+
+class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
+  bool following = false;
+  bool loadingFollow = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowState();
+  }
+
+  Future<void> _loadFollowState() async {
+    final creatorId = widget.show.creatorId;
+    if (creatorId == null) {
+      if (mounted) setState(() => loadingFollow = false);
+      return;
+    }
+    try {
+      final follows = await widget.api.follows(size: 100);
+      if (!mounted) return;
+      setState(() {
+        following = follows.any(
+          (item) => '${item['creatorProfileId']}' == creatorId,
+        );
+        loadingFollow = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => loadingFollow = false);
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final creatorId = widget.show.creatorId;
+    if (creatorId == null || loadingFollow) return;
+    setState(() => loadingFollow = true);
+    try {
+      if (following) {
+        await widget.api.unfollow(creatorId);
+      } else {
+        await widget.api.follow(creatorId);
+      }
+      if (!mounted) return;
+      setState(() {
+        following = !following;
+        loadingFollow = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            following ? 'Da theo doi creator.' : 'Da bo theo doi creator.',
+          ),
+        ),
+      );
+    } catch (exception) {
+      if (!mounted) return;
+      setState(() => loadingFollow = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Khong the cap nhat theo doi: $exception')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final creatorShows = shows
-        .where((item) => item.channel == show.channel)
+        .where((item) => item.channel == widget.show.channel)
         .toList();
     return Scaffold(
       backgroundColor: const Color(0xFF181818),
       appBar: AppBar(
-        title: Text(show.channel),
+        title: Text(widget.show.channel),
         backgroundColor: const Color(0xFF181818),
         foregroundColor: Colors.white,
       ),
@@ -3171,7 +3579,7 @@ class CreatorProfilePanel extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 34,
-                backgroundColor: show.colors.first,
+                backgroundColor: widget.show.colors.first,
                 child: const Icon(Icons.mic, color: Colors.white, size: 28),
               ),
               const SizedBox(width: 14),
@@ -3180,7 +3588,7 @@ class CreatorProfilePanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      show.channel,
+                      widget.show.channel,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -3195,6 +3603,21 @@ class CreatorProfilePanel extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: widget.show.creatorId == null ? null : _toggleFollow,
+              icon: loadingFollow
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(following ? Icons.person_remove : Icons.person_add),
+              label: Text(following ? 'Dang theo doi' : 'Theo doi creator'),
+            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -3222,7 +3645,7 @@ class CreatorProfilePanel extends StatelessWidget {
                 Icons.play_circle_outline,
                 color: Colors.white,
               ),
-              onTap: () => onOpen(audio),
+              onTap: () => widget.onOpen(audio),
             ),
           ),
           const SizedBox(height: 12),
