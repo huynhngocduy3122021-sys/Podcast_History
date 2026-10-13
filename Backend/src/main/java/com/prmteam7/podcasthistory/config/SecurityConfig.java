@@ -53,6 +53,8 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/creator/**").hasRole("CREATOR")
+                        .requestMatchers("/api/listener/**").hasRole("LISTENER")
+                        .requestMatchers("/api/requests/**", "/api/milestones/**").authenticated()
                         .requestMatchers("/api/uploads/**").authenticated()
                         .requestMatchers("/api/creator-applications/**").authenticated()
                         .requestMatchers("/api/auth/me")

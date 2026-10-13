@@ -38,6 +38,16 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
+    @ExceptionHandler(PodcastWorkflowNotFoundException.class)
+    ResponseEntity<ApiError> handlePodcastWorkflowNotFound(PodcastWorkflowNotFoundException exception) {
+        return error(HttpStatus.NOT_FOUND, exception.getMessage());
+    }
+
+    @ExceptionHandler(PodcastWorkflowException.class)
+    ResponseEntity<ApiError> handlePodcastWorkflowConflict(PodcastWorkflowException exception) {
+        return error(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
         String message = exception.getBindingResult().getFieldErrors().stream()
