@@ -6,6 +6,15 @@ export const adminKeys = {
   creatorList: (userId: string | undefined, status: CreatorStatus | '', page: number, size: number) => ['creator-applications', userId, 'list', status, page, size] as const,
   creatorDetail: (userId: string | undefined, applicationId: string | null) => ['creator-applications', userId, 'detail', applicationId] as const,
   categories: (userId: string | undefined) => ['categories', userId] as const,
+  users: (userId: string | undefined) => ['admin-users', userId] as const,
+  userList: (userId: string | undefined, q: string, role: string, active: string, page: number, size: number) => ['admin-users', userId, 'list', q, role, active, page, size] as const,
+  userDetail: (userId: string | undefined, targetId: string | null) => ['admin-users', userId, 'detail', targetId] as const,
+  staff: (userId: string | undefined, page: number, size: number) => ['admin-staff', userId, page, size] as const,
+  plans: (userId: string | undefined) => ['membership-plans', userId] as const,
+  planList: (userId: string | undefined, creatorId: string, status: string, page: number, size: number) => ['membership-plans', userId, 'list', creatorId, status, page, size] as const,
+  planDetail: (userId: string | undefined, planId: string | null) => ['membership-plans', userId, 'detail', planId] as const,
+  audits: (userId: string | undefined) => ['audit-logs', userId] as const,
+  auditList: (userId: string | undefined, resourceType: string, resourceId: string, page: number, size: number) => ['audit-logs', userId, 'list', resourceType, resourceId, page, size] as const,
 }
 
 export async function creatorReviewConfirmed(client: QueryClient, userId: string | undefined, application: CreatorApplication) {
@@ -18,4 +27,27 @@ export async function creatorReviewConfirmed(client: QueryClient, userId: string
 
 export async function categoryChangeConfirmed(client: QueryClient, userId: string | undefined) {
   await client.invalidateQueries({ queryKey: adminKeys.categories(userId) })
+}
+
+export async function userChangeConfirmed(client: QueryClient, userId: string | undefined, targetId?: string) {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.users(userId) }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
+    targetId ? client.invalidateQueries({ queryKey: adminKeys.userDetail(userId, targetId) }) : Promise.resolve(),
+  ])
+}
+
+export async function staffChangeConfirmed(client: QueryClient, userId: string | undefined) {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: ['admin-staff', userId] }),
+    client.invalidateQueries({ queryKey: adminKeys.users(userId) }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
+  ])
+}
+
+export async function planChangeConfirmed(client: QueryClient, userId: string | undefined, planId?: string) {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.plans(userId) }),
+    planId ? client.invalidateQueries({ queryKey: adminKeys.planDetail(userId, planId) }) : Promise.resolve(),
+  ])
 }

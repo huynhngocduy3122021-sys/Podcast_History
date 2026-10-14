@@ -141,6 +141,17 @@ Checklist runtime sau khi cài dependencies và chạy Backend cập nhật:
 9. ADMIN: lọc/phân trang Creator, xem đúng ID profile, ghi chú reject bắt buộc; pending khóa gửi lặp, lỗi giữ dialog. Sau success, list/detail/Dashboard tải lại; hai Admin xử lý đồng thời phải hiển thị 409 cho người đến sau.
 10. Category: danh sách inactive, create/edit đúng giới hạn, duplicate map đúng trường, lỗi chung vẫn hiển thị, deactivate có confirmation và có thể activate lại. STAFF không thấy menu và bị chặn khi nhập URL hai trang này.
 
+## Phase 4 — Administration & Governance
+
+Phase 4 đã triển khai bốn module ADMIN-only theo contract Backend hiện tại:
+
+- User Management: `/users` dùng `/api/admin/users` để phân trang/lọc/search, xem detail, sửa profile, access, verification, role và revoke sessions. Các thay đổi nhạy cảm yêu cầu xác nhận, ghi chú và chỉ báo thành công sau khi response 200 trả đúng `userId` cùng trạng thái yêu cầu.
+- Staff Management: `/staff` dùng `GET /api/admin/staff` và `POST /api/admin/staff` (201). Password chỉ tồn tại trong form/request; không có UI edit/delete/reset vì Backend không cung cấp endpoint tương ứng.
+- Membership Plans: `/membership-plans` dùng list/detail, POST 201, PUT 200 và DELETE 200 với body `Note` để chuyển `INACTIVE`. Giá được giữ dạng chuỗi thập phân ở form/API để không dùng floating-point cho quyết định tiền tệ. Tắt gói không hủy subscription hiện có.
+- Audit Logs: `/audit-logs` dùng `GET /api/admin/audit-logs`, hỗ trợ filter `resourceType`/`resourceId`, phân trang và hiển thị read-only. Backend không có endpoint detail/edit/delete audit log.
+
+Các route và API đều được bảo vệ bằng role guard hiện có; STAFF bị chặn navigation/direct URL và Backend vẫn là authority cuối. Mutation không optimistic, không tự retry khi kết quả không chắc chắn, có invalidation theo identity hiện tại và xử lý 401/403/404/409 qua error mapper chung.
+
 ## Phase 2.1 và thông báo thao tác
 
 - Giữ nguyên các câu thành công tiếng Việt đã duyệt cho Creator, tạo/sửa/ngừng hoạt động/kích hoạt lại Category và logout; các thao tác có thông báo riêng.
