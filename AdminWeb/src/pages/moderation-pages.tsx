@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw, ExternalLink, Download, Eye, Check, X, EyeOff, RotateCcw, Trash2 } from 'lucide-react'
@@ -6,7 +6,7 @@ import { useAuth } from '../auth'
 import { api, errorMessage, session } from '../lib/client'
 import { extractApiError } from '../lib/api-error'
 import { createModerationApi } from '../lib/moderation-api'
-import { canHandleReport, canModeratePodcast, canResolveAppeal, isPodcastReportTarget, linkExpired, moderationSuccessMessages, podcastActionLabels, podcastStatusLabels, reportActionLabels, reportActions, reportStatusLabels, reportCacheKeys, targetLabels, appealStatusLabels, sameModerator } from '../lib/moderation-rules'
+import { appealCacheKeys, canHandleReport, canModeratePodcast, canResolveAppeal, isPodcastReportTarget, linkExpired, moderationSuccessMessages, podcastActionLabels, podcastStatusLabels, reportActionLabels, reportActions, reportStatusLabels, reportCacheKeys, targetLabels, appealStatusLabels, sameModerator } from '../lib/moderation-rules'
 import type { AppealDecision, PodcastAction, ReportAction } from '../lib/moderation-contracts'
 import type { Role } from '../lib/permissions'
 import { Button } from '../components/ui/button'
@@ -17,6 +17,7 @@ import { useFeedback } from '../components/feedback'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { moderationNoteSchema, optionalModerationNoteSchema } from '../lib/moderation-contracts'
+import { identityOf } from '../lib/identity'
 
 const date = (value: string | null | undefined) => value ? new Date(value).toLocaleString('vi-VN') : '—'
 const key = (name: string, userId: string | undefined, status: string, page: number) => [name, userId, status, page] as const
@@ -24,21 +25,25 @@ const sessionChangedMessage = 'Phiên đăng nhập đã thay đổi. Vui lòng 
 function requireCurrentModerator(expected: { id: string; role: Role }) {
   if (!sameModerator(session.getUser(), expected)) throw new Error(sessionChangedMessage)
 }
+function currentModerator() {
+  const current = identityOf(session.getUser())
+  return current && (current.role === 'ADMIN' || current.role === 'STAFF') ? current as { id: string; role: Role } : null
+}
 
-function NoteDialog({ fieldId, title, description, confirmLabel, schema, onConfirm, destructive = false, children }: { fieldId: string; title: string; description: string; confirmLabel: string; schema: typeof moderationNoteSchema | typeof optionalModerationNoteSchema; onConfirm: (note: string) => Promise<void>; destructive?: boolean; children?: ReactNode }) {
+function NoteDialog({ fieldId, title, description, confirmLabel, schema, onConfirm, onOpenChange, destructive = false, children }: { fieldId: string; title: string; description: string; confirmLabel: string; schema: typeof moderationNoteSchema | typeof optionalModerationNoteSchema; onConfirm: (note: string) => Promise<void>; onOpenChange?: (open: boolean) => void; destructive?: boolean; children?: ReactNode }) {
   const form = useForm({ resolver: zodResolver(schema), defaultValues: { note: '' }, mode: 'onChange' })
-  return <ConfirmDialog trigger={children ?? <Button>{confirmLabel}</Button>} title={title} description={description} confirmLabel={confirmLabel} destructive={destructive} confirmDisabled={schema === moderationNoteSchema && !form.formState.isValid} onOpenChange={() => form.reset({ note: '' })} onConfirm={async () => { if (!await form.trigger()) throw new Error('Vui lòng kiểm tra ghi chú.'); await onConfirm(form.getValues().note) }}>
+  return <ConfirmDialog trigger={children ?? <Button>{confirmLabel}</Button>} title={title} description={description} confirmLabel={confirmLabel} destructive={destructive} confirmDisabled={schema === moderationNoteSchema && !form.formState.isValid} onOpenChange={open => { form.reset({ note: '' }); onOpenChange?.(open) }} onConfirm={async () => { if (!await form.trigger()) throw new Error('Vui lòng kiểm tra ghi chú.'); await onConfirm(form.getValues().note) }}>
     <label className="field-label" htmlFor={fieldId}>Ghi chú *</label><textarea id={fieldId} rows={5} maxLength={5000} className="field py-3" {...form.register('note')} aria-invalid={!!form.formState.errors.note} />
     {form.formState.errors.note && <p className="field-error">{form.formState.errors.note.message}</p>}<p className="mt-2 text-xs text-muted-foreground">Tối đa 5.000 ký tự.</p>
   </ConfirmDialog>
 }
 
 function PodcastAction({ podcastId, action, status, role, onDone }: { podcastId: string; action: PodcastAction; status: Parameters<typeof canModeratePodcast>[1]; role: string | undefined; onDone: () => Promise<void> }) {
-  const notify = useFeedback(); const { user } = useAuth(); const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role])
-  const expectedModerator = { id: user?.id || '', role: (role || 'STAFF') as Role }
-  const mutation = useMutation({ mutationFn: async (note: string) => { if (action === 'approve' || action === 'reject') { await backend.review(podcastId, action, note); return } await backend.moderate(podcastId, action, note) }, onSuccess: async () => { requireCurrentModerator(expectedModerator); await onDone(); requireCurrentModerator(expectedModerator); notify(moderationSuccessMessages[action]) }, onError: async error => { if (extractApiError(error).outcomeUnknown && sameModerator(session.getUser(), expectedModerator)) await onDone() } })
+  const notify = useFeedback(); const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role])
+  const initiatingModerator = useRef<{ id: string; role: Role } | null>(null)
+  const mutation = useMutation({ mutationFn: async (note: string) => { const expected = initiatingModerator.current; if (!expected) throw new Error(sessionChangedMessage); requireCurrentModerator(expected); if (action === 'approve' || action === 'reject') { await backend.review(podcastId, action, note); return } await backend.moderate(podcastId, action, note) }, onSuccess: async () => { const expected = initiatingModerator.current; if (!expected) return; requireCurrentModerator(expected); await onDone(); requireCurrentModerator(expected); notify(moderationSuccessMessages[action]) }, onError: async error => { const expected = initiatingModerator.current; if (extractApiError(error).outcomeUnknown && expected && sameModerator(session.getUser(), expected)) { try { await onDone() } catch { /* Keep the uncertain outcome visible to the operator. */ } } } })
   const optional = action === 'approve'
-  return <NoteDialog fieldId={`podcast-${podcastId}-${action}-note`} schema={optional ? optionalModerationNoteSchema : moderationNoteSchema} title={`${podcastActionLabels[action]}?`} description={action === 'approve' ? 'Podcast sẽ chuyển sang trạng thái Đã duyệt và chưa được xuất bản.' : `Xác nhận ${podcastActionLabels[action].toLowerCase()}.`} confirmLabel={`Xác nhận ${podcastActionLabels[action].toLowerCase()}`} destructive={action === 'reject' || action === 'hide' || action === 'delete'} onConfirm={note => mutation.mutateAsync(note)}>{<Button variant={action === 'approve' ? 'default' : 'outline'} disabled={mutation.isPending || !canModeratePodcast(role, status, action)}>{action === 'approve' ? <Check className="size-4" /> : action === 'reject' ? <X className="size-4" /> : action === 'hide' ? <EyeOff className="size-4" /> : action === 'restore' ? <RotateCcw className="size-4" /> : <Trash2 className="size-4" />}{podcastActionLabels[action]}</Button>}</NoteDialog>
+  return <NoteDialog fieldId={`podcast-${podcastId}-${action}-note`} schema={optional ? optionalModerationNoteSchema : moderationNoteSchema} title={`${podcastActionLabels[action]}?`} description={action === 'approve' ? 'Podcast sẽ chuyển sang trạng thái Đã duyệt và chưa được xuất bản.' : `Xác nhận ${podcastActionLabels[action].toLowerCase()}.`} confirmLabel={`Xác nhận ${podcastActionLabels[action].toLowerCase()}`} destructive={action === 'reject' || action === 'hide' || action === 'delete'} onOpenChange={open => { initiatingModerator.current = open ? currentModerator() : null }} onConfirm={note => mutation.mutateAsync(note)}>{<Button variant={action === 'approve' ? 'default' : 'outline'} disabled={mutation.isPending || !canModeratePodcast(role, status, action)}>{action === 'approve' ? <Check className="size-4" /> : action === 'reject' ? <X className="size-4" /> : action === 'hide' ? <EyeOff className="size-4" /> : action === 'restore' ? <RotateCcw className="size-4" /> : <Trash2 className="size-4" />}{podcastActionLabels[action]}</Button>}</NoteDialog>
 }
 
 function PodcastDetail({ id, role, onClose }: { id: string; role: string | undefined; onClose: () => void }) {
@@ -65,16 +70,16 @@ function ReportDetail({ id, role, onClose }: { id: string; role: string | undefi
   const notify = useFeedback()
   const client = useQueryClient()
   const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role])
-  const expectedModerator = { id: user?.id || '', role: (role || 'STAFF') as Role }
+  const initiatingModerator = useRef<{ id: string; role: Role } | null>(null)
   const report = useQuery({ queryKey: ['moderation-report', user?.id, id], queryFn: ({ signal }) => backend.report(id, signal), enabled: !!user })
   const podcast = useQuery({
     queryKey: ['moderation-report-podcast', user?.id, report.data?.targetId],
     queryFn: ({ signal }) => backend.podcast(report.data!.targetId, signal),
     enabled: !!report.data && isPodcastReportTarget(report.data),
   })
-  const refresh = async () => {
+  const refresh = async (actorId = user?.id) => {
     const current = report.data
-    const cacheKeys = current ? reportCacheKeys(user?.id, current) : reportCacheKeys(user?.id, { targetType: 'COMMENT', targetId: '' })
+    const cacheKeys = current ? reportCacheKeys(actorId, current) : reportCacheKeys(actorId, { targetType: 'COMMENT', targetId: '' })
     const tasks: Promise<unknown>[] = [
       client.invalidateQueries({ queryKey: cacheKeys.reports }),
       client.invalidateQueries({ queryKey: cacheKeys.dashboard }),
@@ -87,32 +92,33 @@ function ReportDetail({ id, role, onClose }: { id: string; role: string | undefi
     await Promise.all(tasks)
   }
   const claim = useMutation({
-    mutationFn: () => backend.claimReport(id),
+    mutationFn: () => { const expected = initiatingModerator.current; if (!expected) throw new Error(sessionChangedMessage); requireCurrentModerator(expected); return backend.claimReport(id) },
     onSuccess: async () => {
-      requireCurrentModerator(expectedModerator)
-      await refresh()
-      requireCurrentModerator(expectedModerator)
+      const expected = initiatingModerator.current
+      if (!expected) return
+      requireCurrentModerator(expected)
+      await refresh(expected.id)
+      requireCurrentModerator(expected)
       notify(report.data?.assigneeId ? moderationSuccessMessages.reclaim : moderationSuccessMessages.claim)
     },
     onError: async error => {
       notify(errorMessage(error), 'error')
-      if (extractApiError(error).outcomeUnknown && sameModerator(session.getUser(), expectedModerator)) {
-        try { await refresh() } catch { /* The warning already asks the user to verify current state. */ }
+      const expected = initiatingModerator.current
+      if (extractApiError(error).outcomeUnknown && expected && sameModerator(session.getUser(), expected)) {
+        try { await refresh(expected.id) } catch { /* The warning already asks the user to verify current state. */ }
       }
     },
   })
-  const resolve = async (action: ReportAction, note: string) => {
-    await backend.resolveReport(id, action, note)
-    requireCurrentModerator(expectedModerator)
-    await refresh()
-    requireCurrentModerator(expectedModerator)
-    notify(moderationSuccessMessages[action])
-  }
+  const resolve = useMutation({
+    mutationFn: ({ action, note }: { action: ReportAction; note: string }) => { const expected = initiatingModerator.current; if (!expected) throw new Error(sessionChangedMessage); requireCurrentModerator(expected); return backend.resolveReport(id, action, note) },
+    onSuccess: async (_data, variables) => { const expected = initiatingModerator.current; if (!expected) return; requireCurrentModerator(expected); await refresh(expected.id); requireCurrentModerator(expected); notify(moderationSuccessMessages[variables.action]) },
+    onError: async error => { const expected = initiatingModerator.current; if (extractApiError(error).outcomeUnknown && expected && sameModerator(session.getUser(), expected)) { try { await refresh(expected.id) } catch { /* The warning already asks the user to verify current state. */ } } },
+  })
   if (report.isPending) return <section className="panel mt-6"><LoadingState /></section>
   if (report.isError || !report.data) return <section className="panel mt-6"><ErrorState message={errorMessage(report.error)} onRetry={() => { void report.refetch() }} /></section>
   const data = report.data
   const actions = reportActions(role, user?.id, data, podcast.data?.podcast)
-  return <section className="panel mt-6"><div className="panel-heading"><div><p className="eyebrow">Chi tiết báo cáo</p><h2 className="text-xl font-semibold">{targetLabels[data.targetType]} · {data.reasonCode || 'Không rõ lý do'}</h2></div><Button variant="outline" onClick={onClose}>Đóng</Button></div><div className="p-6 space-y-5 text-sm"><div className="grid gap-4 sm:grid-cols-2"><p>Người báo cáo<br /><b>{data.reporterName || data.reporterId}</b></p><p>Đối tượng<br /><span className="break-all font-mono text-xs">{data.targetId}</span></p><p>Trạng thái<br /><span className="badge">{reportStatusLabels[data.status]}</span></p><p>Người xử lý<br />{data.assigneeId || 'Chưa có'}</p><p>Tạo lúc<br />{date(data.createdAt)}</p><p>Kết thúc lúc<br />{date(data.resolvedAt)}</p></div><p className="whitespace-pre-wrap">{data.description || 'Không có mô tả.'}</p>{data.targetType === 'PODCAST' && podcast.isPending && <LoadingState message="Đang kiểm tra trạng thái podcast…" />}{data.targetType === 'PODCAST' && podcast.data && <p>Podcast: <b>{podcast.data.podcast.title}</b> · {podcast.data.podcast.status}</p>}<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!canHandleReport(role, user?.id, data) || claim.isPending} onClick={() => { void claim.mutate() }}>{claim.isPending ? 'Đang nhận…' : data.assigneeId ? 'Nhận lại báo cáo' : 'Nhận xử lý'}</Button>{actions.map(action => <NoteDialog key={action} fieldId={`report-${id}-${action.toLowerCase()}-note`} schema={moderationNoteSchema} title={`${reportActionLabels[action]}?`} description="Ghi chú sẽ được lưu cùng quyết định xử lý." confirmLabel="Xác nhận" destructive={action !== 'DISMISS'} onConfirm={note => resolve(action, note)}><Button variant="outline">{reportActionLabels[action]}</Button></NoteDialog>)}</div><div><h3 className="font-semibold">Lịch sử xử lý</h3>{data.reviews.length ? <ul className="mt-3 space-y-2">{data.reviews.map(item => <li key={item.reviewId} className="rounded-lg bg-muted/40 p-3">{item.decision} · {item.reviewerName || item.reviewerId} · {date(item.reviewedAt)}<p>{item.note || '—'}</p></li>)}</ul> : <p className="mt-2 text-muted-foreground">Chưa có lịch sử.</p>}</div></div></section>
+  return <section className="panel mt-6"><div className="panel-heading"><div><p className="eyebrow">Chi tiết báo cáo</p><h2 className="text-xl font-semibold">{targetLabels[data.targetType]} · {data.reasonCode || 'Không rõ lý do'}</h2></div><Button variant="outline" onClick={onClose}>Đóng</Button></div><div className="p-6 space-y-5 text-sm"><div className="grid gap-4 sm:grid-cols-2"><p>Người báo cáo<br /><b>{data.reporterName || data.reporterId}</b></p><p>Đối tượng<br /><span className="break-all font-mono text-xs">{data.targetId}</span></p><p>Trạng thái<br /><span className="badge">{reportStatusLabels[data.status]}</span></p><p>Người xử lý<br />{data.assigneeId || 'Chưa có'}</p><p>Tạo lúc<br />{date(data.createdAt)}</p><p>Kết thúc lúc<br />{date(data.resolvedAt)}</p></div><p className="whitespace-pre-wrap">{data.description || 'Không có mô tả.'}</p>{data.targetType === 'PODCAST' && podcast.isPending && <LoadingState message="Đang kiểm tra trạng thái podcast…" />}{data.targetType === 'PODCAST' && podcast.data && <p>Podcast: <b>{podcast.data.podcast.title}</b> · {podcast.data.podcast.status}</p>}<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={!canHandleReport(role, user?.id, data) || claim.isPending} onClick={() => { initiatingModerator.current = currentModerator(); void claim.mutate() }}>{claim.isPending ? 'Đang nhận…' : data.assigneeId ? 'Nhận lại báo cáo' : 'Nhận xử lý'}</Button>{actions.map(action => <NoteDialog key={action} fieldId={`report-${id}-${action.toLowerCase()}-note`} schema={moderationNoteSchema} title={`${reportActionLabels[action]}?`} description="Ghi chú sẽ được lưu cùng quyết định xử lý." confirmLabel="Xác nhận" destructive={action !== 'DISMISS'} onOpenChange={open => { initiatingModerator.current = open ? currentModerator() : null }} onConfirm={async note => { await resolve.mutateAsync({ action, note }) }}><Button variant="outline" disabled={resolve.isPending}>{reportActionLabels[action]}</Button></NoteDialog>)}</div><div><h3 className="font-semibold">Lịch sử xử lý</h3>{data.reviews.length ? <ul className="mt-3 space-y-2">{data.reviews.map(item => <li key={item.reviewId} className="rounded-lg bg-muted/40 p-3">{item.decision} · {item.reviewerName || item.reviewerId} · {date(item.reviewedAt)}<p>{item.note || '—'}</p></li>)}</ul> : <p className="mt-2 text-muted-foreground">Chưa có lịch sử.</p>}</div></div></section>
 }
 
 export function ReportsPage() { const { user } = useAuth(); const role = user?.role; const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role]); const [filter, setFilter] = useState({ status: 'PENDING', page: 0 }); const [selected, setSelected] = useState<string | null>(null); const query = useQuery({ queryKey: key('moderation-reports', user?.id, filter.status, filter.page), enabled: !!user, queryFn: ({ signal }) => backend.reports(filter.status, filter.page, 20, signal) }); return <><Header title="Báo cáo vi phạm" description="Theo dõi, nhận xử lý và giải quyết báo cáo theo phân quyền." refresh={() => { void query.refetch() }} loading={query.isFetching} /><section className="panel"><div className="panel-heading"><h2 className="font-semibold">Danh sách báo cáo</h2><select aria-label="Lọc trạng thái báo cáo" className="field w-auto" value={filter.status} onChange={event => { setFilter({ status: event.target.value, page: 0 }); setSelected(null) }}><option value="">Tất cả trạng thái</option>{Object.entries(reportStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>{query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data.content.length ? <><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Đối tượng</th><th>Lý do</th><th>Trạng thái</th><th>Người xử lý</th><th /></tr></thead><tbody>{query.data.content.map(item => <tr key={item.reportId}><td>{targetLabels[item.targetType]}<p className="font-mono text-xs text-muted-foreground">{item.targetId}</p></td><td>{item.reasonCode || '—'}</td><td><span className="badge">{reportStatusLabels[item.status]}</span></td><td>{item.assigneeId || 'Chưa có'}</td><td><Button variant="outline" onClick={() => setSelected(item.reportId)}>Chi tiết</Button></td></tr>)}</tbody></table></div><Pagination page={query.data} pending={query.isFetching} onPageChange={page => setFilter(current => ({ ...current, page }))} /></> : <EmptyState title="Không có báo cáo" message="Không có báo cáo phù hợp với bộ lọc." />}</section>{selected && <ReportDetail id={selected} role={role} onClose={() => setSelected(null)} />}</> }
@@ -122,26 +128,25 @@ function AppealDetail({ id, role, onClose }: { id: string; role: string | undefi
   const notify = useFeedback()
   const client = useQueryClient()
   const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role])
-  const expectedModerator = { id: user?.id || '', role: (role || 'STAFF') as Role }
+  const initiatingModerator = useRef<{ id: string; role: Role } | null>(null)
   const appeal = useQuery({ queryKey: ['moderation-appeal', user?.id, id], queryFn: ({ signal }) => backend.appeal(id, signal), enabled: !!user })
   const podcast = useQuery({ queryKey: ['moderation-appeal-podcast', user?.id, appeal.data?.podcastId], queryFn: ({ signal }) => backend.podcast(appeal.data!.podcastId, signal), enabled: !!appeal.data })
-  const refresh = async () => {
+  const refresh = async (actorId = user?.id) => {
     const current = appeal.data
-    const tasks: Promise<unknown>[] = [client.invalidateQueries({ queryKey: ['moderation-appeals', user?.id] }), appeal.refetch()]
-    if (current) tasks.push(client.invalidateQueries({ queryKey: ['moderation-podcasts', user?.id] }), client.invalidateQueries({ queryKey: ['moderation-podcast', user?.id, current.podcastId] }), podcast.refetch())
+    const cacheKeys = appealCacheKeys(actorId, current?.podcastId)
+    const tasks: Promise<unknown>[] = [client.invalidateQueries({ queryKey: cacheKeys.appeals }), client.invalidateQueries({ queryKey: cacheKeys.dashboard }), appeal.refetch()]
+    if (current && cacheKeys.podcast) tasks.push(client.invalidateQueries({ queryKey: cacheKeys.podcasts }), client.invalidateQueries({ queryKey: cacheKeys.podcast }), podcast.refetch())
     await Promise.all(tasks)
   }
+  const resolve = useMutation({
+    mutationFn: ({ decision, note }: { decision: AppealDecision; note: string }) => { const expected = initiatingModerator.current; if (!expected) throw new Error(sessionChangedMessage); requireCurrentModerator(expected); return backend.resolveAppeal(id, decision, note) },
+    onSuccess: async (_data, variables) => { const expected = initiatingModerator.current; if (!expected) return; requireCurrentModerator(expected); await refresh(expected.id); requireCurrentModerator(expected); notify(moderationSuccessMessages[variables.decision]) },
+    onError: async error => { const expected = initiatingModerator.current; if (extractApiError(error).outcomeUnknown && expected && sameModerator(session.getUser(), expected)) { try { await refresh(expected.id) } catch { /* The warning already asks the user to verify current state. */ } } },
+  })
   if (appeal.isPending) return <section className="panel mt-6"><LoadingState /></section>
   if (appeal.isError || !appeal.data) return <section className="panel mt-6"><ErrorState message={errorMessage(appeal.error)} onRetry={() => { void appeal.refetch() }} /></section>
   const data = appeal.data
-  const resolve = async (decision: AppealDecision, note: string) => {
-    await backend.resolveAppeal(id, decision, note)
-    requireCurrentModerator(expectedModerator)
-    await refresh()
-    requireCurrentModerator(expectedModerator)
-    notify(moderationSuccessMessages[decision])
-  }
-  return <section className="panel mt-6"><div className="panel-heading"><div><p className="eyebrow">Chi tiết khiếu nại</p><h2 className="text-xl font-semibold">{podcast.data?.podcast.title || data.podcastId}</h2></div><Button variant="outline" onClick={onClose}>Đóng</Button></div><div className="p-6 space-y-5 text-sm"><div className="grid gap-4 sm:grid-cols-2"><p>Creator<br /><b>{podcast.data?.podcast.creatorChannelName || data.applicantId}</b></p><p>Trạng thái<br /><span className="badge">{appealStatusLabels[data.status]}</span></p><p>Tạo lúc<br />{date(data.createdAt)}</p><p>Giải quyết lúc<br />{date(data.resolvedAt)}</p></div><p className="whitespace-pre-wrap"><b>Lý do:</b> {data.reason}</p>{podcast.isError && <ErrorState message={errorMessage(podcast.error)} onRetry={() => { void podcast.refetch() }} />}<div className="flex flex-wrap gap-2"><NoteDialog fieldId={`appeal-${id}-accept-note`} schema={moderationNoteSchema} title="Chấp nhận khiếu nại?" description="Podcast đủ điều kiện sẽ quay về PENDING_REVIEW, không được xuất bản trực tiếp." confirmLabel="Chấp nhận" onConfirm={note => resolve('ACCEPT', note)}><Button disabled={!canResolveAppeal(role, data, 'ACCEPT', podcast.data?.podcast)}>Chấp nhận</Button></NoteDialog><NoteDialog fieldId={`appeal-${id}-reject-note`} schema={moderationNoteSchema} title="Từ chối khiếu nại?" description="Trạng thái podcast sẽ được giữ nguyên." confirmLabel="Từ chối" destructive onConfirm={note => resolve('REJECT', note)}><Button variant="outline" disabled={!canResolveAppeal(role, data, 'REJECT', podcast.data?.podcast)}>Từ chối</Button></NoteDialog></div></div></section>
+  return <section className="panel mt-6"><div className="panel-heading"><div><p className="eyebrow">Chi tiết khiếu nại</p><h2 className="text-xl font-semibold">{podcast.data?.podcast.title || data.podcastId}</h2></div><Button variant="outline" onClick={onClose}>Đóng</Button></div><div className="p-6 space-y-5 text-sm"><div className="grid gap-4 sm:grid-cols-2"><p>Creator<br /><b>{podcast.data?.podcast.creatorChannelName || data.applicantId}</b></p><p>Trạng thái<br /><span className="badge">{appealStatusLabels[data.status]}</span></p><p>Tạo lúc<br />{date(data.createdAt)}</p><p>Giải quyết lúc<br />{date(data.resolvedAt)}</p></div><p className="whitespace-pre-wrap"><b>Lý do:</b> {data.reason}</p>{podcast.isError && <ErrorState message={errorMessage(podcast.error)} onRetry={() => { void podcast.refetch() }} />}<div className="flex flex-wrap gap-2"><NoteDialog fieldId={`appeal-${id}-accept-note`} schema={moderationNoteSchema} title="Chấp nhận khiếu nại?" description="Podcast đủ điều kiện sẽ quay về PENDING_REVIEW, không được xuất bản trực tiếp." confirmLabel="Chấp nhận" onOpenChange={open => { initiatingModerator.current = open ? currentModerator() : null }} onConfirm={async note => { await resolve.mutateAsync({ decision: 'ACCEPT', note }) }}><Button disabled={!canResolveAppeal(role, data, 'ACCEPT', podcast.data?.podcast) || resolve.isPending}>Chấp nhận</Button></NoteDialog><NoteDialog fieldId={`appeal-${id}-reject-note`} schema={moderationNoteSchema} title="Từ chối khiếu nại?" description="Trạng thái podcast sẽ được giữ nguyên." confirmLabel="Từ chối" destructive onOpenChange={open => { initiatingModerator.current = open ? currentModerator() : null }} onConfirm={async note => { await resolve.mutateAsync({ decision: 'REJECT', note }) }}><Button variant="outline" disabled={!canResolveAppeal(role, data, 'REJECT', podcast.data?.podcast) || resolve.isPending}>Từ chối</Button></NoteDialog></div></div></section>
 }
 
 export function AppealsPage() { const { user } = useAuth(); const role = user?.role; const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role]); const [filter, setFilter] = useState({ status: 'PENDING', page: 0 }); const [selected, setSelected] = useState<string | null>(null); const query = useQuery({ queryKey: key('moderation-appeals', user?.id, filter.status, filter.page), enabled: !!user, queryFn: ({ signal }) => backend.appeals(filter.status, filter.page, 20, signal) }); return <><Header title="Khiếu nại podcast" description="Xem lý do và quyết định khiếu nại theo trạng thái hiện tại." refresh={() => { void query.refetch() }} loading={query.isFetching} /><section className="panel"><div className="panel-heading"><h2 className="font-semibold">Danh sách khiếu nại</h2><select aria-label="Lọc trạng thái khiếu nại" className="field w-auto" value={filter.status} onChange={event => { setFilter({ status: event.target.value, page: 0 }); setSelected(null) }}><option value="">Tất cả trạng thái</option>{Object.entries(appealStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>{query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data.content.length ? <><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Podcast</th><th>Người gửi</th><th>Trạng thái</th><th>Ngày gửi</th><th /></tr></thead><tbody>{query.data.content.map(item => <tr key={item.appealId}><td className="font-mono text-xs">{item.podcastId}</td><td className="font-mono text-xs">{item.applicantId}</td><td><span className="badge">{appealStatusLabels[item.status]}</span></td><td>{date(item.createdAt)}</td><td><Button variant="outline" onClick={() => setSelected(item.appealId)}>Chi tiết</Button></td></tr>)}</tbody></table></div><Pagination page={query.data} pending={query.isFetching} onPageChange={page => setFilter(current => ({ ...current, page }))} /></> : <EmptyState title="Không có khiếu nại" message="Không có khiếu nại phù hợp với bộ lọc." />}</section>{selected && <AppealDetail id={selected} role={role} onClose={() => setSelected(null)} />}</> }

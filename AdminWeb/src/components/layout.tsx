@@ -60,6 +60,6 @@ export function Layout() {
       <div className="flex shrink-0 items-center gap-2 sm:gap-4"><NotificationDropdown /><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{user?.displayName || user?.username}</p><p className="text-[11px] text-muted-foreground">{user?.role}</p></div><span className="flex size-9 items-center justify-center rounded-full bg-muted text-sm font-bold" aria-hidden="true">{(user?.displayName || user?.username || 'V').slice(0, 1).toUpperCase()}</span><ConfirmDialog trigger={<Button variant="ghost" className="px-2" aria-label="Đăng xuất"><LogOut className="size-5" /></Button>} title="Đăng xuất khỏi VietCast?" description="Phiên đăng nhập trên máy này sẽ được xóa và refresh token sẽ được gửi tới Backend để thu hồi." confirmLabel="Đăng xuất" onConfirm={logout} /></div>
     </header>
     <main id="main-content" className="mx-auto max-w-[1440px] p-5 sm:p-8 xl:p-10" tabIndex={-1}><Outlet /></main>
-    <footer className="px-8 py-5 text-xs text-muted-foreground">VietCast · Không gian quản trị · Phase 2</footer></div>
+    <footer className="px-8 py-5 text-xs text-muted-foreground">VietCast · Không gian quản trị</footer></div>
   </div>
 }

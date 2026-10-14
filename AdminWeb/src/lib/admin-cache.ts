@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import type { CreatorApplication, CreatorStatus } from './admin-contracts.ts'
+import type { Contract, CreatorApplication, CreatorStatus, Dispute, Payment, Withdrawal } from './admin-contracts.ts'
 
 export const adminKeys = {
   creators: (userId: string | undefined) => ['creator-applications', userId] as const,
@@ -15,6 +15,22 @@ export const adminKeys = {
   planDetail: (userId: string | undefined, planId: string | null) => ['membership-plans', userId, 'detail', planId] as const,
   audits: (userId: string | undefined) => ['audit-logs', userId] as const,
   auditList: (userId: string | undefined, resourceType: string, resourceId: string, page: number, size: number) => ['audit-logs', userId, 'list', resourceType, resourceId, page, size] as const,
+  payments: (userId: string | undefined) => ['payments', userId] as const,
+  paymentList: (userId: string | undefined, status: string, page: number, size: number) => ['payments', userId, 'list', status, page, size] as const,
+  paymentDetail: (userId: string | undefined, paymentId: string | null) => ['payments', userId, 'detail', paymentId] as const,
+  withdrawals: (userId: string | undefined) => ['withdrawals', userId] as const,
+  withdrawalList: (userId: string | undefined, status: string, page: number, size: number) => ['withdrawals', userId, 'list', status, page, size] as const,
+  withdrawalDetail: (userId: string | undefined, withdrawalId: string | null) => ['withdrawals', userId, 'detail', withdrawalId] as const,
+  withdrawalReviews: (userId: string | undefined, withdrawalId: string | null, page: number, size: number) => ['withdrawals', userId, 'reviews', withdrawalId, page, size] as const,
+  wallets: (userId: string | undefined) => ['wallets', userId] as const,
+  walletList: (userId: string | undefined, page: number, size: number) => ['wallets', userId, 'list', page, size] as const,
+  walletTransactions: (userId: string | undefined, walletId: string, status: string, page: number, size: number) => ['wallet-transactions', userId, walletId, status, page, size] as const,
+  contracts: (userId: string | undefined) => ['contracts', userId] as const,
+  contractList: (userId: string | undefined, status: string, page: number, size: number) => ['contracts', userId, 'list', status, page, size] as const,
+  contractDetail: (userId: string | undefined, contractId: string | null) => ['contracts', userId, 'detail', contractId] as const,
+  disputes: (userId: string | undefined) => ['disputes', userId] as const,
+  disputeList: (userId: string | undefined, status: string, page: number, size: number) => ['disputes', userId, 'list', status, page, size] as const,
+  disputeDetail: (userId: string | undefined, disputeId: string | null) => ['disputes', userId, 'detail', disputeId] as const,
 }
 
 export async function creatorReviewConfirmed(client: QueryClient, userId: string | undefined, application: CreatorApplication) {
@@ -49,5 +65,47 @@ export async function planChangeConfirmed(client: QueryClient, userId: string | 
   await Promise.all([
     client.invalidateQueries({ queryKey: adminKeys.plans(userId) }),
     planId ? client.invalidateQueries({ queryKey: adminKeys.planDetail(userId, planId) }) : Promise.resolve(),
+  ])
+}
+
+export async function paymentChangeConfirmed(client: QueryClient, userId: string, payment?: Payment) {
+  if (payment) client.setQueryData(adminKeys.paymentDetail(userId, payment.paymentId), payment)
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.payments(userId) }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
+    payment ? client.invalidateQueries({ queryKey: adminKeys.paymentDetail(userId, payment.paymentId) }) : Promise.resolve(),
+  ])
+}
+
+export async function financeChangeConfirmed(client: QueryClient, userId: string, withdrawal?: Withdrawal) {
+  if (withdrawal) client.setQueryData(adminKeys.withdrawalDetail(userId, withdrawal.withdrawalId), withdrawal)
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.withdrawals(userId) }),
+    client.invalidateQueries({ queryKey: adminKeys.wallets(userId) }),
+    client.invalidateQueries({ queryKey: ['wallet-transactions', userId] }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
+    withdrawal ? client.invalidateQueries({ queryKey: adminKeys.withdrawalDetail(userId, withdrawal.withdrawalId) }) : Promise.resolve(),
+    withdrawal ? client.invalidateQueries({ queryKey: ['withdrawals', userId, 'reviews', withdrawal.withdrawalId] }) : Promise.resolve(),
+  ])
+}
+
+export async function contractChangeConfirmed(client: QueryClient, userId: string, contract?: Contract) {
+  if (contract) client.setQueryData(adminKeys.contractDetail(userId, contract.contractId), contract)
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.contracts(userId) }),
+    client.invalidateQueries({ queryKey: adminKeys.disputes(userId) }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
+    contract ? client.invalidateQueries({ queryKey: adminKeys.contractDetail(userId, contract.contractId) }) : Promise.resolve(),
+  ])
+}
+
+export async function disputeChangeConfirmed(client: QueryClient, userId: string, dispute?: Dispute) {
+  if (dispute) client.setQueryData(adminKeys.disputeDetail(userId, dispute.disputeId), dispute)
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.disputes(userId) }),
+    client.invalidateQueries({ queryKey: adminKeys.contracts(userId) }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
+    dispute ? client.invalidateQueries({ queryKey: adminKeys.disputeDetail(userId, dispute.disputeId) }) : Promise.resolve(),
+    dispute ? client.invalidateQueries({ queryKey: adminKeys.contractDetail(userId, dispute.contractId) }) : Promise.resolve(),
   ])
 }

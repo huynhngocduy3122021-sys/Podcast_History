@@ -1,12 +1,13 @@
 import type { AxiosInstance } from 'axios'
-import { categoriesSchema, categoryFormSchema, categorySchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, staffCreateSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema } from './admin-contracts.ts'
-import type { CategoryForm, CreatorStatus, AdminUserRole, PlanWrite } from './admin-contracts.ts'
+import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema } from './admin-contracts.ts'
+import type { ApproveWithdrawal, CategoryForm, CompleteWithdrawal, CreatorStatus, AdminUserRole, PaymentReconcile, PaymentRefund, PaymentStatus, PlanWrite, WithdrawalNote, WithdrawalStatus } from './admin-contracts.ts'
 import { confirmedMutation } from './api-mutation.ts'
 
 // Inject the existing authenticated transport; tests use an Axios adapter, not a second runtime client.
 export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put' | 'delete' | 'patch'>) {
   const applications = '/api/admin/creator-applications'
   const categories = '/api/admin/categories'
+  const payments = '/api/admin/payments'
   return {
     async applications(status: CreatorStatus | '', page: number, size: number, signal?: AbortSignal) {
       return creatorApplicationsPageSchema.parse((await client.get(applications, { params: { status: status || undefined, page, size }, signal })).data)
@@ -94,6 +95,85 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
     async auditLogs(params: { resourceType?: string; resourceId?: string; page: number; size: number }, signal?: AbortSignal) {
       const resourceId = uuidFilterSchema.parse(params.resourceId || '')
       return auditsPageSchema.parse((await client.get('/api/admin/audit-logs', { params: { ...params, resourceType: params.resourceType || undefined, resourceId: resourceId || undefined }, signal })).data)
+    },
+    async contracts(params: { status: string; page: number; size: number }, signal?: AbortSignal) {
+      const status = params.status ? contractStatusSchema.parse(params.status) : ''
+      return contractsPageSchema.parse((await client.get('/api/admin/contracts', { params: { status: status || undefined, page: params.page, size: params.size }, signal })).data)
+    },
+    async contract(contractId: string, signal?: AbortSignal) {
+      return contractSchema.parse((await client.get(`/api/admin/contracts/${encodeURIComponent(contractId)}`, { signal })).data)
+    },
+    async openDispute(contractId: string, values: unknown) {
+      const body = openDisputeSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/contracts/${encodeURIComponent(contractId)}/disputes`, body), disputeSchema, 201,
+        data => data.contractId === contractId && data.status === 'OPEN')
+    },
+    async disputes(params: { status: string; page: number; size: number }, signal?: AbortSignal) {
+      const status = params.status ? disputeStatusSchema.parse(params.status) : ''
+      return disputesPageSchema.parse((await client.get('/api/admin/disputes', { params: { status: status || undefined, page: params.page, size: params.size }, signal })).data)
+    },
+    async dispute(disputeId: string, signal?: AbortSignal) {
+      return disputeSchema.parse((await client.get(`/api/admin/disputes/${encodeURIComponent(disputeId)}`, { signal })).data)
+    },
+    async resolveDispute(disputeId: string, values: unknown) {
+      const body = resolveDisputeSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/disputes/${encodeURIComponent(disputeId)}/resolve`, body), disputeSchema, 200,
+        data => data.disputeId === disputeId && data.status === 'RESOLVED' && data.decision === body.decision)
+    },
+    async payments(params: { status: PaymentStatus | ''; page: number; size: number }, signal?: AbortSignal) {
+      const status = params.status ? paymentStatusSchema.parse(params.status) : ''
+      return paymentsPageSchema.parse((await client.get(payments, { params: { status: status || undefined, page: params.page, size: params.size }, signal })).data)
+    },
+    async payment(paymentId: string, signal?: AbortSignal) {
+      return paymentSchema.parse((await client.get(`${payments}/${encodeURIComponent(paymentId)}`, { signal })).data)
+    },
+    async reconcilePayment(paymentId: string, values: PaymentReconcile) {
+      const body = paymentReconcileSchema.parse(values)
+      const expectedStatus = body.result
+      return confirmedMutation(() => client.post(`${payments}/${encodeURIComponent(paymentId)}/reconcile`, body), paymentSchema, 200,
+        data => data.paymentId === paymentId && data.status === expectedStatus)
+    },
+    async refundPayment(paymentId: string, values: PaymentRefund) {
+      const body = paymentRefundSchema.parse(values)
+      return confirmedMutation(() => client.post(`${payments}/${encodeURIComponent(paymentId)}/refund`, body), paymentSchema, 200,
+        data => data.paymentId === paymentId && data.status === 'REFUNDED' && data.refundReference === body.refundReference)
+    },
+    async withdrawals(params: { status: WithdrawalStatus | ''; page: number; size: number }, signal?: AbortSignal) {
+      const status = params.status ? withdrawalStatusSchema.parse(params.status) : ''
+      return withdrawalsPageSchema.parse((await client.get('/api/admin/withdrawals', { params: { status: status || undefined, page: params.page, size: params.size }, signal })).data)
+    },
+    async withdrawal(withdrawalId: string, signal?: AbortSignal) {
+      return withdrawalSchema.parse((await client.get(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}`, { signal })).data)
+    },
+    async withdrawalReviews(withdrawalId: string, page: number, size: number, signal?: AbortSignal) {
+      return withdrawalReviewsPageSchema.parse((await client.get(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/reviews`, { params: { page, size }, signal })).data)
+    },
+    async approveWithdrawal(withdrawalId: string, values: ApproveWithdrawal) {
+      const body = approveWithdrawalSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/approve`, body), withdrawalSchema, 200,
+        data => data.withdrawalId === withdrawalId && data.status === 'PROCESSING' && data.fundsReserved)
+    },
+    async rejectWithdrawal(withdrawalId: string, values: WithdrawalNote) {
+      const body = withdrawalNoteSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/reject`, body), withdrawalSchema, 200,
+        data => data.withdrawalId === withdrawalId && data.status === 'REJECTED' && !data.fundsReserved)
+    },
+    async completeWithdrawal(withdrawalId: string, values: CompleteWithdrawal) {
+      const body = completeWithdrawalSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/complete`, body), withdrawalSchema, 200,
+        data => data.withdrawalId === withdrawalId && data.status === 'COMPLETED' && !data.fundsReserved && data.payoutReference === body.payoutReference)
+    },
+    async failWithdrawal(withdrawalId: string, values: WithdrawalNote) {
+      const body = withdrawalNoteSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/fail`, body), withdrawalSchema, 200,
+        data => data.withdrawalId === withdrawalId && data.status === 'FAILED' && !data.fundsReserved)
+    },
+    async wallets(page: number, size: number, signal?: AbortSignal) {
+      return walletsPageSchema.parse((await client.get('/api/admin/wallets', { params: { page, size }, signal })).data)
+    },
+    async walletTransactions(params: { walletId?: string; status?: string; page: number; size: number }, signal?: AbortSignal) {
+      const walletId = uuidFilterSchema.parse(params.walletId || '')
+      return transactionsPageSchema.parse((await client.get('/api/admin/wallet-transactions', { params: { walletId: walletId || undefined, status: params.status || undefined, page: params.page, size: params.size }, signal })).data)
     },
   }
 }

@@ -106,6 +106,127 @@ export const planWriteSchema = z.object({
   status: planStatusSchema,
 })
 export const planDeactivateSchema = z.object({ note: noteSchema })
+
+export const paymentStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'SUCCESS', 'COMPLETED'])
+export const paymentSchema = z.object({
+  paymentId: uuid,
+  userId: uuid,
+  subscriptionId: uuid.nullable(),
+  requestId: uuid.nullable(),
+  stageId: uuid.nullable(),
+  amount: decimalSchema,
+  currency: z.string().length(3),
+  status: paymentStatusSchema,
+  provider: z.string().nullable(),
+  providerTransactionId: z.string().nullable(),
+  createdAt: z.string(),
+  paidAt: z.string().nullable(),
+  refundReference: z.string().nullable(),
+  refundedAt: z.string().nullable(),
+})
+export const paymentsPageSchema = pageSchema(paymentSchema)
+export const paymentReconcileResultSchema = z.enum(['PAID', 'FAILED'])
+export const paymentReconcileSchema = z.object({
+  result: paymentReconcileResultSchema,
+  providerTransactionId: textWithLimit(180, 'Mã giao dịch tối đa 180 ký tự').trim().optional(),
+  note: noteSchema,
+}).superRefine((value, ctx) => {
+  if (value.result === 'PAID' && !value.providerTransactionId) {
+    ctx.addIssue({ code: 'custom', path: ['providerTransactionId'], message: 'Nhập mã giao dịch đã đối soát khi ghi nhận PAID' })
+  }
+})
+export const paymentRefundSchema = z.object({
+  refundReference: textWithLimit(180, 'Mã hoàn tiền tối đa 180 ký tự').trim().min(1, 'Nhập mã hoàn tiền đã xác minh'),
+  note: noteSchema,
+})
+export const withdrawalStatusSchema = z.enum(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REJECTED'])
+export const withdrawalSchema = z.object({
+  withdrawalId: uuid,
+  creatorId: uuid,
+  walletId: uuid,
+  amount: decimalSchema,
+  currency: z.string().length(3),
+  payoutMethod: z.string(),
+  payoutAccountMasked: z.string(),
+  status: withdrawalStatusSchema,
+  fundsReserved: z.boolean(),
+  payoutReference: z.string().nullable(),
+  note: z.string().nullable(),
+  requestedAt: z.string(),
+  processedAt: z.string().nullable(),
+})
+export const withdrawalsPageSchema = pageSchema(withdrawalSchema)
+export const withdrawalReviewSchema = z.object({
+  reviewId: uuid,
+  reviewerId: uuid,
+  decision: z.string(),
+  note: z.string().nullable(),
+  reviewedAt: z.string(),
+})
+export const withdrawalReviewsPageSchema = pageSchema(withdrawalReviewSchema)
+export const walletSchema = z.object({
+  walletId: uuid,
+  userId: uuid,
+  availableBalance: decimalSchema,
+  currency: z.string().length(3),
+  status: z.string(),
+})
+export const walletsPageSchema = pageSchema(walletSchema)
+export const transactionSchema = z.object({
+  transactionId: uuid,
+  walletId: uuid.nullable(),
+  withdrawalId: uuid.nullable(),
+  paymentId: uuid.nullable(),
+  type: z.string(),
+  direction: z.string(),
+  amount: decimalSchema,
+  currency: z.string().length(3),
+  status: z.string(),
+  referenceCode: z.string().nullable(),
+  balanceAfter: decimalSchema.nullable(),
+  createdAt: z.string(),
+})
+export const transactionsPageSchema = pageSchema(transactionSchema)
+export const contractStatusSchema = z.string().min(1)
+export const contractStageSchema = z.object({
+  stageId: uuid,
+  name: z.string(),
+  order: z.number().int().nonnegative(),
+  status: z.string(),
+})
+export const contractSchema = z.object({
+  contractId: uuid,
+  listenerId: uuid,
+  creatorId: uuid,
+  status: contractStatusSchema,
+  createdAt: z.string(),
+  stages: z.array(contractStageSchema),
+})
+export const contractsPageSchema = pageSchema(contractSchema)
+export const disputeStatusSchema = z.string().min(1)
+export const disputeDecisionSchema = z.enum(['RESUME_CONTRACT', 'CANCEL_CONTRACT', 'COMPLETE_CONTRACT'])
+export const disputeSchema = z.object({
+  disputeId: uuid,
+  contractId: uuid,
+  openedById: uuid,
+  reason: z.string(),
+  previousContractStatus: z.string(),
+  status: disputeStatusSchema,
+  decision: z.string().nullable(),
+  note: z.string().nullable(),
+  reviewerId: uuid.nullable(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+})
+export const disputesPageSchema = pageSchema(disputeSchema)
+export const openDisputeSchema = z.object({ note: noteSchema })
+export const resolveDisputeSchema = z.object({ decision: disputeDecisionSchema, note: noteSchema })
+export const approveWithdrawalSchema = z.object({ payoutAccountVerified: z.literal(true), note: noteSchema })
+export const withdrawalNoteSchema = z.object({ note: noteSchema })
+export const completeWithdrawalSchema = z.object({
+  payoutReference: textWithLimit(180, 'Mã chuyển khoản tối đa 180 ký tự').trim().min(1, 'Nhập mã chuyển khoản đã xác minh'),
+  note: noteSchema,
+})
 export type AdminUserRole = z.infer<typeof adminUserRoleSchema>
 export type AdminUser = z.infer<typeof userSchema>
 export type UserProfile = z.infer<typeof userProfileSchema>
@@ -116,6 +237,26 @@ export type UserRoleChange = z.infer<typeof userRoleChangeSchema>
 export type AuditItem = z.infer<typeof auditSchema>
 export type MembershipPlan = z.infer<typeof planSchema>
 export type PlanWrite = z.infer<typeof planWriteSchema>
+export type PaymentStatus = z.infer<typeof paymentStatusSchema>
+export type Payment = z.infer<typeof paymentSchema>
+export type PaymentReconcile = z.infer<typeof paymentReconcileSchema>
+export type PaymentRefund = z.infer<typeof paymentRefundSchema>
+export type WithdrawalStatus = z.infer<typeof withdrawalStatusSchema>
+export type Withdrawal = z.infer<typeof withdrawalSchema>
+export type WithdrawalReview = z.infer<typeof withdrawalReviewSchema>
+export type Wallet = z.infer<typeof walletSchema>
+export type Transaction = z.infer<typeof transactionSchema>
+export type ContractStatus = z.infer<typeof contractStatusSchema>
+export type ContractStage = z.infer<typeof contractStageSchema>
+export type Contract = z.infer<typeof contractSchema>
+export type DisputeStatus = z.infer<typeof disputeStatusSchema>
+export type DisputeDecision = z.infer<typeof disputeDecisionSchema>
+export type Dispute = z.infer<typeof disputeSchema>
+export type OpenDispute = z.infer<typeof openDisputeSchema>
+export type ResolveDispute = z.infer<typeof resolveDisputeSchema>
+export type ApproveWithdrawal = z.infer<typeof approveWithdrawalSchema>
+export type WithdrawalNote = z.infer<typeof withdrawalNoteSchema>
+export type CompleteWithdrawal = z.infer<typeof completeWithdrawalSchema>
 
 export function canReviewApplication(role: unknown, status: CreatorStatus) {
   return role === 'ADMIN' && status === 'PENDING'

@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Bell, X } from "lucide-react";
 import { useAuth } from "../auth";
-import { api, errorMessage } from "../lib/client";
-import { notificationsPageSchema } from "../lib/contracts";
+import { errorMessage } from "../lib/client";
+import { createNotificationApi, notificationKeys } from "../lib/notifications";
+import { useNotificationRead } from "../lib/notification-state";
+import { api } from "../lib/client";
 import { Button } from "./ui/button";
 import { EmptyState, ErrorState, LoadingState } from "./states";
 
@@ -20,6 +22,9 @@ function displayDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? "" : dateFormat.format(date);
 }
 
+const backend = createNotificationApi(api);
+const size = 20;
+
 export function NotificationDropdown() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -30,19 +35,11 @@ export function NotificationDropdown() {
   const panel = useRef<HTMLElement>(null);
   const panelId = useId();
   const titleId = useId();
+  const read = useNotificationRead();
   const query = useQuery({
-    queryKey: ["notifications", user?.id, "preview"],
+    queryKey: user ? notificationKeys.page(user.id, 0, size) : ["notifications", "anonymous", "page", 0, size],
     enabled: open && !!user,
-    staleTime: 0,
-    queryFn: async ({ signal }) =>
-      notificationsPageSchema.parse(
-        (
-          await api.get("/api/me/notifications", {
-            params: { page: 0, size: 5 },
-            signal,
-          })
-        ).data,
-      ),
+    queryFn: ({ signal }) => backend.list(0, size, signal),
   });
   useLayoutEffect(() => {
     if (!open) return;
@@ -93,7 +90,7 @@ export function NotificationDropdown() {
         ref={trigger}
         variant="ghost"
         className="px-2"
-        aria-label="Thông báo cá nhân"
+        aria-label={`Thông báo cá nhân${query.data ? `, ${query.data.content.filter(item => !item.read).length} chưa đọc` : ""}`}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((current) => !current)}
@@ -145,7 +142,7 @@ export function NotificationDropdown() {
               />
             ) : (
               <ul className="divide-y divide-border/60">
-                {query.data.content.map((item) => (
+                {query.data.content.slice(0, 5).map((item) => (
                   <li
                     key={item.notificationId}
                     className={`px-5 py-4 ${item.read ? "" : "bg-primary/4"}`}
@@ -176,6 +173,16 @@ export function NotificationDropdown() {
                             <span className="text-primary">Chưa đọc</span>
                           )}
                         </div>
+                        {!item.read && (
+                          <Button
+                            variant="ghost"
+                            className="mt-2 min-h-0 px-0 py-1 text-xs text-primary"
+                            disabled={read.isPending}
+                            onClick={() => { void read.markRead(item.notificationId).catch(() => undefined); }}
+                          >
+                            Đánh dấu đã đọc
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </li>
@@ -183,6 +190,7 @@ export function NotificationDropdown() {
               </ul>
             )}
           </div>
+          {read.error && <p role="alert" className="border-t border-border px-5 py-3 text-xs text-destructive">{errorMessage(read.error)}</p>}
           <div className="border-t border-border p-2">
             <Button asChild variant="ghost" className="w-full text-primary">
               <Link to="/notifications" onClick={() => setOpen(false)}>

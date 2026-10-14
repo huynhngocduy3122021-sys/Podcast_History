@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -15,51 +15,67 @@ import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
 import { useFeedback } from '../components/feedback'
+import { identityOf, sameIdentity } from '../lib/identity'
 
 const backend = createAdminApi(api)
+const sessionChangedMessage = 'Phiên đăng nhập đã thay đổi. Vui lòng tải lại dữ liệu trước khi tiếp tục.'
 
 function PlanForm({ plan, onClose }: { plan?: MembershipPlan; onClose: () => void }) {
-  const { user } = useAuth()
   const client = useQueryClient()
   const notify = useFeedback()
+  const initiatingIdentity = useRef<ReturnType<typeof identityOf>>(null)
   const form = useForm({
     resolver: zodResolver(planWriteSchema),
     defaultValues: { creatorId: plan?.creatorId || '', name: plan?.name || '', description: plan?.description || '', price: plan?.price || '0.01', currency: plan?.currency || 'VND', durationDays: plan?.durationDays || 30, status: plan?.status || 'ACTIVE' } as PlanWrite,
   })
   const mutation = useMutation({
-    mutationFn: (values: PlanWrite) => backend.savePlan(plan?.planId, values),
+    mutationFn: (values: PlanWrite) => {
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      return backend.savePlan(plan?.planId, values)
+    },
     onSuccess: async data => {
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
-      await planChangeConfirmed(client, user?.id, data.planId)
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      await planChangeConfirmed(client, expected.id, data.planId)
+      if (!sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
       notify(plan ? phase4SuccessMessages.planUpdated : phase4SuccessMessages.planCreated)
       onClose()
     },
     onError: async error => {
-      if (extractApiError(error).outcomeUnknown) await planChangeConfirmed(client, user?.id, plan?.planId)
+      const expected = initiatingIdentity.current
+      if (extractApiError(error).outcomeUnknown && expected && expected.role === 'ADMIN' && sameIdentity(expected, identityOf(session.getUser()))) await planChangeConfirmed(client, expected.id, plan?.planId)
     },
   })
-  const submit = form.handleSubmit(values => { mutation.reset(); void mutation.mutateAsync(values).catch(() => undefined) })
+  const submit = form.handleSubmit(values => { initiatingIdentity.current = identityOf(session.getUser()); mutation.reset(); void mutation.mutateAsync(values).catch(() => undefined) })
   return <section className="panel mb-6"><div className="panel-heading"><div><h2 className="font-semibold">{plan ? `Chỉnh sửa: ${plan.name}` : 'Tạo gói thành viên'}</h2><p className="mt-1 text-xs text-muted-foreground">Giá gửi dạng chuỗi thập phân để giữ chính xác; Backend dùng BigDecimal.</p></div></div><form onSubmit={submit} noValidate className="p-6"><fieldset disabled={mutation.isPending} className="grid gap-5 sm:grid-cols-2"><div><label className="field-label" htmlFor="plan-creator">Creator profile ID *</label><input id="plan-creator" className="field font-mono text-xs" placeholder="UUID của ProducerProfile" {...form.register('creatorId')} />{form.formState.errors.creatorId && <p className="field-error">{form.formState.errors.creatorId.message}</p>}</div><div><label className="field-label" htmlFor="plan-name">Tên gói *</label><input id="plan-name" className="field" maxLength={150} {...form.register('name')} />{form.formState.errors.name && <p className="field-error">{form.formState.errors.name.message}</p>}</div><div><label className="field-label" htmlFor="plan-price">Giá *</label><input id="plan-price" className="field" inputMode="decimal" placeholder="50000.00" {...form.register('price')} />{form.formState.errors.price && <p className="field-error">{form.formState.errors.price.message}</p>}</div><div><label className="field-label" htmlFor="plan-currency">Tiền tệ *</label><input id="plan-currency" className="field uppercase" maxLength={3} {...form.register('currency')} />{form.formState.errors.currency && <p className="field-error">{form.formState.errors.currency.message}</p>}</div><div><label className="field-label" htmlFor="plan-duration">Thời hạn (ngày) *</label><input id="plan-duration" type="number" min={1} max={3650} className="field" {...form.register('durationDays', { valueAsNumber: true })} />{form.formState.errors.durationDays && <p className="field-error">{form.formState.errors.durationDays.message}</p>}</div><div><label className="field-label" htmlFor="plan-status">Trạng thái *</label><select id="plan-status" className="field" {...form.register('status')}><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select>{form.formState.errors.status && <p className="field-error">{form.formState.errors.status.message}</p>}</div><div className="sm:col-span-2"><label className="field-label" htmlFor="plan-description">Mô tả</label><textarea id="plan-description" className="field py-3" rows={4} maxLength={10000} {...form.register('description')} />{form.formState.errors.description && <p className="field-error">{form.formState.errors.description.message}</p>}</div></fieldset>{mutation.isError && <p role="alert" className="mt-5 rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{errorMessage(mutation.error)}</p>}<div className="mt-6 flex justify-end gap-3"><Button variant="outline" onClick={onClose} disabled={mutation.isPending}>Hủy</Button><Button type="submit" disabled={mutation.isPending}>{mutation.isPending ? 'Đang lưu…' : plan ? 'Lưu thay đổi' : 'Tạo gói'}</Button></div></form></section>
 }
 
 function DeactivatePlan({ plan, disabled, onDone }: { plan: MembershipPlan; disabled: boolean; onDone: () => void }) {
-  const { user } = useAuth()
   const client = useQueryClient()
   const notify = useFeedback()
+  const initiatingIdentity = useRef<ReturnType<typeof identityOf>>(null)
   const [note, setNote] = useState('')
   const mutation = useMutation({
-    mutationFn: () => backend.deactivatePlan(plan.planId, { note }),
+    mutationFn: () => {
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      return backend.deactivatePlan(plan.planId, { note })
+    },
     onSuccess: async () => {
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
-      await planChangeConfirmed(client, user?.id, plan.planId)
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      await planChangeConfirmed(client, expected.id, plan.planId)
+      if (!sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
       notify(phase4SuccessMessages.planDeactivated)
       onDone()
     },
-    onError: async error => { if (extractApiError(error).outcomeUnknown) await planChangeConfirmed(client, user?.id, plan.planId) },
+    onError: async error => {
+      const expected = initiatingIdentity.current
+      if (extractApiError(error).outcomeUnknown && expected && expected.role === 'ADMIN' && sameIdentity(expected, identityOf(session.getUser()))) await planChangeConfirmed(client, expected.id, plan.planId)
+    },
   })
-  return <ConfirmDialog trigger={<Button variant="outline" disabled={disabled || plan.status !== 'ACTIVE' || mutation.isPending}>Tắt gói</Button>} title="Tắt gói thành viên?" description="Gói sẽ chuyển INACTIVE và subscription hiện có không bị hủy theo contract Backend." confirmLabel="Xác nhận tắt gói" destructive confirmDisabled={!note.trim()} onOpenChange={open => { if (!open) setNote('') }} onConfirm={async () => { await mutation.mutateAsync(); setNote('') }}>
+  return <ConfirmDialog trigger={<Button variant="outline" disabled={disabled || plan.status !== 'ACTIVE' || mutation.isPending}>Tắt gói</Button>} title="Tắt gói thành viên?" description="Gói sẽ chuyển INACTIVE và subscription hiện có không bị hủy theo contract Backend." confirmLabel="Xác nhận tắt gói" destructive confirmDisabled={!note.trim()} onOpenChange={open => { initiatingIdentity.current = open ? identityOf(session.getUser()) : null; if (!open) setNote('') }} onConfirm={async () => { await mutation.mutateAsync(); setNote('') }}>
     <label className="field-label" htmlFor="plan-deactivate-note">Ghi chú bắt buộc</label><textarea id="plan-deactivate-note" className="field py-3" rows={4} maxLength={5000} value={note} onChange={event => setNote(event.target.value)} placeholder="Lý do tắt gói" />
   </ConfirmDialog>
 }

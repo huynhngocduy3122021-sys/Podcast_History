@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,33 +15,43 @@ import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
 import { useFeedback } from '../components/feedback'
+import { identityOf, sameIdentity } from '../lib/identity'
 
 const backend = createAdminApi(api)
+const sessionChangedMessage = 'Phiên đăng nhập đã thay đổi. Vui lòng tải lại dữ liệu trước khi tiếp tục.'
 
 function CategoryEditor({ category, onClose }: { category?: Category; onClose: () => void }) {
   const { user } = useAuth()
   const client = useQueryClient()
   const notify = useFeedback()
+  const initiatingIdentity = useRef<ReturnType<typeof identityOf>>(null)
   const form = useForm({
     resolver: zodResolver(categoryFormSchema),
     defaultValues: { name: category?.name || '', slug: category?.slug || '', description: category?.description || '', active: category?.active ?? true },
   })
   const mutation = useMutation({
-    mutationFn: (values: CategoryForm) => backend.saveCategory(category?.categoryId, values),
+    mutationFn: (values: CategoryForm) => {
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      return backend.saveCategory(category?.categoryId, values)
+    },
     onSuccess: async data => {
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
-      await categoryChangeConfirmed(client, user?.id)
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      await categoryChangeConfirmed(client, expected.id)
+      if (!sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
       notify(categorySaveSuccess(category, data))
       onClose()
     },
     onError: async error => {
-      if (!extractApiError(error).outcomeUnknown || session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!extractApiError(error).outcomeUnknown || !expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) return
       notify(errorMessage(error), 'error')
-      await categoryChangeConfirmed(client, user?.id)
+      await categoryChangeConfirmed(client, expected.id)
     },
   })
   const submit = form.handleSubmit(async values => {
+    initiatingIdentity.current = identityOf(session.getUser())
     form.clearErrors()
     mutation.reset()
     try { await mutation.mutateAsync(values) }
@@ -71,23 +81,30 @@ function DeactivateCategory({ category, disabled }: { category: Category; disabl
   const { user } = useAuth()
   const client = useQueryClient()
   const notify = useFeedback()
+  const initiatingIdentity = useRef<ReturnType<typeof identityOf>>(null)
   const mutation = useMutation({
-    mutationFn: () => backend.deactivateCategory(category.categoryId),
+    mutationFn: () => {
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      return backend.deactivateCategory(category.categoryId)
+    },
     onSuccess: async () => {
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
-      await categoryChangeConfirmed(client, user?.id)
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      await categoryChangeConfirmed(client, expected.id)
+      if (!sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
       notify(successMessages.categoryDeactivated)
     },
     onError: async error => {
-      if (!extractApiError(error).outcomeUnknown || session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!extractApiError(error).outcomeUnknown || !expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) return
       notify(errorMessage(error), 'error')
-      await categoryChangeConfirmed(client, user?.id)
+      await categoryChangeConfirmed(client, expected.id)
     },
   })
   return <ConfirmDialog trigger={<Button variant="outline" disabled={disabled || !category.active || user?.role !== 'ADMIN' || mutation.isPending}>Ngừng hoạt động</Button>}
     title="Ngừng hoạt động danh mục?" description={`Danh mục “${category.name}” sẽ không còn hoạt động. Các liên kết podcast và series hiện có được giữ lại.`}
-    confirmLabel="Xác nhận ngừng hoạt động" destructive onConfirm={async () => { await mutation.mutateAsync() }} />
+    confirmLabel="Xác nhận ngừng hoạt động" destructive onOpenChange={open => { initiatingIdentity.current = open ? identityOf(session.getUser()) : null }} onConfirm={async () => { await mutation.mutateAsync() }} />
 }
 
 export function CategoriesPage() {

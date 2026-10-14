@@ -16,29 +16,38 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { Pagination } from '../components/pagination'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
 import { useFeedback } from '../components/feedback'
+import { identityOf, sameIdentity } from '../lib/identity'
 
 const backend = createAdminApi(api)
 const statuses: Record<CreatorStatus, string> = { PENDING: 'Chờ duyệt', APPROVED: 'Đã duyệt', REJECTED: 'Đã từ chối' }
 const date = (value: string | null) => value ? new Date(value).toLocaleString('vi-VN') : '—'
+const sessionChangedMessage = 'Phiên đăng nhập đã thay đổi. Vui lòng tải lại dữ liệu trước khi tiếp tục.'
 
 function CreatorDecision({ application, decision }: { application: CreatorApplication; decision: 'approve' | 'reject' }) {
   const { user } = useAuth()
   const client = useQueryClient()
   const notify = useFeedback()
   const rejection = decision === 'reject'
+  const initiatingIdentity = useRef<ReturnType<typeof identityOf>>(null)
   const form = useForm({ resolver: zodResolver(rejection ? rejectCreatorSchema : approveCreatorSchema), defaultValues: { note: '' }, mode: 'onChange' })
   const mutation = useMutation({
-    mutationFn: (values: { note: string }) => backend.review(application.applicationId, decision, values),
+    mutationFn: (values: { note: string }) => {
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      return backend.review(application.applicationId, decision, values)
+    },
     onSuccess: async data => {
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
-      await creatorReviewConfirmed(client, user?.id, data)
-      if (session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
+      await creatorReviewConfirmed(client, expected.id, data)
+      if (!sameIdentity(expected, identityOf(session.getUser()))) throw new Error(sessionChangedMessage)
       notify(rejection ? successMessages.creatorRejected : successMessages.creatorApproved)
     },
     onError: async error => {
-      if (!extractApiError(error).outcomeUnknown || session.getUser()?.id !== user?.id || session.getUser()?.role !== 'ADMIN') return
+      const expected = initiatingIdentity.current
+      if (!extractApiError(error).outcomeUnknown || !expected || expected.role !== 'ADMIN' || !sameIdentity(expected, identityOf(session.getUser()))) return
       notify(errorMessage(error), 'error')
-      await Promise.all([client.invalidateQueries({ queryKey: adminKeys.creators(user?.id) }), client.invalidateQueries({ queryKey: ['dashboard', user?.id] })])
+      await Promise.all([client.invalidateQueries({ queryKey: adminKeys.creators(expected.id) }), client.invalidateQueries({ queryKey: ['dashboard', expected.id] })])
     },
   })
   const noteId = `${decision}-note`
@@ -48,7 +57,7 @@ function CreatorDecision({ application, decision }: { application: CreatorApplic
     description={rejection ? `Hồ sơ của ${application.username} sẽ được từ chối. Hãy ghi rõ lý do để người đăng ký biết cần bổ sung gì.` : `Backend sẽ chuyển tài khoản ${application.username} sang vai trò CREATOR. Xác nhận sau khi đã kiểm tra hồ sơ.`}
     confirmLabel={rejection ? 'Xác nhận từ chối' : 'Xác nhận duyệt'} destructive={rejection}
     confirmDisabled={rejection && !form.formState.isValid}
-    onOpenChange={() => { form.reset({ note: '' }); mutation.reset() }}
+    onOpenChange={open => { if (open) initiatingIdentity.current = identityOf(session.getUser()); else initiatingIdentity.current = null; form.reset({ note: '' }); mutation.reset() }}
     onConfirm={async () => {
       if (!await form.trigger()) throw new Error('Kiểm tra ghi chú trước khi xác nhận.')
       await mutation.mutateAsync(form.getValues())

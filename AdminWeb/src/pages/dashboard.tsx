@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { api, errorMessage } from '../lib/client'
 import { dashboardSchema } from '../lib/contracts'
+import { formatMoney } from '../lib/finance-format'
 import { apiPrefix, isRole } from '../lib/permissions'
 import { Button } from '../components/ui/button'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
@@ -38,8 +39,8 @@ export function DashboardPage() {
         { label: 'Podcast chờ kiểm duyệt', count: data.pendingPodcasts, path: '/podcast-moderation' },
         { label: 'Báo cáo chưa kết thúc', count: data.pendingReports, path: '/reports' },
         ...(admin ? [{ label: 'Hồ sơ Creator', count: data.pendingCreators, path: '/creator-approval' }, { label: 'Yêu cầu rút tiền', count: data.pendingWithdrawals, path: '/withdrawals' }, { label: 'Tranh chấp đang mở', count: data.openDisputes, path: '/disputes' }] : []),
-      ].map(item => <Link to={item.path} key={item.path} className="flex items-center gap-3 py-5 text-sm hover:text-primary"><span className="flex-1">{item.label}</span><span className="font-bold">{number.format(item.count)}</span><ArrowRight className="size-4" /></Link>)}</div><p className="border-t border-border px-6 py-4 text-xs text-muted-foreground">Creator Approval và Category Management đã hoạt động; các trang nghiệp vụ khác đang chờ triển khai.</p></section></div>
-      {admin && <section className="panel mt-6"><div className="panel-heading"><div><h2 className="font-semibold">Thanh toán đã thu</h2><p className="mt-1 text-xs text-muted-foreground">PAID / SUCCESS / COMPLETED · từng loại tiền tệ</p></div></div>{data.collectedPayments.length ? <div className="flex flex-wrap gap-8 p-6">{data.collectedPayments.map(r => <div key={r.currency}><p className="text-xs text-muted-foreground">{r.currency}</p><p className="mt-1 text-2xl font-semibold">{number.format(r.amount)}</p></div>)}</div> : <EmptyState title="Chưa có thanh toán đã thu" message="Không sử dụng số liệu mẫu." />}<p className="px-6 pb-5 text-xs text-muted-foreground">Đây là tổng thanh toán đã thu, không phải lợi nhuận hoặc số dư có thể rút. Các currency không được cộng chung.</p></section>}
+      ].map(item => <Link to={item.path} key={item.path} className="flex items-center gap-3 py-5 text-sm hover:text-primary"><span className="flex-1">{item.label}</span><span className="font-bold">{number.format(item.count)}</span><ArrowRight className="size-4" /></Link>)}</div><p className="border-t border-border px-6 py-4 text-xs text-muted-foreground">Theo dõi các chỉ số vận hành và hàng đợi cần xử lý theo quyền của tài khoản.</p></section></div>
+      {admin && <section className="panel mt-6"><div className="panel-heading"><div><h2 className="font-semibold">Thanh toán đã thu</h2><p className="mt-1 text-xs text-muted-foreground">PAID / SUCCESS / COMPLETED · từng loại tiền tệ</p></div></div>{data.collectedPayments.length ? <div className="flex flex-wrap gap-8 p-6">{data.collectedPayments.map(r => <div key={r.currency}><p className="text-xs text-muted-foreground">{r.currency}</p><p className="mt-1 text-2xl font-semibold">{formatMoney(r.amount, r.currency)}</p></div>)}</div> : <EmptyState title="Chưa có thanh toán đã thu" message="Không sử dụng số liệu mẫu." />}<p className="px-6 pb-5 text-xs text-muted-foreground">Đây là tổng thanh toán đã thu, không phải lợi nhuận hoặc số dư có thể rút. Các currency không được cộng chung.</p></section>}
     </>}
   </>
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { textWithLimit } from './validation.ts'
+import { pageSchema } from './pagination.ts'
 
 export const loginSchema = z.object({
   identifier: textWithLimit(255, 'Tên đăng nhập hoặc email tối đa 255 ký tự').trim().min(1, 'Nhập tên đăng nhập hoặc email'),
@@ -14,24 +15,29 @@ export const tokenSchema = z.object({
 })
 export const meSchema = z.object({ userId: z.string(), username: z.string(), email: z.string(), role: z.string() })
 const count = z.number().int().nonnegative()
+const dashboardMoney = z.union([
+  z.string().regex(/^(?:\d+(?:\.\d*)?|\.\d+)$/, 'Số tiền không hợp lệ'),
+  z.number().nonnegative(),
+]).transform(value => String(value))
 export const dashboardSchema = z.object({
   users: count, activeUsers: count, creators: count, pendingCreators: count,
   podcasts: count, pendingPodcasts: count, pendingReports: count,
   pendingWithdrawals: count, openDisputes: count,
   podcastStatuses: z.array(z.object({ status: z.string().nullable(), count })),
-  collectedPayments: z.array(z.object({ currency: z.string(), amount: z.number().nonnegative() })),
+  collectedPayments: z.array(z.object({ currency: z.string(), amount: dashboardMoney })),
 })
 export type User = z.infer<typeof userSchema>
 export type Tokens = z.infer<typeof tokenSchema>
 
-export const notificationsPageSchema = z.object({
-  content: z.array(z.object({
-    notificationId: z.string(),
-    type: z.string().nullable(),
-    title: z.string().nullable(),
-    message: z.string().nullable(),
-    read: z.boolean(),
-    createdAt: z.string().nullable(),
-    readAt: z.string().nullable(),
-  })),
+export const notificationSchema = z.object({
+  notificationId: z.string(),
+  type: z.string().nullable(),
+  title: z.string().nullable(),
+  message: z.string().nullable(),
+  read: z.boolean(),
+  createdAt: z.string().nullable(),
+  readAt: z.string().nullable(),
 })
+export const notificationsPageSchema = pageSchema(notificationSchema)
+export type Notification = z.infer<typeof notificationSchema>
+export type NotificationsPage = z.infer<typeof notificationsPageSchema>

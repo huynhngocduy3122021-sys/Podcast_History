@@ -31,6 +31,14 @@ export function reportCacheKeys(userId: string | undefined, report: Pick<Report,
       : [],
   }
 }
+export function appealCacheKeys(userId: string | undefined, podcastId?: string) {
+  return {
+    appeals: ['moderation-appeals', userId] as const,
+    dashboard: ['dashboard', userId] as const,
+    podcasts: ['moderation-podcasts', userId] as const,
+    podcast: podcastId ? ['moderation-podcast', userId, podcastId] as const : null,
+  }
+}
 export function canResolveAppeal(role: unknown, appeal: Appeal, decision: AppealDecision, podcast?: Podcast) {
   if (!isRole(role) || appeal.status !== 'PENDING') return false
   return decision === 'REJECT' || !!podcast && podcast.podcastId === appeal.podcastId && ['HIDDEN', 'REJECTED'].includes(podcast.status) && !!podcast.mediaKey?.trim()
