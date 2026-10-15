@@ -6,12 +6,14 @@ import 'package:podcast_history/core/utils/formatters.dart';
 import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/track_comments_sheet.dart';
 
 class SoundCloudPodcastCard extends StatefulWidget {
   final CreatorPodcast podcast;
   final String creatorName;
   final VoidCallback? onPlayToggle;
+  final VoidCallback? onCardTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final bool isPlaying;
@@ -21,6 +23,7 @@ class SoundCloudPodcastCard extends StatefulWidget {
     required this.podcast,
     required this.creatorName,
     this.onPlayToggle,
+    this.onCardTap,
     this.onEdit,
     this.onDelete,
     this.isPlaying = false,
@@ -34,6 +37,22 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
   double _playbackProgress = 0.28;
   bool _isLiked = false;
   bool _isReposted = false;
+
+  void _openPlayer() {
+    if (widget.onCardTap != null) {
+      widget.onCardTap!();
+      return;
+    }
+    CreatorPodcastPlayerSheet.show(
+      context: context,
+      podcast: widget.podcast,
+      creatorName: widget.creatorName,
+      isPlaying: widget.isPlaying,
+      progress: _playbackProgress,
+      onPlayToggle: widget.onPlayToggle,
+      onEdit: widget.onEdit,
+    );
+  }
 
   void _openComments({String? highlight, double? progress}) {
     TrackCommentsSheet.show(
@@ -96,7 +115,10 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                       shape: const CircleBorder(),
                       child: InkWell(
                         customBorder: const CircleBorder(),
-                        onTap: widget.onPlayToggle,
+                        onTap: () {
+                          widget.onPlayToggle?.call();
+                          _openPlayer();
+                        },
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -119,8 +141,11 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
 
                 // Thông tin Artist & Tiêu đề Track
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: InkWell(
+                    onTap: _openPlayer,
+                    borderRadius: AppSpacing.roundedSm,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -181,6 +206,7 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                     ],
                   ),
                 ),
+              ),
 
                 // Menu ba chấm
                 PopupMenuButton<String>(
