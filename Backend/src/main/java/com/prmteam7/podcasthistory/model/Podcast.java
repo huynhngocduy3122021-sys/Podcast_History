@@ -5,154 +5,182 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "\"Podcast\"", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_podcast_series_id_slug", columnNames = {"series_id", "slug"})
-    }, indexes = {
-        @Index(name = "idx_podcast_series_id", columnList = "series_id")
+@Table(
+    name = "\"Podcast\"",
+    indexes = {
+      @Index(name = "idx_podcast_series_id", columnList = "series_id"),
+      @Index(name = "idx_podcast_producer_profile_id", columnList = "producer_profile_id"),
+      @Index(name = "idx_podcast_category_id", columnList = "category_id")
     })
 public class Podcast extends UpdatedEntity {
-    @Id
-    @Column(name = "podcast_id", nullable = false, updatable = false)
-    private UUID podcastId;
+  @Version
+  @Column(name = "row_version", nullable = false, columnDefinition = "bigint default 0")
+  private Long rowVersion = 0L;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "series_id", nullable = false)
-    private Series series;
+  @Id
+  @Column(name = "podcast_id", nullable = false, updatable = false)
+  private UUID podcastId;
 
-    @Column(name = "title", nullable = false, length = 220)
-    private String title;
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  @JoinColumn(name = "series_id", nullable = true)
+  private Series series;
 
-    @Column(name = "slug", nullable = false, length = 240)
-    private String slug;
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "producer_profile_id", nullable = false)
+  private ProducerProfile producerProfile;
 
-    @Column(name = "description", nullable = true, columnDefinition = "text")
-    private String description;
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "category_id", nullable = false)
+  private Category category;
 
-    @Column(name = "media_url", nullable = false, columnDefinition = "text")
-    private String mediaUrl;
+  @Column(name = "title", nullable = false, length = 220)
+  private String title;
 
-    @Column(name = "media_type", nullable = false, length = 20)
-    private String mediaType;
+  @Column(name = "description", nullable = true, columnDefinition = "text")
+  private String description;
 
-    @Column(name = "thumbnail_url", nullable = true, columnDefinition = "text")
-    private String thumbnailUrl;
+  @Column(name = "media_url", nullable = true, columnDefinition = "text")
+  private String mediaUrl;
 
-    @Column(name = "duration_seconds", nullable = false)
-    private Integer durationSeconds;
+  @Column(name = "media_type", nullable = true, length = 20)
+  private String mediaType;
 
-    @Column(name = "episode_number", nullable = true)
-    private Integer episodeNumber;
+  @Column(name = "thumbnail_url", nullable = true, columnDefinition = "text")
+  private String thumbnailUrl;
 
-    @Column(name = "status", nullable = false, length = 30)
-    private String status;
+  @Column(name = "duration_seconds", nullable = false)
+  private Integer durationSeconds;
 
-    @Column(name = "published_at", nullable = true)
-    private Instant publishedAt;
+  @Column(name = "episode_number", nullable = true)
+  private Integer episodeNumber;
 
-    public Podcast() {
+  @Column(name = "status", nullable = false, length = 30)
+  private String status;
+
+  @Column(name = "is_exclusive", nullable = false)
+  private Boolean isExclusive = false;
+
+  @Column(name = "published_at", nullable = true)
+  private Instant publishedAt;
+
+  public Podcast() {}
+
+  @PrePersist
+  private void assignId() {
+    if (podcastId == null) {
+      podcastId = UUID.randomUUID();
     }
+  }
 
-    @PrePersist
-    private void assignId() {
-        if (podcastId == null) {
-            podcastId = UUID.randomUUID();
-        }
-    }
+  public UUID getPodcastId() {
+    return podcastId;
+  }
 
-    public UUID getPodcastId() {
-        return podcastId;
-    }
+  public void setPodcastId(UUID podcastId) {
+    this.podcastId = podcastId;
+  }
 
-    public void setPodcastId(UUID podcastId) {
-        this.podcastId = podcastId;
-    }
+  public Series getSeries() {
+    return series;
+  }
 
-    public Series getSeries() {
-        return series;
-    }
+  public void setSeries(Series series) {
+    this.series = series;
+  }
 
-    public void setSeries(Series series) {
-        this.series = series;
-    }
+  public ProducerProfile getProducerProfile() {
+    return producerProfile;
+  }
 
-    public String getTitle() {
-        return title;
-    }
+  public void setProducerProfile(ProducerProfile producerProfile) {
+    this.producerProfile = producerProfile;
+  }
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
+  public Category getCategory() {
+    return category;
+  }
 
-    public String getSlug() {
-        return slug;
-    }
+  public void setCategory(Category category) {
+    this.category = category;
+  }
 
-    public void setSlug(String slug) {
-        this.slug = slug;
-    }
+  public String getTitle() {
+    return title;
+  }
 
-    public String getDescription() {
-        return description;
-    }
+  public void setTitle(String title) {
+    this.title = title;
+  }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+  public String getDescription() {
+    return description;
+  }
 
-    public String getMediaUrl() {
-        return mediaUrl;
-    }
+  public void setDescription(String description) {
+    this.description = description;
+  }
 
-    public void setMediaUrl(String mediaUrl) {
-        this.mediaUrl = mediaUrl;
-    }
+  public String getMediaUrl() {
+    return mediaUrl;
+  }
 
-    public String getMediaType() {
-        return mediaType;
-    }
+  public void setMediaUrl(String mediaUrl) {
+    this.mediaUrl = mediaUrl;
+  }
 
-    public void setMediaType(String mediaType) {
-        this.mediaType = mediaType;
-    }
+  public String getMediaType() {
+    return mediaType;
+  }
 
-    public String getThumbnailUrl() {
-        return thumbnailUrl;
-    }
+  public void setMediaType(String mediaType) {
+    this.mediaType = mediaType;
+  }
 
-    public void setThumbnailUrl(String thumbnailUrl) {
-        this.thumbnailUrl = thumbnailUrl;
-    }
+  public String getThumbnailUrl() {
+    return thumbnailUrl;
+  }
 
-    public Integer getDurationSeconds() {
-        return durationSeconds;
-    }
+  public void setThumbnailUrl(String thumbnailUrl) {
+    this.thumbnailUrl = thumbnailUrl;
+  }
 
-    public void setDurationSeconds(Integer durationSeconds) {
-        this.durationSeconds = durationSeconds;
-    }
+  public Integer getDurationSeconds() {
+    return durationSeconds;
+  }
 
-    public Integer getEpisodeNumber() {
-        return episodeNumber;
-    }
+  public void setDurationSeconds(Integer durationSeconds) {
+    this.durationSeconds = durationSeconds;
+  }
 
-    public void setEpisodeNumber(Integer episodeNumber) {
-        this.episodeNumber = episodeNumber;
-    }
+  public Integer getEpisodeNumber() {
+    return episodeNumber;
+  }
 
-    public String getStatus() {
-        return status;
-    }
+  public void setEpisodeNumber(Integer episodeNumber) {
+    this.episodeNumber = episodeNumber;
+  }
 
-    public void setStatus(String status) {
-        this.status = status;
-    }
+  public String getStatus() {
+    return status;
+  }
 
-    public Instant getPublishedAt() {
-        return publishedAt;
-    }
+  public void setStatus(String status) {
+    this.status = status;
+  }
 
-    public void setPublishedAt(Instant publishedAt) {
-        this.publishedAt = publishedAt;
-    }
+  public Boolean getIsExclusive() {
+    return isExclusive;
+  }
 
+  public void setIsExclusive(Boolean isExclusive) {
+    this.isExclusive = isExclusive;
+  }
+
+  public Instant getPublishedAt() {
+    return publishedAt;
+  }
+
+  public void setPublishedAt(Instant publishedAt) {
+    this.publishedAt = publishedAt;
+  }
 }

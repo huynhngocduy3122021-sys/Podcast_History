@@ -26,7 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/uploads")
-@Tag(name = "Media uploads", description = "Tải ảnh và video lên Cloudflare R2")
+@Tag(name = "Media uploads", description = "Tải ảnh lên Cloudflare R2")
 @SecurityRequirement(name = "bearerAuth")
 public class MediaUploadController {
 
@@ -37,7 +37,7 @@ public class MediaUploadController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload ảnh hoặc video lên Cloudflare R2")
+    @Operation(summary = "Upload ảnh lên Cloudflare R2")
     @ApiResponse(
             responseCode = "201",
             description = "Upload thành công",

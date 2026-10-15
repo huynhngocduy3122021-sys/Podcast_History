@@ -1,39 +1,38 @@
 package com.prmteam7.podcasthistory.config;
 
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.security.SecureRandom;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
-
-import com.nimbusds.jose.jwk.source.ImmutableSecret;
 
 @Configuration
 public class SecurityConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+  private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -66,50 +65,77 @@ public class SecurityConfig {
                 .build();
     }
 
-    private JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
-        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
-            String role = jwt.getClaimAsString("role");
-            if (role != null && !role.isBlank()) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
-            }
-            return authorities;
+  private JwtAuthenticationConverter jwtAuthenticationConverter() {
+    JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();
+    JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+    converter.setJwtGrantedAuthoritiesConverter(
+        jwt -> {
+          Collection<GrantedAuthority> authorities = new ArrayList<>(scopeConverter.convert(jwt));
+          String role = jwt.getClaimAsString("role");
+          if (role != null && !role.isBlank()) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+          }
+          return authorities;
         });
-        return converter;
+    return converter;
+  }
+
+  @Bean
+  SecretKey jwtSigningKey(@Value("${JWT_SECRET:}") String configuredSecret) {
+    if (configuredSecret == null || configuredSecret.isBlank()) {
+      byte[] generatedSecret = new byte[32];
+      new SecureRandom().nextBytes(generatedSecret);
+      log.warn(
+          "JWT_SECRET is unset. Using a temporary key for this local run; tokens will expire on"
+              + " restart.");
+      return new SecretKeySpec(generatedSecret, "HmacSHA256");
     }
 
-    @Bean
-    SecretKey jwtSigningKey(@Value("${JWT_SECRET:}") String configuredSecret) {
-        if (configuredSecret == null || configuredSecret.isBlank()) {
-            byte[] generatedSecret = new byte[32];
-            new SecureRandom().nextBytes(generatedSecret);
-            log.warn("JWT_SECRET is unset. Using a temporary key for this local run; tokens will expire on restart.");
-            return new SecretKeySpec(generatedSecret, "HmacSHA256");
-        }
-
-        byte[] secretBytes = configuredSecret.getBytes(StandardCharsets.UTF_8);
-        if (secretBytes.length < 32) {
-            throw new IllegalStateException("JWT_SECRET must contain at least 32 UTF-8 bytes for HS256.");
-        }
-        return new SecretKeySpec(secretBytes, "HmacSHA256");
+    byte[] secretBytes = configuredSecret.getBytes(StandardCharsets.UTF_8);
+    if (secretBytes.length < 32) {
+      throw new IllegalStateException("JWT_SECRET must contain at least 32 UTF-8 bytes for HS256.");
     }
+    return new SecretKeySpec(secretBytes, "HmacSHA256");
+  }
 
-    @Bean
-    JwtEncoder jwtEncoder(SecretKey jwtSigningKey) {
-        return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSigningKey));
-    }
+  @Bean
+  JwtEncoder jwtEncoder(SecretKey jwtSigningKey) {
+    return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSigningKey));
+  }
 
-    @Bean
-    JwtDecoder jwtDecoder(SecretKey jwtSigningKey) {
-        return NimbusJwtDecoder.withSecretKey(jwtSigningKey)
-                .macAlgorithm(MacAlgorithm.HS256)
-                .build();
-    }
+  @Bean
+  JwtDecoder jwtDecoder(SecretKey jwtSigningKey, AccountJwtValidator accounts) {
+    NimbusJwtDecoder decoder =
+        NimbusJwtDecoder.withSecretKey(jwtSigningKey).macAlgorithm(MacAlgorithm.HS256).build();
+    decoder.setJwtValidator(
+        new org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator<>(
+            org.springframework.security.oauth2.jwt.JwtValidators.createDefaultWithIssuer(
+                "podcast-history-backend"),
+            accounts));
+    return decoder;
+  }
 
-    @Bean
-    PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+  @Bean
+  PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+  }
+
+  @Bean
+  org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
+      @Value("${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}") String origins) {
+    var config = new org.springframework.web.cors.CorsConfiguration();
+    config.setAllowedOriginPatterns(
+        java.util.Arrays.stream(origins.split(","))
+            .map(String::trim)
+            .filter(x -> !x.isBlank())
+            .toList());
+    config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    config.setAllowedHeaders(
+        java.util.List.of("Authorization", "Content-Type", "Accept", "ngrok-skip-browser-warning"));
+    config.setAllowCredentials(false);
+    config.setMaxAge(3600L);
+    var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/api/**", config);
+    return source;
+  }
 }

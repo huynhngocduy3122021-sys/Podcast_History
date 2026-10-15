@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 
 @Configuration
 public class OpenApiConfig {
@@ -18,6 +19,7 @@ public class OpenApiConfig {
                         .title("Podcast History API")
                         .version("v1")
                         .description("REST API for the Podcast History application."))
+                .addServersItem(new Server().url("/").description("Current host"))
                 .components(new Components().addSecuritySchemes("bearerAuth", new SecurityScheme()
                         .type(SecurityScheme.Type.HTTP)
                         .scheme("bearer")
