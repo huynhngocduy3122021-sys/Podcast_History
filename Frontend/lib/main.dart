@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
+import 'core/network/api_endpoints.dart';
+import 'core/theme/app_theme.dart';
+import 'features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
 import 'api_service.dart';
@@ -2298,14 +2302,14 @@ class Setting extends StatelessWidget {
   );
 }
 
-class AuthPage extends StatefulWidget {
+class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key, required this.onAuthenticated});
   final ValueChanged<Account> onAuthenticated;
   @override
-  State<AuthPage> createState() => _AuthState();
+  ConsumerState<AuthPage> createState() => _AuthState();
 }
 
-class _AuthState extends State<AuthPage> {
+class _AuthState extends ConsumerState<AuthPage> {
   bool register = false;
   bool loading = false;
   final usernameController = TextEditingController();
