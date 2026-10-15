@@ -23,7 +23,7 @@ import com.prmteam7.podcasthistory.dto.response.MediaUploadResponse;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestDecisionResponse;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestResponse;
 import com.prmteam7.podcasthistory.enums.ContractStageStatus;
-import com.prmteam7.podcasthistory.enums.DisputeDecision;
+import com.prmteam7.podcasthistory.enums.MilestoneDisputeDecision;
 import com.prmteam7.podcasthistory.enums.DisputeStatus;
 import com.prmteam7.podcasthistory.enums.RequestStatus;
 import com.prmteam7.podcasthistory.enums.UserRole;
@@ -220,7 +220,7 @@ public class PodcastRequestService {
         requireCreatorParticipant(stage, creatorUserId);
         requireStageStatus(stage, ContractStageStatus.NOT_STARTED, ContractStageStatus.REVISION_REQUESTED);
 
-        MediaUploadResponse uploaded = mediaUploadService.upload(file, creatorUserId);
+        MediaUploadResponse uploaded = mediaUploadService.uploadMilestoneMedia(file, creatorUserId, stageId);
         long previousSubmissions = submissionRepository.countByContractStage_ContractStageId(stageId);
         MilestoneSubmission submission = new MilestoneSubmission();
         submission.setContractStage(stage);
@@ -324,7 +324,7 @@ public class PodcastRequestService {
 
         ContractStage stage = requireStageForUpdate(dispute.getContractStage().getContractStageId());
         requireStageStatus(stage, ContractStageStatus.DISPUTED);
-        if (input.decision() == DisputeDecision.APPROVE_MILESTONE) {
+        if (input.decision() == MilestoneDisputeDecision.APPROVE_MILESTONE) {
             createPendingPayment(stage);
             stage.setStatus(ContractStageStatus.APPROVED.name());
             updateContractStatusIfAllApproved(stage.getContract());

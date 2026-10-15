@@ -3,7 +3,10 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-const apiBaseUrl = 'https://bullpen-viewer-overfill.ngrok-free.dev';
+const apiBaseUrl = String.fromEnvironment(
+  'API_BASE_URL',
+  defaultValue: 'https://bullpen-viewer-overfill.ngrok-free.dev',
+);
 
 class ApiException implements Exception {
   const ApiException(this.message, this.statusCode);
@@ -111,11 +114,13 @@ class AuthApi {
   }
 
   Future<AuthSession> refresh(String refreshToken) async {
-    final response = await _client.post(
-      Uri.parse('$apiBaseUrl/api/auth/refresh'),
-      headers: _jsonHeaders,
-      body: jsonEncode({'refreshToken': refreshToken}),
-    );
+    final response = await _client
+        .post(
+          Uri.parse('$apiBaseUrl/api/auth/refresh'),
+          headers: _jsonHeaders,
+          body: jsonEncode({'refreshToken': refreshToken}),
+        )
+        .timeout(const Duration(seconds: 20));
     return AuthSession.fromJson(_decode(response));
   }
 
@@ -194,10 +199,17 @@ class ListenerPodcast {
 }
 
 class ListenerApi {
-  ListenerApi({required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  ListenerApi({
+    required this.accessToken,
+    this.refreshToken,
+    this.onSessionRefreshed,
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   String accessToken;
+  String? refreshToken;
+  final void Function(AuthSession)? onSessionRefreshed;
+  Future<AuthSession>? _refreshing;
   final http.Client _client;
 
   Future<List<ListenerPodcast>> searchPodcasts({
@@ -262,9 +274,7 @@ class ListenerApi {
     ),
   );
 
-  Future<Map<String, dynamic>> listeningHistoryForPodcast(
-    String podcastId,
-  ) =>
+  Future<Map<String, dynamic>> listeningHistoryForPodcast(String podcastId) =>
       _sendMap('GET', '/api/me/listening-history/$podcastId');
 
   Future<void> deleteListeningHistory(String podcastId) async {
@@ -294,11 +304,12 @@ class ListenerApi {
 
   Future<Map<String, dynamic>> createComment(
     String podcastId,
-    String content,
-  ) => _sendMap(
+    String content, {
+    int? timestampSeconds,
+  }) => _sendMap(
     'POST',
     '/api/podcasts/$podcastId/comments',
-    body: {'content': content},
+    body: {'content': content, 'timestampSeconds': timestampSeconds},
   );
 
   Future<Map<String, dynamic>> updateComment(
@@ -311,19 +322,23 @@ class ListenerApi {
   }
 
   Stream<String> commentStream(String podcastId) async* {
-    final request = http.Request(
-      'GET',
-      Uri.parse('$apiBaseUrl/api/podcasts/$podcastId/comments/stream'),
-    )..headers.addAll({
-        'Accept': 'text/event-stream',
-        'ngrok-skip-browser-warning': 'true',
-        'Authorization': 'Bearer $accessToken',
-      });
+    final request =
+        http.Request(
+            'GET',
+            Uri.parse('$apiBaseUrl/api/podcasts/$podcastId/comments/stream'),
+          )
+          ..headers.addAll({
+            'Accept': 'text/event-stream',
+            'ngrok-skip-browser-warning': 'true',
+            'Authorization': 'Bearer $accessToken',
+          });
     final response = await _client.send(request);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException('Khong the mo comment stream.', response.statusCode);
     }
-    yield* response.stream.transform(utf8.decoder).transform(const LineSplitter());
+    yield* response.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
   }
 
   Future<Map<String, dynamic>> createReport({
@@ -496,14 +511,31 @@ class ListenerApi {
       if (authenticated) 'Authorization': 'Bearer $accessToken',
     };
     final encodedBody = body == null ? null : jsonEncode(body);
-    final response = switch (method) {
-      'GET' => await _client.get(uri, headers: headers),
-      'POST' => await _client.post(uri, headers: headers, body: encodedBody),
-      'PUT' => await _client.put(uri, headers: headers, body: encodedBody),
-      'PATCH' => await _client.patch(uri, headers: headers, body: encodedBody),
-      'DELETE' => await _client.delete(uri, headers: headers),
+    Future<http.Response> send() async => (switch (method) {
+      'GET' => _client.get(uri, headers: headers),
+      'POST' => _client.post(uri, headers: headers, body: encodedBody),
+      'PUT' => _client.put(uri, headers: headers, body: encodedBody),
+      'PATCH' => _client.patch(uri, headers: headers, body: encodedBody),
+      'DELETE' => _client.delete(uri, headers: headers),
       _ => throw ArgumentError('Unsupported HTTP method: $method'),
-    };
+    }).timeout(const Duration(seconds: 20));
+    var response = await send();
+    if (authenticated && response.statusCode == 401 && refreshToken != null) {
+      final pending = _refreshing ??= AuthApi(client: _client)
+          .refresh(refreshToken!);
+      try {
+        final session = await pending;
+        if (identical(_refreshing, pending)) {
+          accessToken = session.accessToken;
+          refreshToken = session.refreshToken;
+          onSessionRefreshed?.call(session);
+        }
+      } finally {
+        if (identical(_refreshing, pending)) _refreshing = null;
+      }
+      headers['Authorization'] = 'Bearer $accessToken';
+      response = await send();
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(_errorMessage(response), response.statusCode);
     }

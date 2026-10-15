@@ -167,7 +167,8 @@ public class ListenerFlowController {
     }
 
     @PostMapping("/podcasts/{podcastId}/comments")
-    @Operation(summary = "Tạo bình luận")
+    @Operation(summary = "Tạo bình luận, có thể gắn mốc thời gian đang xem video",
+            description = "Gửi timestampSeconds từ vị trí player, ví dụ 1080 cho phút 18. GET danh sách và SSE đều trả mốc này. Bỏ trường hoặc null để bình luận không gắn thời gian.")
     public ResponseEntity<CommentItem> createComment(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID podcastId,

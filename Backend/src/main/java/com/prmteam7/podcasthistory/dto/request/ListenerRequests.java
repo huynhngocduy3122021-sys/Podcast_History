@@ -19,7 +19,12 @@ public final class ListenerRequests {
     }
 
     public record CommentCreate(
-            @NotBlank @Size(max = 5000) String content) {
+            @NotBlank @Size(max = 5000) String content,
+            @Min(0)
+            @io.swagger.v3.oas.annotations.media.Schema(
+                    description = "Vị trí player tại lúc gửi bình luận, tính bằng giây; null là bình luận không gắn mốc thời gian. Frontend gửi currentPosition, không phải thời gian đồng hồ.",
+                    example = "1080", minimum = "0")
+            Integer timestampSeconds) {
     }
 
     public record CommentUpdate(

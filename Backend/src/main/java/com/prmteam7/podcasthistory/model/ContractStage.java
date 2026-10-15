@@ -40,7 +40,8 @@ public class ContractStage extends UpdatedEntity {
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 
-    @Column(name = "amount", nullable = false, precision = 12, scale = 2)
+    @Column(name = "amount", nullable = false, precision = 12, scale = 2,
+            columnDefinition = "numeric(12,2) default 0.00")
     private BigDecimal amount;
 
     public ContractStage() {

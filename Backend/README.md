@@ -149,6 +149,6 @@ All amounts are decimal values with up to two fractional digits; currency defaul
 - `POST /api/listener/milestones/{milestoneId}/approve` — The Listener who created the request approves the submitted milestone.
 - `POST /api/listener/milestones/{milestoneId}/revision` — That Listener requests a revision with a `reason`.
 - `POST /api/milestones/{milestoneId}/disputes` — Either contract participant opens a dispute with a `reason`.
-- `GET /api/admin/disputes/open` and `POST /api/admin/disputes/{disputeId}/resolve` — Admin lists and resolves disputes. Resolution decision is `APPROVE_MILESTONE` or `REQUEST_REVISION`, with a required `note`.
+- `GET /api/admin/milestone-disputes/open` and `POST /api/admin/milestone-disputes/{disputeId}/resolve` — Admin lists and resolves milestone disputes. Resolution decision is `APPROVE_MILESTONE` or `REQUEST_REVISION`, with a required `note`. Contract-level disputes keep `/api/admin/disputes` and their separate `RESUME_CONTRACT`, `CANCEL_CONTRACT`, `COMPLETE_CONTRACT` decisions.
 
 Approval creates one `Payment` with status `PENDING` and returns its ID. This project does not yet integrate a payment provider; `PENDING` is not proof of payment, and a provider callback/confirmation endpoint must be integrated before treating the milestone as paid. Business-rule violations return HTTP 409; missing workflow records return HTTP 404.

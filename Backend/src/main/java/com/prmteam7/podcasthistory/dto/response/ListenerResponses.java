@@ -69,6 +69,10 @@ public final class ListenerResponses {
             String displayName,
             String avatarUrl,
             String content,
+            @io.swagger.v3.oas.annotations.media.Schema(
+                    description = "Mốc trên video tính bằng giây; 1080 = 18:00. Null nếu không gắn mốc.",
+                    example = "1080")
+            Integer timestampSeconds,
             String status,
             Instant createdAt,
             Instant updatedAt) {
