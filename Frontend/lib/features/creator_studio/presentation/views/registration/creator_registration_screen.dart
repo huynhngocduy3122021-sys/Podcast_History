@@ -6,36 +6,31 @@ import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/api_service.dart';
 
 class CreatorRegistrationScreen extends ConsumerStatefulWidget {
   const CreatorRegistrationScreen({super.key});
 
   @override
-  ConsumerState<CreatorRegistrationScreen> createState() => _CreatorRegistrationScreenState();
+  ConsumerState<CreatorRegistrationScreen> createState() =>
+      _CreatorRegistrationScreenState();
 }
 
-class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationScreen> {
+class _CreatorRegistrationScreenState
+    extends ConsumerState<CreatorRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController(text: 'Sử Kể Đêm Khuya');
-  final _handleCtrl = TextEditingController(text: '@sukledemkhuya');
-  final _bioCtrl = TextEditingController(text: 'Kênh podcast chuyên sâu về lịch sử Việt Nam cận và hiện đại.');
-  final _socialCtrl = TextEditingController(text: 'https://youtube.com/@sukledemkhuya');
-  String _selectedCategory = 'Kháng chiến 1945–1975';
-  String? _sampleVoiceName = 'giong_doc_mau_intro.mp3';
+  final _bioCtrl = TextEditingController(
+    text: 'Kênh podcast chuyên sâu về lịch sử Việt Nam cận và hiện đại.',
+  );
+  final _socialCtrl = TextEditingController(
+    text: 'https://youtube.com/@sukledemkhuya',
+  );
   bool _isSubmitting = false;
-
-  final List<String> _categories = [
-    'Kháng Pháp & Cách mạng (1858–1954)',
-    'Kháng chiến 1945–1975',
-    'Nhân vật & Sự kiện Lịch sử',
-    'Thời kỳ Bao cấp & Đổi Mới 1986',
-    'Văn hóa & Di sản Lịch sử',
-  ];
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _handleCtrl.dispose();
     _bioCtrl.dispose();
     _socialCtrl.dispose();
     super.dispose();
@@ -45,23 +40,41 @@ class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationS
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
 
-    await ref.read(creatorProfileProvider.notifier).submitRegistration(
-          channelName: _nameCtrl.text.trim(),
-          handle: _handleCtrl.text.trim(),
-          bio: _bioCtrl.text.trim(),
-          category: _selectedCategory,
-          socialLink: _socialCtrl.text.trim(),
-          sampleVoiceName: _sampleVoiceName ?? 'sample.mp3',
-        );
+    try {
+      await ref
+          .read(creatorProfileProvider.notifier)
+          .submitRegistration(
+            channelName: _nameCtrl.text.trim(),
+            handle: '',
+            bio: _bioCtrl.text.trim(),
+            category: '',
+            socialLink: _socialCtrl.text.trim(),
+            sampleVoiceName: '',
+          );
 
-    setState(() => _isSubmitting = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.',
+            ),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } on ApiException catch (exception) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(exception.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Khong the gui ho so den may chu.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -72,9 +85,7 @@ class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationS
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Hồ sơ Creator & Đăng ký'),
-      ),
+      appBar: AppBar(title: const Text('Hồ sơ Creator & Đăng ký')),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenMargin),
         children: [
@@ -95,32 +106,18 @@ class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationS
                 AppTextField(
                   label: 'Tên kênh người kể',
                   controller: _nameCtrl,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập tên kênh' : null,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppTextField(
-                  label: 'Tên định danh (Handle)',
-                  hint: '@tenkenh',
-                  controller: _handleCtrl,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng nhập handle' : null,
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Vui lòng nhập tên kênh'
+                      : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   label: 'Giới thiệu kênh & Định hướng nội dung',
                   controller: _bioCtrl,
                   maxLines: 3,
-                  validator: (v) => (v == null || v.isEmpty) ? 'Vui lòng giới thiệu kênh' : null,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                const Text('Lĩnh vực lịch sử chuyên sâu', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: AppSpacing.xs),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
-                  decoration: const InputDecoration(),
-                  items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedCategory = val);
-                  },
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'Vui lòng giới thiệu kênh'
+                      : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
@@ -128,44 +125,12 @@ class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationS
                   controller: _socialCtrl,
                   hint: 'https://...',
                 ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Upload tệp giọng đọc thử
-                const Text('Mẫu giọng đọc thử (Voice Sample)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: AppSpacing.xs),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-                    borderRadius: AppSpacing.roundedMd,
-                    border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.mic_rounded, color: AppColors.primaryLight),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text(
-                          _sampleVoiceName ?? 'Chưa chọn file mẫu giọng',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          setState(() => _sampleVoiceName = 'giong_doc_test_vietcast.mp3');
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Đã tải lên tệp mẫu giọng đọc')),
-                          );
-                        },
-                        child: const Text('Chọn file'),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: AppSpacing.xxl),
 
                 AppButton(
-                  label: profile?.status == CreatorStatus.rejected ? 'Gửi lại hồ sơ xét duyệt' : 'Cập nhật hồ sơ Creator',
+                  label: profile?.status == CreatorStatus.rejected
+                      ? 'Gửi lại hồ sơ xét duyệt'
+                      : 'Cập nhật hồ sơ Creator',
                   isLoading: _isSubmitting,
                   onPressed: _submitForm,
                 ),
@@ -200,26 +165,35 @@ class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationS
         bg = AppColors.errorContainer;
         icon = Icons.cancel_rounded;
         title = 'Hồ sơ bị từ chối';
-        desc = profile.rejectReason ?? 'Hồ sơ thiếu nguồn xác thực hoặc mẫu giọng đọc chưa đạt chuẩn.';
+        desc =
+            profile.rejectReason ??
+            'Hồ sơ thiếu nguồn xác thực hoặc mẫu giọng đọc chưa đạt chuẩn.';
         break;
     }
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: AppSpacing.roundedMd,
-      ),
+      decoration: BoxDecoration(color: bg, borderRadius: AppSpacing.roundedMd),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 24, color: isDark ? AppColors.onSurfaceDark : Colors.black87),
+          Icon(
+            icon,
+            size: 24,
+            color: isDark ? AppColors.onSurfaceDark : Colors.black87,
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
                 const SizedBox(height: 2),
                 Text(desc, style: const TextStyle(fontSize: 12, height: 1.35)),
               ],

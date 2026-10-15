@@ -1,12 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/features/creator_studio/data/mock_creator_data.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
-import 'package:podcast_history/features/creator_studio/data/repositories/mock_creator_repository.dart';
+import 'package:podcast_history/features/creator_studio/data/repositories/api_creator_repository.dart';
 import 'package:podcast_history/features/creator_studio/domain/creator_repository.dart';
 
 // Single repository instance
+final creatorAccessTokenProvider = Provider<String?>((ref) => null);
+
 final creatorRepositoryProvider = Provider<CreatorRepository>((ref) {
-  return MockCreatorRepository();
+  return ApiCreatorRepository(
+    accessToken: ref.watch(creatorAccessTokenProvider),
+  );
 });
 
 // Profile Controller
@@ -53,12 +57,14 @@ class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
   }
 }
 
-final creatorProfileProvider = NotifierProvider<CreatorProfileNotifier, AsyncValue<CreatorProfile>>(
-  CreatorProfileNotifier.new,
-);
+final creatorProfileProvider =
+    NotifierProvider<CreatorProfileNotifier, AsyncValue<CreatorProfile>>(
+      CreatorProfileNotifier.new,
+    );
 
 // Podcasts Controller
-class CreatorPodcastsNotifier extends Notifier<AsyncValue<List<CreatorPodcast>>> {
+class CreatorPodcastsNotifier
+    extends Notifier<AsyncValue<List<CreatorPodcast>>> {
   @override
   AsyncValue<List<CreatorPodcast>> build() {
     return AsyncValue.data(MockCreatorData.podcasts);
@@ -107,12 +113,14 @@ class CreatorPodcastsNotifier extends Notifier<AsyncValue<List<CreatorPodcast>>>
   }
 }
 
-final creatorPodcastsProvider = NotifierProvider<CreatorPodcastsNotifier, AsyncValue<List<CreatorPodcast>>>(
-  CreatorPodcastsNotifier.new,
-);
+final creatorPodcastsProvider =
+    NotifierProvider<CreatorPodcastsNotifier, AsyncValue<List<CreatorPodcast>>>(
+      CreatorPodcastsNotifier.new,
+    );
 
 // Custom Requests Controller
-class CreatorRequestsNotifier extends Notifier<AsyncValue<List<PodcastRequest>>> {
+class CreatorRequestsNotifier
+    extends Notifier<AsyncValue<List<PodcastRequest>>> {
   @override
   AsyncValue<List<PodcastRequest>> build() {
     return AsyncValue.data(MockCreatorData.requests);
@@ -151,9 +159,10 @@ class CreatorRequestsNotifier extends Notifier<AsyncValue<List<PodcastRequest>>>
   }
 }
 
-final creatorRequestsProvider = NotifierProvider<CreatorRequestsNotifier, AsyncValue<List<PodcastRequest>>>(
-  CreatorRequestsNotifier.new,
-);
+final creatorRequestsProvider =
+    NotifierProvider<CreatorRequestsNotifier, AsyncValue<List<PodcastRequest>>>(
+      CreatorRequestsNotifier.new,
+    );
 
 // Wallet Controller
 class WalletState {
@@ -175,13 +184,15 @@ class WalletState {
 class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
   @override
   AsyncValue<WalletState> build() {
-    return AsyncValue.data(WalletState(
-      available: 6850000,
-      pending: 1200000,
-      holding: 1500000,
-      totalWithdrawn: 8500000,
-      transactions: MockCreatorData.transactions,
-    ));
+    return AsyncValue.data(
+      WalletState(
+        available: 6850000,
+        pending: 1200000,
+        holding: 1500000,
+        totalWithdrawn: 8500000,
+        transactions: MockCreatorData.transactions,
+      ),
+    );
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -191,19 +202,25 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
       state = const AsyncValue.loading();
       final balance = await _repo.getWalletBalance();
       final txs = await _repo.getTransactions();
-      state = AsyncValue.data(WalletState(
-        available: balance['available'] ?? 0,
-        pending: balance['pending'] ?? 0,
-        holding: balance['holding'] ?? 0,
-        totalWithdrawn: balance['totalWithdrawn'] ?? 0,
-        transactions: txs,
-      ));
+      state = AsyncValue.data(
+        WalletState(
+          available: balance['available'] ?? 0,
+          pending: balance['pending'] ?? 0,
+          holding: balance['holding'] ?? 0,
+          totalWithdrawn: balance['totalWithdrawn'] ?? 0,
+          transactions: txs,
+        ),
+      );
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
-  Future<void> withdrawMoney(int amount, String bankAccountId, String pin) async {
+  Future<void> withdrawMoney(
+    int amount,
+    String bankAccountId,
+    String pin,
+  ) async {
     await _repo.withdrawMoney(amount, bankAccountId, pin);
     await loadWallet();
   }
@@ -214,9 +231,10 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
   }
 }
 
-final walletProvider = NotifierProvider<WalletNotifier, AsyncValue<WalletState>>(
-  WalletNotifier.new,
-);
+final walletProvider =
+    NotifierProvider<WalletNotifier, AsyncValue<WalletState>>(
+      WalletNotifier.new,
+    );
 
 // Bank Accounts Controller
 class BankAccountsNotifier extends Notifier<AsyncValue<List<BankAccount>>> {
@@ -237,7 +255,11 @@ class BankAccountsNotifier extends Notifier<AsyncValue<List<BankAccount>>> {
     }
   }
 
-  Future<void> addAccount(String bankName, String accountNumber, String accountHolder) async {
+  Future<void> addAccount(
+    String bankName,
+    String accountNumber,
+    String accountHolder,
+  ) async {
     await _repo.addBankAccount(bankName, accountNumber, accountHolder);
     await loadAccounts();
   }
@@ -248,12 +270,14 @@ class BankAccountsNotifier extends Notifier<AsyncValue<List<BankAccount>>> {
   }
 }
 
-final bankAccountsProvider = NotifierProvider<BankAccountsNotifier, AsyncValue<List<BankAccount>>>(
-  BankAccountsNotifier.new,
-);
+final bankAccountsProvider =
+    NotifierProvider<BankAccountsNotifier, AsyncValue<List<BankAccount>>>(
+      BankAccountsNotifier.new,
+    );
 
 // Comments Controller
-class CreatorCommentsNotifier extends Notifier<AsyncValue<List<StudioComment>>> {
+class CreatorCommentsNotifier
+    extends Notifier<AsyncValue<List<StudioComment>>> {
   @override
   AsyncValue<List<StudioComment>> build() {
     return AsyncValue.data(MockCreatorData.comments);
@@ -282,9 +306,10 @@ class CreatorCommentsNotifier extends Notifier<AsyncValue<List<StudioComment>>> 
   }
 }
 
-final creatorCommentsProvider = NotifierProvider<CreatorCommentsNotifier, AsyncValue<List<StudioComment>>>(
-  CreatorCommentsNotifier.new,
-);
+final creatorCommentsProvider =
+    NotifierProvider<CreatorCommentsNotifier, AsyncValue<List<StudioComment>>>(
+      CreatorCommentsNotifier.new,
+    );
 
 // Forms Controller
 class CreatorFormsNotifier extends Notifier<AsyncValue<List<InteractiveForm>>> {
@@ -305,12 +330,17 @@ class CreatorFormsNotifier extends Notifier<AsyncValue<List<InteractiveForm>>> {
     }
   }
 
-  Future<void> createForm(String title, String description, List<FormQuestion> questions) async {
+  Future<void> createForm(
+    String title,
+    String description,
+    List<FormQuestion> questions,
+  ) async {
     await _repo.createForm(title, description, questions);
     await loadForms();
   }
 }
 
-final creatorFormsProvider = NotifierProvider<CreatorFormsNotifier, AsyncValue<List<InteractiveForm>>>(
-  CreatorFormsNotifier.new,
-);
+final creatorFormsProvider =
+    NotifierProvider<CreatorFormsNotifier, AsyncValue<List<InteractiveForm>>>(
+      CreatorFormsNotifier.new,
+    );

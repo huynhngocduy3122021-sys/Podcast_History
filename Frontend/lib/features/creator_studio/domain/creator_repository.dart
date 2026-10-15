@@ -39,9 +39,17 @@ abstract class CreatorRepository {
   Future<Map<String, int>> getWalletBalance();
   Future<List<WalletTransaction>> getTransactions();
   Future<List<BankAccount>> getBankAccounts();
-  Future<void> addBankAccount(String bankName, String accountNumber, String accountHolder);
+  Future<void> addBankAccount(
+    String bankName,
+    String accountNumber,
+    String accountHolder,
+  );
   Future<void> deleteBankAccount(String id);
-  Future<WalletTransaction> withdrawMoney(int amount, String bankAccountId, String pin);
+  Future<WalletTransaction> withdrawMoney(
+    int amount,
+    String bankAccountId,
+    String pin,
+  );
   Future<void> releaseFunds();
 
   // Comments
@@ -51,5 +59,9 @@ abstract class CreatorRepository {
 
   // Forms
   Future<List<InteractiveForm>> getForms();
-  Future<void> createForm(String title, String description, List<FormQuestion> questions);
+  Future<void> createForm(
+    String title,
+    String description,
+    List<FormQuestion> questions,
+  );
 }

@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'core/theme/app_theme.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
+import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
 import 'api_service.dart';
@@ -35,6 +37,11 @@ class _AppState extends State<VietCastApp> {
   Account? account;
   @override
   Widget build(BuildContext context) => ProviderScope(
+    overrides: [
+      creatorAccessTokenProvider.overrideWithValue(
+        account?.session.accessToken,
+      ),
+    ],
     child: MaterialApp(
       title: 'VietCast',
       debugShowCheckedModeBanner: false,
@@ -54,25 +61,27 @@ class _AppState extends State<VietCastApp> {
         );
       },
       home: account == null
-          ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
-        : switch (account!.role) {
-            UserRole.listener => Shell(
-              session: account!.session,
-              displayName: account!.name,
-              onTheme: toggleTheme,
-              onLogout: logout,
-            ),
-            UserRole.creator => CreatorShell(
-              displayName: account!.name,
-              onTheme: toggleTheme,
-              onLogout: logout,
-            ),
-            UserRole.admin => AdminShell(
-              displayName: account!.name,
-              onTheme: toggleTheme,
-              onLogout: logout,
-            ),
-          },
+          ? AuthPage(
+              onAuthenticated: (value) => setState(() => account = value),
+            )
+          : switch (account!.role) {
+              UserRole.listener => Shell(
+                session: account!.session,
+                displayName: account!.name,
+                onTheme: toggleTheme,
+                onLogout: logout,
+              ),
+              UserRole.creator => CreatorShell(
+                displayName: account!.name,
+                onTheme: toggleTheme,
+                onLogout: logout,
+              ),
+              UserRole.admin => AdminShell(
+                displayName: account!.name,
+                onTheme: toggleTheme,
+                onLogout: logout,
+              ),
+            },
     ),
   );
 
@@ -2182,7 +2191,9 @@ class Profile extends StatelessWidget {
           icon: Icons.mic_rounded,
           title: 'Dang ky lam Creator',
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CreatorRegistrationScreen()),
+            MaterialPageRoute(
+              builder: (_) => const CreatorRegistrationScreen(),
+            ),
           ),
         ),
         Setting(
@@ -3191,13 +3202,27 @@ class _CommentComposer extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: controller,
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: Color(0xFF241C1C)),
+            cursorColor: Color(0xFFB3261E),
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => onSubmit(),
             decoration: const InputDecoration(
               hintText: 'Comment...',
-              hintStyle: TextStyle(color: Colors.white70),
-              border: InputBorder.none,
+              hintStyle: TextStyle(color: Color(0xFF6B6262)),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(24)),
+                borderSide: BorderSide(color: Color(0xFFB3261E)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(24)),
+                borderSide: BorderSide(color: Color(0xFFB3261E), width: 2),
+              ),
               isDense: true,
             ),
           ),

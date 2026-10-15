@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:uuid/uuid.dart';
 import 'package:podcast_history/features/creator_studio/domain/creator_repository.dart';
 import 'package:podcast_history/features/creator_studio/data/mock_creator_data.dart';
@@ -11,8 +12,12 @@ class MockCreatorRepository implements CreatorRepository {
   CreatorProfile _profile = MockCreatorData.creatorProfile;
   final List<CreatorPodcast> _podcasts = List.from(MockCreatorData.podcasts);
   final List<PodcastRequest> _requests = List.from(MockCreatorData.requests);
-  final List<BankAccount> _bankAccounts = List.from(MockCreatorData.bankAccounts);
-  final List<WalletTransaction> _transactions = List.from(MockCreatorData.transactions);
+  final List<BankAccount> _bankAccounts = List.from(
+    MockCreatorData.bankAccounts,
+  );
+  final List<WalletTransaction> _transactions = List.from(
+    MockCreatorData.transactions,
+  );
   final List<StudioComment> _comments = List.from(MockCreatorData.comments);
   final List<InteractiveForm> _forms = List.from(MockCreatorData.forms);
 
@@ -44,7 +49,7 @@ class MockCreatorRepository implements CreatorRepository {
     await _simulateDelay();
     _profile = _profile.copyWith(
       name: channelName,
-      handle: handle,
+      handle: handle.isEmpty ? _profile.handle : handle,
       bio: bio,
       status: CreatorStatus.pending,
       rejectReason: null,
@@ -58,7 +63,9 @@ class MockCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<List<CreatorPodcast>> getPodcasts({PodcastStatus? filterStatus}) async {
+  Future<List<CreatorPodcast>> getPodcasts({
+    PodcastStatus? filterStatus,
+  }) async {
     await _simulateDelay();
     if (filterStatus == null) return List.unmodifiable(_podcasts);
     return _podcasts.where((p) => p.status == filterStatus).toList();
@@ -96,7 +103,9 @@ class MockCreatorRepository implements CreatorRepository {
       aiModerationScore: 0.95,
     );
     _podcasts.insert(0, newPodcast);
-    _profile = _profile.copyWith(currentPodcastCount: _profile.currentPodcastCount + 1);
+    _profile = _profile.copyWith(
+      currentPodcastCount: _profile.currentPodcastCount + 1,
+    );
     return newPodcast;
   }
 
@@ -104,7 +113,9 @@ class MockCreatorRepository implements CreatorRepository {
   Future<void> deletePodcast(String id) async {
     await _simulateDelay();
     _podcasts.removeWhere((p) => p.id == id);
-    _profile = _profile.copyWith(currentPodcastCount: _profile.currentPodcastCount - 1);
+    _profile = _profile.copyWith(
+      currentPodcastCount: _profile.currentPodcastCount - 1,
+    );
   }
 
   @override
@@ -128,7 +139,9 @@ class MockCreatorRepository implements CreatorRepository {
     await _simulateDelay();
     final index = _requests.indexWhere((r) => r.id == id);
     if (index != -1) {
-      _requests[index] = _requests[index].copyWith(status: CustomRequestStatus.accepted);
+      _requests[index] = _requests[index].copyWith(
+        status: CustomRequestStatus.accepted,
+      );
     }
   }
 
@@ -170,7 +183,8 @@ class MockCreatorRepository implements CreatorRepository {
         message: message,
         timestamp: DateTime.now(),
       );
-      final updatedMsgs = List<RequestChatMessage>.from(req.messages)..add(newMsg);
+      final updatedMsgs = List<RequestChatMessage>.from(req.messages)
+        ..add(newMsg);
       _requests[index] = req.copyWith(messages: updatedMsgs);
     }
   }
@@ -199,7 +213,11 @@ class MockCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> addBankAccount(String bankName, String accountNumber, String accountHolder) async {
+  Future<void> addBankAccount(
+    String bankName,
+    String accountNumber,
+    String accountHolder,
+  ) async {
     await _simulateDelay();
     final newAcc = BankAccount(
       id: 'bank_${_uuid.v4().substring(0, 6)}',
@@ -218,7 +236,11 @@ class MockCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<WalletTransaction> withdrawMoney(int amount, String bankAccountId, String pin) async {
+  Future<WalletTransaction> withdrawMoney(
+    int amount,
+    String bankAccountId,
+    String pin,
+  ) async {
     await _simulateDelay();
     if (amount > _availableBalance) {
       throw Exception('Số dư khả dụng không đủ');
@@ -273,7 +295,9 @@ class MockCreatorRepository implements CreatorRepository {
     await _simulateDelay();
     final index = _comments.indexWhere((c) => c.id == id);
     if (index != -1) {
-      _comments[index] = _comments[index].copyWith(isPinned: !_comments[index].isPinned);
+      _comments[index] = _comments[index].copyWith(
+        isPinned: !_comments[index].isPinned,
+      );
     }
   }
 
@@ -282,7 +306,9 @@ class MockCreatorRepository implements CreatorRepository {
     await _simulateDelay();
     final index = _comments.indexWhere((c) => c.id == id);
     if (index != -1) {
-      _comments[index] = _comments[index].copyWith(isHidden: !_comments[index].isHidden);
+      _comments[index] = _comments[index].copyWith(
+        isHidden: !_comments[index].isHidden,
+      );
     }
   }
 
@@ -293,7 +319,11 @@ class MockCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> createForm(String title, String description, List<FormQuestion> questions) async {
+  Future<void> createForm(
+    String title,
+    String description,
+    List<FormQuestion> questions,
+  ) async {
     await _simulateDelay();
     final newForm = InteractiveForm(
       id: 'form_${_uuid.v4().substring(0, 8)}',
