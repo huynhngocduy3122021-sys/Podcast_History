@@ -12,6 +12,7 @@ import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
 
 class CreatorDashboardScreen extends ConsumerStatefulWidget {
   final Function(int tabIndex)? onNavigateTab;
@@ -169,13 +170,13 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
   Widget _buildChannelHeader(BuildContext context, CreatorProfile profile, bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E2631),
+        color: isDark ? const Color(0xFF1E2631) : AppColors.surfaceLight,
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
               ? [const Color(0xFF25221F), const Color(0xFF151311)]
-              : [const Color(0xFF222C3A), const Color(0xFF141A23)],
+              : [const Color(0xFFFFFFFF), const Color(0xFFFBF8F3)],
         ),
         borderRadius: AppSpacing.roundedMd,
         image: DecorationImage(
@@ -183,14 +184,14 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
           fit: BoxFit.cover,
           onError: (e, s) {},
           colorFilter: ColorFilter.mode(
-            Colors.black.withValues(alpha: 0.72),
-            BlendMode.darken,
+            isDark ? Colors.black.withValues(alpha: 0.72) : Colors.white.withValues(alpha: 0.92),
+            isDark ? BlendMode.darken : BlendMode.lighten,
           ),
         ),
-        border: Border.all(color: isDark ? AppColors.outlineDark : const Color(0xFF334155)),
+        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
+            color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -206,10 +207,13 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2.5),
+                  border: Border.all(
+                    color: isDark ? Colors.white : AppColors.primaryLight,
+                    width: 2.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
+                      color: (isDark ? Colors.black : AppColors.primaryLight).withValues(alpha: isDark ? 0.3 : 0.15),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -231,10 +235,10 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                         Flexible(
                           child: Text(
                             profile.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                              color: isDark ? Colors.white : AppColors.onSurfaceLight,
                               letterSpacing: -0.3,
                             ),
                             maxLines: 1,
@@ -243,16 +247,16 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                         ),
                         if (profile.isVerified) ...[
                           const SizedBox(width: AppSpacing.xs),
-                          const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF60A5FA)),
+                          const Icon(Icons.verified_rounded, size: 18, color: Color(0xFF1D9BF0)),
                         ],
                       ],
                     ),
                     const SizedBox(height: 2),
                     Text(
                       profile.handle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13.5,
-                        color: Color(0xFFE2E8F0),
+                        color: isDark ? const Color(0xFFE2E8F0) : AppColors.primaryLight,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -287,13 +291,17 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
+                              color: isDark ? Colors.white.withValues(alpha: 0.15) : AppColors.surfaceVariantLight,
                               borderRadius: AppSpacing.roundedPill,
-                              border: Border.all(color: Colors.white38),
+                              border: Border.all(color: isDark ? Colors.white38 : AppColors.outlineLight),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Gói Creator Free',
-                              style: TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? Colors.white : AppColors.onSurfaceMutedLight,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                       ],
@@ -306,18 +314,23 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
           const SizedBox(height: AppSpacing.md),
           Text(
             profile.bio,
-            style: const TextStyle(fontSize: 13, color: Color(0xFFF1F5F9), height: 1.45, fontWeight: FontWeight.w400),
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? const Color(0xFFF1F5F9) : AppColors.onSurfaceMutedLight,
+              height: 1.45,
+              fontWeight: FontWeight.w400,
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: AppSpacing.md),
-          const Divider(height: 1, color: Colors.white24),
+          Divider(height: 1, color: isDark ? Colors.white24 : AppColors.outlineLight.withValues(alpha: 0.6)),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
-              _buildHeaderStat('Tracks', '${profile.currentPodcastCount}'),
+              _buildHeaderStat('Tracks', '${profile.currentPodcastCount}', isDark),
               const SizedBox(width: AppSpacing.xl),
-              _buildHeaderStat('Followers', AppFormatters.formatCompactNumber(profile.followersCount)),
+              _buildHeaderStat('Followers', AppFormatters.formatCompactNumber(profile.followersCount), isDark),
               const Spacer(),
               ElevatedButton.icon(
                 icon: const Icon(Icons.cloud_upload_rounded, size: 16),
@@ -337,18 +350,27 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
     );
   }
 
-  Widget _buildHeaderStat(String label, String value) {
+  Widget _buildHeaderStat(String label, String value, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w700, letterSpacing: 0.6),
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? const Color(0xFF94A3B8) : AppColors.onSurfaceMutedLight,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+            color: isDark ? Colors.white : AppColors.onSurfaceLight,
+          ),
         ),
       ],
     );
@@ -666,68 +688,95 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
         ...podcasts.take(3).map(
           (pod) => Container(
             margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
               borderRadius: AppSpacing.roundedMd,
               border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            child: InkWell(
+              borderRadius: AppSpacing.roundedMd,
+              onTap: () {
+                final profile = ref.read(creatorProfileProvider).value;
+                CreatorPodcastPlayerSheet.show(
+                  context: context,
+                  podcast: pod,
+                  creatorName: profile?.name ?? 'Sử Kể Đêm Khuya',
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    ClipRRect(
-                      borderRadius: AppSpacing.roundedSm,
-                      child: Image.network(
-                        pod.coverUrl,
-                        width: 52,
-                        height: 52,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            pod.title,
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: AppSpacing.roundedSm,
+                          child: Stack(
+                            alignment: Alignment.center,
                             children: [
-                              StatusChip(
-                                label: pod.statusDisplay,
-                                type: pod.statusType,
+                              Image.network(
+                                pod.coverUrl,
+                                width: 52,
+                                height: 52,
+                                fit: BoxFit.cover,
                               ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Text(
-                                AppFormatters.formatDuration(pod.duration),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withValues(alpha: 0.55),
                                 ),
+                                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pod.title,
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  StatusChip(
+                                    label: pod.statusDisplay,
+                                    type: pod.statusType,
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Text(
+                                    AppFormatters.formatDuration(pod.duration),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    // Mini waveform preview kiểu SoundCloud
+                    const SoundCloudWaveform(
+                      progress: 0.4,
+                      height: 30,
+                      showComments: false,
+                      isInteractive: false,
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                // Mini waveform preview kiểu SoundCloud
-                const SoundCloudWaveform(
-                  progress: 0.4,
-                  height: 30,
-                  showComments: false,
-                  isInteractive: false,
-                ),
-              ],
+              ),
             ),
           ),
         ),
