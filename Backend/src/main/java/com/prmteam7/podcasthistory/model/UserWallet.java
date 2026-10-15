@@ -22,6 +22,9 @@ public class UserWallet extends UpdatedEntity {
     @Column(name = "balance", nullable = false, precision = 14, scale = 2)
     private BigDecimal balance;
 
+    @Column(name = "held_balance", nullable = false, precision = 14, scale = 2)
+    private BigDecimal heldBalance;
+
     @JdbcTypeCode(SqlTypes.CHAR)
     @Column(name = "currency", nullable = false, length = 3, columnDefinition = "char(3)")
     private String currency;
@@ -61,6 +64,14 @@ public class UserWallet extends UpdatedEntity {
 
     public void setBalance(BigDecimal balance) {
         this.balance = balance;
+    }
+
+    public BigDecimal getHeldBalance() {
+        return heldBalance;
+    }
+
+    public void setHeldBalance(BigDecimal heldBalance) {
+        this.heldBalance = heldBalance;
     }
 
     public String getCurrency() {
