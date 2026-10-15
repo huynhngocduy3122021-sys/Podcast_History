@@ -11,13 +11,16 @@ void main() {
   testWidgets('VietCast starts at auth and enters listener home', (tester) async {
     await tester.pumpWidget(const VietCastApp());
     expect(find.text('Dang nhap VietCast'), findsOneWidget);
-    expect(find.text('Nguoi nghe (listener@vietcast.local)'), findsOneWidget);
+    expect(find.text('Username hoac email'), findsOneWidget);
+    expect(find.text('Dang nhap'), findsOneWidget);
 
-    await tester.tap(find.text('Nguoi nghe (listener@vietcast.local)'));
+    await tester.tap(find.text('Chua co tai khoan?'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Minh Anh'), findsOneWidget);
-    expect(find.text('Danh cho ban'), findsOneWidget);
+    expect(find.text('Dang ky VietCast'), findsOneWidget);
+    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Ten hien thi'), findsOneWidget);
+    expect(find.text('Dang ky'), findsOneWidget);
   });
 
   testWidgets('VietCast enters Creator Studio', (tester) async {

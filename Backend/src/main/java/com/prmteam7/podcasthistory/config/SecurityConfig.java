@@ -34,36 +34,49 @@ public class SecurityConfig {
 
   private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
 
-    @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        return http
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(
-                                "/api/health",
-                                "/api/auth/login",
-                                "/api/auth/register",
-                                "/api/auth/refresh",
-                                "/api/auth/logout",
-                                "/swagger-ui.html",
-                                "/swagger-ui/**",
-                                "/v3/api-docs/**")
-                        .permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/creator/**").hasRole("CREATOR")
-                        .requestMatchers("/api/listener/**").hasRole("LISTENER")
-                        .requestMatchers("/api/requests/**", "/api/milestones/**").authenticated()
-                        .requestMatchers("/api/uploads/**").authenticated()
-                        .requestMatchers("/api/creator-applications/**").authenticated()
-                        .requestMatchers("/api/auth/me")
-                        .authenticated()
-                        .anyRequest()
-                        .permitAll())
-                .oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt ->
-                        jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
-                .build();
-    }
+  @Bean
+  SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http.cors(org.springframework.security.config.Customizer.withDefaults())
+        .csrf(AbstractHttpConfigurer::disable)
+        .sessionManagement(
+            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .authorizeHttpRequests(
+            authorize ->
+                authorize
+                    .requestMatchers(HttpMethod.GET, "/api/categories")
+                    .permitAll()
+                    .requestMatchers(
+                        "/api/health",
+                        "/api/auth/login",
+                        "/api/auth/register",
+                        "/api/auth/refresh",
+                        "/api/auth/logout",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**")
+                    .permitAll()
+                    .requestMatchers("/api/admin/**")
+                    .hasRole("ADMIN")
+                    .requestMatchers("/api/staff/**")
+                    .hasRole("STAFF")
+                    .requestMatchers("/api/creator/**")
+                    .hasRole("CREATOR")
+                    .requestMatchers("/api/listener/**")
+                    .hasRole("LISTENER")
+                    .requestMatchers("/api/uploads/**")
+                    .authenticated()
+                    .requestMatchers("/api/creator-applications/**")
+                    .authenticated()
+                    .requestMatchers("/api/auth/me")
+                    .authenticated()
+                    .anyRequest()
+                    .authenticated())
+        .oauth2ResourceServer(
+            resourceServer ->
+                resourceServer.jwt(
+                    jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+        .build();
+  }
 
   private JwtAuthenticationConverter jwtAuthenticationConverter() {
     JwtGrantedAuthoritiesConverter scopeConverter = new JwtGrantedAuthoritiesConverter();

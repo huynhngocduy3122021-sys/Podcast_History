@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.Check(constraints = "timestamp_seconds IS NULL OR timestamp_seconds >= 0")
 @Table(name = "\"Comment\"", indexes = {
         @Index(name = "idx_comment_user_id", columnList = "user_id"),
         @Index(name = "idx_comment_podcast_id", columnList = "podcast_id")
@@ -24,6 +25,17 @@ public class Comment extends UpdatedEntity {
 
     @Column(name = "content", nullable = false, columnDefinition = "text")
     private String content;
+
+    @Column(name = "timestamp_seconds")
+    private Integer timestampSeconds;
+
+    public Integer getTimestampSeconds() {
+        return timestampSeconds;
+    }
+
+    public void setTimestampSeconds(Integer timestampSeconds) {
+        this.timestampSeconds = timestampSeconds;
+    }
 
     @Column(name = "status", nullable = false, length = 30)
     private String status;

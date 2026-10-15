@@ -21,7 +21,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
-@RequestMapping("/api/admin/disputes")
+@RequestMapping("/api/admin/milestone-disputes")
 @Tag(name = "Admin - podcast milestone disputes")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminMilestoneDisputeController {
