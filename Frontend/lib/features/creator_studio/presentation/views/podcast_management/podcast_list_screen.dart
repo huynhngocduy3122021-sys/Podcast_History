@@ -9,7 +9,6 @@ import 'package:podcast_history/core/widgets/error_state_widget.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/upload/upload_podcast_screen.dart';
-import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/soundcloud_podcast_card.dart';
 
 class PodcastListScreen extends ConsumerStatefulWidget {

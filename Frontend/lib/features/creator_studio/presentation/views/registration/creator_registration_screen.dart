@@ -16,12 +16,12 @@ class CreatorRegistrationScreen extends ConsumerStatefulWidget {
 
 class _CreatorRegistrationScreenState extends ConsumerState<CreatorRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController(text: 'Sử Kể Đêm Khuya');
-  final _handleCtrl = TextEditingController(text: '@sukledemkhuya');
-  final _bioCtrl = TextEditingController(text: 'Kênh podcast chuyên sâu về lịch sử Việt Nam cận và hiện đại.');
-  final _socialCtrl = TextEditingController(text: 'https://youtube.com/@sukledemkhuya');
+  final _nameCtrl = TextEditingController();
+  final _handleCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController();
+  final _socialCtrl = TextEditingController();
   String _selectedCategory = 'Kháng chiến 1945–1975';
-  String? _sampleVoiceName = 'giong_doc_mau_intro.mp3';
+  String? _sampleVoiceName;
   bool _isSubmitting = false;
 
   final List<String> _categories = [

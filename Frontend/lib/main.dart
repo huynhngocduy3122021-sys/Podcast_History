@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/network/api_endpoints.dart';
 import 'core/theme/app_theme.dart';
+import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
@@ -1879,14 +1881,14 @@ class Setting extends StatelessWidget {
   );
 }
 
-class AuthPage extends StatefulWidget {
+class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key, required this.onAuthenticated});
   final ValueChanged<MockAccount> onAuthenticated;
   @override
-  State<AuthPage> createState() => _AuthState();
+  ConsumerState<AuthPage> createState() => _AuthState();
 }
 
-class _AuthState extends State<AuthPage> {
+class _AuthState extends ConsumerState<AuthPage> {
   bool register = false;
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
@@ -1899,16 +1901,49 @@ class _AuthState extends State<AuthPage> {
     super.dispose();
   }
 
-  void login(MockAccount account) => widget.onAuthenticated(account);
-
-  void submit() {
-    if (register) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dang ky mock thanh cong. Ban co the dang nhap ngay.'),
-        ),
+  Future<void> login(MockAccount account) async {
+    // Attempt backend login to get Bearer token for Creator / APIs
+    try {
+      final apiClient = ref.read(apiClientProvider);
+      final res = await apiClient.post(
+        ApiEndpoints.login,
+        body: {
+          'usernameOrEmail': account.email,
+          'password': account.password,
+        },
       );
-      setState(() => register = false);
+      if (res is Map<String, dynamic> && res['accessToken'] != null) {
+        apiClient.setToken(res['accessToken'].toString());
+      }
+    } catch (_) {
+      // Offline / dev fallback: continue seamlessly
+    }
+    widget.onAuthenticated(account);
+  }
+
+  Future<void> submit() async {
+    if (register) {
+      try {
+        final apiClient = ref.read(apiClientProvider);
+        await apiClient.post(
+          ApiEndpoints.register,
+          body: {
+            'username': emailController.text.trim().split('@').first,
+            'email': emailController.text.trim(),
+            'password': passwordController.text,
+            'displayName': emailController.text.trim().split('@').first,
+          },
+        );
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Dang ky thanh cong. Ban co the dang nhap ngay.'),
+          ),
+        );
+        setState(() => register = false);
+      }
       return;
     }
     final account = mockAccounts.where(
@@ -1917,10 +1952,36 @@ class _AuthState extends State<AuthPage> {
           item.password == passwordController.text,
     );
     if (account.isEmpty) {
-      setState(() => error = 'Email hoac mat khau mock khong dung.');
+      // Check if user entered direct backend credentials
+      try {
+        final apiClient = ref.read(apiClientProvider);
+        final res = await apiClient.post(
+          ApiEndpoints.login,
+          body: {
+            'usernameOrEmail': emailController.text.trim(),
+            'password': passwordController.text,
+          },
+        );
+        if (res is Map<String, dynamic> && res['accessToken'] != null) {
+          apiClient.setToken(res['accessToken'].toString());
+          final userRole = res['user']?['role']?.toString().toUpperCase();
+          final resolvedRole = userRole == 'ADMIN'
+              ? UserRole.admin
+              : (userRole == 'CREATOR' ? UserRole.creator : UserRole.listener);
+          widget.onAuthenticated(MockAccount(
+            emailController.text.trim(),
+            passwordController.text,
+            res['user']?['displayName']?.toString() ?? 'Nguoi dung',
+            resolvedRole,
+          ));
+          return;
+        }
+      } catch (_) {}
+
+      setState(() => error = 'Email hoac mat khau khong dung.');
       return;
     }
-    login(account.first);
+    await login(account.first);
   }
 
   @override

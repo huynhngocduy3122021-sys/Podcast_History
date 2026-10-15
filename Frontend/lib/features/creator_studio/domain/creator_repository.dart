@@ -25,6 +25,17 @@ abstract class CreatorRepository {
     required String? audioFileName,
     required Duration duration,
   });
+  Future<CreatorPodcast> updatePodcast({
+    required String id,
+    required String title,
+    required String description,
+    required String eraTag,
+    required String sources,
+    required bool isExclusive,
+    required String coverUrl,
+    required String? audioFileName,
+    required Duration duration,
+  });
   Future<void> deletePodcast(String id);
 
   // Custom Requests (Podcast theo yêu cầu)
