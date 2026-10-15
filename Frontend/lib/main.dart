@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
 import 'api_service.dart';
@@ -720,27 +721,8 @@ class CreatorShell extends StatelessWidget {
   final VoidCallback onTheme, onLogout;
 
   @override
-  Widget build(BuildContext context) => ActorShell(
-    title: 'Creator Studio',
-    pages: [
-      const CreatorPage(),
-      const RequestPage(),
-      const WalletPage(),
-      Profile(displayName: displayName, onTheme: onTheme, onLogout: onLogout),
-    ],
-    destinations: const [
-      NavigationDestination(icon: Icon(Icons.mic), label: 'Studio'),
-      NavigationDestination(
-        icon: Icon(Icons.assignment_outlined),
-        label: 'Yeu cau',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.account_balance_wallet_outlined),
-        label: 'Vi',
-      ),
-      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Ca nhan'),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      CreatorMainShell(onTheme: onTheme, onLogout: onLogout);
 }
 
 class AdminShell extends StatelessWidget {
@@ -2318,6 +2300,7 @@ class _AuthState extends ConsumerState<AuthPage> {
   final displayNameController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+  bool obscurePassword = true;
   String? error;
   final authApi = AuthApi();
 
@@ -2427,8 +2410,19 @@ class _AuthState extends ConsumerState<AuthPage> {
       const SizedBox(height: 12),
       TextField(
         controller: passwordController,
-        obscureText: true,
-        decoration: InputDecoration(labelText: 'Mat khau'),
+        obscureText: obscurePassword,
+        decoration: InputDecoration(
+          labelText: 'Mat khau',
+          suffixIcon: IconButton(
+            tooltip: obscurePassword ? 'Hien mat khau' : 'An mat khau',
+            icon: Icon(
+              obscurePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+            onPressed: () => setState(() => obscurePassword = !obscurePassword),
+          ),
+        ),
       ),
       if (error != null) ...[
         const SizedBox(height: 8),
@@ -3357,10 +3351,27 @@ class _CommentComposer extends StatelessWidget {
             style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => onSubmit(),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Comment...',
-              hintStyle: TextStyle(color: Colors.white70),
-              border: InputBorder.none,
+              hintStyle: const TextStyle(color: Colors.white54),
+              filled: true,
+              fillColor: const Color(0xFF191717),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                borderSide: const BorderSide(color: Color(0xFF5A504B)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                borderSide: const BorderSide(color: Color(0xFF5A504B)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                borderSide: const BorderSide(color: Color(0xFFB3261E)),
+              ),
               isDense: true,
             ),
           ),
@@ -4147,31 +4158,47 @@ class Comment extends StatelessWidget {
   });
   final String name, text, time;
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(top: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    decoration: BoxDecoration(
-      color: Colors.white.withAlpha(24),
-      border: Border.all(color: Colors.white24),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: const CircleAvatar(
-        backgroundColor: Color(0xFFFFD8D2),
-        foregroundColor: Color(0xFF733B35),
-        child: Icon(Icons.person),
-      ),
-      title: Text(
-        '$name  $time',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final foreground = isDark ? Colors.white : theme.colorScheme.onSurface;
+    final mutedForeground = isDark
+        ? Colors.white70
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withAlpha(24)
+            : theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(
+          color: isDark
+              ? Colors.white24
+              : theme.colorScheme.outline.withAlpha(90),
         ),
+        borderRadius: BorderRadius.circular(16),
       ),
-      subtitle: Text(text, style: const TextStyle(color: Colors.white70)),
-      trailing: const Icon(Icons.favorite_border, color: Colors.white70),
-    ),
-  );
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        leading: CircleAvatar(
+          backgroundColor: isDark
+              ? const Color(0xFFFFD8D2)
+              : theme.colorScheme.primaryContainer,
+          foregroundColor: isDark
+              ? const Color(0xFF733B35)
+              : theme.colorScheme.onPrimaryContainer,
+          child: const Icon(Icons.person),
+        ),
+        title: Text(
+          '$name  $time',
+          style: TextStyle(color: foreground, fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(text, style: TextStyle(color: mutedForeground)),
+        trailing: Icon(Icons.favorite_border, color: mutedForeground),
+      ),
+    );
+  }
 }
