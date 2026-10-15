@@ -54,14 +54,17 @@ class _AppState extends State<VietCastApp> {
         : switch (account!.role) {
             UserRole.listener => Shell(
               session: account!.session,
+              displayName: account!.name,
               onTheme: toggleTheme,
               onLogout: logout,
             ),
             UserRole.creator => CreatorShell(
+              displayName: account!.name,
               onTheme: toggleTheme,
               onLogout: logout,
             ),
             UserRole.admin => AdminShell(
+              displayName: account!.name,
               onTheme: toggleTheme,
               onLogout: logout,
             ),
@@ -146,10 +149,12 @@ class Shell extends StatefulWidget {
   const Shell({
     super.key,
     required this.session,
+    required this.displayName,
     required this.onTheme,
     required this.onLogout,
   });
   final AuthSession session;
+  final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   @override
@@ -305,10 +310,9 @@ class _ShellState extends State<Shell> {
     if (show.id != null) {
       unawaited(api.playback(show.id!));
       unawaited(api.listeningHistoryForPodcast(show.id!));
-      commentSubscription = api.commentStream(show.id!).listen(
-        (_) {},
-        onError: (_) {},
-      );
+      commentSubscription = api
+          .commentStream(show.id!)
+          .listen((_) {}, onError: (_) {});
     }
     _showPlayer(show);
   }
@@ -472,6 +476,7 @@ class _ShellState extends State<Shell> {
       initialLiked: likedShowTitles.contains(show.title),
       initialSaved: savedShowTitles.contains(show.title),
       initialComments: show.id == null ? null : commentsByPodcast[show.id!],
+      displayName: widget.displayName,
       onProgressChanged: (value) {
         progressByShow[show.title] = value;
         if (show.id != null) {
@@ -514,6 +519,7 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     final pages = [
       Home(
+        displayName: widget.displayName,
         onPlay: play,
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
@@ -533,7 +539,11 @@ class _ShellState extends State<Shell> {
         balance: walletBalance,
         onTopUp: () => setState(() => walletBalance += 200000),
       ),
-      Profile(onTheme: widget.onTheme, onLogout: widget.onLogout),
+      Profile(
+        displayName: widget.displayName,
+        onTheme: widget.onTheme,
+        onLogout: widget.onLogout,
+      ),
     ];
     return Scaffold(
       body: SafeArea(bottom: false, child: pages[tab]),
@@ -610,9 +620,11 @@ class _ShellState extends State<Shell> {
 class CreatorShell extends StatelessWidget {
   const CreatorShell({
     super.key,
+    required this.displayName,
     required this.onTheme,
     required this.onLogout,
   });
+  final String displayName;
   final VoidCallback onTheme, onLogout;
 
   @override
@@ -622,7 +634,7 @@ class CreatorShell extends StatelessWidget {
       const CreatorPage(),
       const RequestPage(),
       const WalletPage(),
-      Profile(onTheme: onTheme, onLogout: onLogout),
+      Profile(displayName: displayName, onTheme: onTheme, onLogout: onLogout),
     ],
     destinations: const [
       NavigationDestination(icon: Icon(Icons.mic), label: 'Studio'),
@@ -640,7 +652,13 @@ class CreatorShell extends StatelessWidget {
 }
 
 class AdminShell extends StatelessWidget {
-  const AdminShell({super.key, required this.onTheme, required this.onLogout});
+  const AdminShell({
+    super.key,
+    required this.displayName,
+    required this.onTheme,
+    required this.onLogout,
+  });
+  final String displayName;
   final VoidCallback onTheme, onLogout;
 
   @override
@@ -649,7 +667,7 @@ class AdminShell extends StatelessWidget {
     pages: [
       const AdminPage(),
       const AlertPage(),
-      Profile(onTheme: onTheme, onLogout: onLogout),
+      Profile(displayName: displayName, onTheme: onTheme, onLogout: onLogout),
     ],
     destinations: const [
       NavigationDestination(
@@ -698,6 +716,7 @@ class _ActorShellState extends State<ActorShell> {
 class Home extends StatelessWidget {
   const Home({
     super.key,
+    required this.displayName,
     required this.onPlay,
     required this.onOpen,
     required this.onSearch,
@@ -705,6 +724,7 @@ class Home extends StatelessWidget {
     required this.onNotifications,
     required this.onProfile,
   });
+  final String displayName;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
   final VoidCallback onSearch, onNotifications, onProfile;
@@ -720,19 +740,23 @@ class Home extends StatelessWidget {
               InkWell(
                 onTap: onProfile,
                 borderRadius: BorderRadius.circular(24),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   backgroundColor: Color(0xFFE0B84A),
-                  child: Text('MA'),
+                  child: Text(
+                    displayName.isEmpty
+                        ? '?'
+                        : displayName.substring(0, 1).toUpperCase(),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Chao buoi toi,'),
                     Text(
-                      'Minh Anh',
+                      displayName,
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -2115,7 +2139,13 @@ class ListenerWalletPage extends StatelessWidget {
 }
 
 class Profile extends StatelessWidget {
-  const Profile({super.key, required this.onTheme, required this.onLogout});
+  const Profile({
+    super.key,
+    required this.displayName,
+    required this.onTheme,
+    required this.onLogout,
+  });
+  final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   @override
@@ -2124,15 +2154,20 @@ class Profile extends StatelessWidget {
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const CircleAvatar(
+        CircleAvatar(
           radius: 42,
           backgroundColor: Color(0xFFE0B84A),
-          child: Text('MA', style: TextStyle(fontSize: 24)),
+          child: Text(
+            displayName.isEmpty
+                ? '?'
+                : displayName.substring(0, 1).toUpperCase(),
+            style: const TextStyle(fontSize: 24),
+          ),
         ),
         const SizedBox(height: 12),
         Center(
           child: Text(
-            'Minh Anh',
+            displayName,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
@@ -2709,6 +2744,7 @@ class Player extends StatefulWidget {
   const Player({
     super.key,
     required this.show,
+    required this.displayName,
     required this.playing,
     required this.initialProgress,
     required this.initialLiked,
@@ -2724,6 +2760,7 @@ class Player extends StatefulWidget {
     required this.onToggle,
   });
   final Show show;
+  final String displayName;
   final bool playing;
   final double initialProgress;
   final bool initialLiked, initialSaved;
@@ -2743,14 +2780,20 @@ class _PlayerState extends State<Player> {
   late double progress = widget.initialProgress;
   late bool liked = widget.initialLiked;
   final commentController = TextEditingController();
-  late final comments = widget.initialComments ?? <CommentData>[
-    const CommentData('Thu Ha', 'Mot lat cat lich su rat dang nghe.', '02:35'),
-    const CommentData(
-      'Quang Minh',
-      'Cach ke chuyen gan gui va nhieu tu lieu.',
-      '08:12',
-    ),
-  ];
+  late final comments =
+      widget.initialComments ??
+      <CommentData>[
+        const CommentData(
+          'Thu Ha',
+          'Mot lat cat lich su rat dang nghe.',
+          '02:35',
+        ),
+        const CommentData(
+          'Quang Minh',
+          'Cach ke chuyen gan gui va nhieu tu lieu.',
+          '08:12',
+        ),
+      ];
 
   @override
   void dispose() {
@@ -2780,7 +2823,8 @@ class _PlayerState extends State<Player> {
     final saved = await widget.onComment?.call(text) ?? true;
     if (!saved || !mounted) return;
     setState(
-      () => comments.insert(0, CommentData('Minh Anh', text, _timestamp)),
+      () =>
+          comments.insert(0, CommentData(widget.displayName, text, _timestamp)),
     );
   }
 
@@ -3160,6 +3204,16 @@ class _CommentComposer extends StatelessWidget {
               child: Text(emoji, style: const TextStyle(fontSize: 22)),
             ),
           ),
+        IconButton(
+          onPressed: onSubmit,
+          tooltip: 'Gui binh luan',
+          visualDensity: VisualDensity.compact,
+          style: IconButton.styleFrom(
+            backgroundColor: const Color(0xFFB3261E),
+            foregroundColor: Colors.white,
+          ),
+          icon: const Icon(Icons.send_rounded, size: 18),
+        ),
       ],
     ),
   );
