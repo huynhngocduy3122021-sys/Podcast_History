@@ -48,6 +48,11 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.CONFLICT, exception.getMessage());
     }
 
+    @ExceptionHandler(WalletWorkflowException.class)
+    ResponseEntity<ApiError> handleWalletWorkflowConflict(WalletWorkflowException exception) {
+        return error(HttpStatus.CONFLICT, exception.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException exception) {
         String message = exception.getBindingResult().getFieldErrors().stream()

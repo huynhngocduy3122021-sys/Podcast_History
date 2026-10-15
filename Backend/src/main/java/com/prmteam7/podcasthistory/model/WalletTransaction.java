@@ -58,6 +58,9 @@ public class WalletTransaction extends BaseEntity {
     @Column(name = "balance_after", nullable = true, precision = 14, scale = 2)
     private BigDecimal balanceAfter;
 
+    @Column(name = "held_balance_after", nullable = true, precision = 14, scale = 2)
+    private BigDecimal heldBalanceAfter;
+
     public WalletTransaction() {
     }
 
@@ -162,6 +165,14 @@ public class WalletTransaction extends BaseEntity {
 
     public void setBalanceAfter(BigDecimal balanceAfter) {
         this.balanceAfter = balanceAfter;
+    }
+
+    public BigDecimal getHeldBalanceAfter() {
+        return heldBalanceAfter;
+    }
+
+    public void setHeldBalanceAfter(BigDecimal heldBalanceAfter) {
+        this.heldBalanceAfter = heldBalanceAfter;
     }
 
 }

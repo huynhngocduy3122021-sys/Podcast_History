@@ -121,3 +121,20 @@ All amounts are decimal values with up to two fractional digits; currency defaul
 - `GET /api/admin/disputes/open` and `POST /api/admin/disputes/{disputeId}/resolve` — Admin lists and resolves disputes. Resolution decision is `APPROVE_MILESTONE` or `REQUEST_REVISION`, with a required `note`.
 
 Approval creates one `Payment` with status `PENDING` and returns its ID. This project does not yet integrate a payment provider; `PENDING` is not proof of payment, and a provider callback/confirmation endpoint must be integrated before treating the milestone as paid. Business-rule violations return HTTP 409; missing workflow records return HTTP 404.
+
+## Creator wallet and payouts
+
+Apply `db/migrations/2026-10-13_z_creator_wallet_payout.sql` to an existing database after `db/migrations/2026-10-13_podcast_request_milestones.sql` and before deploying wallet and payout endpoints. The migration adds the held balance, payout-account reference fields, the verified payout-account table, ledger idempotency constraints, and non-negative wallet checks.
+
+All endpoints require a JWT. `/api/creator/**` requires the `CREATOR` role and `/api/admin/**` requires the `ADMIN` role. Wallets are created with `USD` currency on first access; this workflow does not perform currency conversion.
+
+- `POST /api/creator/wallet/release-funds` — Idempotently transfers wallet earnings for `PAID` payments whose milestone is `APPROVED`. A pending payment from milestone approval is not eligible; a payment provider must first confirm it as paid. Response includes the number and total amount released and the updated balance.
+- `GET /api/creator/wallet/balance` — Returns available, held, and total balance.
+- `GET /api/creator/wallet/payout-accounts` — Lists active payout accounts (masked destination only).
+- `POST /api/creator/wallet/withdrawals` — Body: `{"amount": 25.00, "payoutAccountId": "<verified account UUID>"}`. A valid request atomically moves funds from available to held and records a pending withdrawal.
+- `GET /api/creator/wallet/withdrawals` — Returns the Creator's withdrawal history and status.
+- `POST /api/admin/payouts/creators/{creatorProfileId}/accounts` — Registers an account after an operator verifies it with a payout provider. Body: `{"payoutMethod":"BANK","accountReference":"<provider token>","accountMasked":"****1234","currency":"USD"}`. The reference must be an opaque provider token, never a raw bank/card number.
+- `GET /api/admin/payouts/withdrawals/pending` — Lists pending payout requests and their provider account reference for authorized Admin processing. Keep this reference confidential.
+- `POST /api/admin/payouts/withdrawals/{withdrawalId}/result` — Body: `{"result":"SUCCESS","providerReference":"<provider transaction ID>","note":"optional"}` or `{"result":"FAILED","note":"optional"}`. `SUCCESS` completes the held debit; `FAILED` restores the funds to available. Terminal requests cannot be processed twice.
+
+No payout provider is currently integrated: an authorized Admin/operator executes the transfer outside the application and records the outcome. The result endpoint is not an automated provider callback. Database transactions protect wallet/ledger changes and do not remain open while an external transfer is in progress.

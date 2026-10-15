@@ -40,6 +40,12 @@ public class WithdrawalRequest extends UpdatedEntity {
     @Column(name = "payout_account_masked", nullable = false, length = 160)
     private String payoutAccountMasked;
 
+    @Column(name = "payout_account_reference", nullable = false, length = 255)
+    private String payoutAccountReference;
+
+    @Column(name = "provider_reference", length = 180)
+    private String providerReference;
+
     @Column(name = "status", nullable = false, length = 30)
     private String status;
 
@@ -116,6 +122,22 @@ public class WithdrawalRequest extends UpdatedEntity {
 
     public void setPayoutAccountMasked(String payoutAccountMasked) {
         this.payoutAccountMasked = payoutAccountMasked;
+    }
+
+    public String getPayoutAccountReference() {
+        return payoutAccountReference;
+    }
+
+    public void setPayoutAccountReference(String payoutAccountReference) {
+        this.payoutAccountReference = payoutAccountReference;
+    }
+
+    public String getProviderReference() {
+        return providerReference;
+    }
+
+    public void setProviderReference(String providerReference) {
+        this.providerReference = providerReference;
     }
 
     public String getStatus() {
