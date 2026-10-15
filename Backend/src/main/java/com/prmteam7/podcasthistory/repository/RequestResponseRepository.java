@@ -9,5 +9,5 @@ import com.prmteam7.podcasthistory.model.RequestResponse;
 
 public interface RequestResponseRepository extends JpaRepository<RequestResponse, UUID> {
 
-    Optional<RequestResponse> findTopBySeriesRequest_SeriesRequestIdOrderByCreatedAtDesc(UUID seriesRequestId);
+    Optional<RequestResponse> findBySeriesRequest_SeriesRequestId(UUID requestId);
 }

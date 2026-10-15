@@ -9,5 +9,5 @@ import com.prmteam7.podcasthistory.model.Payment;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
-    Optional<Payment> findFirstBySubscription_SubscriptionIdOrderByCreatedAtDesc(UUID subscriptionId);
+    Optional<Payment> findFirstByContractStage_ContractStageId(UUID stageId);
 }

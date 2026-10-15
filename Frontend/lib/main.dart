@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/theme/app_theme.dart';
+import 'features/creator_studio/presentation/views/creator_main_shell.dart';
+import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
 import 'api_service.dart';
 
@@ -30,27 +34,27 @@ class _AppState extends State<VietCastApp> {
   ThemeMode mode = ThemeMode.light;
   Account? account;
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'VietCast',
-    debugShowCheckedModeBanner: false,
-    themeMode: mode,
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFB3261E),
-        brightness: Brightness.light,
-      ),
-      scaffoldBackgroundColor: const Color(0xFFFBF7F0),
-    ),
-    darkTheme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFE8665D),
-        brightness: Brightness.dark,
-      ),
-    ),
-    home: account == null
-        ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
+  Widget build(BuildContext context) => ProviderScope(
+    child: MaterialApp(
+      title: 'VietCast',
+      debugShowCheckedModeBanner: false,
+      themeMode: mode,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return ColoredBox(
+          color: isDark ? const Color(0xFF121212) : const Color(0xFFEFE8DE),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+        );
+      },
+      home: account == null
+          ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
         : switch (account!.role) {
             UserRole.listener => Shell(
               session: account!.session,
@@ -69,6 +73,7 @@ class _AppState extends State<VietCastApp> {
               onLogout: logout,
             ),
           },
+    ),
   );
 
   void toggleTheme() => setState(
@@ -2173,6 +2178,13 @@ class Profile extends StatelessWidget {
         ),
         const Center(child: Text('Nguoi nghe lich su Viet Nam')),
         const SizedBox(height: 20),
+        Setting(
+          icon: Icons.mic_rounded,
+          title: 'Dang ky lam Creator',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CreatorRegistrationScreen()),
+          ),
+        ),
         Setting(
           icon: Icons.dark_mode_outlined,
           title: 'Giao dien toi',

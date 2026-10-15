@@ -1,0 +1,5286 @@
+{
+  "summary": {
+    "date": "2026-10-13",
+    "operations": 163,
+    "cases": 664,
+    "passed": 664,
+    "failed": 0,
+    "routes_exercised": 163,
+    "routes_with_2xx": 163,
+    "uncovered": [],
+    "no_2xx": [],
+    "error": null,
+    "storage": "local S3 stub; no real Cloudflare or bank calls",
+    "database": "isolated disposable PostgreSQL 18"
+  },
+  "cases": [
+    {
+      "case": "GET /v3/api-docs",
+      "route": "GET /v3/api-docs",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 2981.95
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 650.49
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 245.28
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 89.74
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 101.92
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 91.62
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 111.97
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 91.05
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 97.16
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 92.46
+    },
+    {
+      "case": "POST /api/admin/staff",
+      "route": "POST /api/admin/staff",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 226.69
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 87.36
+    },
+    {
+      "case": "POST /api/admin/staff",
+      "route": "POST /api/admin/staff",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 109.59
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 113.3
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 94.38
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 86.07
+    },
+    {
+      "case": "POST /api/creator-applications",
+      "route": "POST /api/creator-applications",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 68.0
+    },
+    {
+      "case": "GET /api/creator-applications/me",
+      "route": "GET /api/creator-applications/me",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.95
+    },
+    {
+      "case": "GET /api/admin/creator-applications/242033d5-63df-4045-aeac-023f86555598",
+      "route": "GET /api/admin/creator-applications/{applicationId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.11
+    },
+    {
+      "case": "POST /api/admin/creator-applications/242033d5-63df-4045-aeac-023f86555598/approve",
+      "route": "POST /api/admin/creator-applications/{applicationId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 49.63
+    },
+    {
+      "case": "POST /api/auth/refresh",
+      "route": "POST /api/auth/refresh",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 24.61
+    },
+    {
+      "case": "Approval refresh grants CREATOR",
+      "passed": true
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 98.04
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 94.48
+    },
+    {
+      "case": "POST /api/creator-applications",
+      "route": "POST /api/creator-applications",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 31.55
+    },
+    {
+      "case": "GET /api/creator-applications/me",
+      "route": "GET /api/creator-applications/me",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.13
+    },
+    {
+      "case": "GET /api/admin/creator-applications/dc69c5cf-9581-4761-b6ff-36281224f2a6",
+      "route": "GET /api/admin/creator-applications/{applicationId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 30.52
+    },
+    {
+      "case": "POST /api/admin/creator-applications/dc69c5cf-9581-4761-b6ff-36281224f2a6/approve",
+      "route": "POST /api/admin/creator-applications/{applicationId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 24.0
+    },
+    {
+      "case": "POST /api/auth/refresh",
+      "route": "POST /api/auth/refresh",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.33
+    },
+    {
+      "case": "Approval refresh grants CREATOR",
+      "passed": true
+    },
+    {
+      "case": "JWT lifetimes are 10 minutes and one week",
+      "passed": true
+    },
+    {
+      "case": "Database contains BCrypt hash, not password",
+      "passed": true
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 85.92
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": [
+        201,
+        409
+      ],
+      "status": 201,
+      "passed": true,
+      "milliseconds": 113.24
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": [
+        201,
+        409
+      ],
+      "status": 409,
+      "passed": true,
+      "milliseconds": 122.68
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": [
+        201,
+        409
+      ],
+      "status": 409,
+      "passed": true,
+      "milliseconds": 125.62
+    },
+    {
+      "case": "POST /api/auth/register",
+      "route": "POST /api/auth/register",
+      "expected": [
+        201,
+        409
+      ],
+      "status": 409,
+      "passed": true,
+      "milliseconds": 134.6
+    },
+    {
+      "case": "Concurrent registration is case insensitive and unique",
+      "passed": true
+    },
+    {
+      "case": "POST /api/admin/categories",
+      "route": "POST /api/admin/categories",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 42.54
+    },
+    {
+      "case": "GET /api/categories",
+      "route": "GET /api/categories",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.29
+    },
+    {
+      "case": "PUT /api/admin/categories/b484068a-297a-4559-95a4-752a09ac0653",
+      "route": "PUT /api/admin/categories/{categoryId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 30.5
+    },
+    {
+      "case": "POST /api/creator/podcasts",
+      "route": "POST /api/creator/podcasts",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 80.79
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/video",
+      "route": "POST /api/creator/podcasts/{podcastId}/video",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 1174.16
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 404,
+      "status": 404,
+      "passed": true,
+      "milliseconds": 28.16
+    },
+    {
+      "case": "POST /api/creator/series",
+      "route": "POST /api/creator/series",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 51.19
+    },
+    {
+      "case": "PUT /api/creator/series/08b4f880-a0e3-48e4-b163-f167a61c1d67",
+      "route": "PUT /api/creator/series/{seriesId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 53.09
+    },
+    {
+      "case": "PUT /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/series",
+      "route": "PUT /api/creator/podcasts/{podcastId}/series",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 32.74
+    },
+    {
+      "case": "GET /api/creator/series/08b4f880-a0e3-48e4-b163-f167a61c1d67/podcasts",
+      "route": "GET /api/creator/series/{seriesId}/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 46.22
+    },
+    {
+      "case": "DELETE /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/series",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/series",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 25.87
+    },
+    {
+      "case": "PUT /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "PUT /api/creator/podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 39.18
+    },
+    {
+      "case": "POST /api/uploads",
+      "route": "POST /api/uploads",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 23.66
+    },
+    {
+      "case": "POST /api/uploads",
+      "route": "POST /api/uploads",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 28.43
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/video",
+      "route": "POST /api/creator/podcasts/{podcastId}/video",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 27.61
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/video",
+      "route": "POST /api/creator/podcasts/{podcastId}/video",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 58.46
+    },
+    {
+      "case": "Replacing video deletes previous object after commit",
+      "passed": true
+    },
+    {
+      "case": "Podcast video does not expose permanent public URL",
+      "passed": true
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references",
+      "route": "POST /api/creator/podcasts/{podcastId}/references",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 48.08
+    },
+    {
+      "case": "PUT /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8",
+      "route": "PUT /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 64.32
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 38.97
+    },
+    {
+      "case": "GET /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 86.07
+    },
+    {
+      "case": "GET /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.68
+    },
+    {
+      "case": "GET /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 33.03
+    },
+    {
+      "case": "GET /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 43.7
+    },
+    {
+      "case": "GET /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 404,
+      "status": 404,
+      "passed": true,
+      "milliseconds": 26.38
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 36.05
+    },
+    {
+      "case": "POST /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/approve",
+      "route": "POST /api/staff/podcasts/{podcastId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 32.42
+    },
+    {
+      "case": "GET /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/preview",
+      "route": "GET /api/admin/podcasts/{podcastId}/preview",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 26.57
+    },
+    {
+      "case": "GET /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/preview",
+      "route": "GET /api/staff/podcasts/{podcastId}/preview",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 20.7
+    },
+    {
+      "case": "POST /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 18.04
+    },
+    {
+      "case": "GET /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 44.8
+    },
+    {
+      "case": "Private R2 playback is signed",
+      "passed": true
+    },
+    {
+      "case": "Signed media points to correct stored file",
+      "passed": true
+    },
+    {
+      "case": "POST /api/creator/podcasts",
+      "route": "POST /api/creator/podcasts",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 26.18
+    },
+    {
+      "case": "POST /api/creator/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/video",
+      "route": "POST /api/creator/podcasts/{podcastId}/video",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 35.22
+    },
+    {
+      "case": "POST /api/creator/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 26.15
+    },
+    {
+      "case": "POST /api/admin/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 36.45
+    },
+    {
+      "case": "GET /api/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 40.05
+    },
+    {
+      "case": "GET /api/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 27.05
+    },
+    {
+      "case": "POST /api/creator/podcasts",
+      "route": "POST /api/creator/podcasts",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 24.76
+    },
+    {
+      "case": "GET /api/podcasts?q=history&page=0&size=20",
+      "route": "GET /api/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 64.06
+    },
+    {
+      "case": "GET /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references",
+      "route": "GET /api/podcasts/{podcastId}/references",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 35.38
+    },
+    {
+      "case": "GET /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "GET /api/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.48
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 52.66
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 50.61
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 37.05
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.59
+    },
+    {
+      "case": "GET /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/likes",
+      "route": "GET /api/podcasts/{podcastId}/likes",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 13.07
+    },
+    {
+      "case": "Repeated like is idempotent",
+      "passed": true
+    },
+    {
+      "case": "DELETE /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "DELETE /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.49
+    },
+    {
+      "case": "POST /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/comments",
+      "route": "POST /api/podcasts/{podcastId}/comments",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 40.47
+    },
+    {
+      "case": "PUT /api/comments/f11e5d82-a915-402c-98d2-f51a88a8afe1",
+      "route": "PUT /api/comments/{commentId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 18.74
+    },
+    {
+      "case": "PUT /api/comments/f11e5d82-a915-402c-98d2-f51a88a8afe1",
+      "route": "PUT /api/comments/{commentId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 29.81
+    },
+    {
+      "case": "SSE connected event",
+      "passed": true
+    },
+    {
+      "case": "POST /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/comments",
+      "route": "POST /api/podcasts/{podcastId}/comments",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 18.26
+    },
+    {
+      "case": "SSE comment-created event",
+      "passed": true
+    },
+    {
+      "case": "PUT /api/creators/242033d5-63df-4045-aeac-023f86555598/follow",
+      "route": "PUT /api/creators/{creatorId}/follow",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 28.46
+    },
+    {
+      "case": "PUT /api/me/saved-podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "PUT /api/me/saved-podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 28.71
+    },
+    {
+      "case": "GET /api/me/follows",
+      "route": "GET /api/me/follows",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.92
+    },
+    {
+      "case": "GET /api/me/saved-podcasts",
+      "route": "GET /api/me/saved-podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 20.45
+    },
+    {
+      "case": "POST /api/reports",
+      "route": "POST /api/reports",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 26.45
+    },
+    {
+      "case": "PATCH /api/me/reports/e0f6d91c-2f14-4127-8236-b9d85b509767",
+      "route": "PATCH /api/me/reports/{reportId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 22.11
+    },
+    {
+      "case": "GET /api/me/reports",
+      "route": "GET /api/me/reports",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 22.17
+    },
+    {
+      "case": "POST /api/staff/reports/e0f6d91c-2f14-4127-8236-b9d85b509767/claim",
+      "route": "POST /api/staff/reports/{reportId}/claim",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.97
+    },
+    {
+      "case": "POST /api/staff/reports/e0f6d91c-2f14-4127-8236-b9d85b509767/resolve",
+      "route": "POST /api/staff/reports/{reportId}/resolve",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 27.01
+    },
+    {
+      "case": "POST /api/staff/reports/e0f6d91c-2f14-4127-8236-b9d85b509767/resolve",
+      "route": "POST /api/staff/reports/{reportId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 23.01
+    },
+    {
+      "case": "DELETE /api/me/reports/e0f6d91c-2f14-4127-8236-b9d85b509767",
+      "route": "DELETE /api/me/reports/{reportId}",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 9.53
+    },
+    {
+      "case": "POST /api/reports",
+      "route": "POST /api/reports",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 25.67
+    },
+    {
+      "case": "DELETE /api/me/reports/923f4346-0aeb-48be-9dbe-afa3568bc80a",
+      "route": "DELETE /api/me/reports/{reportId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 10.92
+    },
+    {
+      "case": "DELETE /api/comments/f11e5d82-a915-402c-98d2-f51a88a8afe1",
+      "route": "DELETE /api/comments/{commentId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 31.59
+    },
+    {
+      "case": "DELETE /api/creators/242033d5-63df-4045-aeac-023f86555598/follow",
+      "route": "DELETE /api/creators/{creatorId}/follow",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 32.31
+    },
+    {
+      "case": "DELETE /api/me/saved-podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "DELETE /api/me/saved-podcasts/{podcastId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 17.35
+    },
+    {
+      "case": "GET /api/me/listening-history/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "GET /api/me/listening-history/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 15.72
+    },
+    {
+      "case": "DELETE /api/me/listening-history/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "DELETE /api/me/listening-history/{podcastId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 29.43
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.27
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 36.18
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 54.81
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 72.51
+    },
+    {
+      "case": "PUT /api/creators/242033d5-63df-4045-aeac-023f86555598/follow",
+      "route": "PUT /api/creators/{creatorId}/follow",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.71
+    },
+    {
+      "case": "PUT /api/creators/242033d5-63df-4045-aeac-023f86555598/follow",
+      "route": "PUT /api/creators/{creatorId}/follow",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 27.19
+    },
+    {
+      "case": "PUT /api/creators/242033d5-63df-4045-aeac-023f86555598/follow",
+      "route": "PUT /api/creators/{creatorId}/follow",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 37.0
+    },
+    {
+      "case": "PUT /api/creators/242033d5-63df-4045-aeac-023f86555598/follow",
+      "route": "PUT /api/creators/{creatorId}/follow",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 46.23
+    },
+    {
+      "case": "PUT /api/me/saved-podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "PUT /api/me/saved-podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.06
+    },
+    {
+      "case": "PUT /api/me/saved-podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "PUT /api/me/saved-podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 28.57
+    },
+    {
+      "case": "PUT /api/me/saved-podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "PUT /api/me/saved-podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 35.48
+    },
+    {
+      "case": "PUT /api/me/saved-podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "PUT /api/me/saved-podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 46.34
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.42
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.38
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 52.37
+    },
+    {
+      "case": "PUT /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 65.79
+    },
+    {
+      "case": "GET /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/likes",
+      "route": "GET /api/podcasts/{podcastId}/likes",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.67
+    },
+    {
+      "case": "Concurrent likes stay idempotent",
+      "passed": true
+    },
+    {
+      "case": "POST /api/admin/membership-plans",
+      "route": "POST /api/admin/membership-plans",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 60.02
+    },
+    {
+      "case": "PUT /api/admin/membership-plans/d7dd79d2-04a9-4231-b005-a14804f25100",
+      "route": "PUT /api/admin/membership-plans/{planId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.63
+    },
+    {
+      "case": "GET /api/creators/242033d5-63df-4045-aeac-023f86555598/membership-plans",
+      "route": "GET /api/creators/{creatorId}/membership-plans",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.43
+    },
+    {
+      "case": "POST /api/me/subscriptions",
+      "route": "POST /api/me/subscriptions",
+      "expected": 202,
+      "status": 202,
+      "passed": true,
+      "milliseconds": 58.5
+    },
+    {
+      "case": "POST /api/me/subscriptions",
+      "route": "POST /api/me/subscriptions",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 22.52
+    },
+    {
+      "case": "POST /api/admin/payments/29eab818-09d3-41d7-ba47-5a3256abfb6d/reconcile",
+      "route": "POST /api/admin/payments/{paymentId}/reconcile",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 54.88
+    },
+    {
+      "case": "GET /api/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 26.5
+    },
+    {
+      "case": "POST /api/admin/payments/29eab818-09d3-41d7-ba47-5a3256abfb6d/reconcile",
+      "route": "POST /api/admin/payments/{paymentId}/reconcile",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 14.78
+    },
+    {
+      "case": "POST /api/creators/242033d5-63df-4045-aeac-023f86555598/series-requests",
+      "route": "POST /api/creators/{creatorId}/series-requests",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 34.8
+    },
+    {
+      "case": "PUT /api/me/series-requests/088fcfba-fc0b-4e98-a8f4-bff95836dc8d",
+      "route": "PUT /api/me/series-requests/{requestId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.48
+    },
+    {
+      "case": "GET /api/me/series-requests",
+      "route": "GET /api/me/series-requests",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 30.73
+    },
+    {
+      "case": "DELETE /api/me/series-requests/088fcfba-fc0b-4e98-a8f4-bff95836dc8d",
+      "route": "DELETE /api/me/series-requests/{requestId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 21.82
+    },
+    {
+      "case": "POST /api/admin/payments/29eab818-09d3-41d7-ba47-5a3256abfb6d/refund",
+      "route": "POST /api/admin/payments/{paymentId}/refund",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 59.76
+    },
+    {
+      "case": "GET /api/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 17.97
+    },
+    {
+      "case": "POST /api/admin/payments/29eab818-09d3-41d7-ba47-5a3256abfb6d/refund",
+      "route": "POST /api/admin/payments/{paymentId}/refund",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 18.72
+    },
+    {
+      "case": "POST /api/me/subscriptions",
+      "route": "POST /api/me/subscriptions",
+      "expected": 202,
+      "status": 202,
+      "passed": true,
+      "milliseconds": 33.96
+    },
+    {
+      "case": "DELETE /api/me/subscriptions/ec6c677e-924f-4b4e-81ab-450c0ca357f6",
+      "route": "DELETE /api/me/subscriptions/{subscriptionId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 29.62
+    },
+    {
+      "case": "POST /api/admin/payments/c5237cdc-c616-456b-bb37-9ec9408fca0d/reconcile",
+      "route": "POST /api/admin/payments/{paymentId}/reconcile",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 11.72
+    },
+    {
+      "case": "DELETE /api/admin/membership-plans/d7dd79d2-04a9-4231-b005-a14804f25100",
+      "route": "DELETE /api/admin/membership-plans/{planId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.74
+    },
+    {
+      "case": "PUT /api/admin/membership-plans/d7dd79d2-04a9-4231-b005-a14804f25100",
+      "route": "PUT /api/admin/membership-plans/{planId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.59
+    },
+    {
+      "case": "POST /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/hide",
+      "route": "POST /api/staff/podcasts/{podcastId}/hide",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 22.1
+    },
+    {
+      "case": "GET /api/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 404,
+      "status": 404,
+      "passed": true,
+      "milliseconds": 14.19
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/appeals",
+      "route": "POST /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 40.68
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/appeals",
+      "route": "POST /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 15.22
+    },
+    {
+      "case": "POST /api/admin/podcast-appeals/9fdbfa11-58eb-46b7-9a30-16de0cdeb7fd/resolve",
+      "route": "POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 54.03
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/appeals",
+      "route": "POST /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 15.95
+    },
+    {
+      "case": "POST /api/staff/podcast-appeals/f3503540-3337-47e3-8743-681063dd5013/resolve",
+      "route": "POST /api/staff/podcast-appeals/{appealId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.23
+    },
+    {
+      "case": "POST /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/reject",
+      "route": "POST /api/staff/podcasts/{podcastId}/reject",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 45.41
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.38
+    },
+    {
+      "case": "POST /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 17.72
+    },
+    {
+      "case": "POST /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/hide",
+      "route": "POST /api/admin/podcasts/{podcastId}/hide",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 20.35
+    },
+    {
+      "case": "POST /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/restore",
+      "route": "POST /api/admin/podcasts/{podcastId}/restore",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 20.39
+    },
+    {
+      "case": "POST /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/reject",
+      "route": "POST /api/admin/podcasts/{podcastId}/reject",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.42
+    },
+    {
+      "case": "GET /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/reviews",
+      "route": "GET /api/creator/podcasts/{podcastId}/reviews",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 46.53
+    },
+    {
+      "case": "GET /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/appeals",
+      "route": "GET /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 63.28
+    },
+    {
+      "case": "DELETE /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8/file",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 53.84
+    },
+    {
+      "case": "DELETE /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/references/8275a84d-ea9d-4e3e-aa8b-9118e767eeb8",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 18.58
+    },
+    {
+      "case": "POST /api/creator-applications",
+      "route": "POST /api/creator-applications",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 15.29
+    },
+    {
+      "case": "POST /api/admin/creator-applications/aaaf7c64-8ee3-4be5-8637-ffe5a2d399d5/reject",
+      "route": "POST /api/admin/creator-applications/{applicationId}/reject",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.07
+    },
+    {
+      "case": "POST /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.48
+    },
+    {
+      "case": "POST /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 38.58
+    },
+    {
+      "case": "POST /api/reports",
+      "route": "POST /api/reports",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 13.38
+    },
+    {
+      "case": "POST /api/admin/reports/5d0ad237-fcca-4cd9-9887-ce5dee9b2fb3/claim",
+      "route": "POST /api/admin/reports/{reportId}/claim",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 22.63
+    },
+    {
+      "case": "POST /api/admin/reports/5d0ad237-fcca-4cd9-9887-ce5dee9b2fb3/resolve",
+      "route": "POST /api/admin/reports/{reportId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.78
+    },
+    {
+      "case": "POST /api/admin/withdrawals/4d921077-3d48-43bc-9eb6-ec226a052d84/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 76.67
+    },
+    {
+      "case": "Approval reserves money once",
+      "passed": true
+    },
+    {
+      "case": "POST /api/admin/withdrawals/4d921077-3d48-43bc-9eb6-ec226a052d84/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 31.43
+    },
+    {
+      "case": "POST /api/admin/withdrawals/4d921077-3d48-43bc-9eb6-ec226a052d84/fail",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 56.25
+    },
+    {
+      "case": "POST /api/admin/withdrawals/4d921077-3d48-43bc-9eb6-ec226a052d84/fail",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 19.01
+    },
+    {
+      "case": "Failure returns reserved amount once",
+      "passed": true
+    },
+    {
+      "case": "POST /api/admin/withdrawals/82d48eaa-c0c4-4cfd-9e3d-f4a1b5ac20bf/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 28.57
+    },
+    {
+      "case": "POST /api/admin/withdrawals/82d48eaa-c0c4-4cfd-9e3d-f4a1b5ac20bf/complete",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 30.88
+    },
+    {
+      "case": "POST /api/admin/withdrawals/82d48eaa-c0c4-4cfd-9e3d-f4a1b5ac20bf/complete",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 13.13
+    },
+    {
+      "case": "Complete does not deduct twice",
+      "passed": true
+    },
+    {
+      "case": "POST /api/admin/withdrawals/4136b509-b050-4756-9acb-eed385914299/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 31.91
+    },
+    {
+      "case": "POST /api/admin/withdrawals/36f27e10-2b4c-44f9-8b89-d2c80e5e3784/reject",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.37
+    },
+    {
+      "case": "POST /api/admin/withdrawals/aa360aa3-4da8-4d36-9f00-d5f9a594ad2f/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": [
+        200,
+        409
+      ],
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.89
+    },
+    {
+      "case": "POST /api/admin/withdrawals/aa360aa3-4da8-4d36-9f00-d5f9a594ad2f/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": [
+        200,
+        409
+      ],
+      "status": 409,
+      "passed": true,
+      "milliseconds": 35.12
+    },
+    {
+      "case": "Concurrent approvals reserve once",
+      "passed": true
+    },
+    {
+      "case": "POST /api/admin/withdrawals/aa360aa3-4da8-4d36-9f00-d5f9a594ad2f/fail",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 26.12
+    },
+    {
+      "case": "POST /api/contracts/ee489f56-9022-4ba0-bb4e-6811faf7e098/disputes",
+      "route": "POST /api/contracts/{contractId}/disputes",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 24.13
+    },
+    {
+      "case": "POST /api/contracts/ee489f56-9022-4ba0-bb4e-6811faf7e098/disputes",
+      "route": "POST /api/contracts/{contractId}/disputes",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 61.53
+    },
+    {
+      "case": "POST /api/admin/disputes/599b7d53-380b-4f7a-a055-1a70ed2a9702/resolve",
+      "route": "POST /api/admin/disputes/{disputeId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 55.27
+    },
+    {
+      "case": "POST /api/admin/contracts/896e1983-4d51-4a0e-88db-a79aa739604d/disputes",
+      "route": "POST /api/admin/contracts/{contractId}/disputes",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 24.48
+    },
+    {
+      "case": "POST /api/admin/disputes/57fdb0d9-3aa8-490d-bac7-9295af53229d/resolve",
+      "route": "POST /api/admin/disputes/{disputeId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 40.94
+    },
+    {
+      "case": "POST /api/admin/contracts/3990f288-c298-4548-a925-d799e715be6f/disputes",
+      "route": "POST /api/admin/contracts/{contractId}/disputes",
+      "expected": 201,
+      "status": 201,
+      "passed": true,
+      "milliseconds": 48.43
+    },
+    {
+      "case": "POST /api/admin/disputes/5dd33f96-e75d-4ce4-8812-16ed1f1b92b1/resolve",
+      "route": "POST /api/admin/disputes/{disputeId}/resolve",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.87
+    },
+    {
+      "case": "PATCH /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2",
+      "route": "PATCH /api/admin/users/{userId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 26.04
+    },
+    {
+      "case": "PATCH /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2/verification",
+      "route": "PATCH /api/admin/users/{userId}/verification",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 23.88
+    },
+    {
+      "case": "PATCH /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2/access",
+      "route": "PATCH /api/admin/users/{userId}/access",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 48.37
+    },
+    {
+      "case": "GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 57.04
+    },
+    {
+      "case": "POST /api/auth/refresh",
+      "route": "POST /api/auth/refresh",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 17.57
+    },
+    {
+      "case": "PATCH /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2/access",
+      "route": "PATCH /api/admin/users/{userId}/access",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 30.35
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 132.2
+    },
+    {
+      "case": "PATCH /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2/role",
+      "route": "PATCH /api/admin/users/{userId}/role",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 33.2
+    },
+    {
+      "case": "GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 6.24
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 132.14
+    },
+    {
+      "case": "PATCH /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2/role",
+      "route": "PATCH /api/admin/users/{userId}/role",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 30.75
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 127.21
+    },
+    {
+      "case": "POST /api/admin/users/4eb718a0-adcd-4431-90c0-89cb56d884c2/revoke-sessions",
+      "route": "POST /api/admin/users/{userId}/revoke-sessions",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.16
+    },
+    {
+      "case": "GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 5.88
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 124.3
+    },
+    {
+      "case": "PATCH /api/admin/users/e68aa52c-fb30-4020-aae9-9e9124824b66/access",
+      "route": "PATCH /api/admin/users/{userId}/access",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 11.95
+    },
+    {
+      "case": "GET /api/me/notifications",
+      "route": "GET /api/me/notifications",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 35.54
+    },
+    {
+      "case": "Moderation and finance generate notifications",
+      "passed": true
+    },
+    {
+      "case": "PUT /api/me/notifications/c0c0daeb-e2ee-42c5-9cfe-9dc3bf90b8f6/read",
+      "route": "PUT /api/me/notifications/{notificationId}/read",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 15.28
+    },
+    {
+      "case": "PUT /api/me/notifications/c0c0daeb-e2ee-42c5-9cfe-9dc3bf90b8f6/read",
+      "route": "PUT /api/me/notifications/{notificationId}/read",
+      "expected": 404,
+      "status": 404,
+      "passed": true,
+      "milliseconds": 9.19
+    },
+    {
+      "case": "GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.41
+    },
+    {
+      "case": "GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 28.79
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 131.62
+    },
+    {
+      "case": "POST /api/auth/refresh",
+      "route": "POST /api/auth/refresh",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 10.13
+    },
+    {
+      "case": "POST /api/auth/refresh",
+      "route": "POST /api/auth/refresh",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 32.43
+    },
+    {
+      "case": "POST /api/auth/refresh",
+      "route": "POST /api/auth/refresh",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 30.37
+    },
+    {
+      "case": "POST /api/auth/login",
+      "route": "POST /api/auth/login",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 121.77
+    },
+    {
+      "case": "POST /api/auth/logout",
+      "route": "POST /api/auth/logout",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 30.14
+    },
+    {
+      "case": "anonymous: PUT /api/podcasts/{podcastId}/listening-progress",
+      "route": "PUT /api/podcasts/{podcastId}/listening-progress",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.98
+    },
+    {
+      "case": "anonymous: PUT /api/podcasts/{podcastId}/like",
+      "route": "PUT /api/podcasts/{podcastId}/like",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.01
+    },
+    {
+      "case": "anonymous: DELETE /api/podcasts/{podcastId}/like",
+      "route": "DELETE /api/podcasts/{podcastId}/like",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 15.68
+    },
+    {
+      "case": "anonymous: PUT /api/me/series-requests/{requestId}",
+      "route": "PUT /api/me/series-requests/{requestId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.03
+    },
+    {
+      "case": "anonymous: DELETE /api/me/series-requests/{requestId}",
+      "route": "DELETE /api/me/series-requests/{requestId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.9
+    },
+    {
+      "case": "anonymous: PUT /api/me/saved-podcasts/{podcastId}",
+      "route": "PUT /api/me/saved-podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 23.74
+    },
+    {
+      "case": "anonymous: DELETE /api/me/saved-podcasts/{podcastId}",
+      "route": "DELETE /api/me/saved-podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.92
+    },
+    {
+      "case": "anonymous: PUT /api/me/notifications/{notificationId}/read",
+      "route": "PUT /api/me/notifications/{notificationId}/read",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.91
+    },
+    {
+      "case": "anonymous: PUT /api/creators/{creatorId}/follow",
+      "route": "PUT /api/creators/{creatorId}/follow",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.93
+    },
+    {
+      "case": "anonymous: DELETE /api/creators/{creatorId}/follow",
+      "route": "DELETE /api/creators/{creatorId}/follow",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 21.52
+    },
+    {
+      "case": "anonymous: GET /api/creator/series/{seriesId}",
+      "route": "GET /api/creator/series/{seriesId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.72
+    },
+    {
+      "case": "wrong-role: GET /api/creator/series/{seriesId}",
+      "route": "GET /api/creator/series/{seriesId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 33.12
+    },
+    {
+      "case": "read-catalog: GET /api/creator/series/{seriesId}",
+      "route": "GET /api/creator/series/{seriesId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 15.01
+    },
+    {
+      "case": "anonymous: PUT /api/creator/series/{seriesId}",
+      "route": "PUT /api/creator/series/{seriesId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.1
+    },
+    {
+      "case": "wrong-role: PUT /api/creator/series/{seriesId}",
+      "route": "PUT /api/creator/series/{seriesId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.96
+    },
+    {
+      "case": "anonymous: DELETE /api/creator/series/{seriesId}",
+      "route": "DELETE /api/creator/series/{seriesId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.02
+    },
+    {
+      "case": "wrong-role: DELETE /api/creator/series/{seriesId}",
+      "route": "DELETE /api/creator/series/{seriesId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.19
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts/{podcastId}",
+      "route": "GET /api/creator/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.81
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts/{podcastId}",
+      "route": "GET /api/creator/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.59
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts/{podcastId}",
+      "route": "GET /api/creator/podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 17.8
+    },
+    {
+      "case": "anonymous: PUT /api/creator/podcasts/{podcastId}",
+      "route": "PUT /api/creator/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.23
+    },
+    {
+      "case": "wrong-role: PUT /api/creator/podcasts/{podcastId}",
+      "route": "PUT /api/creator/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.26
+    },
+    {
+      "case": "anonymous: DELETE /api/creator/podcasts/{podcastId}",
+      "route": "DELETE /api/creator/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 17.27
+    },
+    {
+      "case": "wrong-role: DELETE /api/creator/podcasts/{podcastId}",
+      "route": "DELETE /api/creator/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.22
+    },
+    {
+      "case": "anonymous: PUT /api/creator/podcasts/{podcastId}/series",
+      "route": "PUT /api/creator/podcasts/{podcastId}/series",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 24.62
+    },
+    {
+      "case": "wrong-role: PUT /api/creator/podcasts/{podcastId}/series",
+      "route": "PUT /api/creator/podcasts/{podcastId}/series",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 7.17
+    },
+    {
+      "case": "anonymous: DELETE /api/creator/podcasts/{podcastId}/series",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/series",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.71
+    },
+    {
+      "case": "wrong-role: DELETE /api/creator/podcasts/{podcastId}/series",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/series",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 7.12
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 26.52
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.18
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 20.22
+    },
+    {
+      "case": "anonymous: PUT /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "PUT /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.45
+    },
+    {
+      "case": "wrong-role: PUT /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "PUT /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.64
+    },
+    {
+      "case": "anonymous: DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.44
+    },
+    {
+      "case": "wrong-role: DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.81
+    },
+    {
+      "case": "anonymous: PUT /api/comments/{commentId}",
+      "route": "PUT /api/comments/{commentId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.08
+    },
+    {
+      "case": "anonymous: DELETE /api/comments/{commentId}",
+      "route": "DELETE /api/comments/{commentId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.07
+    },
+    {
+      "case": "anonymous: GET /api/admin/membership-plans/{planId}",
+      "route": "GET /api/admin/membership-plans/{planId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.51
+    },
+    {
+      "case": "wrong-role: GET /api/admin/membership-plans/{planId}",
+      "route": "GET /api/admin/membership-plans/{planId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.66
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/membership-plans/{planId}",
+      "route": "GET /api/admin/membership-plans/{planId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 7.16
+    },
+    {
+      "case": "read-catalog: GET /api/admin/membership-plans/{planId}",
+      "route": "GET /api/admin/membership-plans/{planId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.39
+    },
+    {
+      "case": "anonymous: PUT /api/admin/membership-plans/{planId}",
+      "route": "PUT /api/admin/membership-plans/{planId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 18.28
+    },
+    {
+      "case": "wrong-role: PUT /api/admin/membership-plans/{planId}",
+      "route": "PUT /api/admin/membership-plans/{planId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 17.97
+    },
+    {
+      "case": "staff cannot administer: PUT /api/admin/membership-plans/{planId}",
+      "route": "PUT /api/admin/membership-plans/{planId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.62
+    },
+    {
+      "case": "anonymous: DELETE /api/admin/membership-plans/{planId}",
+      "route": "DELETE /api/admin/membership-plans/{planId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.13
+    },
+    {
+      "case": "wrong-role: DELETE /api/admin/membership-plans/{planId}",
+      "route": "DELETE /api/admin/membership-plans/{planId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 20.29
+    },
+    {
+      "case": "staff cannot administer: DELETE /api/admin/membership-plans/{planId}",
+      "route": "DELETE /api/admin/membership-plans/{planId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 29.17
+    },
+    {
+      "case": "anonymous: GET /api/admin/categories/{categoryId}",
+      "route": "GET /api/admin/categories/{categoryId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 28.8
+    },
+    {
+      "case": "wrong-role: GET /api/admin/categories/{categoryId}",
+      "route": "GET /api/admin/categories/{categoryId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.24
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/categories/{categoryId}",
+      "route": "GET /api/admin/categories/{categoryId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 15.02
+    },
+    {
+      "case": "read-catalog: GET /api/admin/categories/{categoryId}",
+      "route": "GET /api/admin/categories/{categoryId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.27
+    },
+    {
+      "case": "anonymous: PUT /api/admin/categories/{categoryId}",
+      "route": "PUT /api/admin/categories/{categoryId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 25.18
+    },
+    {
+      "case": "wrong-role: PUT /api/admin/categories/{categoryId}",
+      "route": "PUT /api/admin/categories/{categoryId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.46
+    },
+    {
+      "case": "staff cannot administer: PUT /api/admin/categories/{categoryId}",
+      "route": "PUT /api/admin/categories/{categoryId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 26.87
+    },
+    {
+      "case": "anonymous: DELETE /api/admin/categories/{categoryId}",
+      "route": "DELETE /api/admin/categories/{categoryId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 27.12
+    },
+    {
+      "case": "wrong-role: DELETE /api/admin/categories/{categoryId}",
+      "route": "DELETE /api/admin/categories/{categoryId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.5
+    },
+    {
+      "case": "staff cannot administer: DELETE /api/admin/categories/{categoryId}",
+      "route": "DELETE /api/admin/categories/{categoryId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.47
+    },
+    {
+      "case": "anonymous: POST /api/uploads",
+      "route": "POST /api/uploads",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 18.64
+    },
+    {
+      "case": "anonymous: POST /api/reports",
+      "route": "POST /api/reports",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.77
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}/comments",
+      "route": "GET /api/podcasts/{podcastId}/comments",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.76
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts/{podcastId}/comments",
+      "route": "GET /api/podcasts/{podcastId}/comments",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 23.64
+    },
+    {
+      "case": "anonymous: POST /api/podcasts/{podcastId}/comments",
+      "route": "POST /api/podcasts/{podcastId}/comments",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.6
+    },
+    {
+      "case": "anonymous: GET /api/me/subscriptions",
+      "route": "GET /api/me/subscriptions",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.12
+    },
+    {
+      "case": "read-catalog: GET /api/me/subscriptions",
+      "route": "GET /api/me/subscriptions",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 25.6
+    },
+    {
+      "case": "anonymous: POST /api/me/subscriptions",
+      "route": "POST /api/me/subscriptions",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.69
+    },
+    {
+      "case": "anonymous: POST /api/creators/{creatorId}/series-requests",
+      "route": "POST /api/creators/{creatorId}/series-requests",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 26.21
+    },
+    {
+      "case": "anonymous: GET /api/creator/series",
+      "route": "GET /api/creator/series",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 16.42
+    },
+    {
+      "case": "wrong-role: GET /api/creator/series",
+      "route": "GET /api/creator/series",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.78
+    },
+    {
+      "case": "read-catalog: GET /api/creator/series",
+      "route": "GET /api/creator/series",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 17.6
+    },
+    {
+      "case": "anonymous: POST /api/creator/series",
+      "route": "POST /api/creator/series",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 23.99
+    },
+    {
+      "case": "wrong-role: POST /api/creator/series",
+      "route": "POST /api/creator/series",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.42
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts",
+      "route": "GET /api/creator/podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 26.45
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts",
+      "route": "GET /api/creator/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.36
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts",
+      "route": "GET /api/creator/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 19.37
+    },
+    {
+      "case": "anonymous: POST /api/creator/podcasts",
+      "route": "POST /api/creator/podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.19
+    },
+    {
+      "case": "wrong-role: POST /api/creator/podcasts",
+      "route": "POST /api/creator/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.76
+    },
+    {
+      "case": "anonymous: POST /api/creator/podcasts/{podcastId}/video",
+      "route": "POST /api/creator/podcasts/{podcastId}/video",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.79
+    },
+    {
+      "case": "wrong-role: POST /api/creator/podcasts/{podcastId}/video",
+      "route": "POST /api/creator/podcasts/{podcastId}/video",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.86
+    },
+    {
+      "case": "anonymous: POST /api/creator/podcasts/{podcastId}/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.83
+    },
+    {
+      "case": "wrong-role: POST /api/creator/podcasts/{podcastId}/submit",
+      "route": "POST /api/creator/podcasts/{podcastId}/submit",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.15
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts/{podcastId}/references",
+      "route": "GET /api/creator/podcasts/{podcastId}/references",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 23.74
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts/{podcastId}/references",
+      "route": "GET /api/creator/podcasts/{podcastId}/references",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.72
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts/{podcastId}/references",
+      "route": "GET /api/creator/podcasts/{podcastId}/references",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 200,
+      "passed": true,
+      "milliseconds": 17.55
+    },
+    {
+      "case": "anonymous: POST /api/creator/podcasts/{podcastId}/references",
+      "route": "POST /api/creator/podcasts/{podcastId}/references",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.67
+    },
+    {
+      "case": "wrong-role: POST /api/creator/podcasts/{podcastId}/references",
+      "route": "POST /api/creator/podcasts/{podcastId}/references",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.12
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.09
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.54
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 22.43
+    },
+    {
+      "case": "anonymous: POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.8
+    },
+    {
+      "case": "wrong-role: POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.35
+    },
+    {
+      "case": "anonymous: DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.7
+    },
+    {
+      "case": "wrong-role: DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "DELETE /api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.41
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts/{podcastId}/appeals",
+      "route": "GET /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.79
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts/{podcastId}/appeals",
+      "route": "GET /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 15.29
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts/{podcastId}/appeals",
+      "route": "GET /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 25.58
+    },
+    {
+      "case": "anonymous: POST /api/creator/podcasts/{podcastId}/appeals",
+      "route": "POST /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 17.86
+    },
+    {
+      "case": "wrong-role: POST /api/creator/podcasts/{podcastId}/appeals",
+      "route": "POST /api/creator/podcasts/{podcastId}/appeals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 17.41
+    },
+    {
+      "case": "anonymous: POST /api/creator-applications",
+      "route": "POST /api/creator-applications",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 12.91
+    },
+    {
+      "case": "anonymous: POST /api/contracts/{contractId}/disputes",
+      "route": "POST /api/contracts/{contractId}/disputes",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.64
+    },
+    {
+      "case": "anonymous: POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.79
+    },
+    {
+      "case": "wrong-role: POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 27.93
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 29.65
+    },
+    {
+      "case": "anonymous: POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.98
+    },
+    {
+      "case": "wrong-role: POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 27.04
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/fail",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.36
+    },
+    {
+      "case": "anonymous: POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.9
+    },
+    {
+      "case": "wrong-role: POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.16
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/complete",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.7
+    },
+    {
+      "case": "anonymous: POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.85
+    },
+    {
+      "case": "wrong-role: POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.31
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 21.55
+    },
+    {
+      "case": "anonymous: POST /api/admin/users/{userId}/revoke-sessions",
+      "route": "POST /api/admin/users/{userId}/revoke-sessions",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 27.85
+    },
+    {
+      "case": "wrong-role: POST /api/admin/users/{userId}/revoke-sessions",
+      "route": "POST /api/admin/users/{userId}/revoke-sessions",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 18.03
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/users/{userId}/revoke-sessions",
+      "route": "POST /api/admin/users/{userId}/revoke-sessions",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.33
+    },
+    {
+      "case": "anonymous: GET /api/admin/staff",
+      "route": "GET /api/admin/staff",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.81
+    },
+    {
+      "case": "wrong-role: GET /api/admin/staff",
+      "route": "GET /api/admin/staff",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.48
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/staff",
+      "route": "GET /api/admin/staff",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.18
+    },
+    {
+      "case": "read-catalog: GET /api/admin/staff",
+      "route": "GET /api/admin/staff",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.19
+    },
+    {
+      "case": "anonymous: POST /api/admin/staff",
+      "route": "POST /api/admin/staff",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.04
+    },
+    {
+      "case": "wrong-role: POST /api/admin/staff",
+      "route": "POST /api/admin/staff",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.14
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/staff",
+      "route": "POST /api/admin/staff",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 28.77
+    },
+    {
+      "case": "anonymous: POST /api/admin/reports/{reportId}/resolve",
+      "route": "POST /api/admin/reports/{reportId}/resolve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.96
+    },
+    {
+      "case": "wrong-role: POST /api/admin/reports/{reportId}/resolve",
+      "route": "POST /api/admin/reports/{reportId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.3
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/reports/{reportId}/resolve",
+      "route": "POST /api/admin/reports/{reportId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.72
+    },
+    {
+      "case": "anonymous: POST /api/staff/reports/{reportId}/resolve",
+      "route": "POST /api/staff/reports/{reportId}/resolve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 25.47
+    },
+    {
+      "case": "wrong-role: POST /api/staff/reports/{reportId}/resolve",
+      "route": "POST /api/staff/reports/{reportId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.08
+    },
+    {
+      "case": "anonymous: POST /api/admin/reports/{reportId}/claim",
+      "route": "POST /api/admin/reports/{reportId}/claim",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 22.94
+    },
+    {
+      "case": "wrong-role: POST /api/admin/reports/{reportId}/claim",
+      "route": "POST /api/admin/reports/{reportId}/claim",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.73
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/reports/{reportId}/claim",
+      "route": "POST /api/admin/reports/{reportId}/claim",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.45
+    },
+    {
+      "case": "anonymous: POST /api/staff/reports/{reportId}/claim",
+      "route": "POST /api/staff/reports/{reportId}/claim",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.56
+    },
+    {
+      "case": "wrong-role: POST /api/staff/reports/{reportId}/claim",
+      "route": "POST /api/staff/reports/{reportId}/claim",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 7.31
+    },
+    {
+      "case": "anonymous: POST /api/staff/podcasts/{podcastId}/restore",
+      "route": "POST /api/staff/podcasts/{podcastId}/restore",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 24.26
+    },
+    {
+      "case": "wrong-role: POST /api/staff/podcasts/{podcastId}/restore",
+      "route": "POST /api/staff/podcasts/{podcastId}/restore",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 17.56
+    },
+    {
+      "case": "anonymous: POST /api/admin/podcasts/{podcastId}/restore",
+      "route": "POST /api/admin/podcasts/{podcastId}/restore",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.66
+    },
+    {
+      "case": "wrong-role: POST /api/admin/podcasts/{podcastId}/restore",
+      "route": "POST /api/admin/podcasts/{podcastId}/restore",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 26.76
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/podcasts/{podcastId}/restore",
+      "route": "POST /api/admin/podcasts/{podcastId}/restore",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 15.51
+    },
+    {
+      "case": "anonymous: POST /api/admin/podcasts/{podcastId}/reject",
+      "route": "POST /api/admin/podcasts/{podcastId}/reject",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.09
+    },
+    {
+      "case": "wrong-role: POST /api/admin/podcasts/{podcastId}/reject",
+      "route": "POST /api/admin/podcasts/{podcastId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.32
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/podcasts/{podcastId}/reject",
+      "route": "POST /api/admin/podcasts/{podcastId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 20.88
+    },
+    {
+      "case": "anonymous: POST /api/staff/podcasts/{podcastId}/reject",
+      "route": "POST /api/staff/podcasts/{podcastId}/reject",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.92
+    },
+    {
+      "case": "wrong-role: POST /api/staff/podcasts/{podcastId}/reject",
+      "route": "POST /api/staff/podcasts/{podcastId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 26.68
+    },
+    {
+      "case": "anonymous: POST /api/staff/podcasts/{podcastId}/hide",
+      "route": "POST /api/staff/podcasts/{podcastId}/hide",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.09
+    },
+    {
+      "case": "wrong-role: POST /api/staff/podcasts/{podcastId}/hide",
+      "route": "POST /api/staff/podcasts/{podcastId}/hide",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.54
+    },
+    {
+      "case": "anonymous: POST /api/admin/podcasts/{podcastId}/hide",
+      "route": "POST /api/admin/podcasts/{podcastId}/hide",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.87
+    },
+    {
+      "case": "wrong-role: POST /api/admin/podcasts/{podcastId}/hide",
+      "route": "POST /api/admin/podcasts/{podcastId}/hide",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.19
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/podcasts/{podcastId}/hide",
+      "route": "POST /api/admin/podcasts/{podcastId}/hide",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 26.18
+    },
+    {
+      "case": "anonymous: POST /api/staff/podcasts/{podcastId}/approve",
+      "route": "POST /api/staff/podcasts/{podcastId}/approve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.16
+    },
+    {
+      "case": "wrong-role: POST /api/staff/podcasts/{podcastId}/approve",
+      "route": "POST /api/staff/podcasts/{podcastId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.68
+    },
+    {
+      "case": "anonymous: POST /api/admin/podcasts/{podcastId}/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 18.64
+    },
+    {
+      "case": "wrong-role: POST /api/admin/podcasts/{podcastId}/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.9
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/podcasts/{podcastId}/approve",
+      "route": "POST /api/admin/podcasts/{podcastId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.67
+    },
+    {
+      "case": "anonymous: POST /api/staff/podcast-appeals/{appealId}/resolve",
+      "route": "POST /api/staff/podcast-appeals/{appealId}/resolve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.84
+    },
+    {
+      "case": "wrong-role: POST /api/staff/podcast-appeals/{appealId}/resolve",
+      "route": "POST /api/staff/podcast-appeals/{appealId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 22.13
+    },
+    {
+      "case": "anonymous: POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "route": "POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 27.19
+    },
+    {
+      "case": "wrong-role: POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "route": "POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 17.57
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "route": "POST /api/admin/podcast-appeals/{appealId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.85
+    },
+    {
+      "case": "anonymous: POST /api/admin/payments/{paymentId}/refund",
+      "route": "POST /api/admin/payments/{paymentId}/refund",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.67
+    },
+    {
+      "case": "wrong-role: POST /api/admin/payments/{paymentId}/refund",
+      "route": "POST /api/admin/payments/{paymentId}/refund",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.83
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/payments/{paymentId}/refund",
+      "route": "POST /api/admin/payments/{paymentId}/refund",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.13
+    },
+    {
+      "case": "anonymous: POST /api/admin/payments/{paymentId}/reconcile",
+      "route": "POST /api/admin/payments/{paymentId}/reconcile",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.81
+    },
+    {
+      "case": "wrong-role: POST /api/admin/payments/{paymentId}/reconcile",
+      "route": "POST /api/admin/payments/{paymentId}/reconcile",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.43
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/payments/{paymentId}/reconcile",
+      "route": "POST /api/admin/payments/{paymentId}/reconcile",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.1
+    },
+    {
+      "case": "anonymous: GET /api/admin/membership-plans",
+      "route": "GET /api/admin/membership-plans",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.96
+    },
+    {
+      "case": "wrong-role: GET /api/admin/membership-plans",
+      "route": "GET /api/admin/membership-plans",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.63
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/membership-plans",
+      "route": "GET /api/admin/membership-plans",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.81
+    },
+    {
+      "case": "read-catalog: GET /api/admin/membership-plans",
+      "route": "GET /api/admin/membership-plans",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.18
+    },
+    {
+      "case": "anonymous: POST /api/admin/membership-plans",
+      "route": "POST /api/admin/membership-plans",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.9
+    },
+    {
+      "case": "wrong-role: POST /api/admin/membership-plans",
+      "route": "POST /api/admin/membership-plans",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 19.24
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/membership-plans",
+      "route": "POST /api/admin/membership-plans",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.19
+    },
+    {
+      "case": "anonymous: POST /api/admin/disputes/{disputeId}/resolve",
+      "route": "POST /api/admin/disputes/{disputeId}/resolve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.04
+    },
+    {
+      "case": "wrong-role: POST /api/admin/disputes/{disputeId}/resolve",
+      "route": "POST /api/admin/disputes/{disputeId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.97
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/disputes/{disputeId}/resolve",
+      "route": "POST /api/admin/disputes/{disputeId}/resolve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.89
+    },
+    {
+      "case": "anonymous: POST /api/admin/creator-applications/{applicationId}/reject",
+      "route": "POST /api/admin/creator-applications/{applicationId}/reject",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.98
+    },
+    {
+      "case": "wrong-role: POST /api/admin/creator-applications/{applicationId}/reject",
+      "route": "POST /api/admin/creator-applications/{applicationId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.95
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/creator-applications/{applicationId}/reject",
+      "route": "POST /api/admin/creator-applications/{applicationId}/reject",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.49
+    },
+    {
+      "case": "anonymous: POST /api/admin/creator-applications/{applicationId}/approve",
+      "route": "POST /api/admin/creator-applications/{applicationId}/approve",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.49
+    },
+    {
+      "case": "wrong-role: POST /api/admin/creator-applications/{applicationId}/approve",
+      "route": "POST /api/admin/creator-applications/{applicationId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.31
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/creator-applications/{applicationId}/approve",
+      "route": "POST /api/admin/creator-applications/{applicationId}/approve",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.01
+    },
+    {
+      "case": "anonymous: POST /api/admin/contracts/{contractId}/disputes",
+      "route": "POST /api/admin/contracts/{contractId}/disputes",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 20.51
+    },
+    {
+      "case": "wrong-role: POST /api/admin/contracts/{contractId}/disputes",
+      "route": "POST /api/admin/contracts/{contractId}/disputes",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.51
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/contracts/{contractId}/disputes",
+      "route": "POST /api/admin/contracts/{contractId}/disputes",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.92
+    },
+    {
+      "case": "anonymous: GET /api/admin/categories",
+      "route": "GET /api/admin/categories",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.38
+    },
+    {
+      "case": "wrong-role: GET /api/admin/categories",
+      "route": "GET /api/admin/categories",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.61
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/categories",
+      "route": "GET /api/admin/categories",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.96
+    },
+    {
+      "case": "read-catalog: GET /api/admin/categories",
+      "route": "GET /api/admin/categories",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 10.24
+    },
+    {
+      "case": "anonymous: POST /api/admin/categories",
+      "route": "POST /api/admin/categories",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.68
+    },
+    {
+      "case": "wrong-role: POST /api/admin/categories",
+      "route": "POST /api/admin/categories",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.09
+    },
+    {
+      "case": "staff cannot administer: POST /api/admin/categories",
+      "route": "POST /api/admin/categories",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 18.51
+    },
+    {
+      "case": "anonymous: DELETE /api/me/reports/{reportId}",
+      "route": "DELETE /api/me/reports/{reportId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.82
+    },
+    {
+      "case": "anonymous: PATCH /api/me/reports/{reportId}",
+      "route": "PATCH /api/me/reports/{reportId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.84
+    },
+    {
+      "case": "anonymous: GET /api/admin/users/{userId}",
+      "route": "GET /api/admin/users/{userId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.52
+    },
+    {
+      "case": "wrong-role: GET /api/admin/users/{userId}",
+      "route": "GET /api/admin/users/{userId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.28
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/users/{userId}",
+      "route": "GET /api/admin/users/{userId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.9
+    },
+    {
+      "case": "read-catalog: GET /api/admin/users/{userId}",
+      "route": "GET /api/admin/users/{userId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.27
+    },
+    {
+      "case": "anonymous: PATCH /api/admin/users/{userId}",
+      "route": "PATCH /api/admin/users/{userId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.63
+    },
+    {
+      "case": "wrong-role: PATCH /api/admin/users/{userId}",
+      "route": "PATCH /api/admin/users/{userId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.69
+    },
+    {
+      "case": "staff cannot administer: PATCH /api/admin/users/{userId}",
+      "route": "PATCH /api/admin/users/{userId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.25
+    },
+    {
+      "case": "anonymous: PATCH /api/admin/users/{userId}/verification",
+      "route": "PATCH /api/admin/users/{userId}/verification",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 13.33
+    },
+    {
+      "case": "wrong-role: PATCH /api/admin/users/{userId}/verification",
+      "route": "PATCH /api/admin/users/{userId}/verification",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.49
+    },
+    {
+      "case": "staff cannot administer: PATCH /api/admin/users/{userId}/verification",
+      "route": "PATCH /api/admin/users/{userId}/verification",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.97
+    },
+    {
+      "case": "anonymous: PATCH /api/admin/users/{userId}/role",
+      "route": "PATCH /api/admin/users/{userId}/role",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.06
+    },
+    {
+      "case": "wrong-role: PATCH /api/admin/users/{userId}/role",
+      "route": "PATCH /api/admin/users/{userId}/role",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.89
+    },
+    {
+      "case": "staff cannot administer: PATCH /api/admin/users/{userId}/role",
+      "route": "PATCH /api/admin/users/{userId}/role",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.92
+    },
+    {
+      "case": "anonymous: PATCH /api/admin/users/{userId}/access",
+      "route": "PATCH /api/admin/users/{userId}/access",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.62
+    },
+    {
+      "case": "wrong-role: PATCH /api/admin/users/{userId}/access",
+      "route": "PATCH /api/admin/users/{userId}/access",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.03
+    },
+    {
+      "case": "staff cannot administer: PATCH /api/admin/users/{userId}/access",
+      "route": "PATCH /api/admin/users/{userId}/access",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.82
+    },
+    {
+      "case": "anonymous: GET /api/podcasts",
+      "route": "GET /api/podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.66
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts",
+      "route": "GET /api/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 13.95
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}",
+      "route": "GET /api/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.88
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts/{podcastId}",
+      "route": "GET /api/podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.22
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}/references",
+      "route": "GET /api/podcasts/{podcastId}/references",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.73
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts/{podcastId}/references",
+      "route": "GET /api/podcasts/{podcastId}/references",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 200,
+      "passed": true,
+      "milliseconds": 13.87
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 12.84
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 15.68
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 14.61
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts/{podcastId}/playback",
+      "route": "GET /api/podcasts/{podcastId}/playback",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 15.81
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}/likes",
+      "route": "GET /api/podcasts/{podcastId}/likes",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.67
+    },
+    {
+      "case": "read-catalog: GET /api/podcasts/{podcastId}/likes",
+      "route": "GET /api/podcasts/{podcastId}/likes",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.08
+    },
+    {
+      "case": "anonymous: GET /api/podcasts/{podcastId}/comments/stream",
+      "route": "GET /api/podcasts/{podcastId}/comments/stream",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 13.99
+    },
+    {
+      "case": "anonymous: GET /api/me/series-requests",
+      "route": "GET /api/me/series-requests",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 14.22
+    },
+    {
+      "case": "read-catalog: GET /api/me/series-requests",
+      "route": "GET /api/me/series-requests",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.55
+    },
+    {
+      "case": "anonymous: GET /api/me/saved-podcasts",
+      "route": "GET /api/me/saved-podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.79
+    },
+    {
+      "case": "read-catalog: GET /api/me/saved-podcasts",
+      "route": "GET /api/me/saved-podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 9.33
+    },
+    {
+      "case": "anonymous: GET /api/me/reports",
+      "route": "GET /api/me/reports",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.52
+    },
+    {
+      "case": "read-catalog: GET /api/me/reports",
+      "route": "GET /api/me/reports",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 25.45
+    },
+    {
+      "case": "anonymous: GET /api/me/notifications",
+      "route": "GET /api/me/notifications",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.59
+    },
+    {
+      "case": "read-catalog: GET /api/me/notifications",
+      "route": "GET /api/me/notifications",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 27.47
+    },
+    {
+      "case": "anonymous: GET /api/me/listening-history",
+      "route": "GET /api/me/listening-history",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.51
+    },
+    {
+      "case": "read-catalog: GET /api/me/listening-history",
+      "route": "GET /api/me/listening-history",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.19
+    },
+    {
+      "case": "anonymous: GET /api/me/listening-history/{podcastId}",
+      "route": "GET /api/me/listening-history/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.59
+    },
+    {
+      "case": "read-catalog: GET /api/me/listening-history/{podcastId}",
+      "route": "GET /api/me/listening-history/{podcastId}",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 27.89
+    },
+    {
+      "case": "anonymous: DELETE /api/me/listening-history/{podcastId}",
+      "route": "DELETE /api/me/listening-history/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.81
+    },
+    {
+      "case": "anonymous: GET /api/me/follows",
+      "route": "GET /api/me/follows",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.77
+    },
+    {
+      "case": "read-catalog: GET /api/me/follows",
+      "route": "GET /api/me/follows",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 9.63
+    },
+    {
+      "case": "anonymous: GET /api/me/disputes",
+      "route": "GET /api/me/disputes",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.6
+    },
+    {
+      "case": "read-catalog: GET /api/me/disputes",
+      "route": "GET /api/me/disputes",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.38
+    },
+    {
+      "case": "read-catalog: GET /api/health",
+      "route": "GET /api/health",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 6.19
+    },
+    {
+      "case": "anonymous: GET /api/creators",
+      "route": "GET /api/creators",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.46
+    },
+    {
+      "case": "read-catalog: GET /api/creators",
+      "route": "GET /api/creators",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 37.66
+    },
+    {
+      "case": "anonymous: GET /api/creators/{creatorId}",
+      "route": "GET /api/creators/{creatorId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.39
+    },
+    {
+      "case": "read-catalog: GET /api/creators/{creatorId}",
+      "route": "GET /api/creators/{creatorId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 8.69
+    },
+    {
+      "case": "anonymous: GET /api/creators/{creatorId}/membership-plans",
+      "route": "GET /api/creators/{creatorId}/membership-plans",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.53
+    },
+    {
+      "case": "read-catalog: GET /api/creators/{creatorId}/membership-plans",
+      "route": "GET /api/creators/{creatorId}/membership-plans",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 10.62
+    },
+    {
+      "case": "anonymous: GET /api/creator/series/{seriesId}/podcasts",
+      "route": "GET /api/creator/series/{seriesId}/podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 20.85
+    },
+    {
+      "case": "wrong-role: GET /api/creator/series/{seriesId}/podcasts",
+      "route": "GET /api/creator/series/{seriesId}/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.68
+    },
+    {
+      "case": "read-catalog: GET /api/creator/series/{seriesId}/podcasts",
+      "route": "GET /api/creator/series/{seriesId}/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.36
+    },
+    {
+      "case": "anonymous: GET /api/creator/podcasts/{podcastId}/reviews",
+      "route": "GET /api/creator/podcasts/{podcastId}/reviews",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.76
+    },
+    {
+      "case": "wrong-role: GET /api/creator/podcasts/{podcastId}/reviews",
+      "route": "GET /api/creator/podcasts/{podcastId}/reviews",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.14
+    },
+    {
+      "case": "read-catalog: GET /api/creator/podcasts/{podcastId}/reviews",
+      "route": "GET /api/creator/podcasts/{podcastId}/reviews",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 32.31
+    },
+    {
+      "case": "anonymous: GET /api/creator-applications/me",
+      "route": "GET /api/creator-applications/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 26.39
+    },
+    {
+      "case": "read-catalog: GET /api/creator-applications/me",
+      "route": "GET /api/creator-applications/me",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 8.44
+    },
+    {
+      "case": "read-catalog: GET /api/categories",
+      "route": "GET /api/categories",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 27.62
+    },
+    {
+      "case": "anonymous: GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 23.78
+    },
+    {
+      "case": "read-catalog: GET /api/auth/me",
+      "route": "GET /api/auth/me",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.73
+    },
+    {
+      "case": "anonymous: GET /api/admin/withdrawals",
+      "route": "GET /api/admin/withdrawals",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.82
+    },
+    {
+      "case": "wrong-role: GET /api/admin/withdrawals",
+      "route": "GET /api/admin/withdrawals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.78
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/withdrawals",
+      "route": "GET /api/admin/withdrawals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 20.57
+    },
+    {
+      "case": "read-catalog: GET /api/admin/withdrawals",
+      "route": "GET /api/admin/withdrawals",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 22.3
+    },
+    {
+      "case": "anonymous: GET /api/admin/withdrawals/{withdrawalId}",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.16
+    },
+    {
+      "case": "wrong-role: GET /api/admin/withdrawals/{withdrawalId}",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.88
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/withdrawals/{withdrawalId}",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.06
+    },
+    {
+      "case": "read-catalog: GET /api/admin/withdrawals/{withdrawalId}",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.93
+    },
+    {
+      "case": "anonymous: GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 22.92
+    },
+    {
+      "case": "wrong-role: GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.45
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 30.7
+    },
+    {
+      "case": "read-catalog: GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "route": "GET /api/admin/withdrawals/{withdrawalId}/reviews",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.08
+    },
+    {
+      "case": "anonymous: GET /api/admin/wallets",
+      "route": "GET /api/admin/wallets",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.65
+    },
+    {
+      "case": "wrong-role: GET /api/admin/wallets",
+      "route": "GET /api/admin/wallets",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.3
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/wallets",
+      "route": "GET /api/admin/wallets",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.97
+    },
+    {
+      "case": "read-catalog: GET /api/admin/wallets",
+      "route": "GET /api/admin/wallets",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 13.0
+    },
+    {
+      "case": "anonymous: GET /api/admin/wallet-transactions",
+      "route": "GET /api/admin/wallet-transactions",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 13.17
+    },
+    {
+      "case": "wrong-role: GET /api/admin/wallet-transactions",
+      "route": "GET /api/admin/wallet-transactions",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.86
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/wallet-transactions",
+      "route": "GET /api/admin/wallet-transactions",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 27.87
+    },
+    {
+      "case": "read-catalog: GET /api/admin/wallet-transactions",
+      "route": "GET /api/admin/wallet-transactions",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 46.96
+    },
+    {
+      "case": "anonymous: GET /api/admin/users",
+      "route": "GET /api/admin/users",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.57
+    },
+    {
+      "case": "wrong-role: GET /api/admin/users",
+      "route": "GET /api/admin/users",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.82
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/users",
+      "route": "GET /api/admin/users",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 21.84
+    },
+    {
+      "case": "read-catalog: GET /api/admin/users",
+      "route": "GET /api/admin/users",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.7
+    },
+    {
+      "case": "anonymous: GET /api/admin/reports/{reportId}",
+      "route": "GET /api/admin/reports/{reportId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.62
+    },
+    {
+      "case": "wrong-role: GET /api/admin/reports/{reportId}",
+      "route": "GET /api/admin/reports/{reportId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.44
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/reports/{reportId}",
+      "route": "GET /api/admin/reports/{reportId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 28.42
+    },
+    {
+      "case": "read-catalog: GET /api/admin/reports/{reportId}",
+      "route": "GET /api/admin/reports/{reportId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 24.51
+    },
+    {
+      "case": "anonymous: GET /api/staff/reports/{reportId}",
+      "route": "GET /api/staff/reports/{reportId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.07
+    },
+    {
+      "case": "wrong-role: GET /api/staff/reports/{reportId}",
+      "route": "GET /api/staff/reports/{reportId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.74
+    },
+    {
+      "case": "read-catalog: GET /api/staff/reports/{reportId}",
+      "route": "GET /api/staff/reports/{reportId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.82
+    },
+    {
+      "case": "anonymous: GET /api/staff/reports",
+      "route": "GET /api/staff/reports",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.53
+    },
+    {
+      "case": "wrong-role: GET /api/staff/reports",
+      "route": "GET /api/staff/reports",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.21
+    },
+    {
+      "case": "read-catalog: GET /api/staff/reports",
+      "route": "GET /api/staff/reports",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.92
+    },
+    {
+      "case": "anonymous: GET /api/admin/reports",
+      "route": "GET /api/admin/reports",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 13.36
+    },
+    {
+      "case": "wrong-role: GET /api/admin/reports",
+      "route": "GET /api/admin/reports",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.43
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/reports",
+      "route": "GET /api/admin/reports",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.65
+    },
+    {
+      "case": "read-catalog: GET /api/admin/reports",
+      "route": "GET /api/admin/reports",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 18.08
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/{podcastId}/reviews",
+      "route": "GET /api/admin/podcasts/{podcastId}/reviews",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.14
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/{podcastId}/reviews",
+      "route": "GET /api/admin/podcasts/{podcastId}/reviews",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.89
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/{podcastId}/reviews",
+      "route": "GET /api/admin/podcasts/{podcastId}/reviews",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.86
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/{podcastId}/reviews",
+      "route": "GET /api/admin/podcasts/{podcastId}/reviews",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 14.98
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/{podcastId}/reviews",
+      "route": "GET /api/staff/podcasts/{podcastId}/reviews",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.79
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/{podcastId}/reviews",
+      "route": "GET /api/staff/podcasts/{podcastId}/reviews",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.1
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/{podcastId}/reviews",
+      "route": "GET /api/staff/podcasts/{podcastId}/reviews",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 13.75
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.88
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.31
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.52
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 10.65
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.07
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.43
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "route": "GET /api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 404,
+      "passed": true,
+      "milliseconds": 9.71
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/{podcastId}/references",
+      "route": "GET /api/staff/podcasts/{podcastId}/references",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.78
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/{podcastId}/references",
+      "route": "GET /api/staff/podcasts/{podcastId}/references",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.9
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/{podcastId}/references",
+      "route": "GET /api/staff/podcasts/{podcastId}/references",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 200,
+      "passed": true,
+      "milliseconds": 9.15
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/{podcastId}/references",
+      "route": "GET /api/admin/podcasts/{podcastId}/references",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.6
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/{podcastId}/references",
+      "route": "GET /api/admin/podcasts/{podcastId}/references",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.94
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/{podcastId}/references",
+      "route": "GET /api/admin/podcasts/{podcastId}/references",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.0
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/{podcastId}/references",
+      "route": "GET /api/admin/podcasts/{podcastId}/references",
+      "expected": [
+        200,
+        404
+      ],
+      "status": 200,
+      "passed": true,
+      "milliseconds": 8.66
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/{podcastId}/preview",
+      "route": "GET /api/staff/podcasts/{podcastId}/preview",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.7
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/{podcastId}/preview",
+      "route": "GET /api/staff/podcasts/{podcastId}/preview",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.27
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/{podcastId}/preview",
+      "route": "GET /api/staff/podcasts/{podcastId}/preview",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 14.28
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/{podcastId}/preview",
+      "route": "GET /api/admin/podcasts/{podcastId}/preview",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.65
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/{podcastId}/preview",
+      "route": "GET /api/admin/podcasts/{podcastId}/preview",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.81
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/{podcastId}/preview",
+      "route": "GET /api/admin/podcasts/{podcastId}/preview",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.9
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/{podcastId}/preview",
+      "route": "GET /api/admin/podcasts/{podcastId}/preview",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 14.72
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/{podcastId}",
+      "route": "GET /api/staff/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 12.9
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/{podcastId}",
+      "route": "GET /api/staff/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.73
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/{podcastId}",
+      "route": "GET /api/staff/podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 22.82
+    },
+    {
+      "case": "anonymous: DELETE /api/staff/podcasts/{podcastId}",
+      "route": "DELETE /api/staff/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.81
+    },
+    {
+      "case": "wrong-role: DELETE /api/staff/podcasts/{podcastId}",
+      "route": "DELETE /api/staff/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.8
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/{podcastId}",
+      "route": "GET /api/admin/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.43
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/{podcastId}",
+      "route": "GET /api/admin/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 25.31
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/{podcastId}",
+      "route": "GET /api/admin/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.23
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/{podcastId}",
+      "route": "GET /api/admin/podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.9
+    },
+    {
+      "case": "anonymous: DELETE /api/admin/podcasts/{podcastId}",
+      "route": "DELETE /api/admin/podcasts/{podcastId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 13.64
+    },
+    {
+      "case": "wrong-role: DELETE /api/admin/podcasts/{podcastId}",
+      "route": "DELETE /api/admin/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.18
+    },
+    {
+      "case": "staff cannot administer: DELETE /api/admin/podcasts/{podcastId}",
+      "route": "DELETE /api/admin/podcasts/{podcastId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.93
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/pending-review",
+      "route": "GET /api/admin/podcasts/pending-review",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 19.02
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/pending-review",
+      "route": "GET /api/admin/podcasts/pending-review",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.7
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/pending-review",
+      "route": "GET /api/admin/podcasts/pending-review",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.24
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/pending-review",
+      "route": "GET /api/admin/podcasts/pending-review",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 14.26
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/pending-review",
+      "route": "GET /api/staff/podcasts/pending-review",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.01
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/pending-review",
+      "route": "GET /api/staff/podcasts/pending-review",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.67
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/pending-review",
+      "route": "GET /api/staff/podcasts/pending-review",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 36.43
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts/page",
+      "route": "GET /api/admin/podcasts/page",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.24
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts/page",
+      "route": "GET /api/admin/podcasts/page",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.49
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts/page",
+      "route": "GET /api/admin/podcasts/page",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.35
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts/page",
+      "route": "GET /api/admin/podcasts/page",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 16.63
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts/page",
+      "route": "GET /api/staff/podcasts/page",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.74
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts/page",
+      "route": "GET /api/staff/podcasts/page",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.1
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts/page",
+      "route": "GET /api/staff/podcasts/page",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 37.36
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcasts",
+      "route": "GET /api/admin/podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.29
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcasts",
+      "route": "GET /api/admin/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.09
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcasts",
+      "route": "GET /api/admin/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.39
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcasts",
+      "route": "GET /api/admin/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 14.31
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcasts",
+      "route": "GET /api/staff/podcasts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 17.79
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcasts",
+      "route": "GET /api/staff/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.24
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcasts",
+      "route": "GET /api/staff/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.21
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcast-appeals/{appealId}",
+      "route": "GET /api/admin/podcast-appeals/{appealId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.56
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcast-appeals/{appealId}",
+      "route": "GET /api/admin/podcast-appeals/{appealId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.25
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcast-appeals/{appealId}",
+      "route": "GET /api/admin/podcast-appeals/{appealId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.79
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcast-appeals/{appealId}",
+      "route": "GET /api/admin/podcast-appeals/{appealId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 10.59
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcast-appeals/{appealId}",
+      "route": "GET /api/staff/podcast-appeals/{appealId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.02
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcast-appeals/{appealId}",
+      "route": "GET /api/staff/podcast-appeals/{appealId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.47
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcast-appeals/{appealId}",
+      "route": "GET /api/staff/podcast-appeals/{appealId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 9.81
+    },
+    {
+      "case": "anonymous: GET /api/admin/podcast-appeals",
+      "route": "GET /api/admin/podcast-appeals",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 14.98
+    },
+    {
+      "case": "wrong-role: GET /api/admin/podcast-appeals",
+      "route": "GET /api/admin/podcast-appeals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 7.52
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/podcast-appeals",
+      "route": "GET /api/admin/podcast-appeals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.13
+    },
+    {
+      "case": "read-catalog: GET /api/admin/podcast-appeals",
+      "route": "GET /api/admin/podcast-appeals",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.79
+    },
+    {
+      "case": "anonymous: GET /api/staff/podcast-appeals",
+      "route": "GET /api/staff/podcast-appeals",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.61
+    },
+    {
+      "case": "wrong-role: GET /api/staff/podcast-appeals",
+      "route": "GET /api/staff/podcast-appeals",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.88
+    },
+    {
+      "case": "read-catalog: GET /api/staff/podcast-appeals",
+      "route": "GET /api/staff/podcast-appeals",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 21.84
+    },
+    {
+      "case": "anonymous: GET /api/admin/payments",
+      "route": "GET /api/admin/payments",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.63
+    },
+    {
+      "case": "wrong-role: GET /api/admin/payments",
+      "route": "GET /api/admin/payments",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.43
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/payments",
+      "route": "GET /api/admin/payments",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.99
+    },
+    {
+      "case": "read-catalog: GET /api/admin/payments",
+      "route": "GET /api/admin/payments",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.87
+    },
+    {
+      "case": "anonymous: GET /api/admin/payments/{paymentId}",
+      "route": "GET /api/admin/payments/{paymentId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 12.92
+    },
+    {
+      "case": "wrong-role: GET /api/admin/payments/{paymentId}",
+      "route": "GET /api/admin/payments/{paymentId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.81
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/payments/{paymentId}",
+      "route": "GET /api/admin/payments/{paymentId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 26.13
+    },
+    {
+      "case": "read-catalog: GET /api/admin/payments/{paymentId}",
+      "route": "GET /api/admin/payments/{paymentId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 20.35
+    },
+    {
+      "case": "anonymous: GET /api/admin/disputes",
+      "route": "GET /api/admin/disputes",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.49
+    },
+    {
+      "case": "wrong-role: GET /api/admin/disputes",
+      "route": "GET /api/admin/disputes",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.78
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/disputes",
+      "route": "GET /api/admin/disputes",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 15.64
+    },
+    {
+      "case": "read-catalog: GET /api/admin/disputes",
+      "route": "GET /api/admin/disputes",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 11.67
+    },
+    {
+      "case": "anonymous: GET /api/admin/disputes/{disputeId}",
+      "route": "GET /api/admin/disputes/{disputeId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 15.56
+    },
+    {
+      "case": "wrong-role: GET /api/admin/disputes/{disputeId}",
+      "route": "GET /api/admin/disputes/{disputeId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.66
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/disputes/{disputeId}",
+      "route": "GET /api/admin/disputes/{disputeId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 27.27
+    },
+    {
+      "case": "read-catalog: GET /api/admin/disputes/{disputeId}",
+      "route": "GET /api/admin/disputes/{disputeId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 35.0
+    },
+    {
+      "case": "anonymous: GET /api/admin/dashboard",
+      "route": "GET /api/admin/dashboard",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 22.82
+    },
+    {
+      "case": "wrong-role: GET /api/admin/dashboard",
+      "route": "GET /api/admin/dashboard",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.64
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/dashboard",
+      "route": "GET /api/admin/dashboard",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 29.79
+    },
+    {
+      "case": "read-catalog: GET /api/admin/dashboard",
+      "route": "GET /api/admin/dashboard",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 48.79
+    },
+    {
+      "case": "anonymous: GET /api/staff/dashboard",
+      "route": "GET /api/staff/dashboard",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.77
+    },
+    {
+      "case": "wrong-role: GET /api/staff/dashboard",
+      "route": "GET /api/staff/dashboard",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.52
+    },
+    {
+      "case": "read-catalog: GET /api/staff/dashboard",
+      "route": "GET /api/staff/dashboard",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 25.32
+    },
+    {
+      "case": "anonymous: GET /api/admin/creator-applications",
+      "route": "GET /api/admin/creator-applications",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.19
+    },
+    {
+      "case": "wrong-role: GET /api/admin/creator-applications",
+      "route": "GET /api/admin/creator-applications",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 17.06
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/creator-applications",
+      "route": "GET /api/admin/creator-applications",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 15.02
+    },
+    {
+      "case": "read-catalog: GET /api/admin/creator-applications",
+      "route": "GET /api/admin/creator-applications",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 14.77
+    },
+    {
+      "case": "anonymous: GET /api/admin/creator-applications/{applicationId}",
+      "route": "GET /api/admin/creator-applications/{applicationId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.87
+    },
+    {
+      "case": "wrong-role: GET /api/admin/creator-applications/{applicationId}",
+      "route": "GET /api/admin/creator-applications/{applicationId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 25.41
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/creator-applications/{applicationId}",
+      "route": "GET /api/admin/creator-applications/{applicationId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.33
+    },
+    {
+      "case": "read-catalog: GET /api/admin/creator-applications/{applicationId}",
+      "route": "GET /api/admin/creator-applications/{applicationId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 29.95
+    },
+    {
+      "case": "anonymous: GET /api/admin/creator-applications/pending",
+      "route": "GET /api/admin/creator-applications/pending",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.14
+    },
+    {
+      "case": "wrong-role: GET /api/admin/creator-applications/pending",
+      "route": "GET /api/admin/creator-applications/pending",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.28
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/creator-applications/pending",
+      "route": "GET /api/admin/creator-applications/pending",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 7.0
+    },
+    {
+      "case": "read-catalog: GET /api/admin/creator-applications/pending",
+      "route": "GET /api/admin/creator-applications/pending",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.2
+    },
+    {
+      "case": "anonymous: GET /api/admin/contracts",
+      "route": "GET /api/admin/contracts",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 3.12
+    },
+    {
+      "case": "wrong-role: GET /api/admin/contracts",
+      "route": "GET /api/admin/contracts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 6.44
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/contracts",
+      "route": "GET /api/admin/contracts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.92
+    },
+    {
+      "case": "read-catalog: GET /api/admin/contracts",
+      "route": "GET /api/admin/contracts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.62
+    },
+    {
+      "case": "anonymous: GET /api/admin/contracts/{contractId}",
+      "route": "GET /api/admin/contracts/{contractId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 16.72
+    },
+    {
+      "case": "wrong-role: GET /api/admin/contracts/{contractId}",
+      "route": "GET /api/admin/contracts/{contractId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 16.48
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/contracts/{contractId}",
+      "route": "GET /api/admin/contracts/{contractId}",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 4.7
+    },
+    {
+      "case": "read-catalog: GET /api/admin/contracts/{contractId}",
+      "route": "GET /api/admin/contracts/{contractId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 12.86
+    },
+    {
+      "case": "anonymous: GET /api/admin/audit-logs",
+      "route": "GET /api/admin/audit-logs",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 22.81
+    },
+    {
+      "case": "wrong-role: GET /api/admin/audit-logs",
+      "route": "GET /api/admin/audit-logs",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 18.25
+    },
+    {
+      "case": "staff cannot administer: GET /api/admin/audit-logs",
+      "route": "GET /api/admin/audit-logs",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 5.28
+    },
+    {
+      "case": "read-catalog: GET /api/admin/audit-logs",
+      "route": "GET /api/admin/audit-logs",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 39.36
+    },
+    {
+      "case": "anonymous: DELETE /api/me/subscriptions/{subscriptionId}",
+      "route": "DELETE /api/me/subscriptions/{subscriptionId}",
+      "expected": 401,
+      "status": 401,
+      "passed": true,
+      "milliseconds": 2.93
+    },
+    {
+      "case": "OPTIONS /api/podcasts",
+      "route": "OPTIONS /api/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 3.0
+    },
+    {
+      "case": "Allowed frontend CORS preflight",
+      "passed": true
+    },
+    {
+      "case": "GET /api/podcasts/not-a-uuid",
+      "route": "GET /api/podcasts/{podcastId}",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 27.24
+    },
+    {
+      "case": "GET /api/podcasts/63db46b0-0f1e-45dc-9ee8-8e34d2f2a1fc",
+      "route": "GET /api/podcasts/{podcastId}",
+      "expected": 404,
+      "status": 404,
+      "passed": true,
+      "milliseconds": 12.13
+    },
+    {
+      "case": "POST /api/admin/withdrawals/4d921077-3d48-43bc-9eb6-ec226a052d84/approve",
+      "route": "POST /api/admin/withdrawals/{withdrawalId}/approve",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 9.59
+    },
+    {
+      "case": "OPTIONS /api/podcasts",
+      "route": "OPTIONS /api/podcasts",
+      "expected": 403,
+      "status": 403,
+      "passed": true,
+      "milliseconds": 2.87
+    },
+    {
+      "case": "GET /api/podcasts?q=query-workload&page=0&size=20",
+      "route": "GET /api/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.1
+    },
+    {
+      "case": "Search workload returns 20 podcasts",
+      "passed": true
+    },
+    {
+      "case": "Search filters workload correctly",
+      "passed": true
+    },
+    {
+      "case": "Search does not issue one category query per podcast",
+      "passed": true
+    },
+    {
+      "case": "GET /api/podcasts?q=query-workload&page=0&size=10",
+      "route": "GET /api/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 31.66
+    },
+    {
+      "case": "GET /api/podcasts?q=query-workload&page=1&size=10",
+      "route": "GET /api/podcasts",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 52.9
+    },
+    {
+      "case": "Stable pagination has no duplicates",
+      "passed": true
+    },
+    {
+      "case": "search SQL count (20 distinct categories)",
+      "passed": true,
+      "sql_statements": 3
+    },
+    {
+      "case": "DELETE /api/staff/podcasts/e430a5bb-70db-4e13-8b2c-e4933ba462b8",
+      "route": "DELETE /api/staff/podcasts/{podcastId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 25.92
+    },
+    {
+      "case": "POST /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/hide",
+      "route": "POST /api/staff/podcasts/{podcastId}/hide",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 15.55
+    },
+    {
+      "case": "POST /api/staff/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8/restore",
+      "route": "POST /api/staff/podcasts/{podcastId}/restore",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 15.14
+    },
+    {
+      "case": "DELETE /api/admin/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "DELETE /api/admin/podcasts/{podcastId}",
+      "expected": 204,
+      "status": 204,
+      "passed": true,
+      "milliseconds": 14.61
+    },
+    {
+      "case": "DELETE /api/creator/podcasts/bc0fd09f-be91-40b1-a49d-2b9baae3fea8",
+      "route": "DELETE /api/creator/podcasts/{podcastId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.38
+    },
+    {
+      "case": "DELETE /api/creator/series/08b4f880-a0e3-48e4-b163-f167a61c1d67",
+      "route": "DELETE /api/creator/series/{seriesId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 34.98
+    },
+    {
+      "case": "DELETE /api/admin/categories/b484068a-297a-4559-95a4-752a09ac0653",
+      "route": "DELETE /api/admin/categories/{categoryId}",
+      "expected": 200,
+      "status": 200,
+      "passed": true,
+      "milliseconds": 10.52
+    },
+    {
+      "case": "Reject spoofed image signature",
+      "route": "POST /api/uploads",
+      "expected": 400,
+      "status": 400,
+      "passed": true,
+      "milliseconds": 11.3
+    },
+    {
+      "case": "Reject username colliding with existing email",
+      "route": "POST /api/auth/register",
+      "expected": 409,
+      "status": 409,
+      "passed": true,
+      "milliseconds": 11.8
+    }
+  ]
+}

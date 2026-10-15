@@ -13,5 +13,6 @@ public interface ListeningHistoryRepository extends JpaRepository<ListeningHisto
 
     Optional<ListeningHistory> findByUser_UserIdAndPodcast_PodcastId(UUID userId, UUID podcastId);
 
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"podcast"})
     Page<ListeningHistory> findAllByUser_UserIdOrderByLastListenedAtDesc(UUID userId, Pageable pageable);
 }
