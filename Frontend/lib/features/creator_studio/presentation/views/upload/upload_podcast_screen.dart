@@ -1539,5 +1539,3 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
     );
   }
 }
-
-
