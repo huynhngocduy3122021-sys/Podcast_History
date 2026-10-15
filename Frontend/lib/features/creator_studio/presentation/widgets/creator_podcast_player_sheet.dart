@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
-import 'package:podcast_history/core/theme/app_spacing.dart';
-import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
 import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
@@ -108,8 +106,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
       createdAt: DateTime.now(),
     );
 
-    final currentList = ref.read(creatorCommentsProvider).value ?? [];
-    ref.read(creatorCommentsProvider.notifier).state = AsyncValue.data([newComment, ...currentList]);
+    ref.read(creatorCommentsProvider.notifier).addComment(newComment);
 
     _commentController.clear();
     FocusScope.of(context).unfocus();

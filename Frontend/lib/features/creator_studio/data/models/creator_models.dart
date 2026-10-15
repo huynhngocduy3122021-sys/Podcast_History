@@ -147,6 +147,44 @@ class CreatorPodcast {
     this.aiModerationScore,
   });
 
+  CreatorPodcast copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? coverUrl,
+    String? audioFileName,
+    Duration? duration,
+    DateTime? createdAt,
+    String? eraTag,
+    String? sources,
+    bool? isExclusive,
+    int? listensCount,
+    int? likesCount,
+    int? commentsCount,
+    PodcastStatus? status,
+    String? rejectReason,
+    double? aiModerationScore,
+  }) {
+    return CreatorPodcast(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      coverUrl: coverUrl ?? this.coverUrl,
+      audioFileName: audioFileName ?? this.audioFileName,
+      duration: duration ?? this.duration,
+      createdAt: createdAt ?? this.createdAt,
+      eraTag: eraTag ?? this.eraTag,
+      sources: sources ?? this.sources,
+      isExclusive: isExclusive ?? this.isExclusive,
+      listensCount: listensCount ?? this.listensCount,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      status: status ?? this.status,
+      rejectReason: rejectReason ?? this.rejectReason,
+      aiModerationScore: aiModerationScore ?? this.aiModerationScore,
+    );
+  }
+
   StatusType get statusType {
     switch (status) {
       case PodcastStatus.published:

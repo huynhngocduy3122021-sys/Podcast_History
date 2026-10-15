@@ -1,23 +1,29 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:podcast_history/features/creator_studio/data/mock_creator_data.dart';
+import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/data/repositories/api_creator_repository.dart';
 import 'package:podcast_history/features/creator_studio/domain/creator_repository.dart';
 
-// Single repository instance
+// Inject the authenticated session into Creator Studio API calls.
 final creatorAccessTokenProvider = Provider<String?>((ref) => null);
 
+// API Client Provider
+final apiClientProvider = Provider<ApiClient>((ref) {
+  return ApiClient(initialToken: ref.watch(creatorAccessTokenProvider));
+});
+
+// Single repository instance - backed by real API calls
 final creatorRepositoryProvider = Provider<CreatorRepository>((ref) {
-  return ApiCreatorRepository(
-    accessToken: ref.watch(creatorAccessTokenProvider),
-  );
+  final apiClient = ref.watch(apiClientProvider);
+  return ApiCreatorRepository(apiClient);
 });
 
 // Profile Controller
 class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
   @override
   AsyncValue<CreatorProfile> build() {
-    return AsyncValue.data(MockCreatorData.creatorProfile);
+    Future.microtask(() => loadProfile());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -67,7 +73,8 @@ class CreatorPodcastsNotifier
     extends Notifier<AsyncValue<List<CreatorPodcast>>> {
   @override
   AsyncValue<List<CreatorPodcast>> build() {
-    return AsyncValue.data(MockCreatorData.podcasts);
+    Future.microtask(() => loadPodcasts());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -106,6 +113,31 @@ class CreatorPodcastsNotifier
     ref.read(creatorProfileProvider.notifier).loadProfile();
   }
 
+  Future<void> updatePodcast({
+    required String id,
+    required String title,
+    required String description,
+    required String eraTag,
+    required String sources,
+    required bool isExclusive,
+    required String coverUrl,
+    required String? audioFileName,
+    required Duration duration,
+  }) async {
+    await _repo.updatePodcast(
+      id: id,
+      title: title,
+      description: description,
+      eraTag: eraTag,
+      sources: sources,
+      isExclusive: isExclusive,
+      coverUrl: coverUrl,
+      audioFileName: audioFileName,
+      duration: duration,
+    );
+    await loadPodcasts();
+  }
+
   Future<void> deletePodcast(String id) async {
     await _repo.deletePodcast(id);
     await loadPodcasts();
@@ -123,7 +155,8 @@ class CreatorRequestsNotifier
     extends Notifier<AsyncValue<List<PodcastRequest>>> {
   @override
   AsyncValue<List<PodcastRequest>> build() {
-    return AsyncValue.data(MockCreatorData.requests);
+    Future.microtask(() => loadRequests());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -184,15 +217,8 @@ class WalletState {
 class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
   @override
   AsyncValue<WalletState> build() {
-    return AsyncValue.data(
-      WalletState(
-        available: 6850000,
-        pending: 1200000,
-        holding: 1500000,
-        totalWithdrawn: 8500000,
-        transactions: MockCreatorData.transactions,
-      ),
-    );
+    Future.microtask(() => loadWallet());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -240,7 +266,8 @@ final walletProvider =
 class BankAccountsNotifier extends Notifier<AsyncValue<List<BankAccount>>> {
   @override
   AsyncValue<List<BankAccount>> build() {
-    return AsyncValue.data(MockCreatorData.bankAccounts);
+    Future.microtask(() => loadAccounts());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -280,7 +307,8 @@ class CreatorCommentsNotifier
     extends Notifier<AsyncValue<List<StudioComment>>> {
   @override
   AsyncValue<List<StudioComment>> build() {
-    return AsyncValue.data(MockCreatorData.comments);
+    Future.microtask(() => loadComments());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
@@ -304,6 +332,11 @@ class CreatorCommentsNotifier
     await _repo.toggleHideComment(id);
     await loadComments();
   }
+
+  void addComment(StudioComment comment) {
+    final current = state.value ?? [];
+    state = AsyncValue.data([comment, ...current]);
+  }
 }
 
 final creatorCommentsProvider =
@@ -315,7 +348,8 @@ final creatorCommentsProvider =
 class CreatorFormsNotifier extends Notifier<AsyncValue<List<InteractiveForm>>> {
   @override
   AsyncValue<List<InteractiveForm>> build() {
-    return AsyncValue.data(MockCreatorData.forms);
+    Future.microtask(() => loadForms());
+    return const AsyncValue.loading();
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);

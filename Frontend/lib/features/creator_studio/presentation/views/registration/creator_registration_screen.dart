@@ -6,7 +6,6 @@ import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
-import 'package:podcast_history/api_service.dart';
 
 class CreatorRegistrationScreen extends ConsumerStatefulWidget {
   const CreatorRegistrationScreen({super.key});
@@ -19,18 +18,26 @@ class CreatorRegistrationScreen extends ConsumerStatefulWidget {
 class _CreatorRegistrationScreenState
     extends ConsumerState<CreatorRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController(text: 'Sử Kể Đêm Khuya');
-  final _bioCtrl = TextEditingController(
-    text: 'Kênh podcast chuyên sâu về lịch sử Việt Nam cận và hiện đại.',
-  );
-  final _socialCtrl = TextEditingController(
-    text: 'https://youtube.com/@sukledemkhuya',
-  );
+  final _nameCtrl = TextEditingController();
+  final _handleCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController();
+  final _socialCtrl = TextEditingController();
+  String _selectedCategory = 'Kháng chiến 1945–1975';
+  String? _sampleVoiceName;
   bool _isSubmitting = false;
+
+  final List<String> _categories = [
+    'Kháng Pháp & Cách mạng (1858–1954)',
+    'Kháng chiến 1945–1975',
+    'Nhân vật & Sự kiện Lịch sử',
+    'Thời kỳ Bao cấp & Đổi Mới 1986',
+    'Văn hóa & Di sản Lịch sử',
+  ];
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _handleCtrl.dispose();
     _bioCtrl.dispose();
     _socialCtrl.dispose();
     super.dispose();
@@ -40,41 +47,27 @@ class _CreatorRegistrationScreenState
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
 
-    try {
-      await ref
-          .read(creatorProfileProvider.notifier)
-          .submitRegistration(
-            channelName: _nameCtrl.text.trim(),
-            handle: '',
-            bio: _bioCtrl.text.trim(),
-            category: '',
-            socialLink: _socialCtrl.text.trim(),
-            sampleVoiceName: '',
-          );
+    await ref
+        .read(creatorProfileProvider.notifier)
+        .submitRegistration(
+          channelName: _nameCtrl.text.trim(),
+          handle: _handleCtrl.text.trim(),
+          bio: _bioCtrl.text.trim(),
+          category: _selectedCategory,
+          socialLink: _socialCtrl.text.trim(),
+          sampleVoiceName: _sampleVoiceName ?? 'sample.mp3',
+        );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.',
-            ),
-            backgroundColor: AppColors.success,
+    setState(() => _isSubmitting = false);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.',
           ),
-        );
-      }
-    } on ApiException catch (exception) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(exception.message)));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Khong the gui ho so den may chu.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+          backgroundColor: AppColors.success,
+        ),
+      );
     }
   }
 
@@ -112,6 +105,14 @@ class _CreatorRegistrationScreenState
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
+                  label: 'Tên định danh (Handle)',
+                  hint: '@tenkenh',
+                  controller: _handleCtrl,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Vui lòng nhập handle' : null,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppTextField(
                   label: 'Giới thiệu kênh & Định hướng nội dung',
                   controller: _bioCtrl,
                   maxLines: 3,
@@ -120,10 +121,80 @@ class _CreatorRegistrationScreenState
                       : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
+                const Text(
+                  'Lĩnh vực lịch sử chuyên sâu',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedCategory,
+                  decoration: const InputDecoration(),
+                  items: _categories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedCategory = val);
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   label: 'Link mạng xã hội / Kênh tham khảo (YouTube, FB, TikTok...)',
                   controller: _socialCtrl,
                   hint: 'https://...',
+                ),
+                const SizedBox(height: AppSpacing.lg),
+
+                // Upload tệp giọng đọc thử
+                const Text(
+                  'Mẫu giọng đọc thử (Voice Sample)',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppColors.surfaceDark
+                        : AppColors.surfaceLight,
+                    borderRadius: AppSpacing.roundedMd,
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.outlineDark
+                          : AppColors.outlineLight,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.mic_rounded,
+                        color: AppColors.primaryLight,
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          _sampleVoiceName ?? 'Chưa chọn file mẫu giọng',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setState(
+                            () => _sampleVoiceName =
+                                'giong_doc_test_vietcast.mp3',
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã tải lên tệp mẫu giọng đọc'),
+                            ),
+                          );
+                        },
+                        child: const Text('Chọn file'),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xxl),
 

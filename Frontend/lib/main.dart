@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 
@@ -67,6 +66,18 @@ class _AppState extends State<VietCastApp> {
           : switch (account!.role) {
               UserRole.listener => Shell(
                 session: account!.session,
+                onSessionRefreshed: (session) => setState(() {
+                  final current = account;
+                  if (current != null &&
+                      current.session.user.id == session.user.id) {
+                    account = Account(
+                      email: current.email,
+                      name: current.name,
+                      role: current.role,
+                      session: session,
+                    );
+                  }
+                }),
                 displayName: account!.name,
                 onTheme: toggleTheme,
                 onLogout: logout,
@@ -163,11 +174,13 @@ class Shell extends StatefulWidget {
   const Shell({
     super.key,
     required this.session,
+    this.onSessionRefreshed,
     required this.displayName,
     required this.onTheme,
     required this.onLogout,
   });
   final AuthSession session;
+  final ValueChanged<AuthSession>? onSessionRefreshed;
   final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
@@ -178,6 +191,7 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   late final ListenerApi api;
   bool apiLoading = true;
+  bool usingSamplePodcasts = true;
   String? apiError;
   final commentsByPodcast = <String, List<CommentData>>{};
   final creatorDetails = <String, Map<String, dynamic>>{};
@@ -214,22 +228,33 @@ class _ShellState extends State<Shell> {
   @override
   void initState() {
     super.initState();
-    api = ListenerApi(accessToken: widget.session.accessToken);
+    api = ListenerApi(
+      accessToken: widget.session.accessToken,
+      refreshToken: widget.session.refreshToken,
+      onSessionRefreshed: widget.onSessionRefreshed,
+    );
+    shows = List<Show>.of(fallbackShows);
     _loadListenerFlow();
   }
 
   Future<void> _loadListenerFlow() async {
+    if (mounted) {
+      setState(() {
+        apiLoading = true;
+        apiError = null;
+      });
+    }
     try {
       final results = await Future.wait<dynamic>([
         api.searchPodcasts(),
-        api.listeningHistory(),
-        api.savedPodcasts(),
-        api.follows(),
-        api.reports(),
-        api.subscriptions(),
-        api.seriesRequests(),
-        api.categories(),
-        api.creators(),
+        _optionalList(api.listeningHistory()),
+        _optionalList(api.savedPodcasts()),
+        _optionalList(api.follows()),
+        _optionalList(api.reports()),
+        _optionalList(api.subscriptions()),
+        _optionalList(api.seriesRequests()),
+        _optionalList(api.categories()),
+        _optionalList(api.creators()),
       ]);
       final podcasts = results[0] as List<ListenerPodcast>;
       final creatorList = results[8] as List<Map<String, dynamic>>;
@@ -238,10 +263,17 @@ class _ShellState extends State<Shell> {
           .whereType<String>()
           .toSet();
       final creatorResponses = await Future.wait(
-        creatorIds.map((id) async => MapEntry(id, await api.creator(id))),
+        creatorIds.map((id) async {
+          try {
+            return MapEntry(id, await api.creator(id));
+          } catch (_) {
+            return MapEntry(id, <String, dynamic>{});
+          }
+        }),
       );
       creatorDetails.addEntries(creatorResponses);
       if (podcasts.isNotEmpty) {
+        usingSamplePodcasts = false;
         shows = podcasts.asMap().entries.map((entry) {
           final podcast = entry.value;
           final colorSets = [
@@ -282,7 +314,13 @@ class _ShellState extends State<Shell> {
                 (comment) => CommentData(
                   '${comment['displayName'] ?? comment['username'] ?? 'Listener'}',
                   '${comment['content'] ?? ''}',
-                  '00:00',
+                  comment['timestampSeconds'] == null
+                      ? ''
+                      : _formatDuration(
+                          (comment['timestampSeconds'] as num).toInt(),
+                        ),
+                  id: comment['commentId']?.toString(),
+                  durationSeconds: podcast.durationSeconds,
                 ),
               )
               .toList();
@@ -311,6 +349,16 @@ class _ShellState extends State<Shell> {
   static String _formatDuration(int seconds) {
     final minutes = seconds ~/ 60;
     return '${minutes.toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  Future<List<Map<String, dynamic>>> _optionalList(
+    Future<List<Map<String, dynamic>>> request,
+  ) async {
+    try {
+      return await request;
+    } catch (_) {
+      return [];
+    }
   }
 
   void play(Show s) => setState(() {
@@ -490,6 +538,16 @@ class _ShellState extends State<Shell> {
       initialLiked: likedShowTitles.contains(show.title),
       initialSaved: savedShowTitles.contains(show.title),
       initialComments: show.id == null ? null : commentsByPodcast[show.id!],
+      loadComments: show.id == null
+          ? null
+          : () async => (await api.comments(show.id!))
+                .map(
+                  (json) => CommentData.fromJson(
+                    json,
+                    durationSeconds: show.durationSeconds ?? 0,
+                  ),
+                )
+                .toList(),
       displayName: widget.displayName,
       onProgressChanged: (value) {
         progressByShow[show.title] = value;
@@ -505,20 +563,20 @@ class _ShellState extends State<Shell> {
       },
       onComment: show.id == null
           ? null
-          : (text) async {
-              try {
-                await api.createComment(show.id!, text);
-                return true;
-              } catch (_) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Khong the luu comment len may chu.'),
-                    ),
-                  );
-                }
-                return false;
-              }
+          : (text, timestampSeconds) async {
+              final saved = await api.createComment(
+                show.id!,
+                text,
+                timestampSeconds: timestampSeconds,
+              );
+              final comment = CommentData.fromJson(
+                saved,
+                durationSeconds: show.durationSeconds ?? 0,
+              );
+              final cached = commentsByPodcast.putIfAbsent(show.id!, () => []);
+              cached.removeWhere((item) => item.id == comment.id);
+              cached.insert(0, comment);
+              return comment;
             },
       onLikedChanged: (value) => updateLiked(show, value),
       onSavedChanged: (value) => updateSaved(show, value),
@@ -560,7 +618,27 @@ class _ShellState extends State<Shell> {
       ),
     ];
     return Scaffold(
-      body: SafeArea(bottom: false, child: pages[tab]),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            if (apiLoading) const LinearProgressIndicator(),
+            if (!apiLoading && (apiError != null || usingSamplePodcasts))
+              MaterialBanner(
+                content: Text(
+                  apiError != null ? 'Không tải đầy đủ dữ liệu: $apiError' : 'Chưa có podcast được duyệt. Nội dung mẫu không thể lưu bình luận.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: _loadListenerFlow,
+                    child: const Text('Tải lại'),
+                  ),
+                ],
+              ),
+            Expanded(child: pages[tab]),
+          ],
+        ),
+      ),
       bottomNavigationBar: current == null
           ? nav
           : Column(
@@ -2226,14 +2304,14 @@ class Setting extends StatelessWidget {
   );
 }
 
-class AuthPage extends StatefulWidget {
+class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key, required this.onAuthenticated});
   final ValueChanged<Account> onAuthenticated;
   @override
-  State<AuthPage> createState() => _AuthState();
+  ConsumerState<AuthPage> createState() => _AuthState();
 }
 
-class _AuthState extends State<AuthPage> {
+class _AuthState extends ConsumerState<AuthPage> {
   bool register = false;
   bool loading = false;
   final usernameController = TextEditingController();
@@ -2773,6 +2851,7 @@ class Player extends StatefulWidget {
     required this.initialLiked,
     required this.initialSaved,
     this.initialComments,
+    this.loadComments,
     required this.onProgressChanged,
     this.onComment,
     required this.onLikedChanged,
@@ -2788,8 +2867,9 @@ class Player extends StatefulWidget {
   final double initialProgress;
   final bool initialLiked, initialSaved;
   final List<CommentData>? initialComments;
+  final Future<List<CommentData>> Function()? loadComments;
   final ValueChanged<double> onProgressChanged;
-  final Future<bool> Function(String)? onComment;
+  final Future<CommentData> Function(String, int)? onComment;
   final ValueChanged<bool> onLikedChanged, onSavedChanged;
   final VoidCallback onReport, onMembership, onCreatorProfile;
   final VoidCallback onToggle;
@@ -2803,20 +2883,46 @@ class _PlayerState extends State<Player> {
   late double progress = widget.initialProgress;
   late bool liked = widget.initialLiked;
   final commentController = TextEditingController();
-  late final comments =
-      widget.initialComments ??
-      <CommentData>[
-        const CommentData(
-          'Thu Ha',
-          'Mot lat cat lich su rat dang nghe.',
-          '02:35',
-        ),
-        const CommentData(
-          'Quang Minh',
-          'Cach ke chuyen gan gui va nhieu tu lieu.',
-          '08:12',
-        ),
-      ];
+  late final comments = List<CommentData>.of(
+    widget.initialComments ?? const [],
+  );
+  bool _sendingComment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadComments());
+  }
+
+  Future<void> _loadComments() async {
+    final load = widget.loadComments;
+    if (load == null) return;
+    final idsAtStart = comments.map((comment) => comment.id).toSet();
+    try {
+      final loaded = await load();
+      if (!mounted) return;
+      setState(() {
+        final ids = loaded.map((c) => c.id).toSet();
+        final recent = comments
+            .where(
+              (c) =>
+                  c.id != null &&
+                  !idsAtStart.contains(c.id) &&
+                  !ids.contains(c.id),
+            )
+            .toList();
+        comments
+          ..clear()
+          ..addAll([...recent, ...loaded]);
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không tải được bình luận: $error')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -2835,24 +2941,62 @@ class _PlayerState extends State<Player> {
     setProgress(progress + amount);
   }
 
-  void submitComment() {
+  Future<void> submitComment() async {
     final text = commentController.text.trim();
     if (text.isEmpty) return;
-    unawaited(addComment(text));
-    commentController.clear();
+    if (await addComment(text) &&
+        mounted &&
+        commentController.text.trim() == text) {
+      commentController.clear();
+    }
   }
 
-  Future<void> addComment(String text) async {
-    final saved = await widget.onComment?.call(text) ?? true;
-    if (!saved || !mounted) return;
-    setState(
-      () =>
-          comments.insert(0, CommentData(widget.displayName, text, _timestamp)),
-    );
+  Future<bool> addComment(String text) async {
+    if (_sendingComment || text.trim().isEmpty) return false;
+    final send = widget.onComment;
+    if (send == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Podcast mẫu chưa có ID trên server. Hãy chọn podcast đã được duyệt từ backend.',
+          ),
+        ),
+      );
+      return false;
+    }
+    final seconds = (progress * _durationSeconds).floor();
+    setState(() => _sendingComment = true);
+    try {
+      final saved = await send(text.trim(), seconds);
+      if (!mounted) return false;
+      setState(() {
+        comments.removeWhere((comment) => comment.id == saved.id);
+        comments.insert(0, saved);
+      });
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chưa lưu được bình luận: $error')),
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _sendingComment = false);
+    }
+  }
+
+  int get _durationSeconds {
+    if (widget.show.durationSeconds != null) {
+      return widget.show.durationSeconds!;
+    }
+    return widget.show.duration
+        .split(':')
+        .fold<int>(0, (total, part) => total * 60 + (int.tryParse(part) ?? 0));
   }
 
   String get _timestamp {
-    final seconds = (progress * 32 * 60).round();
+    final seconds = (progress * _durationSeconds).floor();
     return _formatDuration(seconds);
   }
 
@@ -2863,7 +3007,11 @@ class _PlayerState extends State<Player> {
 
   CommentData? get timelineComment {
     final nearby = comments
-        .where((comment) => (comment.position - progress).abs() <= .04)
+        .where(
+          (comment) =>
+              comment.time.isNotEmpty &&
+              (comment.position - progress).abs() <= .04,
+        )
         .toList();
     if (nearby.isEmpty) return null;
     // Comments are inserted newest-first, so the first one wins when a
@@ -2875,10 +3023,7 @@ class _PlayerState extends State<Player> {
     context: context,
     isScrollControlled: true,
     backgroundColor: const Color(0xFF181818),
-    builder: (_) => CommentsPanel(
-      comments: comments,
-      onSubmit: (text) => unawaited(addComment(text)),
-    ),
+    builder: (_) => CommentsPanel(comments: comments, onSubmit: addComment),
   );
 
   void _showPlaylist() => showModalBottomSheet(
@@ -3034,9 +3179,9 @@ class _PlayerState extends State<Player> {
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Text('|', style: TextStyle(color: Colors.white38)),
                 ),
-                const Text(
-                  '32:18',
-                  style: TextStyle(
+                Text(
+                  _formatDuration(_durationSeconds),
+                  style: const TextStyle(
                     color: Colors.white54,
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -3082,7 +3227,7 @@ class _PlayerState extends State<Player> {
                 max: 1,
                 onChanged: setProgress,
                 semanticFormatterCallback: (value) =>
-                    'Vi tri phat ${_formatDuration(value * 32 * 60)}',
+                    'Vi tri phat ${_formatDuration(value * _durationSeconds)}',
               ),
             ),
             const SizedBox(height: 12),
@@ -3121,6 +3266,7 @@ class _PlayerState extends State<Player> {
             _CommentComposer(
               controller: commentController,
               onSubmit: submitComment,
+              sending: _sendingComment,
             ),
             const SizedBox(height: 18),
             Row(
@@ -3185,9 +3331,14 @@ class _PlayerState extends State<Player> {
 }
 
 class _CommentComposer extends StatelessWidget {
-  const _CommentComposer({required this.controller, required this.onSubmit});
+  const _CommentComposer({
+    required this.controller,
+    required this.onSubmit,
+    this.sending = false,
+  });
   final TextEditingController controller;
   final VoidCallback onSubmit;
+  final bool sending;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -3202,27 +3353,14 @@ class _CommentComposer extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: controller,
-            style: const TextStyle(color: Color(0xFF241C1C)),
-            cursorColor: Color(0xFFB3261E),
+            enabled: !sending,
+            style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => onSubmit(),
             decoration: const InputDecoration(
               hintText: 'Comment...',
-              hintStyle: TextStyle(color: Color(0xFF6B6262)),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 12,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-                borderSide: BorderSide(color: Color(0xFFB3261E)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.all(Radius.circular(24)),
-                borderSide: BorderSide(color: Color(0xFFB3261E), width: 2),
-              ),
+              hintStyle: TextStyle(color: Colors.white70),
+              border: InputBorder.none,
               isDense: true,
             ),
           ),
@@ -3242,7 +3380,7 @@ class _CommentComposer extends StatelessWidget {
             ),
           ),
         IconButton(
-          onPressed: onSubmit,
+          onPressed: sending ? null : onSubmit,
           tooltip: 'Gui binh luan',
           visualDensity: VisualDensity.compact,
           style: IconButton.styleFrom(
@@ -3289,15 +3427,47 @@ class _PlayerAction extends StatelessWidget {
 }
 
 class CommentData {
-  const CommentData(this.name, this.text, this.time);
+  const CommentData(
+    this.name,
+    this.text,
+    this.time, {
+    this.id,
+    this.durationSeconds = 1920,
+  });
   final String name, text, time;
+  final String? id;
+  final int durationSeconds;
+
+  factory CommentData.fromJson(
+    Map<String, dynamic> json, {
+    required int durationSeconds,
+  }) {
+    final id = json['commentId']?.toString();
+    if (id == null || id.isEmpty) {
+      throw const FormatException('Server không trả về ID bình luận đã lưu.');
+    }
+    final seconds = (json['timestampSeconds'] as num?)?.toInt();
+    final time = seconds == null
+        ? ''
+        : '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+    return CommentData(
+      '${json['displayName'] ?? json['username'] ?? 'Listener'}',
+      '${json['content'] ?? ''}',
+      time,
+      id: id,
+      durationSeconds: durationSeconds,
+    );
+  }
 
   double get position {
     final parts = time.split(':');
-    final seconds = parts.length == 2
-        ? (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0)
-        : 0;
-    return (seconds / (32 * 60)).clamp(0.02, .9);
+    final seconds = parts.fold<int>(
+      0,
+      (total, part) => total * 60 + (int.tryParse(part) ?? 0),
+    );
+    return durationSeconds <= 0
+        ? 0
+        : (seconds / durationSeconds).clamp(0.0, 1.0);
   }
 }
 
@@ -3330,7 +3500,7 @@ class CommentsPanel extends StatefulWidget {
     required this.onSubmit,
   });
   final List<CommentData> comments;
-  final ValueChanged<String> onSubmit;
+  final Future<bool> Function(String) onSubmit;
 
   @override
   State<CommentsPanel> createState() => _CommentsPanelState();
@@ -3345,11 +3515,20 @@ class _CommentsPanelState extends State<CommentsPanel> {
     super.dispose();
   }
 
-  void submit() {
+  bool sending = false;
+
+  Future<void> submit() async {
     final text = controller.text.trim();
-    if (text.isEmpty) return;
-    widget.onSubmit(text);
-    setState(() => controller.clear());
+    if (text.isEmpty || sending) return;
+    setState(() => sending = true);
+    try {
+      final saved = await widget.onSubmit(text);
+      if (saved && mounted && controller.text.trim() == text) {
+        controller.clear();
+      }
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
   }
 
   @override
@@ -3390,7 +3569,11 @@ class _CommentsPanelState extends State<CommentsPanel> {
             ),
           ),
           const SizedBox(height: 8),
-          _CommentComposer(controller: controller, onSubmit: submit),
+          _CommentComposer(
+            controller: controller,
+            onSubmit: submit,
+            sending: sending,
+          ),
         ],
       ),
     ),

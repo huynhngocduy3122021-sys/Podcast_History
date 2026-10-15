@@ -72,9 +72,7 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
       createdAt: DateTime.now(),
     );
 
-    // Thêm vào state qua controller
-    final currentList = ref.read(creatorCommentsProvider).value ?? [];
-    ref.read(creatorCommentsProvider.notifier).state = AsyncValue.data([newComment, ...currentList]);
+    ref.read(creatorCommentsProvider.notifier).addComment(newComment);
 
     _textController.clear();
     FocusScope.of(context).unfocus();
