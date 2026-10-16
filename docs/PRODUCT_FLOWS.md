@@ -146,7 +146,9 @@ CC có thể thêm nguồn tham khảo và upload PDF gắn vào podcast qua CRU
 
 Gói Premium dành cho CC là gói của creator; gói thành viên ở mục Người dùng là gói hỗ trợ một kênh cụ thể. Đây là hai luồng gói dịch vụ khác nhau theo mô tả nghiệp vụ.
 
-Premium Creator, giới hạn số podcast theo gói, biểu mẫu tương tác, livestream và bộ máy AI moderation chưa được triển khai: ERD/model hiện tại chưa có mô hình billing Premium Creator, và hàng đợi duyệt hiện do Admin xử lý thủ công.
+Đã có [API poll một câu hỏi, nhiều option](POLL_API.md): Creator CRUD/công bố/đóng poll và xem kết quả; Listener gửi/đổi/rút lựa chọn. Bảng Polll_questions lưu các option. Biểu mẫu nhiều câu hỏi hoặc nhiều loại đáp án chưa triển khai.
+
+Premium Creator, giới hạn số podcast theo gói, livestream và bộ máy AI moderation chưa được triển khai: ERD/model hiện tại chưa có mô hình billing Premium Creator, và hàng đợi duyệt hiện do Admin xử lý thủ công. Poll hiện dành cho Creator đã được duyệt, chưa gắn entitlement Premium.
 
 ## 4. Podcast theo yêu cầu
 
