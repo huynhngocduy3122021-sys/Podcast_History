@@ -1,35 +1,30 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'core/theme/app_theme.dart';
+import 'features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'features/creator_studio/presentation/views/creator_main_shell.dart';
+import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
+
+import 'api_service.dart';
 
 void main() => runApp(const VietCastApp());
 
 enum UserRole { listener, creator, admin }
 
-class MockAccount {
-  const MockAccount(this.email, this.password, this.name, this.role);
-  final String email, password, name;
+class Account {
+  const Account({
+    required this.email,
+    required this.name,
+    required this.role,
+    required this.session,
+  });
+  final String email, name;
   final UserRole role;
+  final AuthSession session;
 }
-
-const mockAccounts = <MockAccount>[
-  MockAccount(
-    'listener@vietcast.local',
-    'Listener@123',
-    'Nguoi nghe',
-    UserRole.listener,
-  ),
-  MockAccount(
-    'creator@vietcast.local',
-    'Creator@123',
-    'Nguoi sang tao',
-    UserRole.creator,
-  ),
-  MockAccount(
-    'admin@vietcast.local',
-    'Admin@123',
-    'Quan tri vien',
-    UserRole.admin,
-  ),
-];
 
 class VietCastApp extends StatefulWidget {
   const VietCastApp({super.key});
@@ -39,47 +34,102 @@ class VietCastApp extends StatefulWidget {
 
 class _AppState extends State<VietCastApp> {
   ThemeMode mode = ThemeMode.light;
-  MockAccount? account;
+  Account? account;
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title: 'VietCast',
-    debugShowCheckedModeBanner: false,
-    themeMode: mode,
-    theme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFB3261E),
-        brightness: Brightness.light,
+  Widget build(BuildContext context) => ProviderScope(
+    overrides: [
+      creatorAccessTokenProvider.overrideWithValue(
+        account?.session.accessToken,
       ),
-      scaffoldBackgroundColor: const Color(0xFFFBF7F0),
-    ),
-    darkTheme: ThemeData(
-      useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFE8665D),
-        brightness: Brightness.dark,
-      ),
-    ),
-    home: account == null
-        ? AuthPage(onAuthenticated: (value) => setState(() => account = value))
-        : switch (account!.role) {
-            UserRole.listener => Shell(onTheme: toggleTheme, onLogout: logout),
-            UserRole.creator => CreatorShell(
-              onTheme: toggleTheme,
-              onLogout: logout,
+    ],
+    child: MaterialApp(
+      title: 'VietCast',
+      debugShowCheckedModeBanner: false,
+      themeMode: mode,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        return ColoredBox(
+          color: isDark ? const Color(0xFF121212) : const Color(0xFFEFE8DE),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: child ?? const SizedBox.shrink(),
             ),
-            UserRole.admin => AdminShell(
-              onTheme: toggleTheme,
-              onLogout: logout,
-            ),
-          },
+          ),
+        );
+      },
+      home: account == null
+          ? AuthPage(
+              onAuthenticated: (value) => setState(() => account = value),
+            )
+          : switch (account!.role) {
+              UserRole.listener => Shell(
+                session: account!.session,
+                onSessionRefreshed: (session) => setState(() {
+                  final current = account;
+                  if (current != null &&
+                      current.session.user.id == session.user.id) {
+                    account = Account(
+                      email: current.email,
+                      name: current.name,
+                      role: current.role,
+                      session: session,
+                    );
+                  }
+                }),
+                onProfileUpdated: (user) => setState(() {
+                  final current = account;
+                  if (current != null) {
+                    account = Account(
+                      email: user.email,
+                      name: user.displayName,
+                      role: current.role,
+                      session: AuthSession(
+                        user: user,
+                        accessToken: current.session.accessToken,
+                        refreshToken: current.session.refreshToken,
+                        tokenType: current.session.tokenType,
+                        expiresIn: current.session.expiresIn,
+                        refreshExpiresIn: current.session.refreshExpiresIn,
+                      ),
+                    );
+                  }
+                }),
+                displayName: account!.name,
+                onTheme: toggleTheme,
+                onLogout: logout,
+              ),
+              UserRole.creator => CreatorShell(
+                displayName: account!.name,
+                onTheme: toggleTheme,
+                onLogout: logout,
+              ),
+              UserRole.admin => AdminShell(
+                displayName: account!.name,
+                onTheme: toggleTheme,
+                onLogout: logout,
+              ),
+            },
+    ),
   );
 
   void toggleTheme() => setState(
     () => mode = mode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light,
   );
 
-  void logout() => setState(() => account = null);
+  Future<void> logout() async {
+    final session = account?.session;
+    setState(() => account = null);
+    if (session != null) {
+      try {
+        await AuthApi().logout(session.refreshToken);
+      } catch (_) {
+        // The local session is already cleared even if the network is offline.
+      }
+    }
+  }
 }
 
 class Show {
@@ -90,16 +140,22 @@ class Show {
     this.duration,
     this.colors, {
     this.member = false,
+    this.id,
+    this.creatorId,
+    this.durationSeconds,
   });
   final String title, channel, period, duration;
   final List<Color> colors;
   final bool member;
+  final String? id;
+  final String? creatorId;
+  final int? durationSeconds;
 }
 
 String _formatVnd(int amount) =>
     '${amount.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')} VND';
 
-const shows = <Show>[
+final fallbackShows = <Show>[
   Show(
     'Nhung ngay dau cua nen doc lap',
     'Su Viet ke chuyen',
@@ -131,8 +187,22 @@ const shows = <Show>[
   ),
 ];
 
+List<Show> shows = List<Show>.of(fallbackShows);
+
 class Shell extends StatefulWidget {
-  const Shell({super.key, required this.onTheme, required this.onLogout});
+  const Shell({
+    super.key,
+    required this.session,
+    this.onSessionRefreshed,
+    this.onProfileUpdated,
+    required this.displayName,
+    required this.onTheme,
+    required this.onLogout,
+  });
+  final AuthSession session;
+  final ValueChanged<AuthSession>? onSessionRefreshed;
+  final ValueChanged<AuthUser>? onProfileUpdated;
+  final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   @override
@@ -140,6 +210,13 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
+  late final ListenerApi api;
+  bool apiLoading = true;
+  bool usingSamplePodcasts = true;
+  String? apiError;
+  final commentsByPodcast = <String, List<CommentData>>{};
+  final creatorDetails = <String, Map<String, dynamic>>{};
+  StreamSubscription<String>? commentSubscription;
   int tab = 0;
   Show? current;
   bool playing = false;
@@ -169,6 +246,142 @@ class _ShellState extends State<Shell> {
     ),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    api = ListenerApi(
+      accessToken: widget.session.accessToken,
+      refreshToken: widget.session.refreshToken,
+      onSessionRefreshed: widget.onSessionRefreshed,
+    );
+    shows = List<Show>.of(fallbackShows);
+    _loadListenerFlow();
+  }
+
+  Future<void> _loadListenerFlow() async {
+    if (mounted) {
+      setState(() {
+        apiLoading = true;
+        apiError = null;
+      });
+    }
+    try {
+      final results = await Future.wait<dynamic>([
+        api.searchPodcasts(),
+        _optionalList(api.listeningHistory()),
+        _optionalList(api.savedPodcasts()),
+        _optionalList(api.follows()),
+        _optionalList(api.reports()),
+        _optionalList(api.subscriptions()),
+        _optionalList(api.seriesRequests()),
+        _optionalList(api.categories()),
+        _optionalList(api.creators()),
+      ]);
+      final podcasts = results[0] as List<ListenerPodcast>;
+      final creatorList = results[8] as List<Map<String, dynamic>>;
+      final creatorIds = creatorList
+          .map((item) => item['creatorProfileId']?.toString())
+          .whereType<String>()
+          .toSet();
+      final creatorResponses = await Future.wait(
+        creatorIds.map((id) async {
+          try {
+            return MapEntry(id, await api.creator(id));
+          } catch (_) {
+            return MapEntry(id, <String, dynamic>{});
+          }
+        }),
+      );
+      creatorDetails.addEntries(creatorResponses);
+      if (podcasts.isNotEmpty) {
+        usingSamplePodcasts = false;
+        shows = podcasts.asMap().entries.map((entry) {
+          final podcast = entry.value;
+          final colorSets = [
+            [const Color(0xFF6D3026), const Color(0xFFC68C58)],
+            [const Color(0xFF254A50), const Color(0xFF93B4A4)],
+            [const Color(0xFF803E31), const Color(0xFFE0B84A)],
+          ];
+          final colors = colorSets[entry.key % colorSets.length];
+          final duration = podcast.durationSeconds;
+          return Show(
+            podcast.title,
+            podcast.creatorChannelName,
+            'Podcast',
+            _formatDuration(duration),
+            colors,
+            member: podcast.visibility == 'MEMBERS_ONLY',
+            id: podcast.id,
+            creatorId: podcast.creatorId,
+            durationSeconds: duration,
+          );
+        }).toList();
+        final interactionResponses = await Future.wait(
+          podcasts.map(
+            (podcast) async => (
+              likes: await api.likes(podcast.id),
+              comments: await api.comments(podcast.id),
+            ),
+          ),
+        );
+        for (var index = 0; index < podcasts.length; index++) {
+          final podcast = podcasts[index];
+          final interaction = interactionResponses[index];
+          if (interaction.likes['likedByMe'] == true) {
+            likedShowTitles.add(podcast.title);
+          }
+          commentsByPodcast[podcast.id] = interaction.comments
+              .map(
+                (comment) => CommentData(
+                  '${comment['displayName'] ?? comment['username'] ?? 'Listener'}',
+                  '${comment['content'] ?? ''}',
+                  comment['timestampSeconds'] == null
+                      ? ''
+                      : _formatDuration(
+                          (comment['timestampSeconds'] as num).toInt(),
+                        ),
+                  id: comment['commentId']?.toString(),
+                  durationSeconds: podcast.durationSeconds,
+                ),
+              )
+              .toList();
+        }
+      }
+      for (final item in results[1] as List<Map<String, dynamic>>) {
+        final title = '${item['podcastTitle'] ?? ''}';
+        final seconds = (item['progressSeconds'] as num?)?.toInt() ?? 0;
+        if (title.isNotEmpty) progressByShow[title] = seconds / 86400;
+      }
+      for (final item in results[2] as List<Map<String, dynamic>>) {
+        final title = '${item['title'] ?? ''}';
+        if (title.isNotEmpty) savedShowTitles.add(title);
+      }
+      if (mounted) setState(() => apiLoading = false);
+    } catch (exception) {
+      if (mounted) {
+        setState(() {
+          apiLoading = false;
+          apiError = exception.toString();
+        });
+      }
+    }
+  }
+
+  static String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    return '${minutes.toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  Future<List<Map<String, dynamic>>> _optionalList(
+    Future<List<Map<String, dynamic>>> request,
+  ) async {
+    try {
+      return await request;
+    } catch (_) {
+      return [];
+    }
+  }
+
   void play(Show s) => setState(() {
     current = s;
     playing = true;
@@ -176,7 +389,21 @@ class _ShellState extends State<Shell> {
 
   void openShow(Show show) {
     play(show);
+    commentSubscription?.cancel();
+    if (show.id != null) {
+      unawaited(api.playback(show.id!));
+      unawaited(api.listeningHistoryForPodcast(show.id!));
+      commentSubscription = api
+          .commentStream(show.id!)
+          .listen((_) {}, onError: (_) {});
+    }
     _showPlayer(show);
+  }
+
+  @override
+  void dispose() {
+    commentSubscription?.cancel();
+    super.dispose();
   }
 
   void updateLiked(Show show, bool liked) => setState(() {
@@ -185,6 +412,9 @@ class _ShellState extends State<Shell> {
     } else {
       likedShowTitles.remove(show.title);
     }
+    if (show.id != null) {
+      unawaited(liked ? api.like(show.id!) : api.unlike(show.id!));
+    }
   });
 
   void updateSaved(Show show, bool saved) => setState(() {
@@ -192,6 +422,11 @@ class _ShellState extends State<Shell> {
       savedShowTitles.add(show.title);
     } else {
       savedShowTitles.remove(show.title);
+    }
+    if (show.id != null) {
+      unawaited(
+        saved ? api.savePodcast(show.id!) : api.unsavePodcast(show.id!),
+      );
     }
   });
 
@@ -203,75 +438,105 @@ class _ShellState extends State<Shell> {
       show: show,
       onSubmitted: (reason) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Da gui bao cao "$reason" cho admin.')),
-        );
+        final future = show.id == null
+            ? Future<void>.value()
+            : api.createReport(
+                targetType: 'PODCAST',
+                targetId: show.id!,
+                reasonCode: 'INAPPROPRIATE',
+                description: reason,
+              );
+        future
+            .then((_) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Da gui bao cao "$reason" cho admin.')),
+              );
+            })
+            .catchError((_) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Khong the gui bao cao luc nay.')),
+              );
+            });
       },
     ),
   );
 
-  void _showMembership(Show show) {
-    const price = 79000;
-    if (walletBalance < price) {
+  Future<void> _showMembership(Show show) async {
+    if (show.creatorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Podcast nay chua co creator ID.')),
+      );
+      return;
+    }
+    try {
+      final plans = await api.membershipPlans(show.creatorId!);
+      if (!mounted) return;
+      if (plans.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Creator chua co goi membership active.'),
+          ),
+        );
+        return;
+      }
+      final plan = plans.first;
+      final planId = '${plan['membershipPlanId']}';
+      final planName = '${plan['name'] ?? 'Membership'}';
+      final price = '${plan['price'] ?? ''} ${plan['currency'] ?? 'VND'}';
       showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('So du khong du'),
+          title: Text('Dang ky $planName'),
           content: Text(
-            'Goi thanh vien co gia 79.000 VND. Vi cua ban con ${_formatVnd(walletBalance)}.',
+            'Goi cua ${show.channel}: $price. Backend se tao checkout o trang thai cho thanh toan.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('De sau'),
+              child: const Text('Huy'),
             ),
-            FilledButton.icon(
-              onPressed: () {
+            FilledButton(
+              onPressed: () async {
                 Navigator.pop(context);
-                setState(() {
-                  walletBalance += 200000;
-                  tab = 3;
-                });
+                try {
+                  final checkout = await api.checkout(planId);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Checkout ${checkout['subscriptionStatus'] ?? 'PENDING'} - chua xac nhan thanh toan.',
+                      ),
+                    ),
+                  );
+                } catch (_) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Khong the tao checkout.')),
+                  );
+                }
               },
-              icon: const Icon(Icons.account_balance_wallet),
-              label: const Text('Nap them'),
+              child: const Text('Tao checkout'),
             ),
           ],
         ),
       );
-      return;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Khong the tai goi membership.')),
+        );
+      }
     }
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Xac nhan dang ky'),
-        content: Text(
-          'Ban co chac chan dang ky goi thanh vien cua ${show.channel} voi gia 79.000 VND khong?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Huy'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() => walletBalance -= price);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Dang ky thanh vien thanh cong.')),
-              );
-            },
-            child: const Text('Xac nhan'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showCreatorProfile(Show creatorShow) => Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => CreatorProfilePanel(
         show: creatorShow,
+        api: api,
+        onMembership: () => _showMembership(creatorShow),
         onOpen: (audio) {
           Navigator.pop(context);
           openShow(audio);
@@ -294,7 +559,47 @@ class _ShellState extends State<Shell> {
       initialProgress: progressByShow[show.title] ?? 0,
       initialLiked: likedShowTitles.contains(show.title),
       initialSaved: savedShowTitles.contains(show.title),
-      onProgressChanged: (value) => progressByShow[show.title] = value,
+      initialComments: show.id == null ? null : commentsByPodcast[show.id!],
+      loadComments: show.id == null
+          ? null
+          : () async => (await api.comments(show.id!))
+                .map(
+                  (json) => CommentData.fromJson(
+                    json,
+                    durationSeconds: show.durationSeconds ?? 0,
+                  ),
+                )
+                .toList(),
+      displayName: widget.displayName,
+      onProgressChanged: (value) {
+        progressByShow[show.title] = value;
+        if (show.id != null) {
+          unawaited(
+            api.saveProgress(
+              show.id!,
+              progressSeconds: ((show.durationSeconds ?? 0) * value).round(),
+              completed: value >= .99,
+            ),
+          );
+        }
+      },
+      onComment: show.id == null
+          ? null
+          : (text, timestampSeconds) async {
+              final saved = await api.createComment(
+                show.id!,
+                text,
+                timestampSeconds: timestampSeconds,
+              );
+              final comment = CommentData.fromJson(
+                saved,
+                durationSeconds: show.durationSeconds ?? 0,
+              );
+              final cached = commentsByPodcast.putIfAbsent(show.id!, () => []);
+              cached.removeWhere((item) => item.id == comment.id);
+              cached.insert(0, comment);
+              return comment;
+            },
       onLikedChanged: (value) => updateLiked(show, value),
       onSavedChanged: (value) => updateSaved(show, value),
       onReport: () => _showReport(show),
@@ -308,6 +613,7 @@ class _ShellState extends State<Shell> {
   Widget build(BuildContext context) {
     final pages = [
       Home(
+        displayName: widget.displayName,
         onPlay: play,
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
@@ -317,18 +623,47 @@ class _ShellState extends State<Shell> {
       ),
       Discover(onOpen: openShow),
       LibraryPage(
+        api: api,
         likedTitles: likedShowTitles,
         savedTitles: savedShowTitles,
         onOpen: openShow,
+        onOpenCreator: _showCreatorProfile,
       ),
       ListenerWalletPage(
         balance: walletBalance,
         onTopUp: () => setState(() => walletBalance += 200000),
       ),
-      Profile(onTheme: widget.onTheme, onLogout: widget.onLogout),
+      Profile(
+        displayName: widget.displayName,
+        onTheme: widget.onTheme,
+        onLogout: widget.onLogout,
+        session: widget.session,
+        onProfileUpdated: widget.onProfileUpdated,
+        onSessionChanged: widget.onSessionRefreshed,
+      ),
     ];
     return Scaffold(
-      body: SafeArea(bottom: false, child: pages[tab]),
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            if (apiLoading) const LinearProgressIndicator(),
+            if (!apiLoading && (apiError != null || usingSamplePodcasts))
+              MaterialBanner(
+                content: Text(
+                  apiError != null ? 'Không tải đầy đủ dữ liệu: $apiError' : 'Chưa có podcast được duyệt. Nội dung mẫu không thể lưu bình luận.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: _loadListenerFlow,
+                    child: const Text('Tải lại'),
+                  ),
+                ],
+              ),
+            Expanded(child: pages[tab]),
+          ],
+        ),
+      ),
       bottomNavigationBar: current == null
           ? nav
           : Column(
@@ -402,37 +737,26 @@ class _ShellState extends State<Shell> {
 class CreatorShell extends StatelessWidget {
   const CreatorShell({
     super.key,
+    required this.displayName,
     required this.onTheme,
     required this.onLogout,
   });
+  final String displayName;
   final VoidCallback onTheme, onLogout;
 
   @override
-  Widget build(BuildContext context) => ActorShell(
-    title: 'Creator Studio',
-    pages: [
-      const CreatorPage(),
-      const RequestPage(),
-      const WalletPage(),
-      Profile(onTheme: onTheme, onLogout: onLogout),
-    ],
-    destinations: const [
-      NavigationDestination(icon: Icon(Icons.mic), label: 'Studio'),
-      NavigationDestination(
-        icon: Icon(Icons.assignment_outlined),
-        label: 'Yeu cau',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.account_balance_wallet_outlined),
-        label: 'Vi',
-      ),
-      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Ca nhan'),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      CreatorMainShell(onTheme: onTheme, onLogout: onLogout);
 }
 
 class AdminShell extends StatelessWidget {
-  const AdminShell({super.key, required this.onTheme, required this.onLogout});
+  const AdminShell({
+    super.key,
+    required this.displayName,
+    required this.onTheme,
+    required this.onLogout,
+  });
+  final String displayName;
   final VoidCallback onTheme, onLogout;
 
   @override
@@ -441,7 +765,7 @@ class AdminShell extends StatelessWidget {
     pages: [
       const AdminPage(),
       const AlertPage(),
-      Profile(onTheme: onTheme, onLogout: onLogout),
+      Profile(displayName: displayName, onTheme: onTheme, onLogout: onLogout),
     ],
     destinations: const [
       NavigationDestination(
@@ -490,6 +814,7 @@ class _ActorShellState extends State<ActorShell> {
 class Home extends StatelessWidget {
   const Home({
     super.key,
+    required this.displayName,
     required this.onPlay,
     required this.onOpen,
     required this.onSearch,
@@ -497,6 +822,7 @@ class Home extends StatelessWidget {
     required this.onNotifications,
     required this.onProfile,
   });
+  final String displayName;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
   final VoidCallback onSearch, onNotifications, onProfile;
@@ -512,19 +838,23 @@ class Home extends StatelessWidget {
               InkWell(
                 onTap: onProfile,
                 borderRadius: BorderRadius.circular(24),
-                child: const CircleAvatar(
+                child: CircleAvatar(
                   backgroundColor: Color(0xFFE0B84A),
-                  child: Text('MA'),
+                  child: Text(
+                    displayName.isEmpty
+                        ? '?'
+                        : displayName.substring(0, 1).toUpperCase(),
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Chao buoi toi,'),
                     Text(
-                      'Minh Anh',
+                      displayName,
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -1027,13 +1357,17 @@ class PlaylistData {
 class LibraryPage extends StatefulWidget {
   const LibraryPage({
     super.key,
+    required this.api,
     required this.likedTitles,
     required this.savedTitles,
     required this.onOpen,
+    required this.onOpenCreator,
   });
+  final ListenerApi api;
   final Set<String> likedTitles;
   final Set<String> savedTitles;
   final ValueChanged<Show> onOpen;
+  final ValueChanged<Show> onOpenCreator;
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -1042,6 +1376,36 @@ class LibraryPage extends StatefulWidget {
 class _LibraryPageState extends State<LibraryPage> {
   String selected = 'liked';
   final customPlaylists = <PlaylistData>[];
+  List<Map<String, dynamic>> followedCreators = const [];
+  bool loadingCreators = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowedCreators();
+  }
+
+  Future<void> _loadFollowedCreators() async {
+    try {
+      final result = await widget.api.follows(size: 100);
+      if (!mounted) return;
+      setState(() {
+        followedCreators = result;
+        loadingCreators = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => loadingCreators = false);
+    }
+  }
+
+  Show _creatorShow(Map<String, dynamic> creator) => Show(
+    '${creator['channelName'] ?? 'Content Creator'}',
+    '${creator['channelName'] ?? 'Content Creator'}',
+    'Creator',
+    '',
+    const [Color(0xFF254A50), Color(0xFF93B4A4)],
+    creatorId: '${creator['creatorProfileId']}',
+  );
 
   List<Show> get liked =>
       shows.where((show) => widget.likedTitles.contains(show.title)).toList();
@@ -1131,6 +1495,7 @@ class _LibraryPageState extends State<LibraryPage> {
             segments: const [
               ButtonSegment(value: 'liked', label: Text('Da thich')),
               ButtonSegment(value: 'playlist', label: Text('Playlist')),
+              ButtonSegment(value: 'creators', label: Text('Content Creator')),
             ],
             selected: {selected},
             onSelectionChanged: (value) =>
@@ -1151,7 +1516,7 @@ class _LibraryPageState extends State<LibraryPage> {
               childCount: liked.length,
             ),
           ),
-      ] else ...[
+      ] else if (selected == 'playlist') ...[
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
@@ -1174,6 +1539,47 @@ class _LibraryPageState extends State<LibraryPage> {
         SliverToBoxAdapter(
           child: PlaylistList(playlists: allPlaylists, onOpen: openPlaylist),
         ),
+      ] else ...[
+        if (loadingCreators)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (followedCreators.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Center(
+                child: Text('Ban chua theo doi Content Creator nao.'),
+              ),
+            ),
+          )
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate((_, index) {
+              final creator = followedCreators[index];
+              final show = _creatorShow(creator);
+              return Card(
+                margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: show.colors.first,
+                    child: const Icon(Icons.mic, color: Colors.white),
+                  ),
+                  title: Text(show.channel),
+                  subtitle: Text(
+                    '${creator['description'] ?? 'Content Creator VietCast'}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => widget.onOpenCreator(show),
+                ),
+              );
+            }, childCount: followedCreators.length),
+          ),
       ],
       const SliverToBoxAdapter(child: SizedBox(height: 24)),
     ],
@@ -1831,29 +2237,71 @@ class ListenerWalletPage extends StatelessWidget {
 }
 
 class Profile extends StatelessWidget {
-  const Profile({super.key, required this.onTheme, required this.onLogout});
+  const Profile({
+    super.key,
+    required this.displayName,
+    required this.onTheme,
+    required this.onLogout,
+    this.session,
+    this.onProfileUpdated,
+    this.onSessionChanged,
+  });
+  final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
+  final AuthSession? session;
+  final ValueChanged<AuthUser>? onProfileUpdated;
+  final ValueChanged<AuthSession>? onSessionChanged;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Ca nhan')),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const CircleAvatar(
+        CircleAvatar(
           radius: 42,
           backgroundColor: Color(0xFFE0B84A),
-          child: Text('MA', style: TextStyle(fontSize: 24)),
+          child: Text(
+            displayName.isEmpty
+                ? '?'
+                : displayName.substring(0, 1).toUpperCase(),
+            style: const TextStyle(fontSize: 24),
+          ),
         ),
         const SizedBox(height: 12),
         Center(
           child: Text(
-            'Minh Anh',
+            displayName,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
         const Center(child: Text('Nguoi nghe lich su Viet Nam')),
         const SizedBox(height: 20),
+        Setting(
+          icon: Icons.account_circle_outlined,
+          title: 'Ho so cua toi',
+          subtitle: 'Xem va chinh sua thong tin, doi mat khau',
+          onTap: session == null
+              ? null
+              : () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProfileEditor(
+                      session: session!,
+                      onProfileUpdated: onProfileUpdated,
+                      onSessionChanged: onSessionChanged,
+                    ),
+                  ),
+                ),
+        ),
+        Setting(
+          icon: Icons.mic_rounded,
+          title: 'Dang ky lam Creator',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreatorRegistrationScreen(),
+            ),
+          ),
+        ),
         Setting(
           icon: Icons.dark_mode_outlined,
           title: 'Giao dien toi',
@@ -1871,61 +2319,260 @@ class Setting extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
   });
   final IconData icon;
   final String title;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String? subtitle;
   @override
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon),
     title: Text(title),
+    subtitle: subtitle == null ? null : Text(subtitle!),
     trailing: const Icon(Icons.chevron_right),
     onTap: onTap,
   );
 }
 
-class AuthPage extends StatefulWidget {
-  const AuthPage({super.key, required this.onAuthenticated});
-  final ValueChanged<MockAccount> onAuthenticated;
+class ProfileEditor extends StatefulWidget {
+  const ProfileEditor({
+    super.key,
+    required this.session,
+    this.onProfileUpdated,
+    this.onSessionChanged,
+  });
+
+  final AuthSession session;
+  final ValueChanged<AuthUser>? onProfileUpdated;
+  final ValueChanged<AuthSession>? onSessionChanged;
+
   @override
-  State<AuthPage> createState() => _AuthState();
+  State<ProfileEditor> createState() => _ProfileEditorState();
 }
 
-class _AuthState extends State<AuthPage> {
-  bool register = false;
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
-  String? error;
+class _ProfileEditorState extends State<ProfileEditor> {
+  late final displayNameController = TextEditingController(
+    text: widget.session.user.displayName,
+  );
+  late final bioController = TextEditingController(
+    text: widget.session.user.bio,
+  );
+  final currentPasswordController = TextEditingController();
+  final newPasswordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+  bool savingProfile = false;
+  bool changingPassword = false;
+  bool obscureCurrent = true;
+  bool obscureNew = true;
 
   @override
   void dispose() {
+    displayNameController.dispose();
+    bioController.dispose();
+    currentPasswordController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _message(String value) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(value)));
+
+  Future<void> _saveProfile() async {
+    _message('API hien tai chua cung cap endpoint cap nhat ho so.');
+  }
+
+  Future<void> _changePassword() async {
+    _message('API hien tai chua cung cap endpoint doi mat khau.');
+  }
+
+  InputDecoration _decoration(String label, {Widget? suffix}) =>
+      InputDecoration(labelText: label, suffixIcon: suffix);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Ho so cua toi')),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      children: [
+        Text(
+          'Thong tin ca nhan',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: displayNameController,
+          decoration: _decoration('Ten hien thi'),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: widget.session.user.username,
+          readOnly: true,
+          decoration: _decoration('Username'),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: widget.session.user.email,
+          readOnly: true,
+          decoration: _decoration('Email'),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: bioController,
+          maxLines: 3,
+          decoration: _decoration('Gioi thieu'),
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: savingProfile ? null : _saveProfile,
+            icon: const Icon(Icons.save_outlined),
+            label: Text(savingProfile ? 'Dang luu...' : 'Luu thay doi'),
+          ),
+        ),
+        const Divider(height: 40),
+        Text('Bao mat', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: currentPasswordController,
+          obscureText: obscureCurrent,
+          decoration: _decoration(
+            'Mat khau hien tai',
+            suffix: IconButton(
+              icon: Icon(
+                obscureCurrent
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+              onPressed: () => setState(() => obscureCurrent = !obscureCurrent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: newPasswordController,
+          obscureText: obscureNew,
+          decoration: _decoration(
+            'Mat khau moi',
+            suffix: IconButton(
+              icon: Icon(
+                obscureNew
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+              onPressed: () => setState(() => obscureNew = !obscureNew),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: confirmPasswordController,
+          obscureText: obscureNew,
+          decoration: _decoration('Xac nhan mat khau moi'),
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            onPressed: changingPassword ? null : _changePassword,
+            icon: const Icon(Icons.lock_reset_outlined),
+            label: Text(changingPassword ? 'Dang cap nhat...' : 'Doi mat khau'),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class AuthPage extends ConsumerStatefulWidget {
+  const AuthPage({super.key, required this.onAuthenticated});
+  final ValueChanged<Account> onAuthenticated;
+  @override
+  ConsumerState<AuthPage> createState() => _AuthState();
+}
+
+class _AuthState extends ConsumerState<AuthPage> {
+  bool register = false;
+  bool loading = false;
+  final usernameController = TextEditingController();
+  final displayNameController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  bool obscurePassword = true;
+  String? error;
+  final authApi = AuthApi();
+
+  @override
+  void dispose() {
+    usernameController.dispose();
+    displayNameController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
-  void login(MockAccount account) => widget.onAuthenticated(account);
+  UserRole _roleFromApi(String role) => switch (role) {
+    'ADMIN' => UserRole.admin,
+    'CREATOR' => UserRole.creator,
+    _ => UserRole.listener,
+  };
 
-  void submit() {
-    if (register) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Dang ky mock thanh cong. Ban co the dang nhap ngay.'),
-        ),
-      );
-      setState(() => register = false);
-      return;
-    }
-    final account = mockAccounts.where(
-      (item) =>
-          item.email == emailController.text.trim() &&
-          item.password == passwordController.text,
+  void _completeLogin(AuthSession session) {
+    widget.onAuthenticated(
+      Account(
+        email: session.user.email,
+        name: session.user.displayName,
+        role: _roleFromApi(session.user.role),
+        session: session,
+      ),
     );
-    if (account.isEmpty) {
-      setState(() => error = 'Email hoac mat khau mock khong dung.');
-      return;
+  }
+
+  Future<void> submit() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      if (register) {
+        final username = usernameController.text.trim();
+        final displayName = displayNameController.text.trim();
+        final email = emailController.text.trim();
+        if (username.length < 3 || displayName.isEmpty || email.isEmpty) {
+          throw const ApiException(
+            'Vui long dien day du thong tin dang ky.',
+            400,
+          );
+        }
+        await authApi.register(
+          username: username,
+          email: email,
+          password: passwordController.text,
+          displayName: displayName,
+        );
+        final session = await authApi.login(
+          identifier: username,
+          password: passwordController.text,
+        );
+        _completeLogin(session);
+      } else {
+        final session = await authApi.login(
+          identifier: emailController.text.trim(),
+          password: passwordController.text,
+        );
+        _completeLogin(session);
+      }
+    } on ApiException catch (exception) {
+      if (mounted) setState(() => error = exception.message);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Khong the ket noi den may chu API.');
+    } finally {
+      if (mounted) setState(() => loading = false);
     }
-    login(account.first);
   }
 
   @override
@@ -1938,15 +2585,45 @@ class _AuthState extends State<AuthPage> {
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 20),
+      if (register) ...[
+        TextField(
+          controller: usernameController,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(labelText: 'Username'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: displayNameController,
+          textInputAction: TextInputAction.next,
+          decoration: const InputDecoration(labelText: 'Ten hien thi'),
+        ),
+        const SizedBox(height: 12),
+      ],
       TextField(
         controller: emailController,
-        decoration: const InputDecoration(labelText: 'Email'),
+        keyboardType: register
+            ? TextInputType.emailAddress
+            : TextInputType.text,
+        decoration: InputDecoration(
+          labelText: register ? 'Email' : 'Username hoac email',
+        ),
       ),
       const SizedBox(height: 12),
       TextField(
         controller: passwordController,
-        obscureText: true,
-        decoration: InputDecoration(labelText: 'Mat khau'),
+        obscureText: obscurePassword,
+        decoration: InputDecoration(
+          labelText: 'Mat khau',
+          suffixIcon: IconButton(
+            tooltip: obscurePassword ? 'Hien mat khau' : 'An mat khau',
+            icon: Icon(
+              obscurePassword
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+            ),
+            onPressed: () => setState(() => obscurePassword = !obscurePassword),
+          ),
+        ),
       ),
       if (error != null) ...[
         const SizedBox(height: 8),
@@ -1973,28 +2650,15 @@ class _AuthState extends State<AuthPage> {
       ],
       const SizedBox(height: 20),
       FilledButton(
-        onPressed: submit,
-        child: Text(register ? 'Dang ky' : 'Dang nhap'),
+        onPressed: loading ? null : submit,
+        child: loading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(register ? 'Dang ky' : 'Dang nhap'),
       ),
-      if (!register) ...[
-        const SizedBox(height: 20),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Dang nhap nhanh bang tai khoan mock'),
-        ),
-        const SizedBox(height: 8),
-        ...mockAccounts.map(
-          (account) => OutlinedButton.icon(
-            onPressed: () => login(account),
-            icon: Icon(switch (account.role) {
-              UserRole.listener => Icons.headphones,
-              UserRole.creator => Icons.mic,
-              UserRole.admin => Icons.admin_panel_settings,
-            }),
-            label: Text('${account.name} (${account.email})'),
-          ),
-        ),
-      ],
       TextButton(
         onPressed: () => setState(() => register = !register),
         child: Text(register ? 'Da co tai khoan?' : 'Chua co tai khoan?'),
@@ -2376,11 +3040,15 @@ class Player extends StatefulWidget {
   const Player({
     super.key,
     required this.show,
+    required this.displayName,
     required this.playing,
     required this.initialProgress,
     required this.initialLiked,
     required this.initialSaved,
+    this.initialComments,
+    this.loadComments,
     required this.onProgressChanged,
+    this.onComment,
     required this.onLikedChanged,
     required this.onSavedChanged,
     required this.onReport,
@@ -2389,10 +3057,14 @@ class Player extends StatefulWidget {
     required this.onToggle,
   });
   final Show show;
+  final String displayName;
   final bool playing;
   final double initialProgress;
   final bool initialLiked, initialSaved;
+  final List<CommentData>? initialComments;
+  final Future<List<CommentData>> Function()? loadComments;
   final ValueChanged<double> onProgressChanged;
+  final Future<CommentData> Function(String, int)? onComment;
   final ValueChanged<bool> onLikedChanged, onSavedChanged;
   final VoidCallback onReport, onMembership, onCreatorProfile;
   final VoidCallback onToggle;
@@ -2406,14 +3078,46 @@ class _PlayerState extends State<Player> {
   late double progress = widget.initialProgress;
   late bool liked = widget.initialLiked;
   final commentController = TextEditingController();
-  final comments = <CommentData>[
-    const CommentData('Thu Ha', 'Mot lat cat lich su rat dang nghe.', '02:35'),
-    const CommentData(
-      'Quang Minh',
-      'Cach ke chuyen gan gui va nhieu tu lieu.',
-      '08:12',
-    ),
-  ];
+  late final comments = List<CommentData>.of(
+    widget.initialComments ?? const [],
+  );
+  bool _sendingComment = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadComments());
+  }
+
+  Future<void> _loadComments() async {
+    final load = widget.loadComments;
+    if (load == null) return;
+    final idsAtStart = comments.map((comment) => comment.id).toSet();
+    try {
+      final loaded = await load();
+      if (!mounted) return;
+      setState(() {
+        final ids = loaded.map((c) => c.id).toSet();
+        final recent = comments
+            .where(
+              (c) =>
+                  c.id != null &&
+                  !idsAtStart.contains(c.id) &&
+                  !ids.contains(c.id),
+            )
+            .toList();
+        comments
+          ..clear()
+          ..addAll([...recent, ...loaded]);
+      });
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không tải được bình luận: $error')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -2432,17 +3136,62 @@ class _PlayerState extends State<Player> {
     setProgress(progress + amount);
   }
 
-  void submitComment() {
+  Future<void> submitComment() async {
     final text = commentController.text.trim();
     if (text.isEmpty) return;
-    setState(() {
-      comments.insert(0, CommentData('Minh Anh', text, _timestamp));
+    if (await addComment(text) &&
+        mounted &&
+        commentController.text.trim() == text) {
       commentController.clear();
-    });
+    }
+  }
+
+  Future<bool> addComment(String text) async {
+    if (_sendingComment || text.trim().isEmpty) return false;
+    final send = widget.onComment;
+    if (send == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Podcast mẫu chưa có ID trên server. Hãy chọn podcast đã được duyệt từ backend.',
+          ),
+        ),
+      );
+      return false;
+    }
+    final seconds = (progress * _durationSeconds).floor();
+    setState(() => _sendingComment = true);
+    try {
+      final saved = await send(text.trim(), seconds);
+      if (!mounted) return false;
+      setState(() {
+        comments.removeWhere((comment) => comment.id == saved.id);
+        comments.insert(0, saved);
+      });
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Chưa lưu được bình luận: $error')),
+        );
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _sendingComment = false);
+    }
+  }
+
+  int get _durationSeconds {
+    if (widget.show.durationSeconds != null) {
+      return widget.show.durationSeconds!;
+    }
+    return widget.show.duration
+        .split(':')
+        .fold<int>(0, (total, part) => total * 60 + (int.tryParse(part) ?? 0));
   }
 
   String get _timestamp {
-    final seconds = (progress * 32 * 60).round();
+    final seconds = (progress * _durationSeconds).floor();
     return _formatDuration(seconds);
   }
 
@@ -2453,7 +3202,11 @@ class _PlayerState extends State<Player> {
 
   CommentData? get timelineComment {
     final nearby = comments
-        .where((comment) => (comment.position - progress).abs() <= .04)
+        .where(
+          (comment) =>
+              comment.time.isNotEmpty &&
+              (comment.position - progress).abs() <= .04,
+        )
         .toList();
     if (nearby.isEmpty) return null;
     // Comments are inserted newest-first, so the first one wins when a
@@ -2465,12 +3218,7 @@ class _PlayerState extends State<Player> {
     context: context,
     isScrollControlled: true,
     backgroundColor: const Color(0xFF181818),
-    builder: (_) => CommentsPanel(
-      comments: comments,
-      onSubmit: (text) => setState(
-        () => comments.insert(0, CommentData('Minh Anh', text, _timestamp)),
-      ),
-    ),
+    builder: (_) => CommentsPanel(comments: comments, onSubmit: addComment),
   );
 
   void _showPlaylist() => showModalBottomSheet(
@@ -2626,9 +3374,9 @@ class _PlayerState extends State<Player> {
                   padding: EdgeInsets.symmetric(horizontal: 12),
                   child: Text('|', style: TextStyle(color: Colors.white38)),
                 ),
-                const Text(
-                  '32:18',
-                  style: TextStyle(
+                Text(
+                  _formatDuration(_durationSeconds),
+                  style: const TextStyle(
                     color: Colors.white54,
                     fontSize: 30,
                     fontWeight: FontWeight.w700,
@@ -2674,7 +3422,7 @@ class _PlayerState extends State<Player> {
                 max: 1,
                 onChanged: setProgress,
                 semanticFormatterCallback: (value) =>
-                    'Vi tri phat ${_formatDuration(value * 32 * 60)}',
+                    'Vi tri phat ${_formatDuration(value * _durationSeconds)}',
               ),
             ),
             const SizedBox(height: 12),
@@ -2713,6 +3461,7 @@ class _PlayerState extends State<Player> {
             _CommentComposer(
               controller: commentController,
               onSubmit: submitComment,
+              sending: _sendingComment,
             ),
             const SizedBox(height: 18),
             Row(
@@ -2777,9 +3526,14 @@ class _PlayerState extends State<Player> {
 }
 
 class _CommentComposer extends StatelessWidget {
-  const _CommentComposer({required this.controller, required this.onSubmit});
+  const _CommentComposer({
+    required this.controller,
+    required this.onSubmit,
+    this.sending = false,
+  });
   final TextEditingController controller;
   final VoidCallback onSubmit;
+  final bool sending;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -2794,13 +3548,31 @@ class _CommentComposer extends StatelessWidget {
         Expanded(
           child: TextField(
             controller: controller,
+            enabled: !sending,
             style: const TextStyle(color: Colors.white),
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => onSubmit(),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Comment...',
-              hintStyle: TextStyle(color: Colors.white70),
-              border: InputBorder.none,
+              hintStyle: const TextStyle(color: Colors.white54),
+              filled: true,
+              fillColor: const Color(0xFF191717),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                borderSide: const BorderSide(color: Color(0xFF5A504B)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                borderSide: const BorderSide(color: Color(0xFF5A504B)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+                borderSide: const BorderSide(color: Color(0xFFB3261E)),
+              ),
               isDense: true,
             ),
           ),
@@ -2819,6 +3591,16 @@ class _CommentComposer extends StatelessWidget {
               child: Text(emoji, style: const TextStyle(fontSize: 22)),
             ),
           ),
+        IconButton(
+          onPressed: sending ? null : onSubmit,
+          tooltip: 'Gui binh luan',
+          visualDensity: VisualDensity.compact,
+          style: IconButton.styleFrom(
+            backgroundColor: const Color(0xFFB3261E),
+            foregroundColor: Colors.white,
+          ),
+          icon: const Icon(Icons.send_rounded, size: 18),
+        ),
       ],
     ),
   );
@@ -2857,15 +3639,47 @@ class _PlayerAction extends StatelessWidget {
 }
 
 class CommentData {
-  const CommentData(this.name, this.text, this.time);
+  const CommentData(
+    this.name,
+    this.text,
+    this.time, {
+    this.id,
+    this.durationSeconds = 1920,
+  });
   final String name, text, time;
+  final String? id;
+  final int durationSeconds;
+
+  factory CommentData.fromJson(
+    Map<String, dynamic> json, {
+    required int durationSeconds,
+  }) {
+    final id = json['commentId']?.toString();
+    if (id == null || id.isEmpty) {
+      throw const FormatException('Server không trả về ID bình luận đã lưu.');
+    }
+    final seconds = (json['timestampSeconds'] as num?)?.toInt();
+    final time = seconds == null
+        ? ''
+        : '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+    return CommentData(
+      '${json['displayName'] ?? json['username'] ?? 'Listener'}',
+      '${json['content'] ?? ''}',
+      time,
+      id: id,
+      durationSeconds: durationSeconds,
+    );
+  }
 
   double get position {
     final parts = time.split(':');
-    final seconds = parts.length == 2
-        ? (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0)
-        : 0;
-    return (seconds / (32 * 60)).clamp(0.02, .9);
+    final seconds = parts.fold<int>(
+      0,
+      (total, part) => total * 60 + (int.tryParse(part) ?? 0),
+    );
+    return durationSeconds <= 0
+        ? 0
+        : (seconds / durationSeconds).clamp(0.0, 1.0);
   }
 }
 
@@ -2898,7 +3712,7 @@ class CommentsPanel extends StatefulWidget {
     required this.onSubmit,
   });
   final List<CommentData> comments;
-  final ValueChanged<String> onSubmit;
+  final Future<bool> Function(String) onSubmit;
 
   @override
   State<CommentsPanel> createState() => _CommentsPanelState();
@@ -2913,11 +3727,20 @@ class _CommentsPanelState extends State<CommentsPanel> {
     super.dispose();
   }
 
-  void submit() {
+  bool sending = false;
+
+  Future<void> submit() async {
     final text = controller.text.trim();
-    if (text.isEmpty) return;
-    widget.onSubmit(text);
-    setState(() => controller.clear());
+    if (text.isEmpty || sending) return;
+    setState(() => sending = true);
+    try {
+      final saved = await widget.onSubmit(text);
+      if (saved && mounted && controller.text.trim() == text) {
+        controller.clear();
+      }
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
   }
 
   @override
@@ -2958,7 +3781,11 @@ class _CommentsPanelState extends State<CommentsPanel> {
             ),
           ),
           const SizedBox(height: 8),
-          _CommentComposer(controller: controller, onSubmit: submit),
+          _CommentComposer(
+            controller: controller,
+            onSubmit: submit,
+            sending: sending,
+          ),
         ],
       ),
     ),
@@ -3143,24 +3970,93 @@ class _ReportPanelState extends State<ReportPanel> {
   );
 }
 
-class CreatorProfilePanel extends StatelessWidget {
+class CreatorProfilePanel extends StatefulWidget {
   const CreatorProfilePanel({
     super.key,
     required this.show,
+    required this.api,
+    required this.onMembership,
     required this.onOpen,
   });
   final Show show;
+  final ListenerApi api;
+  final VoidCallback onMembership;
   final ValueChanged<Show> onOpen;
+
+  @override
+  State<CreatorProfilePanel> createState() => _CreatorProfilePanelState();
+}
+
+class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
+  bool following = false;
+  bool loadingFollow = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFollowState();
+  }
+
+  Future<void> _loadFollowState() async {
+    final creatorId = widget.show.creatorId;
+    if (creatorId == null) {
+      if (mounted) setState(() => loadingFollow = false);
+      return;
+    }
+    try {
+      final follows = await widget.api.follows(size: 100);
+      if (!mounted) return;
+      setState(() {
+        following = follows.any(
+          (item) => '${item['creatorProfileId']}' == creatorId,
+        );
+        loadingFollow = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => loadingFollow = false);
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final creatorId = widget.show.creatorId;
+    if (creatorId == null || loadingFollow) return;
+    setState(() => loadingFollow = true);
+    try {
+      if (following) {
+        await widget.api.unfollow(creatorId);
+      } else {
+        await widget.api.follow(creatorId);
+      }
+      if (!mounted) return;
+      setState(() {
+        following = !following;
+        loadingFollow = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            following ? 'Da theo doi creator.' : 'Da bo theo doi creator.',
+          ),
+        ),
+      );
+    } catch (exception) {
+      if (!mounted) return;
+      setState(() => loadingFollow = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Khong the cap nhat theo doi: $exception')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final creatorShows = shows
-        .where((item) => item.channel == show.channel)
+        .where((item) => item.channel == widget.show.channel)
         .toList();
     return Scaffold(
       backgroundColor: const Color(0xFF181818),
       appBar: AppBar(
-        title: Text(show.channel),
+        title: Text(widget.show.channel),
         backgroundColor: const Color(0xFF181818),
         foregroundColor: Colors.white,
       ),
@@ -3171,7 +4067,7 @@ class CreatorProfilePanel extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 34,
-                backgroundColor: show.colors.first,
+                backgroundColor: widget.show.colors.first,
                 child: const Icon(Icons.mic, color: Colors.white, size: 28),
               ),
               const SizedBox(width: 14),
@@ -3180,7 +4076,7 @@ class CreatorProfilePanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      show.channel,
+                      widget.show.channel,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 22,
@@ -3195,6 +4091,36 @@ class CreatorProfilePanel extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: widget.show.creatorId == null ? null : _toggleFollow,
+              icon: loadingFollow
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(following ? Icons.person_remove : Icons.person_add),
+              label: Text(following ? 'Dang theo doi' : 'Theo doi creator'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.show.creatorId == null
+                  ? null
+                  : widget.onMembership,
+              icon: const Icon(Icons.workspace_premium_outlined),
+              label: const Text('Dang ky thanh vien'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -3222,7 +4148,7 @@ class CreatorProfilePanel extends StatelessWidget {
                 Icons.play_circle_outline,
                 color: Colors.white,
               ),
-              onTap: () => onOpen(audio),
+              onTap: () => widget.onOpen(audio),
             ),
           ),
           const SizedBox(height: 12),
@@ -3450,31 +4376,47 @@ class Comment extends StatelessWidget {
   });
   final String name, text, time;
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(top: 8),
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    decoration: BoxDecoration(
-      color: Colors.white.withAlpha(24),
-      border: Border.all(color: Colors.white24),
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: ListTile(
-      contentPadding: EdgeInsets.zero,
-      dense: true,
-      leading: const CircleAvatar(
-        backgroundColor: Color(0xFFFFD8D2),
-        foregroundColor: Color(0xFF733B35),
-        child: Icon(Icons.person),
-      ),
-      title: Text(
-        '$name  $time',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final foreground = isDark ? Colors.white : theme.colorScheme.onSurface;
+    final mutedForeground = isDark
+        ? Colors.white70
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withAlpha(24)
+            : theme.colorScheme.surfaceContainerHighest,
+        border: Border.all(
+          color: isDark
+              ? Colors.white24
+              : theme.colorScheme.outline.withAlpha(90),
         ),
+        borderRadius: BorderRadius.circular(16),
       ),
-      subtitle: Text(text, style: const TextStyle(color: Colors.white70)),
-      trailing: const Icon(Icons.favorite_border, color: Colors.white70),
-    ),
-  );
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        leading: CircleAvatar(
+          backgroundColor: isDark
+              ? const Color(0xFFFFD8D2)
+              : theme.colorScheme.primaryContainer,
+          foregroundColor: isDark
+              ? const Color(0xFF733B35)
+              : theme.colorScheme.onPrimaryContainer,
+          child: const Icon(Icons.person),
+        ),
+        title: Text(
+          '$name  $time',
+          style: TextStyle(color: foreground, fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(text, style: TextStyle(color: mutedForeground)),
+        trailing: Icon(Icons.favorite_border, color: mutedForeground),
+      ),
+    );
+  }
 }

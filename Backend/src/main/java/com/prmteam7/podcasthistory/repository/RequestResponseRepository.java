@@ -12,4 +12,5 @@ public interface RequestResponseRepository extends JpaRepository<RequestResponse
     Optional<RequestResponse> findTopBySeriesRequest_SeriesRequestIdOrderByCreatedAtDesc(UUID seriesRequestId);
 
     java.util.List<RequestResponse> findAllBySeriesRequest_SeriesRequestIdIn(java.util.Collection<UUID> ids);
+  Optional<RequestResponse> findBySeriesRequest_SeriesRequestId(UUID requestId);
 }

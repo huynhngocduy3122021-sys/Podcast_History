@@ -31,4 +31,5 @@ public interface PaymentRepository
 
   @org.springframework.data.jpa.repository.Query("select p from Payment p where p.subscription.subscriptionId in :ids and not exists (select newer.paymentId from Payment newer where newer.subscription = p.subscription and (newer.createdAt > p.createdAt or (newer.createdAt = p.createdAt and newer.paymentId > p.paymentId)))")
   java.util.List<Payment> findLatestBySubscriptions(@org.springframework.data.repository.query.Param("ids") java.util.Collection<UUID> ids);
+  Optional<Payment> findFirstByContractStage_ContractStageId(UUID stageId);
 }
