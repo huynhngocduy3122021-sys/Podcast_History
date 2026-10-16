@@ -79,6 +79,24 @@ class _AppState extends State<VietCastApp> {
                     );
                   }
                 }),
+                onProfileUpdated: (user) => setState(() {
+                  final current = account;
+                  if (current != null) {
+                    account = Account(
+                      email: user.email,
+                      name: user.displayName,
+                      role: current.role,
+                      session: AuthSession(
+                        user: user,
+                        accessToken: current.session.accessToken,
+                        refreshToken: current.session.refreshToken,
+                        tokenType: current.session.tokenType,
+                        expiresIn: current.session.expiresIn,
+                        refreshExpiresIn: current.session.refreshExpiresIn,
+                      ),
+                    );
+                  }
+                }),
                 displayName: account!.name,
                 onTheme: toggleTheme,
                 onLogout: logout,
@@ -176,12 +194,14 @@ class Shell extends StatefulWidget {
     super.key,
     required this.session,
     this.onSessionRefreshed,
+    this.onProfileUpdated,
     required this.displayName,
     required this.onTheme,
     required this.onLogout,
   });
   final AuthSession session;
   final ValueChanged<AuthSession>? onSessionRefreshed;
+  final ValueChanged<AuthUser>? onProfileUpdated;
   final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
@@ -516,6 +536,7 @@ class _ShellState extends State<Shell> {
       builder: (_) => CreatorProfilePanel(
         show: creatorShow,
         api: api,
+        onMembership: () => _showMembership(creatorShow),
         onOpen: (audio) {
           Navigator.pop(context);
           openShow(audio);
@@ -616,6 +637,9 @@ class _ShellState extends State<Shell> {
         displayName: widget.displayName,
         onTheme: widget.onTheme,
         onLogout: widget.onLogout,
+        session: widget.session,
+        onProfileUpdated: widget.onProfileUpdated,
+        onSessionChanged: widget.onSessionRefreshed,
       ),
     ];
     return Scaffold(
@@ -2218,10 +2242,16 @@ class Profile extends StatelessWidget {
     required this.displayName,
     required this.onTheme,
     required this.onLogout,
+    this.session,
+    this.onProfileUpdated,
+    this.onSessionChanged,
   });
   final String displayName;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
+  final AuthSession? session;
+  final ValueChanged<AuthUser>? onProfileUpdated;
+  final ValueChanged<AuthSession>? onSessionChanged;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Ca nhan')),
@@ -2248,6 +2278,22 @@ class Profile extends StatelessWidget {
         const Center(child: Text('Nguoi nghe lich su Viet Nam')),
         const SizedBox(height: 20),
         Setting(
+          icon: Icons.account_circle_outlined,
+          title: 'Ho so cua toi',
+          subtitle: 'Xem va chinh sua thong tin, doi mat khau',
+          onTap: session == null
+              ? null
+              : () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ProfileEditor(
+                      session: session!,
+                      onProfileUpdated: onProfileUpdated,
+                      onSessionChanged: onSessionChanged,
+                    ),
+                  ),
+                ),
+        ),
+        Setting(
           icon: Icons.mic_rounded,
           title: 'Dang ky lam Creator',
           onTap: () => Navigator.of(context).push(
@@ -2273,16 +2319,171 @@ class Setting extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
   });
   final IconData icon;
   final String title;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final String? subtitle;
   @override
   Widget build(BuildContext context) => ListTile(
     leading: Icon(icon),
     title: Text(title),
+    subtitle: subtitle == null ? null : Text(subtitle!),
     trailing: const Icon(Icons.chevron_right),
     onTap: onTap,
+  );
+}
+
+class ProfileEditor extends StatefulWidget {
+  const ProfileEditor({
+    super.key,
+    required this.session,
+    this.onProfileUpdated,
+    this.onSessionChanged,
+  });
+
+  final AuthSession session;
+  final ValueChanged<AuthUser>? onProfileUpdated;
+  final ValueChanged<AuthSession>? onSessionChanged;
+
+  @override
+  State<ProfileEditor> createState() => _ProfileEditorState();
+}
+
+class _ProfileEditorState extends State<ProfileEditor> {
+  late final displayNameController = TextEditingController(
+    text: widget.session.user.displayName,
+  );
+  late final bioController = TextEditingController(
+    text: widget.session.user.bio,
+  );
+  final currentPasswordController = TextEditingController();
+  final newPasswordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+  bool savingProfile = false;
+  bool changingPassword = false;
+  bool obscureCurrent = true;
+  bool obscureNew = true;
+
+  @override
+  void dispose() {
+    displayNameController.dispose();
+    bioController.dispose();
+    currentPasswordController.dispose();
+    newPasswordController.dispose();
+    confirmPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _message(String value) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(value)));
+
+  Future<void> _saveProfile() async {
+    _message('API hien tai chua cung cap endpoint cap nhat ho so.');
+  }
+
+  Future<void> _changePassword() async {
+    _message('API hien tai chua cung cap endpoint doi mat khau.');
+  }
+
+  InputDecoration _decoration(String label, {Widget? suffix}) =>
+      InputDecoration(labelText: label, suffixIcon: suffix);
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Ho so cua toi')),
+    body: ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      children: [
+        Text(
+          'Thong tin ca nhan',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: displayNameController,
+          decoration: _decoration('Ten hien thi'),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: widget.session.user.username,
+          readOnly: true,
+          decoration: _decoration('Username'),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          initialValue: widget.session.user.email,
+          readOnly: true,
+          decoration: _decoration('Email'),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: bioController,
+          maxLines: 3,
+          decoration: _decoration('Gioi thieu'),
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: savingProfile ? null : _saveProfile,
+            icon: const Icon(Icons.save_outlined),
+            label: Text(savingProfile ? 'Dang luu...' : 'Luu thay doi'),
+          ),
+        ),
+        const Divider(height: 40),
+        Text('Bao mat', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: currentPasswordController,
+          obscureText: obscureCurrent,
+          decoration: _decoration(
+            'Mat khau hien tai',
+            suffix: IconButton(
+              icon: Icon(
+                obscureCurrent
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+              onPressed: () => setState(() => obscureCurrent = !obscureCurrent),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: newPasswordController,
+          obscureText: obscureNew,
+          decoration: _decoration(
+            'Mat khau moi',
+            suffix: IconButton(
+              icon: Icon(
+                obscureNew
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+              onPressed: () => setState(() => obscureNew = !obscureNew),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: confirmPasswordController,
+          obscureText: obscureNew,
+          decoration: _decoration('Xac nhan mat khau moi'),
+        ),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton.icon(
+            onPressed: changingPassword ? null : _changePassword,
+            icon: const Icon(Icons.lock_reset_outlined),
+            label: Text(changingPassword ? 'Dang cap nhat...' : 'Doi mat khau'),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -3774,10 +3975,12 @@ class CreatorProfilePanel extends StatefulWidget {
     super.key,
     required this.show,
     required this.api,
+    required this.onMembership,
     required this.onOpen,
   });
   final Show show;
   final ListenerApi api;
+  final VoidCallback onMembership;
   final ValueChanged<Show> onOpen;
 
   @override
@@ -3902,6 +4105,21 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                     )
                   : Icon(following ? Icons.person_remove : Icons.person_add),
               label: Text(following ? 'Dang theo doi' : 'Theo doi creator'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.show.creatorId == null
+                  ? null
+                  : widget.onMembership,
+              icon: const Icon(Icons.workspace_premium_outlined),
+              label: const Text('Dang ky thanh vien'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
+              ),
             ),
           ),
           const SizedBox(height: 24),

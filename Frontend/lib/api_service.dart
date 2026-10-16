@@ -25,6 +25,8 @@ class AuthUser {
     required this.email,
     required this.displayName,
     required this.role,
+    this.avatarUrl = '',
+    this.bio = '',
   });
 
   final String id;
@@ -32,6 +34,8 @@ class AuthUser {
   final String email;
   final String displayName;
   final String role;
+  final String avatarUrl;
+  final String bio;
 
   factory AuthUser.fromJson(Map<String, dynamic> json) => AuthUser(
     id: '${json['id'] ?? json['userId'] ?? ''}',
@@ -39,6 +43,8 @@ class AuthUser {
     email: '${json['email'] ?? ''}',
     displayName: '${json['displayName'] ?? ''}',
     role: '${json['role'] ?? 'LISTENER'}',
+    avatarUrl: '${json['avatarUrl'] ?? ''}',
+    bio: '${json['bio'] ?? ''}',
   );
 }
 
