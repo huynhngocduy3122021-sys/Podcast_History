@@ -336,8 +336,12 @@ public class CreatorWalletService {
     private WalletBalanceResponse toBalanceResponse(UserWallet wallet) {
         BigDecimal available = wallet.getBalance() == null ? ZERO : wallet.getBalance();
         BigDecimal held = wallet.getHeldBalance() == null ? ZERO : wallet.getHeldBalance();
+        BigDecimal pendingRelease = payoutPaymentRepository
+                .sumPaidApprovedMilestonesPendingRelease(
+                        wallet.getUser().getUserId(), wallet.getCurrency());
         return new WalletBalanceResponse(
-                wallet.getUserWalletId(), available, held, available.add(held), wallet.getCurrency());
+                wallet.getUserWalletId(), available, held, available.add(held),
+                pendingRelease == null ? ZERO : pendingRelease, wallet.getCurrency());
     }
 
     private WithdrawalResponse toWithdrawalResponse(WithdrawalRequest withdrawal) {

@@ -10,9 +10,6 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "\"Milestone_revision\"", uniqueConstraints = {
@@ -20,9 +17,6 @@ import lombok.Setter;
 }, indexes = {
         @Index(name = "idx_milestone_revision_stage_id", columnList = "contract_stage_id")
 })
-@Getter
-@Setter
-@NoArgsConstructor
 public class MilestoneRevision extends BaseEntity {
 
     @jakarta.persistence.Id
@@ -42,6 +36,19 @@ public class MilestoneRevision extends BaseEntity {
 
     @Column(name = "reason", nullable = false, columnDefinition = "text")
     private String reason;
+
+    public MilestoneRevision() {}
+
+    public UUID getMilestoneRevisionId() { return milestoneRevisionId; }
+    public void setMilestoneRevisionId(UUID id) { this.milestoneRevisionId = id; }
+    public ContractStage getContractStage() { return contractStage; }
+    public void setContractStage(ContractStage contractStage) { this.contractStage = contractStage; }
+    public AppUser getRequestedBy() { return requestedBy; }
+    public void setRequestedBy(AppUser requestedBy) { this.requestedBy = requestedBy; }
+    public Integer getRevisionNumber() { return revisionNumber; }
+    public void setRevisionNumber(Integer revisionNumber) { this.revisionNumber = revisionNumber; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 
     @PrePersist
     private void assignId() {

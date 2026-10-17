@@ -13,7 +13,13 @@ import com.prmteam7.podcasthistory.model.UserWallet;
 
 public interface UserWalletRepository extends JpaRepository<UserWallet, UUID> {
 
+    Optional<UserWallet> findByUser_UserId(UUID userId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select wallet from UserWallet wallet where wallet.user.userId = :userId")
     Optional<UserWallet> findByUserIdForUpdate(@Param("userId") UUID userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select wallet from UserWallet wallet where wallet.userWalletId = :id")
+    Optional<UserWallet> lockById(@Param("id") UUID id);
 }
