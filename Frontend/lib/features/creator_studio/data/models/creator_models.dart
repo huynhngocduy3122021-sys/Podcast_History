@@ -2,19 +2,9 @@ import 'package:podcast_history/core/widgets/status_chip.dart';
 
 // --- ENUMS & STATUSES ---
 
-enum CreatorStatus {
-  pending,
-  approved,
-  rejected,
-}
+enum CreatorStatus { notRegistered, pending, approved, rejected }
 
-enum PodcastStatus {
-  draft,
-  aiModerating,
-  pendingAdmin,
-  published,
-  rejected,
-}
+enum PodcastStatus { draft, aiModerating, pendingAdmin, published, rejected }
 
 enum CustomRequestStatus {
   sent,
@@ -28,19 +18,9 @@ enum CustomRequestStatus {
   disputed,
 }
 
-enum TransactionType {
-  requestEarning,
-  membership,
-  withdrawal,
-  refund,
-}
+enum TransactionType { requestEarning, membership, withdrawal, refund }
 
-enum TransactionStatus {
-  success,
-  processing,
-  holding,
-  failed,
-}
+enum TransactionStatus { success, processing, holding, failed }
 
 // --- CREATOR PROFILE ---
 
@@ -245,10 +225,7 @@ class RequestMilestone {
     required this.isApproved,
   });
 
-  RequestMilestone copyWith({
-    bool? isCompleted,
-    bool? isApproved,
-  }) {
+  RequestMilestone copyWith({bool? isCompleted, bool? isApproved}) {
     return RequestMilestone(
       id: id,
       title: title,
@@ -478,10 +455,7 @@ class StudioComment {
     this.likesCount = 0,
   });
 
-  StudioComment copyWith({
-    bool? isPinned,
-    bool? isHidden,
-  }) {
+  StudioComment copyWith({bool? isPinned, bool? isHidden}) {
     return StudioComment(
       id: id,
       podcastTitle: podcastTitle,
@@ -576,4 +550,3 @@ class CreatorSeries {
     );
   }
 }
-

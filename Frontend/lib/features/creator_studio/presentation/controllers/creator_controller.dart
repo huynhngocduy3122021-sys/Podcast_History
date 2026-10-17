@@ -40,19 +40,13 @@ class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
 
   Future<void> submitRegistration({
     required String channelName,
-    required String handle,
     required String bio,
-    required String category,
     required String socialLink,
-    required String sampleVoiceName,
   }) async {
     await _repo.submitRegistration(
       channelName: channelName,
-      handle: handle,
       bio: bio,
-      category: category,
       socialLink: socialLink,
-      sampleVoiceName: sampleVoiceName,
     );
     await loadProfile();
   }

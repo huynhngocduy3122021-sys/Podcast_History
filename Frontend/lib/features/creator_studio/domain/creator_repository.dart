@@ -5,11 +5,8 @@ abstract class CreatorRepository {
   Future<CreatorProfile> getProfile();
   Future<void> submitRegistration({
     required String channelName,
-    required String handle,
     required String bio,
-    required String category,
     required String socialLink,
-    required String sampleVoiceName,
   });
   Future<void> upgradeToPremium();
 

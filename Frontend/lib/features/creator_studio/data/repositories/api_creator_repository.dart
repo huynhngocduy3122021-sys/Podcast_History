@@ -24,7 +24,7 @@ class ApiCreatorRepository implements CreatorRepository {
     maxFreePodcasts: 5,
     currentPodcastCount: 0,
     followersCount: 0,
-    status: CreatorStatus.rejected,
+    status: CreatorStatus.notRegistered,
   );
   final List<CreatorPodcast> _cachedPodcasts = [];
   final List<PodcastRequest> _cachedRequests = [];
@@ -62,17 +62,21 @@ class ApiCreatorRepository implements CreatorRepository {
           case 'PENDING':
             creatorStatus = CreatorStatus.pending;
             break;
-          default:
+          case 'REJECTED':
             creatorStatus = CreatorStatus.rejected;
+            break;
+          default:
+            creatorStatus = CreatorStatus.notRegistered;
         }
 
         final rawChannelName = appData['channelName'] as String?;
         final rawUsername = appData['username'] as String?;
-        final channelName = (rawChannelName != null && rawChannelName.isNotEmpty)
+        final channelName =
+            (rawChannelName != null && rawChannelName.isNotEmpty)
             ? rawChannelName
             : ((rawUsername != null && rawUsername.isNotEmpty)
-                ? rawUsername
-                : _cachedProfile.name);
+                  ? rawUsername
+                  : _cachedProfile.name);
         final handle = (rawUsername != null && rawUsername.isNotEmpty)
             ? '@$rawUsername'
             : _cachedProfile.handle;
@@ -91,17 +95,9 @@ class ApiCreatorRepository implements CreatorRepository {
     } on ApiException catch (e) {
       if (e.statusCode == 404) {
         _cachedProfile = _cachedProfile.copyWith(
-          status: CreatorStatus.rejected,
+          status: CreatorStatus.notRegistered,
         );
       }
-    } catch (_) {}
-
-    // Count actual podcasts from API
-    try {
-      final podcasts = await getPodcasts();
-      _cachedProfile = _cachedProfile.copyWith(
-        currentPodcastCount: podcasts.length,
-      );
     } catch (_) {}
 
     return _cachedProfile;
@@ -110,15 +106,12 @@ class ApiCreatorRepository implements CreatorRepository {
   @override
   Future<void> submitRegistration({
     required String channelName,
-    required String handle,
     required String bio,
-    required String category,
     required String socialLink,
-    required String sampleVoiceName,
   }) async {
     final body = {
       'channelName': channelName,
-      'introduction': '$bio\nLĩnh vực: $category\nMẫu giọng: $sampleVoiceName',
+      'introduction': bio,
       'portfolioUrl': socialLink.isNotEmpty ? socialLink : null,
     };
 
@@ -128,7 +121,6 @@ class ApiCreatorRepository implements CreatorRepository {
 
     _cachedProfile = _cachedProfile.copyWith(
       name: channelName,
-      handle: handle,
       bio: bio,
       status: CreatorStatus.pending,
       rejectReason: null,
@@ -205,7 +197,8 @@ class ApiCreatorRepository implements CreatorRepository {
                 );
                 if (refRes is List && refRes.isNotEmpty) {
                   final firstRef = refRes.first as Map<String, dynamic>;
-                  final citation = firstRef['citationText']?.toString() ??
+                  final citation =
+                      firstRef['citationText']?.toString() ??
                       firstRef['title']?.toString() ??
                       '';
                   if (citation.isNotEmpty) {
@@ -327,7 +320,8 @@ class ApiCreatorRepository implements CreatorRepository {
         audioFileName != null &&
         mediaBytes != null &&
         mediaBytes.isNotEmpty) {
-      final isVideo = audioFileName.toLowerCase().endsWith('.mp4') ||
+      final isVideo =
+          audioFileName.toLowerCase().endsWith('.mp4') ||
           audioFileName.toLowerCase().endsWith('.mov') ||
           audioFileName.toLowerCase().endsWith('.mkv') ||
           audioFileName.toLowerCase().endsWith('.webm');
@@ -475,7 +469,8 @@ class ApiCreatorRepository implements CreatorRepository {
 
     // 3.5 If video podcast and real media bytes provided, upload video file to backend
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final isVideo = audioFileName.toLowerCase().endsWith('.mp4') ||
+      final isVideo =
+          audioFileName.toLowerCase().endsWith('.mp4') ||
           audioFileName.toLowerCase().endsWith('.mov') ||
           audioFileName.toLowerCase().endsWith('.mkv') ||
           audioFileName.toLowerCase().endsWith('.webm');
@@ -815,10 +810,9 @@ class ApiCreatorRepository implements CreatorRepository {
       final res = await _apiClient.get(ApiEndpoints.creatorWallet);
       if (res is Map<String, dynamic>) {
         _availableBalance =
-            (res['available'] as num?)?.toInt() ?? _availableBalance;
-        _pendingRelease = (res['pending'] as num?)?.toInt() ?? _pendingRelease;
+            (res['availableBalance'] as num?)?.toInt() ?? _availableBalance;
         _holdingWithdraw =
-            (res['holding'] as num?)?.toInt() ?? _holdingWithdraw;
+            (res['heldBalance'] as num?)?.toInt() ?? _holdingWithdraw;
       }
     } catch (_) {}
 
@@ -835,7 +829,29 @@ class ApiCreatorRepository implements CreatorRepository {
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorTransactions);
       if (res is List) {
-        // Map if backend returns list
+        final transactions = res.whereType<Map<String, dynamic>>().map((item) {
+          final status = (item['status']?.toString() ?? '').toUpperCase();
+          final transactionStatus = switch (status) {
+            'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
+            'FAILED' || 'REJECTED' || 'CANCELLED' => TransactionStatus.failed,
+            'PENDING' => TransactionStatus.holding,
+            _ => TransactionStatus.processing,
+          };
+          return WalletTransaction(
+            id: item['withdrawalRequestId']?.toString() ?? _uuid.v4(),
+            title: 'Yêu cầu rút tiền',
+            type: TransactionType.withdrawal,
+            amount: -((item['amount'] as num?)?.toInt() ?? 0),
+            status: transactionStatus,
+            createdAt:
+                DateTime.tryParse(item['requestedAt']?.toString() ?? '') ??
+                DateTime.now(),
+            note: item['note']?.toString(),
+          );
+        }).toList();
+        _cachedTransactions
+          ..clear()
+          ..addAll(transactions);
       }
     } catch (_) {}
     return List.unmodifiable(_cachedTransactions);
@@ -846,7 +862,18 @@ class ApiCreatorRepository implements CreatorRepository {
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorBankAccounts);
       if (res is List) {
-        // Map if backend returns list
+        final accounts = res.whereType<Map<String, dynamic>>().map((item) {
+          return BankAccount(
+            id: item['payoutAccountId']?.toString() ?? _uuid.v4(),
+            bankName: item['payoutMethod']?.toString() ?? 'Tài khoản nhận tiền',
+            accountNumber: item['accountMasked']?.toString() ?? '',
+            accountHolder: item['currency']?.toString() ?? '',
+            isDefault: item['active'] == true && item['verified'] == true,
+          );
+        }).toList();
+        _cachedBankAccounts
+          ..clear()
+          ..addAll(accounts);
       }
     } catch (_) {}
     return List.unmodifiable(_cachedBankAccounts);
@@ -858,33 +885,12 @@ class ApiCreatorRepository implements CreatorRepository {
     String accountNumber,
     String accountHolder,
   ) async {
-    try {
-      await _apiClient.post(
-        ApiEndpoints.creatorBankAccounts,
-        body: {
-          'bankName': bankName,
-          'accountNumber': accountNumber,
-          'accountHolder': accountHolder,
-        },
-      );
-    } catch (_) {}
-
-    final newAcc = BankAccount(
-      id: 'bank_${_uuid.v4().substring(0, 6)}',
-      bankName: bankName,
-      accountNumber: accountNumber,
-      accountHolder: accountHolder.toUpperCase(),
-      isDefault: _cachedBankAccounts.isEmpty,
-    );
-    _cachedBankAccounts.add(newAcc);
+    await getBankAccounts();
   }
 
   @override
   Future<void> deleteBankAccount(String id) async {
-    try {
-      await _apiClient.delete(ApiEndpoints.creatorBankAccountById(id));
-    } catch (_) {}
-    _cachedBankAccounts.removeWhere((a) => a.id == id);
+    await getBankAccounts();
   }
 
   @override
@@ -896,7 +902,7 @@ class ApiCreatorRepository implements CreatorRepository {
     try {
       await _apiClient.post(
         ApiEndpoints.creatorWithdraw,
-        body: {'amount': amount, 'bankAccountId': bankAccountId, 'pin': pin},
+        body: {'amount': amount, 'payoutAccountId': bankAccountId},
       );
     } catch (_) {}
 
@@ -953,8 +959,9 @@ class ApiCreatorRepository implements CreatorRepository {
   Future<List<StudioComment>> getComments() async {
     final allComments = <StudioComment>[];
     try {
-      final podcasts =
-          _cachedPodcasts.isNotEmpty ? _cachedPodcasts : await getPodcasts();
+      final podcasts = _cachedPodcasts.isNotEmpty
+          ? _cachedPodcasts
+          : await getPodcasts();
       for (final pod in podcasts.take(5)) {
         try {
           final commentsRes = await _apiClient.get(
@@ -969,14 +976,14 @@ class ApiCreatorRepository implements CreatorRepository {
                     id: item['commentId']?.toString() ?? _uuid.v4(),
                     podcastTitle: pod.title,
                     authorName: item['username']?.toString() ?? 'Thính giả',
-                    authorAvatar:
-                        item['avatarUrl']?.toString() ??
-                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+                    authorAvatar: item['avatarUrl']?.toString() ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
                     content: item['content']?.toString() ?? '',
                     timestampSeconds:
                         (item['timestampSeconds'] as num?)?.toInt() ?? 0,
                     createdAt:
-                        DateTime.tryParse(item['createdAt']?.toString() ?? '') ??
+                        DateTime.tryParse(
+                          item['createdAt']?.toString() ?? '',
+                        ) ??
                         DateTime.now(),
                   ),
                 );
@@ -1002,10 +1009,7 @@ class ApiCreatorRepository implements CreatorRepository {
     try {
       final res = await _apiClient.post(
         ApiEndpoints.podcastComments(podcastId),
-        body: {
-          'content': content,
-          'timestampSeconds': timestampSeconds,
-        },
+        body: {'content': content, 'timestampSeconds': timestampSeconds},
       );
       if (res is Map<String, dynamic>) {
         final comment = StudioComment(
@@ -1095,8 +1099,7 @@ class ApiCreatorRepository implements CreatorRepository {
         final categoriesRes = await _apiClient.get(ApiEndpoints.categories);
         if (categoriesRes is List && categoriesRes.isNotEmpty) {
           final firstCat = categoriesRes.first as Map<String, dynamic>;
-          final realId =
-              (firstCat['categoryId'] ?? firstCat['id'])?.toString();
+          final realId = (firstCat['categoryId'] ?? firstCat['id'])?.toString();
           if (realId != null && realId.isNotEmpty) {
             effectiveCategoryId = realId;
           }
@@ -1110,7 +1113,9 @@ class ApiCreatorRepository implements CreatorRepository {
         body: {
           'categoryId': effectiveCategoryId,
           'title': title,
-          'slug': slug.isNotEmpty ? slug : title.toLowerCase().replaceAll(' ', '-'),
+          'slug': slug.isNotEmpty
+              ? slug
+              : title.toLowerCase().replaceAll(' ', '-'),
           'description': description.isNotEmpty ? description : null,
           'coverUrl': coverUrl.isNotEmpty ? coverUrl : null,
         },
@@ -1139,9 +1144,7 @@ class ApiCreatorRepository implements CreatorRepository {
     }
   }
 
-  Future<bool> removePodcastFromSeries({
-    required String podcastId,
-  }) async {
+  Future<bool> removePodcastFromSeries({required String podcastId}) async {
     try {
       final res = await _apiClient.delete(
         ApiEndpoints.creatorPodcastSeries(podcastId),
@@ -1223,26 +1226,23 @@ class ApiCreatorRepository implements CreatorRepository {
   ) async {
     String? createdPollId;
     try {
-      final questionText =
-          questions.isNotEmpty ? questions.first.question : title;
+      final questionText = questions.isNotEmpty
+          ? questions.first.question
+          : title;
       final options =
           (questions.isNotEmpty && questions.first.options.length >= 2)
-              ? questions.first.options
-              : ['Đồng ý', 'Không đồng ý'];
+          ? questions.first.options
+          : ['Đồng ý', 'Không đồng ý'];
 
       final pollRes = await _apiClient.post(
         ApiEndpoints.creatorPolls,
-        body: {
-          'question': questionText,
-          'options': options,
-        },
+        body: {'question': questionText, 'options': options},
       );
 
       if (pollRes is Map<String, dynamic>) {
         final pollSummary = pollRes['poll'] as Map<String, dynamic>?;
         createdPollId =
-            pollSummary?['pollId']?.toString() ??
-            pollRes['pollId']?.toString();
+            pollSummary?['pollId']?.toString() ?? pollRes['pollId']?.toString();
       }
 
       if (createdPollId != null) {
