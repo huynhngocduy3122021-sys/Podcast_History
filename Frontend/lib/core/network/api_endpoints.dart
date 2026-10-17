@@ -28,6 +28,8 @@ class ApiEndpoints {
   static String creatorPodcastSubmit(String id) => '/api/creator/podcasts/$id/submit';
   static String creatorPodcastSeries(String id) => '/api/creator/podcasts/$id/series';
   static String creatorPodcastReferences(String id) => '/api/creator/podcasts/$id/references';
+  static String creatorPodcastReferenceFile(String podcastId, String refId) =>
+      '/api/creator/podcasts/$podcastId/references/$refId/file';
   static String creatorPodcastReviews(String id) => '/api/creator/podcasts/$id/reviews';
   static String creatorPodcastAppeals(String id) => '/api/creator/podcasts/$id/appeals';
 
@@ -54,7 +56,12 @@ class ApiEndpoints {
   static const String creatorBankAccounts = '/api/v1/creator/bank-accounts';
   static String creatorBankAccountById(String id) => '/api/v1/creator/bank-accounts/$id';
 
-  // Forms & Premium (Contract endpoints)
+  // Forms & Polls
   static const String creatorForms = '/api/v1/creator/forms';
+  static const String creatorPolls = '/api/creator/polls';
+  static String creatorPollById(String id) => '/api/creator/polls/$id';
+  static String creatorPollPublish(String id) => '/api/creator/polls/$id/publish';
+  static String creatorPollClose(String id) => '/api/creator/polls/$id/close';
+  static String creatorPollResults(String id) => '/api/creator/polls/$id/results';
   static const String creatorUpgradePremium = '/api/v1/creator/upgrade-premium';
 }

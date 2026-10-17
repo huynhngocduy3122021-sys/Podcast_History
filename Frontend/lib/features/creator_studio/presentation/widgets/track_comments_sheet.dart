@@ -66,14 +66,19 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
     final newComment = StudioComment(
       id: 'cmt_${DateTime.now().millisecondsSinceEpoch}',
       podcastTitle: widget.podcast.title,
-      authorName: profile?.name ?? 'Sử Kể Đêm Khuya',
+      authorName: (profile?.name.isNotEmpty == true)
+          ? profile!.name
+          : 'Creator',
       authorAvatar: profile?.avatarUrl ?? '',
       content: text,
       timestampSeconds: _attachTimestamp ? currentSeconds : 0,
       createdAt: DateTime.now(),
     );
 
-    ref.read(creatorCommentsProvider.notifier).addComment(newComment);
+    ref.read(creatorCommentsProvider.notifier).addComment(
+      newComment,
+      podcastId: widget.podcast.id,
+    );
 
     _textController.clear();
     FocusScope.of(context).unfocus();

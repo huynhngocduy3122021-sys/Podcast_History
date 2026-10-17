@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -45,6 +46,15 @@ class _CreatorRegistrationScreenState
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_sampleVoiceName == null || _sampleVoiceName!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chọn tệp mẫu giọng đọc thử trước khi gửi hồ sơ.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
     setState(() => _isSubmitting = true);
 
     await ref
@@ -55,7 +65,7 @@ class _CreatorRegistrationScreenState
           bio: _bioCtrl.text.trim(),
           category: _selectedCategory,
           socialLink: _socialCtrl.text.trim(),
-          sampleVoiceName: _sampleVoiceName ?? 'sample.mp3',
+          sampleVoiceName: _sampleVoiceName!,
         );
 
     setState(() => _isSubmitting = false);
@@ -180,16 +190,38 @@ class _CreatorRegistrationScreenState
                         ),
                       ),
                       TextButton(
-                        onPressed: () {
-                          setState(
-                            () => _sampleVoiceName =
-                                'giong_doc_test_vietcast.mp3',
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Đã tải lên tệp mẫu giọng đọc'),
-                            ),
-                          );
+                        onPressed: () async {
+                          try {
+                            PlatformFile? file;
+                            try {
+                              file = await FilePicker.pickFile(
+                                type: FileType.custom,
+                                allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
+                              );
+                            } catch (_) {
+                              file = await FilePicker.pickFile(type: FileType.audio);
+                            }
+                            if (file != null) {
+                              final fileName = file.name;
+                              if (fileName.isNotEmpty) {
+                                setState(() => _sampleVoiceName = fileName);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text('Đã chọn tệp: $fileName')),
+                                  );
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Không thể chọn tệp: $e'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          }
                         },
                         child: const Text('Chọn file'),
                       ),

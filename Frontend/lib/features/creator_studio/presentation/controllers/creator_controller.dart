@@ -89,7 +89,7 @@ class CreatorPodcastsNotifier
     }
   }
 
-  Future<void> createPodcast({
+  Future<CreatorPodcast> createPodcast({
     required String title,
     required String description,
     required String eraTag,
@@ -98,8 +98,9 @@ class CreatorPodcastsNotifier
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
   }) async {
-    await _repo.createPodcast(
+    final pod = await _repo.createPodcast(
       title: title,
       description: description,
       eraTag: eraTag,
@@ -108,12 +109,14 @@ class CreatorPodcastsNotifier
       coverUrl: coverUrl,
       audioFileName: audioFileName,
       duration: duration,
+      mediaBytes: mediaBytes,
     );
     await loadPodcasts();
     ref.read(creatorProfileProvider.notifier).loadProfile();
+    return pod;
   }
 
-  Future<void> updatePodcast({
+  Future<CreatorPodcast> updatePodcast({
     required String id,
     required String title,
     required String description,
@@ -123,8 +126,9 @@ class CreatorPodcastsNotifier
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
   }) async {
-    await _repo.updatePodcast(
+    final pod = await _repo.updatePodcast(
       id: id,
       title: title,
       description: description,
@@ -134,8 +138,10 @@ class CreatorPodcastsNotifier
       coverUrl: coverUrl,
       audioFileName: audioFileName,
       duration: duration,
+      mediaBytes: mediaBytes,
     );
     await loadPodcasts();
+    return pod;
   }
 
   Future<void> deletePodcast(String id) async {
@@ -181,8 +187,20 @@ class CreatorRequestsNotifier
     await loadRequests();
   }
 
-  Future<void> deliverWork(String id, String fileUrl, String note) async {
-    await _repo.deliverWork(id, fileUrl, note);
+  Future<void> deliverWork(
+    String id,
+    String fileUrl,
+    String note, {
+    List<int>? fileBytes,
+    String? filename,
+  }) async {
+    await _repo.deliverWork(
+      id,
+      fileUrl,
+      note,
+      fileBytes: fileBytes,
+      filename: filename,
+    );
     await loadRequests();
   }
 
@@ -333,15 +351,73 @@ class CreatorCommentsNotifier
     await loadComments();
   }
 
-  void addComment(StudioComment comment) {
+  Future<void> deleteComment(String id) async {
+    await _repo.deleteComment(id);
+    await loadComments();
+  }
+
+  Future<void> addComment(StudioComment comment, {String? podcastId}) async {
     final current = state.value ?? [];
     state = AsyncValue.data([comment, ...current]);
+    if (podcastId != null) {
+      await _repo.addCommentToPodcast(
+        podcastId: podcastId,
+        content: comment.content,
+        timestampSeconds: comment.timestampSeconds,
+        podcastTitle: comment.podcastTitle,
+      );
+      await loadComments();
+    }
   }
 }
 
 final creatorCommentsProvider =
     NotifierProvider<CreatorCommentsNotifier, AsyncValue<List<StudioComment>>>(
       CreatorCommentsNotifier.new,
+    );
+
+// Series Controller
+class CreatorSeriesNotifier extends Notifier<AsyncValue<List<CreatorSeries>>> {
+  @override
+  AsyncValue<List<CreatorSeries>> build() {
+    Future.microtask(() => loadSeries());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadSeries() async {
+    try {
+      state = const AsyncValue.loading();
+      final list = await _repo.getSeries();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<CreatorSeries?> createSeries({
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description = '',
+    String coverUrl = '',
+  }) async {
+    final series = await _repo.createSeries(
+      title: title,
+      slug: slug,
+      categoryId: categoryId,
+      description: description,
+      coverUrl: coverUrl,
+    );
+    await loadSeries();
+    return series;
+  }
+}
+
+final creatorSeriesProvider =
+    NotifierProvider<CreatorSeriesNotifier, AsyncValue<List<CreatorSeries>>>(
+      CreatorSeriesNotifier.new,
     );
 
 // Forms Controller
