@@ -4048,6 +4048,127 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     }
   }
 
+  Future<void> _showRequestDialog() async {
+    final creatorId = widget.show.creatorId;
+    if (creatorId == null) return;
+
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        var sending = false;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Gửi yêu cầu'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Gửi ý tưởng podcast đến ${widget.show.channel}.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    enabled: !sending,
+                    maxLength: 220,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Chủ đề yêu cầu',
+                      hintText: 'Ví dụ: Lịch sử thành nhà Hồ',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descriptionController,
+                    enabled: !sending,
+                    maxLength: 10000,
+                    maxLines: 5,
+                    decoration: const InputDecoration(
+                      labelText: 'Mô tả yêu cầu',
+                      hintText: 'Bạn muốn creator thực hiện nội dung gì?',
+                    ),
+                  ),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      errorMessage!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: sending ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Hủy'),
+              ),
+              FilledButton.icon(
+                onPressed: sending
+                    ? null
+                    : () async {
+                        final title = titleController.text.trim();
+                        final description = descriptionController.text.trim();
+                        if (title.isEmpty || description.isEmpty) {
+                          setDialogState(() {
+                            errorMessage =
+                                'Vui lòng nhập đầy đủ chủ đề và mô tả.';
+                          });
+                          return;
+                        }
+                        setDialogState(() {
+                          sending = true;
+                          errorMessage = null;
+                        });
+                        try {
+                          await widget.api.createSeriesRequest(
+                            creatorId,
+                            requestedTitle: title,
+                            description: description,
+                          );
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext, true);
+                          }
+                        } catch (exception) {
+                          if (!dialogContext.mounted) return;
+                          setDialogState(() {
+                            sending = false;
+                            errorMessage = 'Không thể gửi yêu cầu: $exception';
+                          });
+                        }
+                      },
+                icon: sending
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.send_outlined),
+                label: Text(sending ? 'Đang gửi...' : 'Gửi yêu cầu'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    titleController.dispose();
+    descriptionController.dispose();
+
+    if (submitted == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã gửi yêu cầu đến creator.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final creatorShows = shows
@@ -4116,6 +4237,21 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                   : widget.onMembership,
               icon: const Icon(Icons.workspace_premium_outlined),
               label: const Text('Dang ky thanh vien'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.show.creatorId == null
+                  ? null
+                  : _showRequestDialog,
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Gửi yêu cầu'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: Colors.white54),
