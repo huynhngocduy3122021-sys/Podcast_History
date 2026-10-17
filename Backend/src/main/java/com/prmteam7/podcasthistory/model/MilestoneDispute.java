@@ -10,18 +10,12 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "\"Milestone_dispute\"", indexes = {
         @Index(name = "idx_milestone_dispute_status", columnList = "status"),
         @Index(name = "idx_milestone_dispute_stage_id", columnList = "contract_stage_id")
 })
-@Getter
-@Setter
-@NoArgsConstructor
 public class MilestoneDispute extends BaseEntity {
 
     @jakarta.persistence.Id
@@ -54,6 +48,27 @@ public class MilestoneDispute extends BaseEntity {
 
     @Column(name = "resolved_at")
     private Instant resolvedAt;
+
+    public MilestoneDispute() {}
+
+    public UUID getMilestoneDisputeId() { return milestoneDisputeId; }
+    public void setMilestoneDisputeId(UUID id) { this.milestoneDisputeId = id; }
+    public ContractStage getContractStage() { return contractStage; }
+    public void setContractStage(ContractStage contractStage) { this.contractStage = contractStage; }
+    public AppUser getRaisedBy() { return raisedBy; }
+    public void setRaisedBy(AppUser raisedBy) { this.raisedBy = raisedBy; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public AppUser getReviewedBy() { return reviewedBy; }
+    public void setReviewedBy(AppUser reviewedBy) { this.reviewedBy = reviewedBy; }
+    public String getDecision() { return decision; }
+    public void setDecision(String decision) { this.decision = decision; }
+    public String getResolutionNote() { return resolutionNote; }
+    public void setResolutionNote(String resolutionNote) { this.resolutionNote = resolutionNote; }
+    public Instant getResolvedAt() { return resolvedAt; }
+    public void setResolvedAt(Instant resolvedAt) { this.resolvedAt = resolvedAt; }
 
     @PrePersist
     private void assignId() {
