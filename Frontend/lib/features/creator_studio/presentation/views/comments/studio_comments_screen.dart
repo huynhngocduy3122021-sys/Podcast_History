@@ -178,6 +178,18 @@ class StudioCommentsScreen extends ConsumerWidget {
                 label: const Text('Trả lời'),
                 onPressed: () => _showReplyDialog(context, c),
               ),
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
+                label: const Text('Xóa', style: TextStyle(color: AppColors.error)),
+                onPressed: () async {
+                  await ref.read(creatorCommentsProvider.notifier).deleteComment(c.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã xóa bình luận!')),
+                    );
+                  }
+                },
+              ),
             ],
           ),
         ],

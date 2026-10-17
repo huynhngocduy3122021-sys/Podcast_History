@@ -45,9 +45,14 @@ public class WithdrawalRequest extends UpdatedEntity {
   @Column(name = "withdrawal_request_id", nullable = false, updatable = false)
   private UUID withdrawalRequestId;
 
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
-  @JoinColumn(name = "producer_profile_id", nullable = false)
-  private ProducerProfile producerProfile;
+    @Column(name = "payout_account_reference", nullable = false, length = 255)
+    private String payoutAccountReference;
+
+    @Column(name = "provider_reference", length = 180)
+    private String providerReference;
+
+    @Column(name = "status", nullable = false, length = 30)
+    private String status;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "user_wallet_id", nullable = false)
@@ -119,9 +124,25 @@ public class WithdrawalRequest extends UpdatedEntity {
     this.amount = amount;
   }
 
-  public String getCurrency() {
-    return currency;
-  }
+    public String getPayoutAccountReference() {
+        return payoutAccountReference;
+    }
+
+    public void setPayoutAccountReference(String payoutAccountReference) {
+        this.payoutAccountReference = payoutAccountReference;
+    }
+
+    public String getProviderReference() {
+        return providerReference;
+    }
+
+    public void setProviderReference(String providerReference) {
+        this.providerReference = providerReference;
+    }
+
+    public String getStatus() {
+        return status;
+    }
 
   public void setCurrency(String currency) {
     this.currency = currency;

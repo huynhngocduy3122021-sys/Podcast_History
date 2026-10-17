@@ -14,7 +14,7 @@ class ApiCreatorRepository implements CreatorRepository {
   // Clean in-memory caches (initialized with empty data, populated purely by API responses)
   CreatorProfile _cachedProfile = const CreatorProfile(
     id: '',
-    name: '',
+    name: 'Creator',
     handle: '',
     bio: '',
     avatarUrl: '',
@@ -24,7 +24,7 @@ class ApiCreatorRepository implements CreatorRepository {
     maxFreePodcasts: 5,
     currentPodcastCount: 0,
     followersCount: 0,
-    status: CreatorStatus.pending,
+    status: CreatorStatus.rejected,
   );
   final List<CreatorPodcast> _cachedPodcasts = [];
   final List<PodcastRequest> _cachedRequests = [];
@@ -32,6 +32,7 @@ class ApiCreatorRepository implements CreatorRepository {
   final List<WalletTransaction> _cachedTransactions = [];
   final List<StudioComment> _cachedComments = [];
   final List<InteractiveForm> _cachedForms = [];
+  final List<CreatorSeries> _cachedSeries = [];
 
   int _availableBalance = 0;
   int _pendingRelease = 0;
@@ -65,14 +66,23 @@ class ApiCreatorRepository implements CreatorRepository {
             creatorStatus = CreatorStatus.rejected;
         }
 
-        final channelName =
-            appData['channelName'] as String? ?? _cachedProfile.name;
+        final rawChannelName = appData['channelName'] as String?;
+        final rawUsername = appData['username'] as String?;
+        final channelName = (rawChannelName != null && rawChannelName.isNotEmpty)
+            ? rawChannelName
+            : ((rawUsername != null && rawUsername.isNotEmpty)
+                ? rawUsername
+                : _cachedProfile.name);
+        final handle = (rawUsername != null && rawUsername.isNotEmpty)
+            ? '@$rawUsername'
+            : _cachedProfile.handle;
         final intro = appData['introduction'] as String? ?? _cachedProfile.bio;
         final reviewNote = appData['reviewNote'] as String?;
 
         _cachedProfile = _cachedProfile.copyWith(
           id: appData['applicationId']?.toString() ?? _cachedProfile.id,
           name: channelName,
+          handle: handle,
           bio: intro,
           status: creatorStatus,
           rejectReason: reviewNote,
@@ -188,6 +198,22 @@ class ApiCreatorRepository implements CreatorRepository {
                 }
               } catch (_) {}
             }
+            if (mapped.sources.isEmpty) {
+              try {
+                final refRes = await _apiClient.get(
+                  ApiEndpoints.creatorPodcastReferences(mapped.id),
+                );
+                if (refRes is List && refRes.isNotEmpty) {
+                  final firstRef = refRes.first as Map<String, dynamic>;
+                  final citation = firstRef['citationText']?.toString() ??
+                      firstRef['title']?.toString() ??
+                      '';
+                  if (citation.isNotEmpty) {
+                    mapped = mapped.copyWith(sources: citation);
+                  }
+                }
+              } catch (_) {}
+            }
             list.add(mapped);
           }
         }
@@ -212,6 +238,7 @@ class ApiCreatorRepository implements CreatorRepository {
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
   }) async {
     String? categoryId;
 
@@ -227,7 +254,7 @@ class ApiCreatorRepository implements CreatorRepository {
               true,
           orElse: () => categoriesRes.first as Map<String, dynamic>,
         );
-        categoryId = matching['categoryId']?.toString();
+        categoryId = (matching['categoryId'] ?? matching['id'])?.toString();
       }
     } catch (_) {}
 
@@ -295,6 +322,27 @@ class ApiCreatorRepository implements CreatorRepository {
       } catch (_) {}
     }
 
+    // 3.5 If video podcast, backend created podcast, and real media bytes provided, upload video file
+    if (createdPodcastId != null &&
+        audioFileName != null &&
+        mediaBytes != null &&
+        mediaBytes.isNotEmpty) {
+      final isVideo = audioFileName.toLowerCase().endsWith('.mp4') ||
+          audioFileName.toLowerCase().endsWith('.mov') ||
+          audioFileName.toLowerCase().endsWith('.mkv') ||
+          audioFileName.toLowerCase().endsWith('.webm');
+      if (isVideo) {
+        try {
+          await uploadPodcastVideoFile(
+            podcastId: createdPodcastId,
+            fileBytes: mediaBytes,
+            filename: audioFileName,
+            mimeType: 'video/mp4',
+          );
+        } catch (_) {}
+      }
+    }
+
     // 4. Submit podcast to review queue: POST /api/creator/podcasts/{id}/submit
     if (createdPodcastId != null) {
       try {
@@ -343,6 +391,7 @@ class ApiCreatorRepository implements CreatorRepository {
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
   }) async {
     String? categoryId;
 
@@ -358,7 +407,7 @@ class ApiCreatorRepository implements CreatorRepository {
               true,
           orElse: () => categoriesRes.first as Map<String, dynamic>,
         );
-        categoryId = matching['categoryId']?.toString();
+        categoryId = (matching['categoryId'] ?? matching['id'])?.toString();
       }
     } catch (_) {}
 
@@ -422,6 +471,24 @@ class ApiCreatorRepository implements CreatorRepository {
           },
         );
       } catch (_) {}
+    }
+
+    // 3.5 If video podcast and real media bytes provided, upload video file to backend
+    if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
+      final isVideo = audioFileName.toLowerCase().endsWith('.mp4') ||
+          audioFileName.toLowerCase().endsWith('.mov') ||
+          audioFileName.toLowerCase().endsWith('.mkv') ||
+          audioFileName.toLowerCase().endsWith('.webm');
+      if (isVideo) {
+        try {
+          await uploadPodcastVideoFile(
+            podcastId: id,
+            fileBytes: mediaBytes,
+            filename: audioFileName,
+            mimeType: 'video/mp4',
+          );
+        } catch (_) {}
+      }
     }
 
     // 4. Submit podcast to review queue if not already submitted
@@ -542,6 +609,61 @@ class ApiCreatorRepository implements CreatorRepository {
     }
   }
 
+  Future<bool> uploadPdfReferenceFile({
+    required String podcastId,
+    String? referenceId,
+    required List<int> fileBytes,
+    required String filename,
+  }) async {
+    try {
+      String? targetRefId = referenceId;
+      final uuidRegex = RegExp(
+        r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+      );
+
+      // If referenceId is null or not a valid UUID, resolve from existing or create one
+      if (targetRefId == null || !uuidRegex.hasMatch(targetRefId)) {
+        try {
+          final existing = await _apiClient.get(
+            ApiEndpoints.creatorPodcastReferences(podcastId),
+          );
+          if (existing is List && existing.isNotEmpty) {
+            targetRefId = existing.first['referenceId']?.toString();
+          }
+        } catch (_) {}
+
+        if (targetRefId == null || !uuidRegex.hasMatch(targetRefId)) {
+          final createRes = await _apiClient.post(
+            ApiEndpoints.creatorPodcastReferences(podcastId),
+            body: {
+              'referenceType': 'BOOK',
+              'title': filename,
+              'citationText': 'Tài liệu nguồn tham khảo: $filename',
+            },
+          );
+          if (createRes is Map<String, dynamic>) {
+            targetRefId = createRes['referenceId']?.toString();
+          }
+        }
+      }
+
+      if (targetRefId == null || !uuidRegex.hasMatch(targetRefId)) {
+        return false;
+      }
+
+      final res = await _apiClient.uploadMultipart(
+        ApiEndpoints.creatorPodcastReferenceFile(podcastId, targetRefId),
+        fileFieldName: 'file',
+        filename: filename,
+        fileBytes: fileBytes,
+        mimeType: 'application/pdf',
+      );
+      return res != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ==========================================
   // 4. CUSTOM PODCAST REQUESTS
   // ==========================================
@@ -630,18 +752,26 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> deliverWork(String id, String fileUrl, String note) async {
+  Future<void> deliverWork(
+    String id,
+    String fileUrl,
+    String note, {
+    List<int>? fileBytes,
+    String? filename,
+  }) async {
     try {
       final req = await getRequestById(id);
       if (req != null && req.milestones.isNotEmpty) {
         final milestoneId = req.milestones.first.id;
-        await _apiClient.uploadMultipart(
-          ApiEndpoints.submitMilestone(milestoneId),
-          fileFieldName: 'file',
-          filename: 'delivered_audio.mp3',
-          fileBytes: [0],
-          fields: {'note': note},
-        );
+        if (fileBytes != null && fileBytes.isNotEmpty) {
+          await _apiClient.uploadMultipart(
+            ApiEndpoints.submitMilestone(milestoneId),
+            fileFieldName: 'file',
+            filename: filename ?? 'delivery.mp3',
+            fileBytes: fileBytes,
+            fields: {'note': note},
+          );
+        }
       }
     } catch (_) {}
 
@@ -821,42 +951,91 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<StudioComment>> getComments() async {
+    final allComments = <StudioComment>[];
     try {
-      final res = await _apiClient.get(ApiEndpoints.creatorCommentsContract);
-      if (res is List) {
-        // Map comments from contract
-      }
-    } catch (_) {
-      try {
-        if (_cachedPodcasts.isNotEmpty) {
-          final firstPodId = _cachedPodcasts.first.id;
+      final podcasts =
+          _cachedPodcasts.isNotEmpty ? _cachedPodcasts : await getPodcasts();
+      for (final pod in podcasts.take(5)) {
+        try {
           final commentsRes = await _apiClient.get(
-            ApiEndpoints.podcastComments(firstPodId),
+            ApiEndpoints.podcastComments(pod.id),
           );
           if (commentsRes is Map<String, dynamic> &&
               commentsRes['content'] is List) {
-            final contentList = commentsRes['content'] as List;
-            return contentList.map((c) {
-              final map = c as Map<String, dynamic>;
-              return StudioComment(
-                id: map['commentId']?.toString() ?? _uuid.v4(),
-                podcastTitle:
-                    map['podcastTitle']?.toString() ??
-                    _cachedPodcasts.first.title,
-                authorName: map['username']?.toString() ?? 'Thính giả',
-                authorAvatar: '',
-                content: map['content']?.toString() ?? '',
-                timestampSeconds: 0,
-                createdAt:
-                    DateTime.tryParse(map['createdAt']?.toString() ?? '') ??
-                    DateTime.now(),
-              );
-            }).toList();
+            for (final item in commentsRes['content'] as List) {
+              if (item is Map<String, dynamic>) {
+                allComments.add(
+                  StudioComment(
+                    id: item['commentId']?.toString() ?? _uuid.v4(),
+                    podcastTitle: pod.title,
+                    authorName: item['username']?.toString() ?? 'Thính giả',
+                    authorAvatar:
+                        item['avatarUrl']?.toString() ??
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+                    content: item['content']?.toString() ?? '',
+                    timestampSeconds:
+                        (item['timestampSeconds'] as num?)?.toInt() ?? 0,
+                    createdAt:
+                        DateTime.tryParse(item['createdAt']?.toString() ?? '') ??
+                        DateTime.now(),
+                  ),
+                );
+              }
+            }
           }
-        }
-      } catch (_) {}
-    }
+        } catch (_) {}
+      }
+      _cachedComments.clear();
+      _cachedComments.addAll(allComments);
+    } catch (_) {}
+
     return List.unmodifiable(_cachedComments);
+  }
+
+  @override
+  Future<StudioComment?> addCommentToPodcast({
+    required String podcastId,
+    required String content,
+    int? timestampSeconds,
+    String? podcastTitle,
+  }) async {
+    try {
+      final res = await _apiClient.post(
+        ApiEndpoints.podcastComments(podcastId),
+        body: {
+          'content': content,
+          'timestampSeconds': timestampSeconds,
+        },
+      );
+      if (res is Map<String, dynamic>) {
+        final comment = StudioComment(
+          id: res['commentId']?.toString() ?? _uuid.v4(),
+          podcastTitle: podcastTitle ?? _cachedProfile.name,
+          authorName: res['username']?.toString() ?? _cachedProfile.name,
+          authorAvatar:
+              res['avatarUrl']?.toString() ?? _cachedProfile.avatarUrl,
+          content: res['content']?.toString() ?? content,
+          timestampSeconds:
+              (res['timestampSeconds'] as num?)?.toInt() ??
+              (timestampSeconds ?? 0),
+          createdAt:
+              DateTime.tryParse(res['createdAt']?.toString() ?? '') ??
+              DateTime.now(),
+        );
+        _cachedComments.insert(0, comment);
+        return comment;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
+  @override
+  Future<void> deleteComment(String commentId) async {
+    try {
+      await _apiClient.delete(ApiEndpoints.commentById(commentId));
+    } catch (_) {}
+    _cachedComments.removeWhere((c) => c.id == commentId);
   }
 
   @override
@@ -880,11 +1059,159 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   // ==========================================
-  // 7. FORMS (PREMIUM)
+  // 7. SERIES MANAGEMENT
+  // ==========================================
+
+  @override
+  Future<List<CreatorSeries>> getSeries() async {
+    try {
+      final res = await _apiClient.get(ApiEndpoints.creatorSeries);
+      if (res is List) {
+        final list = <CreatorSeries>[];
+        for (final item in res) {
+          if (item is Map<String, dynamic>) {
+            list.add(CreatorSeries.fromJson(item));
+          }
+        }
+        _cachedSeries.clear();
+        _cachedSeries.addAll(list);
+      }
+    } catch (_) {}
+    return List.unmodifiable(_cachedSeries);
+  }
+
+  @override
+  Future<CreatorSeries?> createSeries({
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description = '',
+    String coverUrl = '',
+  }) async {
+    String effectiveCategoryId = categoryId;
+    if (effectiveCategoryId.isEmpty ||
+        effectiveCategoryId.startsWith('00000000-0000-0000')) {
+      try {
+        final categoriesRes = await _apiClient.get(ApiEndpoints.categories);
+        if (categoriesRes is List && categoriesRes.isNotEmpty) {
+          final firstCat = categoriesRes.first as Map<String, dynamic>;
+          final realId =
+              (firstCat['categoryId'] ?? firstCat['id'])?.toString();
+          if (realId != null && realId.isNotEmpty) {
+            effectiveCategoryId = realId;
+          }
+        }
+      } catch (_) {}
+    }
+
+    try {
+      final res = await _apiClient.post(
+        ApiEndpoints.creatorSeries,
+        body: {
+          'categoryId': effectiveCategoryId,
+          'title': title,
+          'slug': slug.isNotEmpty ? slug : title.toLowerCase().replaceAll(' ', '-'),
+          'description': description.isNotEmpty ? description : null,
+          'coverUrl': coverUrl.isNotEmpty ? coverUrl : null,
+        },
+      );
+      if (res is Map<String, dynamic>) {
+        final series = CreatorSeries.fromJson(res);
+        _cachedSeries.insert(0, series);
+        return series;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<bool> assignPodcastToSeries({
+    required String podcastId,
+    required String seriesId,
+  }) async {
+    try {
+      final res = await _apiClient.put(
+        ApiEndpoints.creatorPodcastSeries(podcastId),
+        body: {'seriesId': seriesId},
+      );
+      return res != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> removePodcastFromSeries({
+    required String podcastId,
+  }) async {
+    try {
+      final res = await _apiClient.delete(
+        ApiEndpoints.creatorPodcastSeries(podcastId),
+      );
+      return res != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ==========================================
+  // 8. APPEALS & REVIEWS
+  // ==========================================
+
+  @override
+  Future<void> submitPodcastAppeal({
+    required String podcastId,
+    required String note,
+  }) async {
+    try {
+      await _apiClient.post(
+        ApiEndpoints.creatorPodcastAppeals(podcastId),
+        body: {'note': note},
+      );
+    } catch (_) {}
+  }
+
+  // ==========================================
+  // 9. FORMS & POLLS
   // ==========================================
 
   @override
   Future<List<InteractiveForm>> getForms() async {
+    try {
+      final res = await _apiClient.get(ApiEndpoints.creatorPolls);
+      if (res is Map<String, dynamic> && res['content'] is List) {
+        final content = res['content'] as List;
+        final list = <InteractiveForm>[];
+        for (final item in content) {
+          if (item is Map<String, dynamic>) {
+            final pollId = item['pollId']?.toString() ?? _uuid.v4();
+            final question =
+                item['question']?.toString() ?? 'Khảo sát thính giả';
+            final status = item['status']?.toString() ?? 'DRAFT';
+            list.add(
+              InteractiveForm(
+                id: pollId,
+                title: question,
+                description: 'Trạng thái: $status',
+                questions: [
+                  FormQuestion(
+                    id: 'q_$pollId',
+                    question: question,
+                    type: FormQuestionType.singleChoice,
+                    options: const ['Đồng ý', 'Không đồng ý'],
+                  ),
+                ],
+                responsesCount: 0,
+                createdAt:
+                    DateTime.tryParse(item['createdAt']?.toString() ?? '') ??
+                    DateTime.now(),
+              ),
+            );
+          }
+        }
+        _cachedForms.clear();
+        _cachedForms.addAll(list);
+      }
+    } catch (_) {}
+
     return List.unmodifiable(_cachedForms);
   }
 
@@ -894,8 +1221,38 @@ class ApiCreatorRepository implements CreatorRepository {
     String description,
     List<FormQuestion> questions,
   ) async {
+    String? createdPollId;
+    try {
+      final questionText =
+          questions.isNotEmpty ? questions.first.question : title;
+      final options =
+          (questions.isNotEmpty && questions.first.options.length >= 2)
+              ? questions.first.options
+              : ['Đồng ý', 'Không đồng ý'];
+
+      final pollRes = await _apiClient.post(
+        ApiEndpoints.creatorPolls,
+        body: {
+          'question': questionText,
+          'options': options,
+        },
+      );
+
+      if (pollRes is Map<String, dynamic>) {
+        final pollSummary = pollRes['poll'] as Map<String, dynamic>?;
+        createdPollId =
+            pollSummary?['pollId']?.toString() ??
+            pollRes['pollId']?.toString();
+      }
+
+      if (createdPollId != null) {
+        // Automatically publish poll
+        await _apiClient.post(ApiEndpoints.creatorPollPublish(createdPollId));
+      }
+    } catch (_) {}
+
     final newForm = InteractiveForm(
-      id: 'form_${_uuid.v4().substring(0, 8)}',
+      id: createdPollId ?? 'form_${_uuid.v4().substring(0, 8)}',
       title: title,
       description: description,
       questions: questions,

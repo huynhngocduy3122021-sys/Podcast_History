@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -68,6 +69,8 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
           final podcasts = podcastsAsync.value ?? [];
           final requests = requestsAsync.value ?? [];
           final wallet = walletAsync.value;
+          final totalListens =
+              podcasts.fold<int>(0, (sum, p) => sum + p.listensCount);
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -98,10 +101,8 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     Expanded(
                       child: MetricCard(
                         title: 'Tổng lượt nghe',
-                        value: '45.2K',
+                        value: AppFormatters.formatCompactNumber(totalListens),
                         icon: Icons.headphones_rounded,
-                        trendText: '+18%',
-                        isPositiveTrend: true,
                         onTap: () => widget.onNavigateTab?.call(1),
                       ),
                     ),
@@ -112,8 +113,6 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                         value: AppFormatters.formatCompactNumber(profile.followersCount),
                         icon: Icons.group_rounded,
                         iconColor: AppColors.tertiaryLight,
-                        trendText: '+12%',
-                        isPositiveTrend: true,
                         onTap: () => widget.onNavigateTab?.call(1),
                       ),
                     ),
@@ -125,11 +124,9 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     Expanded(
                       child: MetricCard(
                         title: 'Doanh thu tháng',
-                        value: AppFormatters.formatVND(wallet?.available ?? 6850000),
+                        value: AppFormatters.formatVND(wallet?.available ?? 0),
                         icon: Icons.account_balance_wallet_rounded,
                         iconColor: AppColors.success,
-                        trendText: '+24%',
-                        isPositiveTrend: true,
                         onTap: () => widget.onNavigateTab?.call(3),
                       ),
                     ),
@@ -137,10 +134,9 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     Expanded(
                       child: MetricCard(
                         title: 'Chờ release',
-                        value: AppFormatters.formatVND(wallet?.pending ?? 1200000),
+                        value: AppFormatters.formatVND(wallet?.pending ?? 0),
                         icon: Icons.hourglass_bottom_rounded,
                         iconColor: AppColors.warning,
-                        subtitle: 'Từ 2 đơn hoàn tất',
                         onTap: () => widget.onNavigateTab?.call(3),
                       ),
                     ),
@@ -149,7 +145,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 const SizedBox(height: AppSpacing.xl),
 
                 // Biểu đồ lượt nghe
-                _buildGrowthChart(context, isDark),
+                _buildGrowthChart(context, totalListens, isDark),
                 const SizedBox(height: AppSpacing.xl),
 
                 // Yêu cầu podcast cần xử lý nhanh
@@ -179,15 +175,19 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               : [const Color(0xFFFFFFFF), const Color(0xFFFBF8F3)],
         ),
         borderRadius: AppSpacing.roundedMd,
-        image: DecorationImage(
-          image: NetworkImage(profile.bannerUrl),
-          fit: BoxFit.cover,
-          onError: (e, s) {},
-          colorFilter: ColorFilter.mode(
-            isDark ? Colors.black.withValues(alpha: 0.72) : Colors.white.withValues(alpha: 0.92),
-            isDark ? BlendMode.darken : BlendMode.lighten,
-          ),
-        ),
+        image: profile.bannerUrl.isNotEmpty
+            ? DecorationImage(
+                image: NetworkImage(profile.bannerUrl),
+                fit: BoxFit.cover,
+                onError: (e, s) {},
+                colorFilter: ColorFilter.mode(
+                  isDark
+                      ? Colors.black.withValues(alpha: 0.72)
+                      : Colors.white.withValues(alpha: 0.92),
+                  isDark ? BlendMode.darken : BlendMode.lighten,
+                ),
+              )
+            : null,
         border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
         boxShadow: [
           BoxShadow(
@@ -221,8 +221,22 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 ),
                 child: CircleAvatar(
                   radius: 34,
-                  backgroundImage: NetworkImage(profile.avatarUrl),
+                  backgroundImage: profile.avatarUrl.isNotEmpty
+                      ? NetworkImage(profile.avatarUrl)
+                      : null,
                   backgroundColor: AppColors.surfaceVariantLight,
+                  child: profile.avatarUrl.isEmpty
+                      ? Text(
+                          profile.name.isNotEmpty
+                              ? profile.name[0].toUpperCase()
+                              : 'C',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : AppColors.primaryLight,
+                          ),
+                        )
+                      : null,
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -439,7 +453,38 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
     );
   }
 
-  Widget _buildGrowthChart(BuildContext context, bool isDark) {
+  Widget _buildGrowthChart(BuildContext context, int totalListens, bool isDark) {
+    if (totalListens == 0) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          borderRadius: AppSpacing.roundedMd,
+          border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.show_chart_rounded,
+                size: 40,
+                color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Chưa có dữ liệu thống kê tăng trưởng lượt nghe',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -685,24 +730,63 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
             ),
           ],
         ),
-        ...podcasts.take(3).map(
-          (pod) => Container(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        if (podcasts.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
               borderRadius: AppSpacing.roundedMd,
-              border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+              border: Border.all(
+                color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+              ),
             ),
-            child: InkWell(
-              borderRadius: AppSpacing.roundedMd,
-              onTap: () {
-                final profile = ref.read(creatorProfileProvider).value;
-                CreatorPodcastPlayerSheet.show(
-                  context: context,
-                  podcast: pod,
-                  creatorName: profile?.name ?? 'Sử Kể Đêm Khuya',
-                );
-              },
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.mic_none_rounded,
+                    size: 36,
+                    color: isDark
+                        ? AppColors.onSurfaceMutedDark
+                        : AppColors.onSurfaceMutedLight,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Chưa có track nào được tải lên.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark
+                          ? AppColors.onSurfaceMutedDark
+                          : AppColors.onSurfaceMutedLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...podcasts.take(3).map(
+            (pod) => Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                borderRadius: AppSpacing.roundedMd,
+                border: Border.all(
+                  color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+                ),
+              ),
+              child: InkWell(
+                borderRadius: AppSpacing.roundedMd,
+                onTap: () {
+                  final profile = ref.read(creatorProfileProvider).value;
+                  CreatorPodcastPlayerSheet.show(
+                    context: context,
+                    podcast: pod,
+                    creatorName: (profile?.name.isNotEmpty == true)
+                        ? profile!.name
+                        : 'Creator',
+                  );
+                },
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
@@ -715,12 +799,38 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              Image.network(
-                                pod.coverUrl,
-                                width: 52,
-                                height: 52,
-                                fit: BoxFit.cover,
-                              ),
+                              pod.coverUrl.isEmpty
+                                  ? Container(
+                                      width: 52,
+                                      height: 52,
+                                      color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                      child: const Icon(Icons.mic_rounded, color: AppColors.onSurfaceMutedLight, size: 24),
+                                    )
+                                  : pod.coverUrl.startsWith('data:image')
+                                      ? Image.memory(
+                                          base64Decode(pod.coverUrl.split(',').last),
+                                          width: 52,
+                                          height: 52,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            width: 52,
+                                            height: 52,
+                                            color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                            child: const Icon(Icons.mic_rounded, color: AppColors.onSurfaceMutedLight, size: 24),
+                                          ),
+                                        )
+                                      : Image.network(
+                                          pod.coverUrl,
+                                          width: 52,
+                                          height: 52,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            width: 52,
+                                            height: 52,
+                                            color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                            child: const Icon(Icons.mic_rounded, color: AppColors.onSurfaceMutedLight, size: 24),
+                                          ),
+                                        ),
                               Container(
                                 width: 28,
                                 height: 28,

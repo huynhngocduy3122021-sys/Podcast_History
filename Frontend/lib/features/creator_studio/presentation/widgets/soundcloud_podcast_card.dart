@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -97,18 +98,38 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                   children: [
                     ClipRRect(
                       borderRadius: AppSpacing.roundedSm,
-                      child: Image.network(
-                        pod.coverUrl,
-                        width: 84,
-                        height: 84,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => Container(
-                          width: 84,
-                          height: 84,
-                          color: AppColors.surfaceVariantLight,
-                          child: const Icon(Icons.mic, size: 36, color: AppColors.onSurfaceMutedLight),
-                        ),
-                      ),
+                      child: pod.coverUrl.isEmpty
+                          ? Container(
+                              width: 84,
+                              height: 84,
+                              color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                              child: const Icon(Icons.mic, size: 36, color: AppColors.onSurfaceMutedLight),
+                            )
+                          : pod.coverUrl.startsWith('data:image')
+                              ? Image.memory(
+                                  base64Decode(pod.coverUrl.split(',').last),
+                                  width: 84,
+                                  height: 84,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    width: 84,
+                                    height: 84,
+                                    color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                    child: const Icon(Icons.mic, size: 36, color: AppColors.onSurfaceMutedLight),
+                                  ),
+                                )
+                              : Image.network(
+                                  pod.coverUrl,
+                                  width: 84,
+                                  height: 84,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    width: 84,
+                                    height: 84,
+                                    color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                    child: const Icon(Icons.mic, size: 36, color: AppColors.onSurfaceMutedLight),
+                                  ),
+                                ),
                     ),
                     Material(
                       color: Colors.black.withValues(alpha: 0.35),
@@ -194,6 +215,13 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                             label: pod.statusDisplay,
                             type: pod.statusType,
                           ),
+                          if (pod.isVideo) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            const StatusChip(
+                              label: 'Video 🎬',
+                              type: StatusType.info,
+                            ),
+                          ],
                           if (pod.isExclusive) ...[
                             const SizedBox(width: AppSpacing.xs),
                             const StatusChip(
