@@ -24,6 +24,7 @@ abstract class CreatorRepository {
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
   });
   Future<CreatorPodcast> updatePodcast({
     required String id,
@@ -35,6 +36,7 @@ abstract class CreatorRepository {
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
   });
   Future<void> deletePodcast(String id);
 
@@ -43,24 +45,65 @@ abstract class CreatorRepository {
   Future<PodcastRequest?> getRequestById(String id);
   Future<void> acceptRequest(String id);
   Future<void> rejectRequest(String id, String reason);
-  Future<void> deliverWork(String id, String fileUrl, String note);
+  Future<void> deliverWork(
+    String id,
+    String fileUrl,
+    String note, {
+    List<int>? fileBytes,
+    String? filename,
+  });
   Future<void> sendChatMessage(String requestId, String message);
 
   // Wallet & Withdraw
   Future<Map<String, int>> getWalletBalance();
   Future<List<WalletTransaction>> getTransactions();
   Future<List<BankAccount>> getBankAccounts();
-  Future<void> addBankAccount(String bankName, String accountNumber, String accountHolder);
+  Future<void> addBankAccount(
+    String bankName,
+    String accountNumber,
+    String accountHolder,
+  );
   Future<void> deleteBankAccount(String id);
-  Future<WalletTransaction> withdrawMoney(int amount, String bankAccountId, String pin);
+  Future<WalletTransaction> withdrawMoney(
+    int amount,
+    String bankAccountId,
+    String pin,
+  );
   Future<void> releaseFunds();
 
   // Comments
   Future<List<StudioComment>> getComments();
+  Future<StudioComment?> addCommentToPodcast({
+    required String podcastId,
+    required String content,
+    int? timestampSeconds,
+    String? podcastTitle,
+  });
+  Future<void> deleteComment(String commentId);
   Future<void> togglePinComment(String id);
   Future<void> toggleHideComment(String id);
 
+  // Series
+  Future<List<CreatorSeries>> getSeries();
+  Future<CreatorSeries?> createSeries({
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description,
+    String coverUrl,
+  });
+
+  // Appeals
+  Future<void> submitPodcastAppeal({
+    required String podcastId,
+    required String note,
+  });
+
   // Forms
   Future<List<InteractiveForm>> getForms();
-  Future<void> createForm(String title, String description, List<FormQuestion> questions);
+  Future<void> createForm(
+    String title,
+    String description,
+    List<FormQuestion> questions,
+  );
 }

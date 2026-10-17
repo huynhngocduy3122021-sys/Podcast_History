@@ -96,27 +96,37 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
   Widget _buildPodcastList(List<CreatorPodcast> all, PodcastStatus? filter, bool isDark) {
     final list = filter == null ? all : all.where((p) => p.status == filter).toList();
 
-    if (list.isEmpty) {
-      return EmptyStateWidget(
-        title: 'Chưa có podcast nào',
-        description: 'Tải lên tập podcast đầu tiên để chia sẻ với người nghe.',
-        actionLabel: 'Tạo podcast',
-        onAction: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const UploadPodcastScreen()),
-          );
-        },
-      );
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.screenMargin),
-      itemCount: list.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-      itemBuilder: (context, index) {
-        final pod = list[index];
-        return _buildPodcastItem(pod, isDark);
-      },
+    return RefreshIndicator(
+      onRefresh: () => ref.read(creatorPodcastsProvider.notifier).loadPodcasts(),
+      child: list.isEmpty
+          ? LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: EmptyStateWidget(
+                    title: 'Chưa có podcast nào',
+                    description: 'Tải lên tập podcast đầu tiên để chia sẻ với người nghe.',
+                    actionLabel: 'Tạo podcast',
+                    onAction: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const UploadPodcastScreen()),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            )
+          : ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.screenMargin),
+              itemCount: list.length,
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+              itemBuilder: (context, index) {
+                final pod = list[index];
+                return _buildPodcastItem(pod, isDark);
+              },
+            ),
     );
   }
 
@@ -130,7 +140,9 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
       children: [
         SoundCloudPodcastCard(
           podcast: pod,
-          creatorName: profile?.name ?? 'Sử Kể Đêm Khuya',
+          creatorName: (profile?.name.isNotEmpty == true)
+              ? profile!.name
+              : 'Creator',
           isPlaying: isPlaying,
           onPlayToggle: () {
             setState(() {
@@ -199,17 +211,33 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                   style: const TextStyle(fontSize: 12, color: AppColors.error),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                AppButton(
-                  label: 'Sửa & Gửi lại',
-                  height: 32,
-                  type: AppButtonType.destructive,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => UploadPodcastScreen(editingPodcast: pod),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        label: 'Sửa & Gửi lại',
+                        height: 32,
+                        type: AppButtonType.destructive,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  UploadPodcastScreen(editingPodcast: pod),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppButton(
+                        label: 'Khiếu nại',
+                        height: 32,
+                        type: AppButtonType.secondary,
+                        onPressed: () => _showAppealDialog(pod),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -234,6 +262,72 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
           );
         }
       },
+    );
+  }
+
+  void _showAppealDialog(CreatorPodcast pod) {
+    final noteCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Gửi khiếu nại kiểm duyệt',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tập: "${pod.title}"',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Nếu bạn cho rằng nội dung bị từ chối nhầm lẫn, hãy cung cấp thêm bằng chứng lịch sử hoặc giải trình chi tiết cho Admin:',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.onSurfaceMutedLight,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: noteCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Nhập nội dung giải trình khiếu nại...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          AppButton(
+            label: 'Gửi khiếu nại',
+            width: 130,
+            onPressed: () async {
+              final note = noteCtrl.text.trim();
+              if (note.isNotEmpty) {
+                final repo = ref.read(creatorRepositoryProvider);
+                await repo.submitPodcastAppeal(podcastId: pod.id, note: note);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text('Đã gửi khiếu nại đến ban quản trị VietCast.'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }

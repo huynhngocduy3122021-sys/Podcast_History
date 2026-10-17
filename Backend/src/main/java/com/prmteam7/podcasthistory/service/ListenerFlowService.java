@@ -278,10 +278,16 @@ public class ListenerFlowService {
   @Transactional
   public CommentItem createComment(UUID userId, UUID podcastId, CommentCreate request) {
     Podcast podcast = requirePublishedPodcast(podcastId);
+    Integer timestamp = request.timestampSeconds();
+    if (timestamp != null && (timestamp < 0
+        || (podcast.getDurationSeconds() != null && timestamp > podcast.getDurationSeconds()))) {
+      throw new InvalidFlowRequestException("Mốc bình luận phải nằm trong khoảng thời gian của video.");
+    }
     Comment comment = new Comment();
     comment.setUser(requireUser(userId));
     comment.setPodcast(podcast);
     comment.setContent(request.content().trim());
+    comment.setTimestampSeconds(timestamp);
     comment.setStatus("VISIBLE");
     CommentItem response = toCommentItem(commentRepository.save(comment));
     publishAfterCommit(podcastId, response);
@@ -766,6 +772,7 @@ public class ListenerFlowService {
         user.getDisplayName(),
         user.getAvatarUrl(),
         comment.getContent(),
+        comment.getTimestampSeconds(),
         comment.getStatus(),
         comment.getCreatedAt(),
         comment.getUpdatedAt());

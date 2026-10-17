@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -204,20 +205,56 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      pod.coverUrl,
-                      width: 68,
-                      height: 68,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
-                        width: 68,
-                        height: 68,
-                        color: AppColors.surfaceVariantDark,
-                        child: const Icon(Icons.mic, color: Colors.white54, size: 32),
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: pod.coverUrl.isEmpty
+                            ? Container(
+                                width: 68,
+                                height: 68,
+                                color: AppColors.surfaceVariantDark,
+                                child: const Icon(Icons.mic, color: Colors.white54, size: 32),
+                              )
+                            : pod.coverUrl.startsWith('data:image')
+                                ? Image.memory(
+                                    base64Decode(pod.coverUrl.split(',').last),
+                                    width: 68,
+                                    height: 68,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      width: 68,
+                                      height: 68,
+                                      color: AppColors.surfaceVariantDark,
+                                      child: const Icon(Icons.mic, color: Colors.white54, size: 32),
+                                    ),
+                                  )
+                                : Image.network(
+                                    pod.coverUrl,
+                                    width: 68,
+                                    height: 68,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, _, _) => Container(
+                                      width: 68,
+                                      height: 68,
+                                      color: AppColors.surfaceVariantDark,
+                                      child: const Icon(Icons.mic, color: Colors.white54, size: 32),
+                                    ),
+                                  ),
                       ),
-                    ),
+                      if (pod.isVideo)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.black45,
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -247,6 +284,13 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                               label: pod.statusDisplay,
                               type: pod.statusType,
                             ),
+                            if (pod.isVideo) ...[
+                              const SizedBox(width: 6),
+                              const StatusChip(
+                                label: 'Video 🎬',
+                                type: StatusType.info,
+                              ),
+                            ],
                           ],
                         ),
                       ],

@@ -59,29 +59,37 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
 
-    final currentSeconds = (widget.podcast.duration.inSeconds * widget.currentProgress).toInt();
+    final currentSeconds =
+        (widget.podcast.duration.inSeconds * widget.currentProgress).toInt();
     final profile = ref.read(creatorProfileProvider).value;
 
     final newComment = StudioComment(
       id: 'cmt_${DateTime.now().millisecondsSinceEpoch}',
       podcastTitle: widget.podcast.title,
-      authorName: profile?.name ?? 'Sử Kể Đêm Khuya',
+      authorName: (profile?.name.isNotEmpty == true)
+          ? profile!.name
+          : 'Creator',
       authorAvatar: profile?.avatarUrl ?? '',
       content: text,
       timestampSeconds: _attachTimestamp ? currentSeconds : 0,
       createdAt: DateTime.now(),
     );
 
-    ref.read(creatorCommentsProvider.notifier).addComment(newComment);
+    ref.read(creatorCommentsProvider.notifier).addComment(
+      newComment,
+      podcastId: widget.podcast.id,
+    );
 
     _textController.clear();
     FocusScope.of(context).unfocus();
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_attachTimestamp
-            ? 'Đã gửi bình luận tại mốc ${AppFormatters.formatDuration(Duration(seconds: currentSeconds))}!'
-            : 'Đã gửi bình luận!'),
+        content: Text(
+          _attachTimestamp
+              ? 'Đã gửi bình luận tại mốc ${AppFormatters.formatDuration(Duration(seconds: currentSeconds))}!'
+              : 'Đã gửi bình luận!',
+        ),
         backgroundColor: AppColors.success,
       ),
     );
@@ -94,8 +102,11 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
     final commentsAsync = ref.watch(creatorCommentsProvider);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    final currentSec = (widget.podcast.duration.inSeconds * widget.currentProgress).toInt();
-    final currentTimestampStr = AppFormatters.formatDuration(Duration(seconds: currentSec));
+    final currentSec =
+        (widget.podcast.duration.inSeconds * widget.currentProgress).toInt();
+    final currentTimestampStr = AppFormatters.formatDuration(
+      Duration(seconds: currentSec),
+    );
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.75,
@@ -135,13 +146,19 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                 Container(
                   padding: const EdgeInsets.all(AppSpacing.xs),
                   decoration: BoxDecoration(
-                    color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.12),
+                    color:
+                        (isDark
+                                ? AppColors.primaryDark
+                                : AppColors.primaryLight)
+                            .withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.chat_bubble_rounded,
                     size: 18,
-                    color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                    color: isDark
+                        ? AppColors.primaryDark
+                        : AppColors.primaryLight,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -151,13 +168,18 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                     children: [
                       const Text(
                         'Bình luận & Mốc thời gian',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                       Text(
                         widget.podcast.title,
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                          color: isDark
+                              ? AppColors.onSurfaceMutedDark
+                              : AppColors.onSurfaceMutedLight,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -171,7 +193,9 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                   onPressed: () {
                     Navigator.of(context).pop();
                     Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const StudioCommentsScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const StudioCommentsScreen(),
+                      ),
                     );
                   },
                 ),
@@ -189,7 +213,8 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
           Expanded(
             child: commentsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) => const Center(child: Text('Không thể tải bình luận')),
+              error: (_, _) =>
+                  const Center(child: Text('Không thể tải bình luận')),
               data: (comments) {
                 // Ưu tiên bình luận có liên quan hoặc toàn bộ bình luận mẫu
                 final trackComments = comments.where((c) {
@@ -197,7 +222,9 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                       widget.podcast.title.contains(c.podcastTitle);
                 }).toList();
 
-                final displayList = trackComments.isNotEmpty ? trackComments : comments;
+                final displayList = trackComments.isNotEmpty
+                    ? trackComments
+                    : comments;
 
                 if (displayList.isEmpty) {
                   return const Center(
@@ -214,20 +241,30 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                   separatorBuilder: (_, _) => const Divider(height: 16),
                   itemBuilder: (context, index) {
                     final c = displayList[index];
-                    final isHighlighted = widget.highlightComment != null &&
+                    final isHighlighted =
+                        widget.highlightComment != null &&
                         c.content.contains(widget.highlightComment!);
 
                     final minutes = c.timestampSeconds ~/ 60;
                     final seconds = c.timestampSeconds % 60;
-                    final timeStr = '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+                    final timeStr =
+                        '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
 
                     return Container(
-                      padding: isHighlighted ? const EdgeInsets.all(8) : EdgeInsets.zero,
+                      padding: isHighlighted
+                          ? const EdgeInsets.all(8)
+                          : EdgeInsets.zero,
                       decoration: isHighlighted
                           ? BoxDecoration(
-                              color: AppColors.primaryLight.withValues(alpha: 0.08),
+                              color: AppColors.primaryLight.withValues(
+                                alpha: 0.08,
+                              ),
                               borderRadius: AppSpacing.roundedSm,
-                              border: Border.all(color: AppColors.primaryLight.withValues(alpha: 0.3)),
+                              border: Border.all(
+                                color: AppColors.primaryLight.withValues(
+                                  alpha: 0.3,
+                                ),
+                              ),
                             )
                           : null,
                       child: Row(
@@ -235,8 +272,12 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                         children: [
                           CircleAvatar(
                             radius: 18,
-                            backgroundImage: c.authorAvatar.isNotEmpty ? NetworkImage(c.authorAvatar) : null,
-                            child: c.authorAvatar.isEmpty ? const Icon(Icons.person, size: 18) : null,
+                            backgroundImage: c.authorAvatar.isNotEmpty
+                                ? NetworkImage(c.authorAvatar)
+                                : null,
+                            child: c.authorAvatar.isEmpty
+                                ? const Icon(Icons.person, size: 18)
+                                : null,
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(
@@ -247,27 +288,50 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                   children: [
                                     Text(
                                       c.authorName,
-                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13.5,
+                                      ),
                                     ),
                                     const SizedBox(width: AppSpacing.xs),
                                     if (c.timestampSeconds > 0)
                                       InkWell(
                                         onTap: () {
-                                          final totalSec = widget.podcast.duration.inSeconds;
-                                          if (totalSec > 0 && widget.onSeek != null) {
-                                            final frac = (c.timestampSeconds / totalSec).clamp(0.0, 1.0);
+                                          final totalSec =
+                                              widget.podcast.duration.inSeconds;
+                                          if (totalSec > 0 &&
+                                              widget.onSeek != null) {
+                                            final frac =
+                                                (c.timestampSeconds / totalSec)
+                                                    .clamp(0.0, 1.0);
                                             widget.onSeek!(frac);
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text('Đã nhảy đến mốc $timeStr')),
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Đã nhảy đến mốc $timeStr',
+                                                ),
+                                              ),
                                             );
                                           }
                                         },
                                         borderRadius: BorderRadius.circular(4),
                                         child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
                                           decoration: BoxDecoration(
-                                            color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(4),
+                                            color:
+                                                (isDark
+                                                        ? AppColors.primaryDark
+                                                        : AppColors
+                                                              .primaryLight)
+                                                    .withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
                                           ),
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
@@ -275,7 +339,9 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                               Icon(
                                                 Icons.play_arrow_rounded,
                                                 size: 12,
-                                                color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                                                color: isDark
+                                                    ? AppColors.primaryDark
+                                                    : AppColors.primaryLight,
                                               ),
                                               const SizedBox(width: 2),
                                               Text(
@@ -283,7 +349,9 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                                 style: TextStyle(
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w700,
-                                                  color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                                                  color: isDark
+                                                      ? AppColors.primaryDark
+                                                      : AppColors.primaryLight,
                                                 ),
                                               ),
                                             ],
@@ -295,34 +363,56 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                       AppFormatters.timeAgo(c.createdAt),
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                        color: isDark
+                                            ? AppColors.onSurfaceMutedDark
+                                            : AppColors.onSurfaceMutedLight,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  c.isHidden ? '[Bình luận đã bị ẩn]' : c.content,
+                                  c.isHidden
+                                      ? '[Bình luận đã bị ẩn]'
+                                      : c.content,
                                   style: TextStyle(
                                     fontSize: 13,
                                     height: 1.35,
                                     color: c.isHidden
-                                        ? (isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight)
-                                        : (isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight),
-                                    fontStyle: c.isHidden ? FontStyle.italic : FontStyle.normal,
+                                        ? (isDark
+                                              ? AppColors.onSurfaceMutedDark
+                                              : AppColors.onSurfaceMutedLight)
+                                        : (isDark
+                                              ? AppColors.onSurfaceDark
+                                              : AppColors.onSurfaceLight),
+                                    fontStyle: c.isHidden
+                                        ? FontStyle.italic
+                                        : FontStyle.normal,
                                   ),
                                 ),
                                 const SizedBox(height: 6),
                                 Row(
                                   children: [
                                     InkWell(
-                                      onTap: () => ref.read(creatorCommentsProvider.notifier).togglePin(c.id),
+                                      onTap: () => ref
+                                          .read(
+                                            creatorCommentsProvider.notifier,
+                                          )
+                                          .togglePin(c.id),
                                       child: Row(
                                         children: [
                                           Icon(
-                                            c.isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                                            c.isPinned
+                                                ? Icons.push_pin_rounded
+                                                : Icons.push_pin_outlined,
                                             size: 14,
-                                            color: c.isPinned ? AppColors.secondaryLight : (isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight),
+                                            color: c.isPinned
+                                                ? AppColors.secondaryLight
+                                                : (isDark
+                                                      ? AppColors
+                                                            .onSurfaceMutedDark
+                                                      : AppColors
+                                                            .onSurfaceMutedLight),
                                           ),
                                           const SizedBox(width: 2),
                                           Text(
@@ -330,7 +420,13 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                             style: TextStyle(
                                               fontSize: 11.5,
                                               fontWeight: FontWeight.w600,
-                                              color: c.isPinned ? AppColors.secondaryLight : (isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight),
+                                              color: c.isPinned
+                                                  ? AppColors.secondaryLight
+                                                  : (isDark
+                                                        ? AppColors
+                                                              .onSurfaceMutedDark
+                                                        : AppColors
+                                                              .onSurfaceMutedLight),
                                             ),
                                           ),
                                         ],
@@ -338,20 +434,31 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                     ),
                                     const SizedBox(width: AppSpacing.md),
                                     InkWell(
-                                      onTap: () => ref.read(creatorCommentsProvider.notifier).toggleHide(c.id),
+                                      onTap: () => ref
+                                          .read(
+                                            creatorCommentsProvider.notifier,
+                                          )
+                                          .toggleHide(c.id),
                                       child: Row(
                                         children: [
                                           Icon(
-                                            c.isHidden ? Icons.visibility_rounded : Icons.visibility_off_outlined,
+                                            c.isHidden
+                                                ? Icons.visibility_rounded
+                                                : Icons.visibility_off_outlined,
                                             size: 14,
-                                            color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                            color: isDark
+                                                ? AppColors.onSurfaceMutedDark
+                                                : AppColors.onSurfaceMutedLight,
                                           ),
                                           const SizedBox(width: 2),
                                           Text(
                                             c.isHidden ? 'Hiện lại' : 'Ẩn',
                                             style: TextStyle(
                                               fontSize: 11.5,
-                                              color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                              color: isDark
+                                                  ? AppColors.onSurfaceMutedDark
+                                                  : AppColors
+                                                        .onSurfaceMutedLight,
                                             ),
                                           ),
                                         ],
@@ -373,12 +480,13 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
 
           // Bottom Input Field
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: 8,
+            ),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
-              border: Border(
-                top: BorderSide(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
-              ),
+              color: const Color(0xFF2C2525),
+              border: Border(top: const BorderSide(color: Color(0xFF5A504B))),
             ),
             child: SafeArea(
               child: Column(
@@ -388,22 +496,35 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                     children: [
                       ActionChip(
                         avatar: Icon(
-                          _attachTimestamp ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          _attachTimestamp
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked_rounded,
                           size: 14,
-                          color: _attachTimestamp ? (isDark ? AppColors.primaryDark : AppColors.primaryLight) : null,
+                          color: _attachTimestamp
+                              ? (isDark
+                                    ? AppColors.primaryDark
+                                    : AppColors.primaryLight)
+                              : null,
                         ),
                         label: Text(
                           'Gắn mốc: $currentTimestampStr',
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        onPressed: () => setState(() => _attachTimestamp = !_attachTimestamp),
+                        onPressed: () => setState(
+                          () => _attachTimestamp = !_attachTimestamp,
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         'Phản hồi với tư cách Creator',
                         style: TextStyle(
                           fontSize: 11,
-                          color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                          color: isDark
+                              ? AppColors.onSurfaceMutedDark
+                              : AppColors.onSurfaceMutedLight,
                         ),
                       ),
                     ],
@@ -414,21 +535,76 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                       Expanded(
                         child: TextField(
                           controller: _textController,
+                          style: const TextStyle(color: Colors.white),
                           decoration: InputDecoration(
                             hintText: 'Thêm bình luận cho tập podcast này...',
-                            hintStyle: const TextStyle(fontSize: 13),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            hintStyle: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.white54,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             isDense: true,
+                            filled: true,
+                            fillColor: const Color(0xFF191717),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(20),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF5A504B),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF5A504B),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              borderSide: const BorderSide(
+                                color: Color(0xFFB3261E),
+                              ),
                             ),
                           ),
                           onSubmitted: (_) => _sendComment(),
                         ),
                       ),
+                      for (final emoji in const [
+                        '\u{1F525}',
+                        '\u{1F44B}',
+                        '\u{1F979}',
+                      ])
+                        InkWell(
+                          onTap: () {
+                            _textController.text =
+                                '${_textController.text}$emoji';
+                            _textController
+                                .selection = TextSelection.fromPosition(
+                              TextPosition(offset: _textController.text.length),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              emoji,
+                              style: const TextStyle(fontSize: 20),
+                            ),
+                          ),
+                        ),
                       const SizedBox(width: AppSpacing.sm),
-                      IconButton.filled(
+                      IconButton(
                         icon: const Icon(Icons.send_rounded, size: 18),
+                        color: Colors.white,
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFFB3261E),
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: _sendComment,
                       ),
                     ],

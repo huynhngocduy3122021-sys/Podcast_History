@@ -54,7 +54,7 @@ class _SoundCloudWaveformState extends State<SoundCloudWaveform> {
   @override
   void initState() {
     super.initState();
-    _effectivePeaks = widget.peaks ?? _generateMockPeaks(60);
+    _effectivePeaks = widget.peaks ?? _generateProceduralPeaks(60);
   }
 
   @override
@@ -65,7 +65,7 @@ class _SoundCloudWaveformState extends State<SoundCloudWaveform> {
     }
   }
 
-  List<double> _generateMockPeaks(int count) {
+  List<double> _generateProceduralPeaks(int count) {
     final rand = math.Random(42);
     final list = <double>[];
     for (int i = 0; i < count; i++) {

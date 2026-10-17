@@ -7,9 +7,11 @@ Database credentials are read from .env/environment; tokens are never written to
 import argparse
 import base64
 import concurrent.futures
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import http.server
+from http.client import HTTPException
 import json
 import os
 from pathlib import Path
@@ -527,7 +529,7 @@ class Regression:
         self.post('/api/auth/register',None,{'username':'listener_test@example.test','email':'collision@example.test','password':PASSWORD,'displayName':'collision'},expected=409,label='Reject username colliding with existing email')
     def report(self,error=None):
         operations={m+' '+p for m,p in self.routes}
-        summary={"date":"2026-10-13","operations":len(operations),"cases":len(self.results),
+        summary={"date":datetime.now(timezone(timedelta(hours=7))).date().isoformat(),"operations":len(operations),"cases":len(self.results),
             "passed":sum(r['passed'] for r in self.results),"failed":sum(not r['passed'] for r in self.results),
             "routes_exercised":len(operations & self.covered),"routes_with_2xx":len(operations & self.success),
             "uncovered":sorted(operations-self.covered),"no_2xx":sorted(operations-self.success),"error":error,
@@ -577,7 +579,7 @@ def main():
             try:
                 with urllib.request.urlopen(test.base+'/api/health',timeout=2) as response:
                     if response.status==200:break
-            except (urllib.error.URLError,TimeoutError):time.sleep(.5)
+            except (urllib.error.URLError,TimeoutError,HTTPException,ConnectionError):time.sleep(.5)
         else:raise AssertionError('Application readiness timed out')
         test.run();test.report()
         return 0

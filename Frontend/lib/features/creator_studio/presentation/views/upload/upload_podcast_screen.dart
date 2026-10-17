@@ -10,6 +10,7 @@ import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/data/repositories/api_creator_repository.dart';
 
 class UploadPodcastScreen extends ConsumerStatefulWidget {
   final CreatorPodcast? editingPodcast;
@@ -40,6 +41,10 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   bool _isUploadingVideo = false;
   double _videoUploadProgress = 0.0;
   bool _isSubmitting = false;
+  String? _selectedSeriesId;
+  String? _selectedPdfFileName;
+  List<int>? _pdfFileBytes;
+  List<int>? _pickedMediaBytes;
 
   final List<String> _eras = [
     '1858–1945',
@@ -60,8 +65,22 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       _selectedEra = edit.eraTag;
       _isExclusive = edit.isExclusive;
       _selectedCoverUrl = edit.coverUrl;
-      _audioFileName = edit.audioFileName ?? 'audio_sample.mp3';
+      final isVideoFile = edit.audioFileName != null &&
+          (edit.audioFileName!.toLowerCase().endsWith('.mp4') ||
+              edit.audioFileName!.toLowerCase().endsWith('.mov') ||
+              edit.audioFileName!.toLowerCase().endsWith('.mkv') ||
+              edit.audioFileName!.toLowerCase().endsWith('.webm') ||
+              edit.audioFileName!.toLowerCase().contains('video'));
+      _isVideo = isVideoFile;
+      if (isVideoFile) {
+        _videoFileName = edit.audioFileName;
+        _audioFileName = null;
+      } else {
+        _audioFileName = edit.audioFileName;
+        _videoFileName = null;
+      }
       _uploadProgress = 1.0;
+      _videoUploadProgress = 1.0;
     }
   }
 
@@ -74,6 +93,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   }
 
   Future<void> _applySelectedMedia(String fileName, {required bool isVideo}) async {
+    final cleanName = fileName.trim();
     if (isVideo) {
       setState(() {
         _isUploadingVideo = true;
@@ -91,12 +111,11 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       if (mounted) {
         setState(() {
           _isUploadingVideo = false;
-          _videoFileName = fileName.trim();
-          _audioFileName = fileName.trim();
+          _videoFileName = cleanName;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã cập nhật tệp video: ${fileName.trim()}'),
+            content: Text('Đã cập nhật tệp video: $cleanName'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 2),
           ),
@@ -119,11 +138,11 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       if (mounted) {
         setState(() {
           _isUploadingAudio = false;
-          _audioFileName = fileName.trim();
+          _audioFileName = cleanName;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã cập nhật tệp âm thanh: ${fileName.trim()}'),
+            content: Text('Đã cập nhật tệp âm thanh: $cleanName'),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 2),
           ),
@@ -134,10 +153,20 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
 
   Future<void> _pickAudioDirectly() async {
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.audio,
-      );
-      if (file != null) {
+      PlatformFile? file;
+      try {
+        file = await FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+        );
+      } catch (_) {
+        file = await FilePicker.pickFile(type: FileType.audio);
+      }
+      if (file != null && file.name.isNotEmpty) {
+        try {
+          final bytes = await file.readAsBytes();
+          _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
+        } catch (_) {}
         await _applySelectedMedia(file.name, isVideo: false);
       }
     } catch (e) {
@@ -151,10 +180,20 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
 
   Future<void> _pickVideoDirectly() async {
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.video,
-      );
-      if (file != null) {
+      PlatformFile? file;
+      try {
+        file = await FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'],
+        );
+      } catch (_) {
+        file = await FilePicker.pickFile(type: FileType.video);
+      }
+      if (file != null && file.name.isNotEmpty) {
+        try {
+          final bytes = await file.readAsBytes();
+          _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
+        } catch (_) {}
         await _applySelectedMedia(file.name, isVideo: true);
       }
     } catch (e) {
@@ -204,9 +243,17 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
 
   Future<void> _handleUploadCoverDirectly() async {
     try {
-      final file = await FilePicker.pickFile(
-        type: FileType.image,
-      );
+      PlatformFile? file;
+      try {
+        file = await FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+        );
+      } catch (_) {
+        file = await FilePicker.pickFile(
+          type: FileType.image,
+        );
+      }
 
       if (file != null) {
         final bytes = await file.readAsBytes();
@@ -282,13 +329,15 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       return;
     }
 
-    final hasMedia = _isVideo ? (_videoFileName != null) : (_audioFileName != null);
-    if (!hasMedia) {
+    final effectiveMedia = _isVideo ? _videoFileName : _audioFileName;
+
+    if (effectiveMedia == null || effectiveMedia.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_isVideo
               ? 'Vui lòng tải lên hoặc chọn tệp video (Video MP4/MOV)'
               : 'Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
+          backgroundColor: AppColors.error,
         ),
       );
       setState(() => _currentStep = 0);
@@ -298,20 +347,46 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     setState(() => _isSubmitting = true);
 
     try {
+      CreatorPodcast resultPodcast;
       if (widget.editingPodcast != null) {
-        await ref.read(creatorPodcastsProvider.notifier).updatePodcast(
-              id: widget.editingPodcast!.id,
-              title: _titleController.text.trim(),
-              description: _descController.text.trim(),
-              eraTag: _selectedEra,
-              sources: _sourcesController.text.trim(),
-              isExclusive: _isExclusive,
-              coverUrl: _selectedCoverUrl,
-              audioFileName: _audioFileName,
-              duration: widget.editingPodcast!.duration.inSeconds > 0
-                  ? widget.editingPodcast!.duration
-                  : const Duration(minutes: 25, seconds: 30),
+        resultPodcast =
+            await ref.read(creatorPodcastsProvider.notifier).updatePodcast(
+                  id: widget.editingPodcast!.id,
+                  title: _titleController.text.trim(),
+                  description: _descController.text.trim(),
+                  eraTag: _selectedEra,
+                  sources: _sourcesController.text.trim(),
+                  isExclusive: _isExclusive,
+                  coverUrl: _selectedCoverUrl,
+                  audioFileName: effectiveMedia,
+                  duration: widget.editingPodcast!.duration.inSeconds > 0
+                      ? widget.editingPodcast!.duration
+                      : const Duration(minutes: 25, seconds: 30),
+                  mediaBytes: _pickedMediaBytes,
+                );
+
+        // Assign to series if selected
+        if (_selectedSeriesId != null && _selectedSeriesId!.isNotEmpty) {
+          final repo = ref.read(creatorRepositoryProvider);
+          if (repo is ApiCreatorRepository) {
+            await repo.assignPodcastToSeries(
+              podcastId: resultPodcast.id,
+              seriesId: _selectedSeriesId!,
             );
+          }
+        }
+
+        // Upload PDF Reference if selected
+        if (_pdfFileBytes != null && _selectedPdfFileName != null) {
+          final repo = ref.read(creatorRepositoryProvider);
+          if (repo is ApiCreatorRepository) {
+            await repo.uploadPdfReferenceFile(
+              podcastId: resultPodcast.id,
+              fileBytes: _pdfFileBytes!,
+              filename: _selectedPdfFileName!,
+            );
+          }
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -323,21 +398,47 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           Navigator.of(context).pop();
         }
       } else {
-        await ref.read(creatorPodcastsProvider.notifier).createPodcast(
-              title: _titleController.text.trim(),
-              description: _descController.text.trim(),
-              eraTag: _selectedEra,
-              sources: _sourcesController.text.trim(),
-              isExclusive: _isExclusive,
-              coverUrl: _selectedCoverUrl,
-              audioFileName: _audioFileName,
-              duration: const Duration(minutes: 25, seconds: 30),
+        resultPodcast =
+            await ref.read(creatorPodcastsProvider.notifier).createPodcast(
+                  title: _titleController.text.trim(),
+                  description: _descController.text.trim(),
+                  eraTag: _selectedEra,
+                  sources: _sourcesController.text.trim(),
+                  isExclusive: _isExclusive,
+                  coverUrl: _selectedCoverUrl,
+                  audioFileName: effectiveMedia,
+                  duration: const Duration(minutes: 25, seconds: 30),
+                  mediaBytes: _pickedMediaBytes,
+                );
+
+        // Assign to series if selected
+        if (_selectedSeriesId != null && _selectedSeriesId!.isNotEmpty) {
+          final repo = ref.read(creatorRepositoryProvider);
+          if (repo is ApiCreatorRepository) {
+            await repo.assignPodcastToSeries(
+              podcastId: resultPodcast.id,
+              seriesId: _selectedSeriesId!,
             );
+          }
+        }
+
+        // Upload PDF Reference if selected
+        if (_pdfFileBytes != null && _selectedPdfFileName != null) {
+          final repo = ref.read(creatorRepositoryProvider);
+          if (repo is ApiCreatorRepository) {
+            await repo.uploadPdfReferenceFile(
+              podcastId: resultPodcast.id,
+              fileBytes: _pdfFileBytes!,
+              filename: _selectedPdfFileName!,
+            );
+          }
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Podcast đã được gửi lên hệ thống và chuyển vào hàng đợi kiểm duyệt AI!'),
+              content: Text(
+                  'Podcast đã được gửi lên hệ thống và chuyển vào hàng đợi kiểm duyệt AI!'),
               backgroundColor: AppColors.success,
             ),
           );
@@ -385,7 +486,26 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
               child: Stepper(
                 currentStep: _currentStep,
                 onStepContinue: () {
-                  if (_currentStep < 2) {
+                  if (_currentStep == 0) {
+                    final hasMedia = _isVideo
+                        ? (_videoFileName != null && _videoFileName!.isNotEmpty)
+                        : (_audioFileName != null && _audioFileName!.isNotEmpty);
+                    if (!hasMedia) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(_isVideo
+                              ? 'Vui lòng tải lên hoặc chọn tệp video (Video MP4/MOV)'
+                              : 'Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                      return;
+                    }
+                    setState(() => _currentStep++);
+                  } else if (_currentStep == 1) {
+                    if (!_formKey.currentState!.validate()) {
+                      return;
+                    }
                     setState(() => _currentStep++);
                   } else {
                     _handleSubmit();
@@ -428,9 +548,13 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                 },
                 steps: [
                   Step(
-                    title: const Text('Tệp âm thanh & Ảnh bìa'),
+                    title: Text(_isVideo ? 'Tệp video & Ảnh bìa' : 'Tệp âm thanh & Ảnh bìa'),
                     isActive: _currentStep >= 0,
-                    state: _audioFileName != null ? StepState.complete : StepState.indexed,
+                    state: (_isVideo
+                            ? (_videoFileName != null && _videoFileName!.isNotEmpty)
+                            : (_audioFileName != null && _audioFileName!.isNotEmpty))
+                        ? StepState.complete
+                        : StepState.indexed,
                     content: _buildStep1(isDark),
                   ),
                   Step(
@@ -878,6 +1002,19 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
         );
       } catch (_) {}
     }
+    if (_selectedCoverUrl.isEmpty) {
+      return Container(
+        width: 84,
+        height: 84,
+        decoration: BoxDecoration(
+          borderRadius: AppSpacing.roundedMd,
+          color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+        ),
+        child: const Center(
+          child: Icon(Icons.photo_size_select_actual_rounded, color: AppColors.onSurfaceMutedLight, size: 30),
+        ),
+      );
+    }
     return Image.network(
       _selectedCoverUrl,
       width: 84,
@@ -955,6 +1092,36 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             );
           }).toList(),
         ),
+        const SizedBox(height: AppSpacing.md),
+        const Text(
+          'Thuộc Series (Tuyển tập)',
+          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Consumer(
+          builder: (context, ref, _) {
+            final seriesList =
+                ref.watch(creatorSeriesProvider).value ?? [];
+            return DropdownButtonFormField<String?>(
+              initialValue: _selectedSeriesId,
+              decoration: const InputDecoration(
+                hintText: 'Chọn Series liên quan (tùy chọn)',
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('Không thuộc Series nào (Tập đơn lẻ)'),
+                ),
+                ...seriesList.map((s) => DropdownMenuItem<String?>(
+                      value: s.id,
+                      child: Text(s.title),
+                    )),
+              ],
+              onChanged: (val) => setState(() => _selectedSeriesId = val),
+            );
+          },
+        ),
       ],
     );
   }
@@ -965,16 +1132,96 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       children: [
         AppTextField(
           label: 'Nguồn tư liệu & Sách tham khảo (Bắt buộc)',
-          hint: 'Ghi rõ tên sách, tác giả, hồi ký, tài liệu lưu trữ để phục vụ kiểm duyệt...',
+          hint:
+              'Ghi rõ tên sách, tác giả, hồi ký, tài liệu lưu trữ để phục vụ kiểm duyệt...',
           controller: _sourcesController,
           maxLines: 3,
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng cung cấp nguồn tư liệu để đảm bảo tính xác thực' : null,
+          validator: (v) => (v == null || v.trim().isEmpty)
+              ? 'Vui lòng cung cấp nguồn tư liệu để đảm bảo tính xác thực'
+              : null,
         ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Tài liệu PDF đính kèm (Nguồn xác thực)',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            TextButton.icon(
+              icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+              label: Text(_selectedPdfFileName != null
+                  ? 'Đổi tệp PDF'
+                  : 'Tải lên PDF'),
+              onPressed: () async {
+                try {
+                  PlatformFile? file;
+                  try {
+                    file = await FilePicker.pickFile(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf'],
+                    );
+                  } catch (_) {
+                    file = await FilePicker.pickFile(type: FileType.any);
+                  }
+                  final picked = file;
+                  if (picked != null && picked.name.isNotEmpty) {
+                    final bytes = await picked.readAsBytes();
+                    setState(() {
+                      _selectedPdfFileName = picked.name;
+                      _pdfFileBytes = bytes;
+                    });
+                  }
+                } catch (_) {}
+              },
+            ),
+          ],
+        ),
+        if (_selectedPdfFileName != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppColors.surfaceVariantDark
+                  : AppColors.surfaceVariantLight,
+              borderRadius: AppSpacing.roundedSm,
+              border: Border.all(
+                  color: AppColors.secondaryLight.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.description_rounded,
+                    size: 20, color: AppColors.secondaryLight),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    _selectedPdfFileName!,
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  onPressed: () => setState(() {
+                    _selectedPdfFileName = null;
+                    _pdfFileBytes = null;
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.lg),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Chế độ Độc quyền thành viên (Locked)', style: TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text('Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập này.'),
+          title: const Text('Chế độ Độc quyền thành viên (Locked)',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text(
+              'Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập này.'),
           value: _isExclusive,
           activeThumbColor: AppColors.secondaryLight,
           onChanged: (val) => setState(() => _isExclusive = val),
@@ -1023,20 +1270,6 @@ class _AudioSourceSelectorSheet extends StatefulWidget {
 class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
   late TextEditingController _textController;
 
-  final List<String> _audioPresets = const [
-    'Hồ Chí Minh đọc Tuyên ngôn Độc lập (1945).mp3',
-    'Bản tin Chiến thắng Điện Biên Phủ (1954).mp3',
-    'Hiệp định Genève 1954 và Vĩ tuyến 17.mp3',
-    'Hào khí Đông A - Bạch Đằng Giang.mp3',
-    'Kháng chiến toàn quốc 1946.mp3',
-  ];
-
-  final List<String> _videoPresets = const [
-    'Phim tư liệu Điện Biên Phủ trên không (1972).mp4',
-    'Tư liệu Lễ ký Hiệp định Genève (1954).mp4',
-    'Hình ảnh ngày Giải phóng Thủ đô (10-10-1954).mp4',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -1053,7 +1286,6 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final presets = widget.isVideo ? _videoPresets : _audioPresets;
     final mediaLabel = widget.isVideo ? 'Video' : 'Audio';
 
     return Padding(
@@ -1088,7 +1320,7 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Nhập tên tệp / URL trực tuyến, tải tệp từ thiết bị hoặc chọn mẫu có sẵn.',
+              'Nhập tên tệp / URL trực tuyến, hoặc tải tệp trực tiếp từ thiết bị của bạn.',
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -1131,10 +1363,20 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
                 height: 40,
                 onPressed: () async {
                   try {
-                    final file = await FilePicker.pickFile(
-                      type: widget.isVideo ? FileType.video : FileType.audio,
-                    );
-                    if (file != null) {
+                    PlatformFile? file;
+                    try {
+                      file = await FilePicker.pickFile(
+                        type: FileType.custom,
+                        allowedExtensions: widget.isVideo
+                            ? ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v']
+                            : ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+                      );
+                    } catch (_) {
+                      file = await FilePicker.pickFile(
+                        type: widget.isVideo ? FileType.video : FileType.audio,
+                      );
+                    }
+                    if (file != null && file.name.isNotEmpty) {
                       if (context.mounted) {
                         Navigator.of(context).pop(file.name);
                       }
@@ -1149,26 +1391,6 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
                 },
               ),
             ),
-            const SizedBox(height: AppSpacing.lg),
-            const Divider(),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Tệp $mediaLabel tư liệu lịch sử mẫu:',
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            ...presets.map((preset) => ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    widget.isVideo ? Icons.videocam_outlined : Icons.graphic_eq_rounded,
-                    size: 20,
-                    color: widget.isVideo ? AppColors.secondaryLight : AppColors.primaryLight,
-                  ),
-                  title: Text(preset, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
-                  onTap: () => Navigator.of(context).pop(preset),
-                )),
           ],
         ),
       ),
@@ -1190,49 +1412,6 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
   late String _previewUrl;
   bool _isUploading = false;
 
-  final List<Map<String, String>> _historicalCovers = const [
-    {
-      'title': 'Bản đồ cổ & Kỷ vật thời gian',
-      'category': 'Tư liệu lịch sử',
-      'url': 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Sách sử ký & Trang tài liệu cổ',
-      'category': 'Khảo cứu văn bản',
-      'url': 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Hoàng thành Thăng Long cổ kính',
-      'category': 'Di tích nghìn năm',
-      'url': 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Cố đô Huế & Điện Thái Hòa',
-      'category': 'Triều Nguyễn 1802-1945',
-      'url': 'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Chiến dịch Điện Biên Phủ lẫy lừng',
-      'category': 'Kháng chiến 1945-1954',
-      'url': 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Hào khí sông Bạch Đằng',
-      'category': 'Chiến công hiển hách',
-      'url': 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Studio Thu thanh Kể sử',
-      'category': 'Podcast chuyên nghiệp',
-      'url': 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=400&q=80',
-    },
-    {
-      'title': 'Ánh nến & Trang sử Việt',
-      'category': 'Không gian hoài niệm',
-      'url': 'https://images.unsplash.com/photo-1516979187457-637abb4f9353?auto=format&fit=crop&w=400&q=80',
-    },
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -1249,9 +1428,17 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
   Future<void> _handleUploadNewImage() async {
     try {
       setState(() => _isUploading = true);
-      final file = await FilePicker.pickFile(
-        type: FileType.image,
-      );
+      PlatformFile? file;
+      try {
+        file = await FilePicker.pickFile(
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+        );
+      } catch (_) {
+        file = await FilePicker.pickFile(
+          type: FileType.image,
+        );
+      }
 
       if (file != null) {
         final bytes = await file.readAsBytes();
@@ -1292,33 +1479,35 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
         top: AppSpacing.lg,
         bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.lg,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.photo_library_rounded, color: AppColors.primaryLight),
-              const SizedBox(width: AppSpacing.sm),
-              const Text(
-                'Thư viện ảnh bìa Podcast',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Chọn một ảnh có sẵn bên dưới, dán liên kết URL hoặc tải ảnh mới từ máy.',
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.photo_library_rounded, color: AppColors.primaryLight),
+                const SizedBox(width: AppSpacing.sm),
+                const Text(
+                  'Ảnh bìa Podcast',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Dán liên kết URL ảnh bìa hoặc tải ảnh mới từ thiết bị của bạn.',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
 
           // Nhập URL ảnh
           Row(
@@ -1428,116 +1617,9 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
             ),
           ],
 
-          const SizedBox(height: AppSpacing.md),
-          const Divider(),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Ảnh tư liệu lịch sử chọn lọc (Tỉ lệ 1:1):',
-            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // Grid ảnh
-          Expanded(
-            child: GridView.builder(
-              itemCount: _historicalCovers.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: AppSpacing.sm,
-                mainAxisSpacing: AppSpacing.sm,
-                childAspectRatio: 0.85,
-              ),
-              itemBuilder: (context, index) {
-                final item = _historicalCovers[index];
-                final isSelected = _previewUrl == item['url'];
-
-                return InkWell(
-                  onTap: () {
-                    Navigator.of(context).pop(item['url']);
-                  },
-                  borderRadius: AppSpacing.roundedSm,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: AppSpacing.roundedSm,
-                      border: Border.all(
-                        color: isSelected ? AppColors.primaryLight : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
-                        width: isSelected ? 2.5 : 1,
-                      ),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.network(
-                                item['url']!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Color(0xFF8B2500), Color(0xFFCD3700)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Icon(Icons.history_edu_rounded, color: Colors.white.withValues(alpha: 0.8), size: 32),
-                                  ),
-                                ),
-                              ),
-                              if (isSelected)
-                                Positioned(
-                                  top: 6,
-                                  right: 6,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.primaryLight,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.check, size: 14, color: Colors.white),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item['title']!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11),
-                              ),
-                              Text(
-                                item['category']!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
-
-

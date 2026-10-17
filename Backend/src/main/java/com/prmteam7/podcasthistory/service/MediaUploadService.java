@@ -53,10 +53,47 @@ public class MediaUploadService {
         return store(file, userId, podcastId, fileType);
     }
 
+    public MediaUploadResponse uploadMilestoneMedia(MultipartFile file, UUID userId, UUID milestoneId) {
+        UploadFileType type = validateAndResolveFile(file);
+        if (!type.contentType().startsWith("video/") && !type.contentType().startsWith("audio/")) {
+            throw new InvalidMediaUploadException("Sản phẩm bàn giao phải là file video hoặc audio.");
+        }
+        String prefix = normalizeFolder(properties.getFolder()) + "/" + userId + "/milestones/" + milestoneId;
+        return store(file, userId, null, null, type, prefix);
+    }
+
     public MediaUploadResponse uploadPodcastReferencePdf(
             MultipartFile file, UUID userId, UUID podcastId, UUID referenceId) {
         if (file == null || file.isEmpty()) {
-            throw new InvalidMediaUploadException("Vui lòng chọn một file ảnh, video hoặc audio.");
+            throw new InvalidMediaUploadException("Vui lòng chọn file PDF nguồn.");
+        }
+        String type = file.getContentType();
+        if (type != null && !type.equalsIgnoreCase("application/pdf")
+                && !type.equalsIgnoreCase("application/octet-stream")) {
+            throw new InvalidMediaUploadException("Tài liệu nguồn chỉ chấp nhận PDF.");
+        }
+        if (!"pdf".equals(extensionOf(file.getOriginalFilename()))) {
+            throw new InvalidMediaUploadException("Tài liệu nguồn phải có đuôi .pdf.");
+        }
+        try (var input = file.getInputStream()) {
+            byte[] signature = input.readNBytes(5);
+            if (!java.util.Arrays.equals(signature, "%PDF-".getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
+                throw new InvalidMediaUploadException("Nội dung file không phải PDF hợp lệ.");
+            }
+        } catch (IOException exception) {
+            throw new InvalidMediaUploadException("Không đọc được file PDF.");
+        }
+        return store(file, userId, podcastId, referenceId, new UploadFileType("application/pdf"));
+    }
+
+    public void deletePodcastReferenceFile(String key, UUID userId, UUID podcastId, UUID referenceId) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        String prefix = normalizeFolder(properties.getFolder()) + "/" + userId
+                + "/podcasts/" + podcastId + "/references/" + referenceId + "/";
+        if (!key.startsWith(prefix)) {
+            throw new InvalidMediaUploadException("Object key không thuộc tài liệu nguồn này.");
         }
         s3Client().deleteObject(DeleteObjectRequest.builder()
                 .bucket(properties.getBucketName().trim()).key(key).build());
@@ -87,6 +124,12 @@ public class MediaUploadService {
                 case "video/mp4", "video/quicktime", "video/x-m4v", "video/3gpp" -> bmff;
                 case "video/webm", "video/x-matroska" -> bytes.length >= 4 && (bytes[0]&255)==26 && (bytes[1]&255)==69 && (bytes[2]&255)==223 && (bytes[3]&255)==163;
                 case "video/x-msvideo", "video/avi" -> ascii.startsWith("RIFF") && ascii.startsWith("AVI ",8);
+                case "audio/mpeg", "audio/mp3" -> ascii.startsWith("ID3") || (bytes.length >= 2 && (bytes[0]&255)==255 && (bytes[1]&224)==224);
+                case "audio/mp4", "audio/x-m4a" -> bmff;
+                case "audio/aac" -> bytes.length >= 2 && (bytes[0]&255)==255 && (bytes[1]&246)==240;
+                case "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave" -> ascii.startsWith("RIFF") && ascii.startsWith("WAVE",8);
+                case "audio/ogg", "audio/opus" -> ascii.startsWith("OggS");
+                case "audio/flac", "audio/x-flac" -> ascii.startsWith("fLaC");
                 default -> false;
             };
             if (!valid) throw new InvalidMediaUploadException("Nội dung file không khớp định dạng ảnh/video được hỗ trợ.");
@@ -111,6 +154,12 @@ public class MediaUploadService {
 
     private MediaUploadResponse store(
             MultipartFile file, UUID userId, UUID podcastId, UUID referenceId, UploadFileType fileType) {
+        return store(file, userId, podcastId, referenceId, fileType, null);
+    }
+
+    private MediaUploadResponse store(
+            MultipartFile file, UUID userId, UUID podcastId, UUID referenceId, UploadFileType fileType,
+            String privatePrefix) {
         S3Client client = s3Client();
         Path tempFile = null;
 
@@ -118,9 +167,9 @@ public class MediaUploadService {
             tempFile = Files.createTempFile("podcast-history-upload-", safeExtension(file.getOriginalFilename()));
             file.transferTo(tempFile.toFile());
 
-            String objectKey = normalizeFolder(properties.getFolder()) + "/" + userId
+            String objectKey = (privatePrefix != null ? privatePrefix : normalizeFolder(properties.getFolder()) + "/" + userId
                     + (podcastId == null ? "" : "/podcasts/" + podcastId)
-                    + (referenceId == null ? "" : "/references/" + referenceId)
+                    + (referenceId == null ? "" : "/references/" + referenceId))
                     + "/" + UUID.randomUUID() + safeExtension(file.getOriginalFilename());
             PutObjectRequest request = PutObjectRequest.builder()
                     .bucket(properties.getBucketName().trim())
@@ -132,7 +181,7 @@ public class MediaUploadService {
             return new MediaUploadResponse(
                     objectKey,
                     properties.getBucketName().trim(),
-                    podcastId == null ? publicUrl(objectKey) : null,
+                    podcastId == null && privatePrefix == null ? publicUrl(objectKey) : null,
                     fileType.contentType(),
                     file.getSize());
         } catch (IOException | RuntimeException exception) {

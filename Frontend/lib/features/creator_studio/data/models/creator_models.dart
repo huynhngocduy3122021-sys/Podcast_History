@@ -214,6 +214,16 @@ class CreatorPodcast {
         return 'Bản nháp';
     }
   }
+
+  bool get isVideo {
+    final name = audioFileName?.toLowerCase() ?? '';
+    return name.endsWith('.mp4') ||
+        name.endsWith('.mov') ||
+        name.endsWith('.mkv') ||
+        name.endsWith('.webm') ||
+        name.endsWith('.avi') ||
+        name.contains('video');
+  }
 }
 
 // --- CUSTOM PODCAST REQUEST (ESCROW & STATE MACHINE) ---
@@ -524,3 +534,46 @@ class InteractiveForm {
     this.isActive = true,
   });
 }
+
+// --- CREATOR SERIES ---
+
+class CreatorSeries {
+  final String id;
+  final String title;
+  final String slug;
+  final String description;
+  final String coverUrl;
+  final String categoryId;
+  final String categoryName;
+  final String status;
+  final DateTime createdAt;
+
+  const CreatorSeries({
+    required this.id,
+    required this.title,
+    required this.slug,
+    this.description = '',
+    this.coverUrl = '',
+    this.categoryId = '',
+    this.categoryName = '',
+    this.status = 'ACTIVE',
+    required this.createdAt,
+  });
+
+  factory CreatorSeries.fromJson(Map<String, dynamic> json) {
+    return CreatorSeries(
+      id: json['seriesId']?.toString() ?? '',
+      title: json['title'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      coverUrl: json['coverUrl'] as String? ?? '',
+      categoryId: json['categoryId']?.toString() ?? '',
+      categoryName: json['categoryName'] as String? ?? '',
+      status: json['status'] as String? ?? 'ACTIVE',
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+    );
+  }
+}
+
