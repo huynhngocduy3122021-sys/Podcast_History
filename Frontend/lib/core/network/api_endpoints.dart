@@ -1,6 +1,6 @@
 class ApiEndpoints {
   // Base URLs
-  static const String defaultBaseUrl = 'http://localhost:8081';
+  static const String defaultBaseUrl = 'https://bullpen-viewer-overfill.ngrok-free.dev';
   static const String emulatorBaseUrl = 'http://10.0.2.2:8081';
 
   // Auth
