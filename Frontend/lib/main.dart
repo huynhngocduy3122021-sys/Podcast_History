@@ -617,21 +617,19 @@ class _ShellState extends State<Shell> {
         onPlay: play,
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
+        onWallet: _openWallet,
         hasUnreadNotifications: notifications.any((item) => !item.read),
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
       ),
       Discover(onOpen: openShow),
+      const LivestreamPage(),
       LibraryPage(
         api: api,
         likedTitles: likedShowTitles,
         savedTitles: savedShowTitles,
         onOpen: openShow,
         onOpenCreator: _showCreatorProfile,
-      ),
-      ListenerWalletPage(
-        balance: walletBalance,
-        onTopUp: () => setState(() => walletBalance += 200000),
       ),
       Profile(
         displayName: widget.displayName,
@@ -696,14 +694,14 @@ class _ShellState extends State<Shell> {
         label: 'Kham pha',
       ),
       NavigationDestination(
+        icon: Icon(Icons.live_tv_outlined),
+        selectedIcon: Icon(Icons.live_tv),
+        label: 'Livestream',
+      ),
+      NavigationDestination(
         icon: Icon(Icons.library_music_outlined),
         selectedIcon: Icon(Icons.library_music),
         label: 'Thu vien',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.account_balance_wallet_outlined),
-        selectedIcon: Icon(Icons.account_balance_wallet),
-        label: 'Vi',
       ),
       NavigationDestination(
         icon: Icon(Icons.person_outline),
@@ -729,6 +727,15 @@ class _ShellState extends State<Shell> {
           }
         });
       },
+    ),
+  );
+
+  void _openWallet() => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ListenerWalletPage(
+        balance: walletBalance,
+        onTopUp: () => setState(() => walletBalance += 200000),
+      ),
     ),
   );
   void openPlayer() => _showPlayer(current!);
@@ -818,6 +825,7 @@ class Home extends StatelessWidget {
     required this.onPlay,
     required this.onOpen,
     required this.onSearch,
+    required this.onWallet,
     required this.hasUnreadNotifications,
     required this.onNotifications,
     required this.onProfile,
@@ -825,7 +833,7 @@ class Home extends StatelessWidget {
   final String displayName;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
-  final VoidCallback onSearch, onNotifications, onProfile;
+  final VoidCallback onSearch, onWallet, onNotifications, onProfile;
   final bool hasUnreadNotifications;
   @override
   Widget build(BuildContext context) => CustomScrollView(
@@ -867,6 +875,11 @@ class Home extends StatelessWidget {
                 onPressed: onSearch,
                 tooltip: 'Tim kiem',
                 icon: const Icon(Icons.search),
+              ),
+              IconButton(
+                onPressed: onWallet,
+                tooltip: 'Ví',
+                icon: const Icon(Icons.account_balance_wallet_outlined),
               ),
               IconButton(
                 onPressed: onNotifications,
@@ -2188,6 +2201,37 @@ class _NotificationPanelState extends State<NotificationPanel> {
       ),
     );
   }
+}
+
+class LivestreamPage extends StatelessWidget {
+  const LivestreamPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => PageFrame(
+    title: 'Livestream',
+    children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.live_tv, size: 42),
+              const SizedBox(height: 12),
+              Text(
+                'Livestream sắp ra mắt',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Các buổi phát trực tiếp lịch sử và giao lưu với Creator sẽ xuất hiện tại đây.',
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class ListenerWalletPage extends StatelessWidget {
