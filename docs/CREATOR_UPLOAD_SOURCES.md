@@ -5,7 +5,7 @@ Creator phải có role `CREATOR`, tài khoản hoạt động và hồ sơ đã
 
 1. Lấy `categoryId` từ `GET /api/categories`.
 2. Tạo nháp qua `POST /api/creator/podcasts`, lưu `podcastId`.
-3. Upload video qua `POST /api/creator/podcasts/{podcastId}/video`, multipart field `file`.
+3. Upload video hoặc audio qua `POST /api/creator/podcasts/{podcastId}/video`, multipart field `file`.
 4. Tạo nguồn qua `POST /api/creator/podcasts/{podcastId}/references`, lưu `referenceId`.
 5. Upload PDF qua `POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file`, multipart field `file`.
 6. Gửi duyệt qua `POST /api/creator/podcasts/{podcastId}/submit`.
@@ -59,7 +59,7 @@ Sửa nguồn chỉ cho phép trên `DRAFT`/`REJECTED`. Sửa nguồn của podc
 `APPROVED`/`PUBLISHED` đưa podcast về `DRAFT` để duyệt lại. `PENDING_REVIEW`
 và `DELETED` không cho phép sửa. Reference phải thuộc podcast trong URL;
 podcast phải thuộc Creator đang đăng nhập.
-Nguồn là tùy chọn; điều kiện gửi duyệt hiện vẫn yêu cầu video.
+Nguồn là tùy chọn; điều kiện gửi duyệt yêu cầu podcast đã có media video hoặc audio.
 
 ## Admin và Listener
 

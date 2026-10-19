@@ -322,22 +322,19 @@ class ApiCreatorRepository implements CreatorRepository {
       } catch (_) {}
     }
 
-    // 3.5 If video podcast, backend created podcast, and real media bytes provided, upload video file
+    // 3.5 Upload video or audio to the same podcast media endpoint.
     if (createdPodcastId != null &&
         audioFileName != null &&
         mediaBytes != null &&
         mediaBytes.isNotEmpty) {
-      final isVideo = audioFileName.toLowerCase().endsWith('.mp4') ||
-          audioFileName.toLowerCase().endsWith('.mov') ||
-          audioFileName.toLowerCase().endsWith('.mkv') ||
-          audioFileName.toLowerCase().endsWith('.webm');
-      if (isVideo) {
+      final mediaType = _podcastMediaTypeForFilename(audioFileName);
+      if (mediaType != null) {
         try {
-          await uploadPodcastVideoFile(
+          await uploadPodcastMediaFile(
             podcastId: createdPodcastId,
             fileBytes: mediaBytes,
             filename: audioFileName,
-            mimeType: 'video/mp4',
+            mimeType: mediaType,
           );
         } catch (_) {}
       }
@@ -473,19 +470,16 @@ class ApiCreatorRepository implements CreatorRepository {
       } catch (_) {}
     }
 
-    // 3.5 If video podcast and real media bytes provided, upload video file to backend
+    // 3.5 Upload video or audio to the same podcast media endpoint.
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final isVideo = audioFileName.toLowerCase().endsWith('.mp4') ||
-          audioFileName.toLowerCase().endsWith('.mov') ||
-          audioFileName.toLowerCase().endsWith('.mkv') ||
-          audioFileName.toLowerCase().endsWith('.webm');
-      if (isVideo) {
+      final mediaType = _podcastMediaTypeForFilename(audioFileName);
+      if (mediaType != null) {
         try {
-          await uploadPodcastVideoFile(
+          await uploadPodcastMediaFile(
             podcastId: id,
             fileBytes: mediaBytes,
             filename: audioFileName,
-            mimeType: 'video/mp4',
+            mimeType: mediaType,
           );
         } catch (_) {}
       }
@@ -589,7 +583,7 @@ class ApiCreatorRepository implements CreatorRepository {
     return null;
   }
 
-  Future<bool> uploadPodcastVideoFile({
+  Future<bool> uploadPodcastMediaFile({
     required String podcastId,
     required List<int> fileBytes,
     required String filename,
@@ -602,11 +596,33 @@ class ApiCreatorRepository implements CreatorRepository {
         filename: filename,
         fileBytes: fileBytes,
         mimeType: mimeType,
+        headers: {'ngrok-skip-browser-warning': '1'},
       );
       return res != null;
     } catch (_) {
       return false;
     }
+  }
+
+  String? _podcastMediaTypeForFilename(String filename) {
+    final extension = filename.toLowerCase().split('.').last;
+    return switch (extension) {
+      'mp4' => 'video/mp4',
+      'mov' => 'video/quicktime',
+      'm4v' => 'video/x-m4v',
+      'webm' => 'video/webm',
+      'mkv' => 'video/x-matroska',
+      '3gp' => 'video/3gpp',
+      'avi' => 'video/x-msvideo',
+      'mp3' => 'audio/mpeg',
+      'm4a' => 'audio/mp4',
+      'aac' => 'audio/aac',
+      'wav' => 'audio/wav',
+      'ogg', 'oga' => 'audio/ogg',
+      'opus' => 'audio/opus',
+      'flac' => 'audio/flac',
+      _ => null,
+    };
   }
 
   Future<bool> uploadPdfReferenceFile({

@@ -50,6 +50,37 @@ mvn spring-boot:run
 
 The backend maps the latest ERD plus a supporting refresh-token table. Creator applications use `Creator_profile.verification_status`; there is no separate creator-application table. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds system roles and, in the default local `dev` profile, the shared development accounts described in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md).
 
+## Gói CC đăng ký với hệ thống
+
+Gói hệ thống dành cho Creator tách biệt với `/api/admin/membership-plans` (gói listener theo từng kênh). Gói hệ thống dùng chung cho tất cả CC và không có `creatorId` trong request tạo gói. Admin quản lý tại `/api/admin/creator-system-plans`: `GET` danh sách, `GET /{planId}`, `POST`, `PUT /{planId}`, `DELETE /{planId}`. DELETE ngừng bán gói (`INACTIVE`) để giữ lịch sử đăng ký; gói Free mặc định không thể xóa. PUT có thể kích hoạt lại gói.
+
+Lần đầu chạy, hệ thống tạo Free (0đ, tối đa 3 podcast có video/audio) và Plus (50.000 VND/30 ngày, đăng không giới hạn, có quyền livestream). Admin tự quản lý danh sách `benefits` của từng gói; giá trị mặc định chỉ là dữ liệu khởi tạo. Ví dụ request tạo/sửa Plus:
+
+```json
+{
+  "code": "PLUS",
+  "name": "Plus",
+  "description": "Gói CC trả phí",
+  "price": 50000,
+  "currency": "VND",
+  "durationDays": 30,
+  "status": "ACTIVE",
+  "benefits": [
+    { "key": "UPLOAD_LIMIT", "value": "unlimited", "description": "Đăng podcast không giới hạn" },
+    { "key": "LIVESTREAM", "value": "true", "description": "Quyền livestream khi tính năng ra mắt" },
+    { "key": "PRIORITY_SUPPORT", "value": "true", "description": "Ưu tiên hỗ trợ" }
+  ]
+}
+```
+
+`UPLOAD_LIMIT` nhận số nguyên không âm hoặc `unlimited`; thiếu key này nghĩa là không được upload. `LIVESTREAM` nhận `true` hoặc `false`. Hai quyền này được API hiểu; các key khác được lưu và trả về cho client, cần triển khai chức năng tương ứng mới có hiệu lực. Livestream hiện chỉ là quyền trong gói, chưa có API phát trực tiếp. Giá trị quyền lợi của lượt Plus đã mua được giữ đến khi gói hết hạn; sửa gói chỉ ảnh hưởng lượt mua sau. Sửa Free có hiệu lực ngay.
+
+Danh mục key/value đang hỗ trợ và cách backend áp dụng: [`docs/CREATOR_SYSTEM_PLAN_BENEFIT_KEYS.md`](../docs/CREATOR_SYSTEM_PLAN_BENEFIT_KEYS.md).
+
+CC dùng `GET /api/creator/system-plans` để xem gói, `GET /api/creator/system-plans/me` để xem quyền và lượt đăng còn lại, `POST /api/creator/system-plans/{planId}/subscribe` để giả lập thanh toán thành công và kích hoạt gói trả phí. Gói Free là mặc định, không cần đăng ký. Mỗi CC chỉ có một lượt đăng ký trả phí còn hiệu lực; sau khi hết hạn có thể mua tiếp. Upload video/audio lần đầu cho một podcast được tính là một lượt; thay file của podcast đó không tính thêm. Số lượt đã đăng không đặt lại khi Plus hết hạn. Thanh toán chỉ là mô phỏng, không thu tiền thật.
+
+Với `ddl-auto=update`, Hibernate tạo bảng mới khi khởi động. Nếu dùng `ddl-auto=validate`, áp dụng `db/migrations/2026-10-19_creator_system_plans.sql` trước khi chạy API.
+
 The server listens on `http://localhost:8081`. Check that it is running at:
 
 ```text

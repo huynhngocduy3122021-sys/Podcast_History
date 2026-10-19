@@ -157,14 +157,15 @@ class ApiClient {
     List<int>? fileBytes,
     String? mimeType,
     Map<String, String>? fields,
+    Map<String, String>? headers,
   }) async {
     final uri = _buildUri(endpoint);
     _log('MULTIPART POST $uri with file: $filename ($fileFieldName)');
     try {
       final request = http.MultipartRequest('POST', uri);
-      final headers = _buildHeaders();
-      headers.remove('Content-Type'); // MultipartRequest sets boundary automatically
-      request.headers.addAll(headers);
+      final requestHeaders = _buildHeaders(headers);
+      requestHeaders.remove('Content-Type'); // MultipartRequest sets boundary automatically
+      request.headers.addAll(requestHeaders);
 
       if (fields != null) {
         request.fields.addAll(fields);

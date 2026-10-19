@@ -81,7 +81,7 @@ public class PodcastReviewService {
 
   private void supportPreviewMedia(Podcast p) {
     if (p.getMediaUrl() == null || p.getMediaUrl().isBlank())
-      throw new ResourceNotFoundException("Podcast chưa có video.");
+      throw new ResourceNotFoundException("Podcast chưa có media video hoặc audio.");
   }
 
   @Transactional(readOnly = true)

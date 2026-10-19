@@ -40,15 +40,16 @@ public class MediaUploadService {
         UploadFileType fileType = validateAndResolveFile(file);
         if (!fileType.contentType().startsWith("image/")) {
             throw new InvalidMediaUploadException(
-                    "Video phải được upload qua API của podcast để liên kết đúng podcast.");
+                    "Video hoặc audio phải được upload qua API của podcast để liên kết đúng podcast.");
         }
         return store(file, userId, null, fileType);
     }
 
     public MediaUploadResponse uploadPodcastVideo(MultipartFile file, UUID userId, UUID podcastId) {
         UploadFileType fileType = validateAndResolveFile(file);
-        if (!fileType.contentType().startsWith("video/")) {
-            throw new InvalidMediaUploadException("API này chỉ chấp nhận file video.");
+        if (!fileType.contentType().startsWith("video/")
+                && !fileType.contentType().startsWith("audio/")) {
+            throw new InvalidMediaUploadException("API này chỉ chấp nhận file video hoặc audio.");
         }
         return store(file, userId, podcastId, fileType);
     }
@@ -132,7 +133,7 @@ public class MediaUploadService {
                 case "audio/flac", "audio/x-flac" -> ascii.startsWith("fLaC");
                 default -> false;
             };
-            if (!valid) throw new InvalidMediaUploadException("Nội dung file không khớp định dạng ảnh/video được hỗ trợ.");
+            if (!valid) throw new InvalidMediaUploadException("Nội dung file không khớp định dạng ảnh, video hoặc audio được hỗ trợ.");
         } catch (IOException exception) {
             throw new InvalidMediaUploadException("Không đọc được file media.");
         }
