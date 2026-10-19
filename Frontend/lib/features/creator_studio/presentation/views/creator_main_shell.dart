@@ -29,10 +29,10 @@ class _CreatorMainShellState extends State<CreatorMainShell> {
     final isDark = theme.brightness == Brightness.dark;
 
     final screens = [
-      CreatorDashboardScreen(onNavigateTab: _navigateToTab),
       const PodcastListScreen(),
       const RequestListScreen(),
       const WalletScreen(),
+      CreatorDashboardScreen(onNavigateTab: _navigateToTab),
       CreatorMoreScreen(onTheme: widget.onTheme, onLogout: widget.onLogout),
     ];
 
@@ -51,11 +51,6 @@ class _CreatorMainShellState extends State<CreatorMainShell> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard_rounded),
-            label: 'Tổng quan',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.podcasts_outlined),
             activeIcon: Icon(Icons.podcasts_rounded),
             label: 'Podcast',
@@ -69,6 +64,11 @@ class _CreatorMainShellState extends State<CreatorMainShell> {
             icon: Icon(Icons.account_balance_wallet_outlined),
             activeIcon: Icon(Icons.account_balance_wallet_rounded),
             label: 'Ví tiền',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard_rounded),
+            label: 'Tổng quan',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.more_horiz_outlined),

@@ -230,9 +230,9 @@ class ListenerApi {
       'page': '$page',
       'size': '$size',
       if (query?.trim().isNotEmpty ?? false) 'q': query!.trim(),
-      if (categoryId case final value?) 'categoryId': value,
-      if (creatorId case final value?) 'creatorId': value,
-      if (seriesId case final value?) 'seriesId': value,
+      'categoryId': ?categoryId,
+      'creatorId': ?creatorId,
+      'seriesId': ?seriesId,
     };
     final json = await _send(
       'GET',
@@ -359,7 +359,7 @@ class ListenerApi {
       'targetType': targetType,
       'targetId': targetId,
       'reasonCode': reasonCode,
-      if (description case final value?) 'description': value,
+      'description': ?description,
     },
   );
 
@@ -383,7 +383,7 @@ class ListenerApi {
     '/api/me/reports/$reportId',
     body: {
       'reasonCode': reasonCode,
-      if (description case final value?) 'description': value,
+      'description': ?description,
     },
   );
 

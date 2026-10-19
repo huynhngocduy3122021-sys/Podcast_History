@@ -8,5 +8,6 @@ public record WalletBalanceResponse(
         BigDecimal availableBalance,
         BigDecimal heldBalance,
         BigDecimal totalBalance,
+        BigDecimal pendingRelease,
         String currency) {
 }

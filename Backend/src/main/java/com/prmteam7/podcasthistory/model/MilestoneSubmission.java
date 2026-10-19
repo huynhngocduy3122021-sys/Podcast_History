@@ -10,17 +10,11 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "\"Milestone_submission\"", indexes = {
         @Index(name = "idx_milestone_submission_stage_id", columnList = "contract_stage_id")
 })
-@Getter
-@Setter
-@NoArgsConstructor
 public class MilestoneSubmission extends BaseEntity {
 
     @jakarta.persistence.Id
@@ -52,6 +46,27 @@ public class MilestoneSubmission extends BaseEntity {
 
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt;
+
+    public MilestoneSubmission() {}
+
+    public UUID getMilestoneSubmissionId() { return milestoneSubmissionId; }
+    public void setMilestoneSubmissionId(UUID id) { this.milestoneSubmissionId = id; }
+    public ContractStage getContractStage() { return contractStage; }
+    public void setContractStage(ContractStage contractStage) { this.contractStage = contractStage; }
+    public AppUser getCreator() { return creator; }
+    public void setCreator(AppUser creator) { this.creator = creator; }
+    public Integer getRevisionNumber() { return revisionNumber; }
+    public void setRevisionNumber(Integer revisionNumber) { this.revisionNumber = revisionNumber; }
+    public String getObjectKey() { return objectKey; }
+    public void setObjectKey(String objectKey) { this.objectKey = objectKey; }
+    public String getPublicUrl() { return publicUrl; }
+    public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
+    public String getContentType() { return contentType; }
+    public void setContentType(String contentType) { this.contentType = contentType; }
+    public String getSubmissionNote() { return submissionNote; }
+    public void setSubmissionNote(String submissionNote) { this.submissionNote = submissionNote; }
+    public Instant getSubmittedAt() { return submittedAt; }
+    public void setSubmittedAt(Instant submittedAt) { this.submittedAt = submittedAt; }
 
     @PrePersist
     private void assignIdAndTimestamp() {

@@ -1,22 +1,26 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
+import 'package:podcast_history/core/utils/image_url_helper.dart';
 import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/track_comments_sheet.dart';
 
-class SoundCloudPodcastCard extends StatefulWidget {
+class SoundCloudPodcastCard extends ConsumerStatefulWidget {
   final CreatorPodcast podcast;
   final String creatorName;
   final VoidCallback? onPlayToggle;
   final VoidCallback? onCardTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onSubmitReview;
   final bool isPlaying;
 
   const SoundCloudPodcastCard({
@@ -27,14 +31,15 @@ class SoundCloudPodcastCard extends StatefulWidget {
     this.onCardTap,
     this.onEdit,
     this.onDelete,
+    this.onSubmitReview,
     this.isPlaying = false,
   });
 
   @override
-  State<SoundCloudPodcastCard> createState() => _SoundCloudPodcastCardState();
+  ConsumerState<SoundCloudPodcastCard> createState() => _SoundCloudPodcastCardState();
 }
 
-class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
+class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
   double _playbackProgress = 0.28;
   bool _isLiked = false;
   bool _isReposted = false;
@@ -44,13 +49,14 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
       widget.onCardTap!();
       return;
     }
+    final audioState = ref.read(audioPlayerServiceProvider);
+    final isCurrent = audioState.podcastId == widget.podcast.id;
     CreatorPodcastPlayerSheet.show(
       context: context,
       podcast: widget.podcast,
       creatorName: widget.creatorName,
-      isPlaying: widget.isPlaying,
-      progress: _playbackProgress,
-      onPlayToggle: widget.onPlayToggle,
+      isPlaying: isCurrent ? audioState.isPlaying : true,
+      progress: isCurrent ? audioState.progress : _playbackProgress,
       onEdit: widget.onEdit,
     );
   }
@@ -72,16 +78,26 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final pod = widget.podcast;
+    final audioState = ref.watch(audioPlayerServiceProvider);
+    final isCurrent = audioState.podcastId == pod.id;
+    final isPlaying = isCurrent ? audioState.isPlaying : false;
+    final progress = isCurrent ? audioState.progress : _playbackProgress;
+    final currentPos = isCurrent
+        ? audioState.position
+        : Duration(seconds: (pod.duration.inSeconds * progress).toInt());
+    final totalDur = isCurrent && audioState.duration.inSeconds > 0
+        ? audioState.duration
+        : pod.duration;
 
     return Container(
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         borderRadius: AppSpacing.roundedMd,
         border: Border.all(
-          color: widget.isPlaying
+          color: isPlaying
               ? (isDark ? AppColors.primaryDark : AppColors.primaryLight)
               : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
-          width: widget.isPlaying ? 1.5 : 1,
+          width: isPlaying ? 1.5 : 1,
         ),
       ),
       child: Column(
@@ -119,7 +135,7 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                                   ),
                                 )
                               : Image.network(
-                                  pod.coverUrl,
+                                  resolveImageUrl(pod.coverUrl),
                                   width: 84,
                                   height: 84,
                                   fit: BoxFit.cover,
@@ -136,20 +152,59 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                       shape: const CircleBorder(),
                       child: InkWell(
                         customBorder: const CircleBorder(),
-                        onTap: () {
-                          widget.onPlayToggle?.call();
-                          _openPlayer();
+                        onTap: () async {
+                          try {
+                            if (widget.onPlayToggle != null) {
+                              widget.onPlayToggle!();
+                            } else {
+                              await ref.read(audioPlayerServiceProvider.notifier).togglePlay(pod);
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              final errStr = e.toString();
+                              final isCors = errStr.contains('WebAudioError') ||
+                                  errStr.contains('CORS') ||
+                                  errStr.contains('MEDIA_ELEMENT_ERROR') ||
+                                  errStr.contains('Code: 4');
+                              final hasMedia = (pod.videoUrl != null && pod.videoUrl!.isNotEmpty) ||
+                                  (pod.audioFileName != null && pod.audioFileName!.isNotEmpty);
+
+                              String message;
+                              if (isCors) {
+                                message = 'Trình duyệt chặn phát âm thanh do chính sách CORS của Cloudflare R2. Vui lòng bật CORS cho bucket R2 hoặc thử trên ứng dụng Mobile.';
+                              } else if (hasMedia) {
+                                message = 'Không thể phát âm thanh: ${errStr.replaceAll('Exception:', '').trim()}';
+                              } else {
+                                message = 'Tập podcast "${pod.title}" chưa có tệp âm thanh trên máy chủ.';
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(message),
+                                  backgroundColor: AppColors.error,
+                                  duration: const Duration(seconds: 6),
+                                  action: (!hasMedia && widget.onSubmitReview != null)
+                                      ? SnackBarAction(
+                                          label: 'Tải tệp lên',
+                                          textColor: Colors.white,
+                                          onPressed: widget.onSubmitReview!,
+                                        )
+                                      : null,
+                                ),
+                              );
+                            }
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: widget.isPlaying
+                            color: isPlaying
                                 ? (isDark ? AppColors.primaryDark : AppColors.primaryLight)
                                 : Colors.black.withValues(alpha: 0.5),
                           ),
                           child: Icon(
-                            widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                             size: 24,
                             color: Colors.white,
                           ),
@@ -200,7 +255,7 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: widget.isPlaying
+                          color: isPlaying
                               ? (isDark ? AppColors.primaryDark : AppColors.primaryLight)
                               : (isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight),
                           height: 1.25,
@@ -215,13 +270,6 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                             label: pod.statusDisplay,
                             type: pod.statusType,
                           ),
-                          if (pod.isVideo) ...[
-                            const SizedBox(width: AppSpacing.xs),
-                            const StatusChip(
-                              label: 'Video 🎬',
-                              type: StatusType.info,
-                            ),
-                          ],
                           if (pod.isExclusive) ...[
                             const SizedBox(width: AppSpacing.xs),
                             const StatusChip(
@@ -240,10 +288,22 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_horiz_rounded),
                   onSelected: (val) {
+                    if (val == 'submit') widget.onSubmitReview?.call();
                     if (val == 'edit') widget.onEdit?.call();
                     if (val == 'delete') widget.onDelete?.call();
                   },
                   itemBuilder: (context) => [
+                    if (widget.podcast.status == PodcastStatus.draft && widget.onSubmitReview != null)
+                      const PopupMenuItem(
+                        value: 'submit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.send_rounded, size: 16, color: AppColors.primaryLight),
+                            SizedBox(width: 8),
+                            Text('Chờ Admin duyệt', style: TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
                     const PopupMenuItem(value: 'edit', child: Text('Chỉnh sửa')),
                     const PopupMenuItem(value: 'delete', child: Text('Xóa podcast', style: TextStyle(color: AppColors.error))),
                   ],
@@ -258,48 +318,33 @@ class _SoundCloudPodcastCardState extends State<SoundCloudPodcastCard> {
             child: Column(
               children: [
                 SoundCloudWaveform(
-                  progress: _playbackProgress,
+                  progress: progress,
                   height: 48,
                   onSeek: (fraction) {
-                    setState(() => _playbackProgress = fraction);
+                    if (isCurrent) {
+                      ref.read(audioPlayerServiceProvider.notifier).seekFraction(fraction);
+                    } else {
+                      setState(() => _playbackProgress = fraction);
+                      ref.read(audioPlayerServiceProvider.notifier).play(pod).then((_) {
+                        ref.read(audioPlayerServiceProvider.notifier).seekFraction(fraction);
+                      });
+                    }
                   },
-                  comments: [
-                    TimedCommentPin(
-                      fraction: 0.15,
-                      avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-                      authorName: 'Hoàng Long',
-                      content: 'Đoạn này xúc động quá!',
-                      onTap: () => _openComments(highlight: 'Đoạn này xúc động quá!', progress: 0.15),
-                    ),
-                    TimedCommentPin(
-                      fraction: 0.45,
-                      avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
-                      authorName: 'Mai Phương',
-                      content: 'Âm thanh pháo kéo chân thực',
-                      onTap: () => _openComments(highlight: 'Âm thanh pháo kéo chân thực', progress: 0.45),
-                    ),
-                    TimedCommentPin(
-                      fraction: 0.72,
-                      avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
-                      authorName: 'Bác Ba',
-                      content: 'Ký ức thời khó quên',
-                      onTap: () => _openComments(highlight: 'Ký ức thời khó quên', progress: 0.72),
-                    ),
-                  ],
+                  comments: const [],
                 ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      AppFormatters.formatDuration(Duration(seconds: (pod.duration.inSeconds * _playbackProgress).toInt())),
+                      AppFormatters.formatDuration(currentPos),
                       style: AppTypography.tabularNumbers(
                         fontSize: 10,
                         color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
                       ),
                     ),
                     Text(
-                      AppFormatters.formatDuration(pod.duration),
+                      AppFormatters.formatDuration(totalDur),
                       style: AppTypography.tabularNumbers(
                         fontSize: 10,
                         color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,

@@ -11,9 +11,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 @Entity
 @Table(name = "\"Creator_payout_account\"", uniqueConstraints = {
@@ -21,9 +18,6 @@ import lombok.Setter;
 }, indexes = {
         @Index(name = "idx_creator_payout_account_creator", columnList = "producer_profile_id")
 })
-@Getter
-@Setter
-@NoArgsConstructor
 public class CreatorPayoutAccount extends BaseEntity {
 
     @jakarta.persistence.Id
@@ -54,6 +48,27 @@ public class CreatorPayoutAccount extends BaseEntity {
 
     @Column(name = "verified_at")
     private Instant verifiedAt;
+
+    public CreatorPayoutAccount() {}
+
+    public UUID getCreatorPayoutAccountId() { return creatorPayoutAccountId; }
+    public void setCreatorPayoutAccountId(UUID id) { this.creatorPayoutAccountId = id; }
+    public ProducerProfile getProducerProfile() { return producerProfile; }
+    public void setProducerProfile(ProducerProfile producerProfile) { this.producerProfile = producerProfile; }
+    public String getPayoutMethod() { return payoutMethod; }
+    public void setPayoutMethod(String payoutMethod) { this.payoutMethod = payoutMethod; }
+    public String getAccountReference() { return accountReference; }
+    public void setAccountReference(String accountReference) { this.accountReference = accountReference; }
+    public String getAccountMasked() { return accountMasked; }
+    public void setAccountMasked(String accountMasked) { this.accountMasked = accountMasked; }
+    public String getCurrency() { return currency; }
+    public void setCurrency(String currency) { this.currency = currency; }
+    public Boolean getVerified() { return verified; }
+    public void setVerified(Boolean verified) { this.verified = verified; }
+    public Boolean getActive() { return active; }
+    public void setActive(Boolean active) { this.active = active; }
+    public Instant getVerifiedAt() { return verifiedAt; }
+    public void setVerifiedAt(Instant verifiedAt) { this.verifiedAt = verifiedAt; }
 
     @PrePersist
     private void assignId() {

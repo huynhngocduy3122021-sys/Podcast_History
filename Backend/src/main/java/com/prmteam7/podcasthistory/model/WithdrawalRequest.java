@@ -1,6 +1,14 @@
 package com.prmteam7.podcasthistory.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -19,40 +27,13 @@ import org.hibernate.type.SqlTypes;
     })
 @Check(constraints = "amount > 0")
 public class WithdrawalRequest extends UpdatedEntity {
-  @Column(name = "funds_reserved", nullable = false, columnDefinition = "boolean default false")
-  private Boolean fundsReserved = false;
-
-  @Column(name = "payout_reference", length = 180, unique = true)
-  private String payoutReference;
-
-  public boolean isFundsReserved() {
-    return Boolean.TRUE.equals(fundsReserved);
-  }
-
-  public void setFundsReserved(boolean value) {
-    fundsReserved = value;
-  }
-
-  public String getPayoutReference() {
-    return payoutReference;
-  }
-
-  public void setPayoutReference(String value) {
-    payoutReference = value;
-  }
-
   @Id
   @Column(name = "withdrawal_request_id", nullable = false, updatable = false)
   private UUID withdrawalRequestId;
 
-    @Column(name = "payout_account_reference", nullable = false, length = 255)
-    private String payoutAccountReference;
-
-    @Column(name = "provider_reference", length = 180)
-    private String providerReference;
-
-    @Column(name = "status", nullable = false, length = 30)
-    private String status;
+  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  @JoinColumn(name = "producer_profile_id", nullable = false)
+  private ProducerProfile producerProfile;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "user_wallet_id", nullable = false)
@@ -71,16 +52,28 @@ public class WithdrawalRequest extends UpdatedEntity {
   @Column(name = "payout_account_masked", nullable = false, length = 160)
   private String payoutAccountMasked;
 
+  @Column(name = "payout_account_reference", length = 255)
+  private String payoutAccountReference;
+
+  @Column(name = "provider_reference", length = 180)
+  private String providerReference;
+
   @Column(name = "status", nullable = false, length = 30)
   private String status;
+
+  @Column(name = "funds_reserved", nullable = false, columnDefinition = "boolean default false")
+  private Boolean fundsReserved = false;
+
+  @Column(name = "payout_reference", length = 180, unique = true)
+  private String payoutReference;
 
   @Column(name = "requested_at", nullable = false)
   private Instant requestedAt;
 
-  @Column(name = "processed_at", nullable = true)
+  @Column(name = "processed_at")
   private Instant processedAt;
 
-  @Column(name = "note", nullable = true, columnDefinition = "text")
+  @Column(name = "note", columnDefinition = "text")
   private String note;
 
   public WithdrawalRequest() {}
@@ -124,25 +117,9 @@ public class WithdrawalRequest extends UpdatedEntity {
     this.amount = amount;
   }
 
-    public String getPayoutAccountReference() {
-        return payoutAccountReference;
-    }
-
-    public void setPayoutAccountReference(String payoutAccountReference) {
-        this.payoutAccountReference = payoutAccountReference;
-    }
-
-    public String getProviderReference() {
-        return providerReference;
-    }
-
-    public void setProviderReference(String providerReference) {
-        this.providerReference = providerReference;
-    }
-
-    public String getStatus() {
-        return status;
-    }
+  public String getCurrency() {
+    return currency;
+  }
 
   public void setCurrency(String currency) {
     this.currency = currency;
@@ -164,12 +141,44 @@ public class WithdrawalRequest extends UpdatedEntity {
     this.payoutAccountMasked = payoutAccountMasked;
   }
 
+  public String getPayoutAccountReference() {
+    return payoutAccountReference;
+  }
+
+  public void setPayoutAccountReference(String payoutAccountReference) {
+    this.payoutAccountReference = payoutAccountReference;
+  }
+
+  public String getProviderReference() {
+    return providerReference;
+  }
+
+  public void setProviderReference(String providerReference) {
+    this.providerReference = providerReference;
+  }
+
   public String getStatus() {
     return status;
   }
 
   public void setStatus(String status) {
     this.status = status;
+  }
+
+  public boolean isFundsReserved() {
+    return Boolean.TRUE.equals(fundsReserved);
+  }
+
+  public void setFundsReserved(boolean fundsReserved) {
+    this.fundsReserved = fundsReserved;
+  }
+
+  public String getPayoutReference() {
+    return payoutReference;
+  }
+
+  public void setPayoutReference(String payoutReference) {
+    this.payoutReference = payoutReference;
   }
 
   public Instant getRequestedAt() {
