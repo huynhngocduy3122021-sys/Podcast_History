@@ -275,9 +275,8 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                             backgroundImage: c.authorAvatar.isNotEmpty
                                 ? NetworkImage(c.authorAvatar)
                                 : null,
-                            child: c.authorAvatar.isEmpty
-                                ? const Icon(Icons.person, size: 18)
-                                : null,
+                            onBackgroundImageError: c.authorAvatar.isNotEmpty ? (_, _) {} : null,
+                            child: const Icon(Icons.person, size: 18),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(

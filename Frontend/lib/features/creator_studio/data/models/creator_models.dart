@@ -39,6 +39,21 @@ class CreatorProfile {
   final CreatorStatus status;
   final String? rejectReason;
 
+  static const empty = CreatorProfile(
+    id: '',
+    name: '',
+    handle: '',
+    bio: '',
+    avatarUrl: '',
+    bannerUrl: '',
+    isVerified: false,
+    isPremium: false,
+    maxFreePodcasts: 5,
+    currentPodcastCount: 0,
+    followersCount: 0,
+    status: CreatorStatus.notRegistered,
+  );
+
   const CreatorProfile({
     required this.id,
     required this.name,
@@ -107,6 +122,11 @@ class CreatorPodcast {
   final PodcastStatus status;
   final String? rejectReason;
   final double? aiModerationScore; // 0.0 -> 1.0
+  final String? categoryId;
+  final String? seriesId;
+  final String? seriesTitle;
+  final String? mediaType;
+  final String? videoUrl;
 
   const CreatorPodcast({
     required this.id,
@@ -125,6 +145,11 @@ class CreatorPodcast {
     required this.status,
     this.rejectReason,
     this.aiModerationScore,
+    this.categoryId,
+    this.seriesId,
+    this.seriesTitle,
+    this.mediaType,
+    this.videoUrl,
   });
 
   CreatorPodcast copyWith({
@@ -144,6 +169,11 @@ class CreatorPodcast {
     PodcastStatus? status,
     String? rejectReason,
     double? aiModerationScore,
+    String? categoryId,
+    String? seriesId,
+    String? seriesTitle,
+    String? mediaType,
+    String? videoUrl,
   }) {
     return CreatorPodcast(
       id: id ?? this.id,
@@ -162,6 +192,11 @@ class CreatorPodcast {
       status: status ?? this.status,
       rejectReason: rejectReason ?? this.rejectReason,
       aiModerationScore: aiModerationScore ?? this.aiModerationScore,
+      categoryId: categoryId ?? this.categoryId,
+      seriesId: seriesId ?? this.seriesId,
+      seriesTitle: seriesTitle ?? this.seriesTitle,
+      mediaType: mediaType ?? this.mediaType,
+      videoUrl: videoUrl ?? this.videoUrl,
     );
   }
 
@@ -197,6 +232,19 @@ class CreatorPodcast {
 
   bool get isVideo {
     final name = audioFileName?.toLowerCase() ?? '';
+    if (name.endsWith('.mp3') ||
+        name.endsWith('.wav') ||
+        name.endsWith('.m4a') ||
+        name.endsWith('.aac') ||
+        name.endsWith('.ogg') ||
+        name.endsWith('.flac')) {
+      return false;
+    }
+    if (mediaType != null) {
+      final mt = mediaType!.toLowerCase();
+      if (mt.contains('audio')) return false;
+      return mt.contains('video');
+    }
     return name.endsWith('.mp4') ||
         name.endsWith('.mov') ||
         name.endsWith('.mkv') ||
@@ -550,3 +598,111 @@ class CreatorSeries {
     );
   }
 }
+
+// --- CREATOR CATEGORY ---
+
+class CreatorCategory {
+  final String id;
+  final String name;
+  final String slug;
+  final String? description;
+
+  const CreatorCategory({
+    required this.id,
+    required this.name,
+    required this.slug,
+    this.description,
+  });
+
+  factory CreatorCategory.fromJson(Map<String, dynamic> json) {
+    return CreatorCategory(
+      id: json['categoryId']?.toString() ?? json['id']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      slug: json['slug'] as String? ?? '',
+      description: json['description'] as String?,
+    );
+  }
+}
+
+// --- DASHBOARD MODELS ---
+
+class GrowthDataPoint {
+  final String date;
+  final double value;
+
+  const GrowthDataPoint({required this.date, required this.value});
+
+  factory GrowthDataPoint.fromJson(Map<String, dynamic> json) {
+    return GrowthDataPoint(
+      date: json['date'] as String? ?? '',
+      value: (json['value'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class DashboardMetrics {
+  final int views;
+  final int likes;
+  final int followers;
+  final double earnings;
+  final double growthRate;
+
+  const DashboardMetrics({
+    this.views = 0,
+    this.likes = 0,
+    this.followers = 0,
+    this.earnings = 0.0,
+    this.growthRate = 0.0,
+  });
+
+  factory DashboardMetrics.fromJson(Map<String, dynamic> json) {
+    return DashboardMetrics(
+      views: (json['views'] as num?)?.toInt() ?? 0,
+      likes: (json['likes'] as num?)?.toInt() ?? 0,
+      followers: (json['followers'] as num?)?.toInt() ?? 0,
+      earnings: (json['earnings'] as num?)?.toDouble() ?? 0.0,
+      growthRate: (json['growthRate'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class CreatorDashboardData {
+  final String creatorProfileId;
+  final String channelName;
+  final String bio;
+  final String avatarUrl;
+  final String verificationStatus;
+  final DashboardMetrics metrics;
+  final List<GrowthDataPoint> growthSeries;
+
+  const CreatorDashboardData({
+    this.creatorProfileId = '',
+    this.channelName = '',
+    this.bio = '',
+    this.avatarUrl = '',
+    this.verificationStatus = '',
+    this.metrics = const DashboardMetrics(),
+    this.growthSeries = const [],
+  });
+
+  factory CreatorDashboardData.fromJson(Map<String, dynamic> json) {
+    final prof = json['profile'] as Map<String, dynamic>? ?? {};
+    final met = json['metrics'] as Map<String, dynamic>? ?? {};
+    final seriesList = (json['growthSeries'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(GrowthDataPoint.fromJson)
+            .toList() ??
+        [];
+
+    return CreatorDashboardData(
+      creatorProfileId: prof['creatorProfileId']?.toString() ?? '',
+      channelName: prof['channelName'] as String? ?? '',
+      bio: prof['bio'] as String? ?? '',
+      avatarUrl: prof['avatarUrl'] as String? ?? '',
+      verificationStatus: prof['verificationStatus'] as String? ?? '',
+      metrics: DashboardMetrics.fromJson(met),
+      growthSeries: seriesList,
+    );
+  }
+}
+

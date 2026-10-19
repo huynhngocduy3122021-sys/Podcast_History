@@ -7,10 +7,10 @@ import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
-import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
-import 'package:podcast_history/features/creator_studio/data/repositories/api_creator_repository.dart';
+import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
+import 'package:podcast_history/core/utils/image_url_helper.dart';
 
 class UploadPodcastScreen extends ConsumerStatefulWidget {
   final CreatorPodcast? editingPodcast;
@@ -23,36 +23,26 @@ class UploadPodcastScreen extends ConsumerStatefulWidget {
 
 class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   int _currentStep = 0;
-  final _formKey = GlobalKey<FormState>();
+  final _step2FormKey = GlobalKey<FormState>();
+  final _step3FormKey = GlobalKey<FormState>();
 
   // Form Fields
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _sourcesController;
-  String _selectedEra = '1945–1954';
+  String? _selectedCategoryId;
+  String _selectedEra = 'Lịch sử';
   bool _isExclusive = false;
   String _selectedCoverUrl = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=400&q=80';
   Uint8List? _coverImageBytes;
-  bool _isVideo = false;
   String? _audioFileName;
   bool _isUploadingAudio = false;
   double _uploadProgress = 0.0;
-  String? _videoFileName;
-  bool _isUploadingVideo = false;
-  double _videoUploadProgress = 0.0;
   bool _isSubmitting = false;
   String? _selectedSeriesId;
   String? _selectedPdfFileName;
   List<int>? _pdfFileBytes;
   List<int>? _pickedMediaBytes;
-
-  final List<String> _eras = [
-    '1858–1945',
-    '1945–1954',
-    '1954–1975',
-    '1975–1986',
-    '1986–nay',
-  ];
 
   @override
   void initState() {
@@ -62,25 +52,13 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     _descController = TextEditingController(text: edit?.description ?? '');
     _sourcesController = TextEditingController(text: edit?.sources ?? '');
     if (edit != null) {
+      _selectedCategoryId = edit.categoryId;
+      _selectedSeriesId = edit.seriesId;
       _selectedEra = edit.eraTag;
       _isExclusive = edit.isExclusive;
       _selectedCoverUrl = edit.coverUrl;
-      final isVideoFile = edit.audioFileName != null &&
-          (edit.audioFileName!.toLowerCase().endsWith('.mp4') ||
-              edit.audioFileName!.toLowerCase().endsWith('.mov') ||
-              edit.audioFileName!.toLowerCase().endsWith('.mkv') ||
-              edit.audioFileName!.toLowerCase().endsWith('.webm') ||
-              edit.audioFileName!.toLowerCase().contains('video'));
-      _isVideo = isVideoFile;
-      if (isVideoFile) {
-        _videoFileName = edit.audioFileName;
-        _audioFileName = null;
-      } else {
-        _audioFileName = edit.audioFileName;
-        _videoFileName = null;
-      }
+      _audioFileName = edit.audioFileName;
       _uploadProgress = 1.0;
-      _videoUploadProgress = 1.0;
     }
   }
 
@@ -92,62 +70,33 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     super.dispose();
   }
 
-  Future<void> _applySelectedMedia(String fileName, {required bool isVideo}) async {
+  Future<void> _applySelectedMedia(String fileName) async {
     final cleanName = fileName.trim();
-    if (isVideo) {
+    setState(() {
+      _isUploadingAudio = true;
+      _uploadProgress = 0.0;
+    });
+
+    for (int i = 1; i <= 10; i++) {
+      await Future.delayed(const Duration(milliseconds: 25));
+      if (!mounted) return;
       setState(() {
-        _isUploadingVideo = true;
-        _videoUploadProgress = 0.0;
+        _uploadProgress = i / 10.0;
       });
+    }
 
-      for (int i = 1; i <= 10; i++) {
-        await Future.delayed(const Duration(milliseconds: 25));
-        if (!mounted) return;
-        setState(() {
-          _videoUploadProgress = i / 10.0;
-        });
-      }
-
-      if (mounted) {
-        setState(() {
-          _isUploadingVideo = false;
-          _videoFileName = cleanName;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã cập nhật tệp video: $cleanName'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } else {
+    if (mounted) {
       setState(() {
-        _isUploadingAudio = true;
-        _uploadProgress = 0.0;
+        _isUploadingAudio = false;
+        _audioFileName = cleanName;
       });
-
-      for (int i = 1; i <= 10; i++) {
-        await Future.delayed(const Duration(milliseconds: 25));
-        if (!mounted) return;
-        setState(() {
-          _uploadProgress = i / 10.0;
-        });
-      }
-
-      if (mounted) {
-        setState(() {
-          _isUploadingAudio = false;
-          _audioFileName = cleanName;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Đã cập nhật tệp âm thanh: $cleanName'),
-            backgroundColor: AppColors.success,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Đã cập nhật tệp âm thanh: $cleanName'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -157,7 +106,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       try {
         file = await FilePicker.pickFile(
           type: FileType.custom,
-          allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+          allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'mp4'],
         );
       } catch (_) {
         file = await FilePicker.pickFile(type: FileType.audio);
@@ -167,39 +116,12 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           final bytes = await file.readAsBytes();
           _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
         } catch (_) {}
-        await _applySelectedMedia(file.name, isVideo: false);
+        await _applySelectedMedia(file.name);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Lỗi chọn tệp âm thanh: $e'), backgroundColor: AppColors.error),
-        );
-      }
-    }
-  }
-
-  Future<void> _pickVideoDirectly() async {
-    try {
-      PlatformFile? file;
-      try {
-        file = await FilePicker.pickFile(
-          type: FileType.custom,
-          allowedExtensions: ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v'],
-        );
-      } catch (_) {
-        file = await FilePicker.pickFile(type: FileType.video);
-      }
-      if (file != null && file.name.isNotEmpty) {
-        try {
-          final bytes = await file.readAsBytes();
-          _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
-        } catch (_) {}
-        await _applySelectedMedia(file.name, isVideo: true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi chọn tệp video: $e'), backgroundColor: AppColors.error),
         );
       }
     }
@@ -219,25 +141,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     );
 
     if (selected != null && selected.trim().isNotEmpty) {
-      await _applySelectedMedia(selected, isVideo: false);
-    }
-  }
-
-  Future<void> _handleUploadVideo() async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => _AudioSourceSelectorSheet(
-        initialFileName: _videoFileName,
-        isVideo: true,
-      ),
-    );
-
-    if (selected != null && selected.trim().isNotEmpty) {
-      await _applySelectedMedia(selected, isVideo: true);
+      await _applySelectedMedia(selected);
     }
   }
 
@@ -325,18 +229,12 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   }
 
   Future<void> _handleSubmit() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final effectiveMedia = _isVideo ? _videoFileName : _audioFileName;
+    final effectiveMedia = _audioFileName;
 
     if (effectiveMedia == null || effectiveMedia.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_isVideo
-              ? 'Vui lòng tải lên hoặc chọn tệp video (Video MP4/MOV)'
-              : 'Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
+        const SnackBar(
+          content: Text('Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -344,48 +242,108 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       return;
     }
 
+    const maxUploadBytes = 100 * 1024 * 1024;
+    if (_pickedMediaBytes != null && _pickedMediaBytes!.length > maxUploadBytes) {
+      final sizeMb = (_pickedMediaBytes!.length / (1024 * 1024)).toStringAsFixed(1);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Tệp âm thanh ($sizeMb MB) vượt quá giới hạn tối đa của hệ thống (100MB). Vui lòng chọn tệp nhỏ hơn 100MB.',
+          ),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      setState(() => _currentStep = 0);
+      return;
+    }
+
+    final title = _titleController.text.trim();
+    if (title.isEmpty) {
+      _step2FormKey.currentState?.validate();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng nhập tiêu đề tập podcast'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      setState(() => _currentStep = 1);
+      return;
+    }
+
+    final desc = _descController.text.trim();
+    if (desc.isEmpty) {
+      _step2FormKey.currentState?.validate();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng nhập mô tả tóm tắt nội dung'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      setState(() => _currentStep = 1);
+      return;
+    }
+
+    if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chọn danh mục chủ đề'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      setState(() => _currentStep = 1);
+      return;
+    }
+
+    final sources = _sourcesController.text.trim();
+    if (sources.isEmpty) {
+      _step3FormKey.currentState?.validate();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng cung cấp nguồn tư liệu để đảm bảo tính xác thực'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      setState(() => _currentStep = 2);
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
-      CreatorPodcast resultPodcast;
+      final repo = ref.read(creatorRepositoryProvider);
+
       if (widget.editingPodcast != null) {
-        resultPodcast =
+        final resultPodcast =
             await ref.read(creatorPodcastsProvider.notifier).updatePodcast(
                   id: widget.editingPodcast!.id,
                   title: _titleController.text.trim(),
                   description: _descController.text.trim(),
                   eraTag: _selectedEra,
+                  categoryId: _selectedCategoryId,
+                  seriesId: _selectedSeriesId,
                   sources: _sourcesController.text.trim(),
                   isExclusive: _isExclusive,
                   coverUrl: _selectedCoverUrl,
                   audioFileName: effectiveMedia,
                   duration: widget.editingPodcast!.duration.inSeconds > 0
                       ? widget.editingPodcast!.duration
-                      : const Duration(minutes: 25, seconds: 30),
+                      : const Duration(minutes: 30),
                   mediaBytes: _pickedMediaBytes,
+                  autoSubmit: false,
                 );
-
-        // Assign to series if selected
-        if (_selectedSeriesId != null && _selectedSeriesId!.isNotEmpty) {
-          final repo = ref.read(creatorRepositoryProvider);
-          if (repo is ApiCreatorRepository) {
-            await repo.assignPodcastToSeries(
-              podcastId: resultPodcast.id,
-              seriesId: _selectedSeriesId!,
-            );
-          }
-        }
 
         // Upload PDF Reference if selected
         if (_pdfFileBytes != null && _selectedPdfFileName != null) {
-          final repo = ref.read(creatorRepositoryProvider);
-          if (repo is ApiCreatorRepository) {
-            await repo.uploadPdfReferenceFile(
-              podcastId: resultPodcast.id,
-              fileBytes: _pdfFileBytes!,
-              filename: _selectedPdfFileName!,
-            );
-          }
+          await repo.uploadPdfReferenceFile(
+            podcastId: resultPodcast.id,
+            fileBytes: _pdfFileBytes!,
+            filename: _selectedPdfFileName!,
+          );
+        }
+
+        if (_pickedMediaBytes != null && _pickedMediaBytes!.isNotEmpty) {
+          ref.read(audioPlayerServiceProvider.notifier).cacheBytes(resultPodcast.id, _pickedMediaBytes!);
         }
 
         if (mounted) {
@@ -398,57 +356,104 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           Navigator.of(context).pop();
         }
       } else {
-        resultPodcast =
-            await ref.read(creatorPodcastsProvider.notifier).createPodcast(
-                  title: _titleController.text.trim(),
-                  description: _descController.text.trim(),
-                  eraTag: _selectedEra,
-                  sources: _sourcesController.text.trim(),
-                  isExclusive: _isExclusive,
-                  coverUrl: _selectedCoverUrl,
-                  audioFileName: effectiveMedia,
-                  duration: const Duration(minutes: 25, seconds: 30),
-                  mediaBytes: _pickedMediaBytes,
-                );
+        // Step 4: POST /api/creator/podcasts (Draft)
+        final draftPodcast = await repo.createPodcast(
+          title: _titleController.text.trim(),
+          description: _descController.text.trim(),
+          eraTag: _selectedEra,
+          categoryId: _selectedCategoryId,
+          sources: _sourcesController.text.trim(),
+          isExclusive: _isExclusive,
+          coverUrl: _selectedCoverUrl,
+          audioFileName: effectiveMedia,
+          duration: const Duration(minutes: 30),
+          mediaBytes: null,
+          seriesId: null,
+          autoSubmit: false,
+        );
 
-        // Assign to series if selected
+        final podcastId = draftPodcast.id;
+
+        // Step 5: PUT /api/creator/podcasts/{id}/series (Optional)
         if (_selectedSeriesId != null && _selectedSeriesId!.isNotEmpty) {
-          final repo = ref.read(creatorRepositoryProvider);
-          if (repo is ApiCreatorRepository) {
-            await repo.assignPodcastToSeries(
-              podcastId: resultPodcast.id,
-              seriesId: _selectedSeriesId!,
-            );
+          await repo.assignPodcastToSeries(
+            podcastId: podcastId,
+            seriesId: _selectedSeriesId!,
+          );
+        }
+
+        // Step 6: POST /api/creator/podcasts/{id}/video (Mandatory)
+        if (_pickedMediaBytes != null && _pickedMediaBytes!.isNotEmpty) {
+          final nameLower = effectiveMedia.toLowerCase();
+          String mimeType = 'video/mp4';
+          if (nameLower.endsWith('.mp3')) {
+            mimeType = 'audio/mpeg';
+          } else if (nameLower.endsWith('.m4a')) {
+            mimeType = 'audio/mp4';
+          } else if (nameLower.endsWith('.wav')) {
+            mimeType = 'audio/wav';
+          } else if (nameLower.endsWith('.aac')) {
+            mimeType = 'audio/aac';
+          } else if (nameLower.endsWith('.webm')) {
+            mimeType = 'video/webm';
+          } else if (nameLower.endsWith('.mov')) {
+            mimeType = 'video/quicktime';
+          }
+
+          final uploaded = await repo.uploadPodcastVideoFile(
+            podcastId: podcastId,
+            fileBytes: _pickedMediaBytes!,
+            filename: effectiveMedia,
+            mimeType: mimeType,
+          );
+          if (!uploaded) {
+            throw Exception('Không thể tải tệp âm thanh lên máy chủ. Vui lòng kiểm tra dung lượng tệp (tối đa 100MB) và thử lại.');
           }
         }
 
-        // Upload PDF Reference if selected
+        // Step 7 & 8: PDF Reference (Optional)
         if (_pdfFileBytes != null && _selectedPdfFileName != null) {
-          final repo = ref.read(creatorRepositoryProvider);
-          if (repo is ApiCreatorRepository) {
-            await repo.uploadPdfReferenceFile(
-              podcastId: resultPodcast.id,
-              fileBytes: _pdfFileBytes!,
-              filename: _selectedPdfFileName!,
-            );
-          }
+          await repo.uploadPdfReferenceFile(
+            podcastId: podcastId,
+            fileBytes: _pdfFileBytes!,
+            filename: _selectedPdfFileName!,
+          );
         }
+
+        // Step 9: Verify
+        final verified = await repo.getPodcastById(podcastId);
+        if (verified == null) {
+          throw Exception('Không tìm thấy podcast vừa tạo trên máy chủ.');
+        }
+
+        if (_pickedMediaBytes != null && _pickedMediaBytes!.isNotEmpty) {
+          ref.read(audioPlayerServiceProvider.notifier).cacheBytes(podcastId, _pickedMediaBytes!);
+        }
+
+        // Tải lại danh sách podcast để podcast hiển thị ngay ở mục Nháp
+        await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Podcast đã được gửi lên hệ thống và chuyển vào hàng đợi kiểm duyệt AI!'),
+                'Đã lưu podcast vào mục Bản nháp! Hãy bấm "Chờ Admin duyệt" ở danh sách để gửi kiểm duyệt.',
+              ),
               backgroundColor: AppColors.success,
+              duration: Duration(seconds: 4),
             ),
           );
-          Navigator.of(context).pop();
+          Navigator.of(context).pop('draft_saved');
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Lỗi: $e'),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } finally {
@@ -481,96 +486,110 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       ),
       body: isLimitReached && widget.editingPodcast == null
           ? _buildLimitReachedView(isDark)
-          : Form(
-              key: _formKey,
-              child: Stepper(
-                currentStep: _currentStep,
-                onStepContinue: () {
-                  if (_currentStep == 0) {
-                    final hasMedia = _isVideo
-                        ? (_videoFileName != null && _videoFileName!.isNotEmpty)
-                        : (_audioFileName != null && _audioFileName!.isNotEmpty);
-                    if (!hasMedia) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(_isVideo
-                              ? 'Vui lòng tải lên hoặc chọn tệp video (Video MP4/MOV)'
-                              : 'Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
-                          backgroundColor: AppColors.error,
+          : Stepper(
+              currentStep: _currentStep,
+              onStepTapped: (step) {
+                if (step < _currentStep) {
+                  setState(() => _currentStep = step);
+                }
+              },
+              onStepContinue: () {
+                if (_currentStep == 0) {
+                  final hasMedia = _audioFileName != null && _audioFileName!.isNotEmpty;
+                  if (!hasMedia) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => _currentStep++);
+                } else if (_currentStep == 1) {
+                  final isValid = _step2FormKey.currentState?.validate() ?? false;
+                  final title = _titleController.text.trim();
+                  final desc = _descController.text.trim();
+                  if (!isValid || title.isEmpty || desc.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Vui lòng nhập đầy đủ tiêu đề và mô tả tập podcast'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                    return;
+                  }
+                  if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Vui lòng chọn danh mục chủ đề'),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => _currentStep++);
+                } else {
+                  _handleSubmit();
+                }
+              },
+              onStepCancel: () {
+                if (_currentStep > 0) {
+                  setState(() => _currentStep--);
+                } else {
+                  Navigator.of(context).pop();
+                }
+              },
+              controlsBuilder: (context, details) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.lg),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: AppButton(
+                          label: _currentStep == 2
+                              ? (widget.editingPodcast != null ? 'Lưu thay đổi' : 'Lưu vào Bản nháp')
+                              : 'Tiếp tục',
+                          isLoading: _isSubmitting,
+                          onPressed: details.onStepContinue,
                         ),
-                      );
-                      return;
-                    }
-                    setState(() => _currentStep++);
-                  } else if (_currentStep == 1) {
-                    if (!_formKey.currentState!.validate()) {
-                      return;
-                    }
-                    setState(() => _currentStep++);
-                  } else {
-                    _handleSubmit();
-                  }
-                },
-                onStepCancel: () {
-                  if (_currentStep > 0) {
-                    setState(() => _currentStep--);
-                  } else {
-                    Navigator.of(context).pop();
-                  }
-                },
-                controlsBuilder: (context, details) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.lg),
-                    child: Row(
-                      children: [
+                      ),
+                      if (_currentStep > 0) ...[
+                        const SizedBox(width: AppSpacing.md),
                         Expanded(
                           child: AppButton(
-                            label: _currentStep == 2
-                                ? (widget.editingPodcast != null ? 'Lưu thay đổi' : 'Gửi duyệt & Đăng')
-                                : 'Tiếp tục',
-                            isLoading: _isSubmitting,
-                            onPressed: details.onStepContinue,
+                            label: 'Quay lại',
+                            type: AppButtonType.secondary,
+                            onPressed: details.onStepCancel,
                           ),
                         ),
-                        if (_currentStep > 0) ...[
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: AppButton(
-                              label: 'Quay lại',
-                              type: AppButtonType.secondary,
-                              onPressed: details.onStepCancel,
-                            ),
-                          ),
-                        ],
                       ],
-                    ),
-                  );
-                },
-                steps: [
-                  Step(
-                    title: Text(_isVideo ? 'Tệp video & Ảnh bìa' : 'Tệp âm thanh & Ảnh bìa'),
-                    isActive: _currentStep >= 0,
-                    state: (_isVideo
-                            ? (_videoFileName != null && _videoFileName!.isNotEmpty)
-                            : (_audioFileName != null && _audioFileName!.isNotEmpty))
-                        ? StepState.complete
-                        : StepState.indexed,
-                    content: _buildStep1(isDark),
+                    ],
                   ),
-                  Step(
-                    title: const Text('Thông tin nội dung'),
-                    isActive: _currentStep >= 1,
-                    state: _titleController.text.isNotEmpty ? StepState.complete : StepState.indexed,
-                    content: _buildStep2(isDark),
-                  ),
-                  Step(
-                    title: const Text('Tư liệu & Chế độ phát'),
-                    isActive: _currentStep >= 2,
-                    state: _sourcesController.text.isNotEmpty ? StepState.complete : StepState.indexed,
-                    content: _buildStep3(isDark),
-                  ),
-                ],
-              ),
+                );
+              },
+              steps: [
+                Step(
+                  title: const Text('Tệp âm thanh & Ảnh bìa'),
+                  isActive: _currentStep >= 0,
+                  state: (_audioFileName != null && _audioFileName!.isNotEmpty)
+                      ? StepState.complete
+                      : StepState.indexed,
+                  content: _buildStep1(isDark),
+                ),
+                Step(
+                  title: const Text('Thông tin nội dung'),
+                  isActive: _currentStep >= 1,
+                  state: _titleController.text.isNotEmpty ? StepState.complete : StepState.indexed,
+                  content: _buildStep2(isDark),
+                ),
+                Step(
+                  title: const Text('Tư liệu & Chế độ phát'),
+                  isActive: _currentStep >= 2,
+                  state: _sourcesController.text.isNotEmpty ? StepState.complete : StepState.indexed,
+                  content: _buildStep3(isDark),
+                ),
+              ],
             ),
     );
   }
@@ -621,291 +640,92 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Chọn loại định dạng (Audio hoặc Video)
-        const Text('Loại định dạng Podcast', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            Expanded(
-              child: ChoiceChip(
-                label: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.graphic_eq_rounded, size: 18),
-                    SizedBox(width: 6),
-                    Text('Audio Podcast'),
-                  ],
-                ),
-                selected: !_isVideo,
-                onSelected: (val) {
-                  if (val) setState(() => _isVideo = false);
-                },
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: ChoiceChip(
-                label: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.video_camera_back_rounded, size: 18),
-                    SizedBox(width: 6),
-                    Text('Video Podcast'),
-                  ],
-                ),
-                selected: _isVideo,
-                onSelected: (val) {
-                  if (val) setState(() => _isVideo = true);
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-
-        // Khung Upload Media (Audio hoặc Video)
-        if (!_isVideo)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-              borderRadius: AppSpacing.roundedMd,
-              border: Border.all(
-                color: _audioFileName != null ? AppColors.success : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
-                width: _audioFileName != null ? 1.5 : 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  _audioFileName != null ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
-                  size: 48,
-                  color: _audioFileName != null ? AppColors.success : AppColors.primaryLight,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                InkWell(
-                  onTap: _handleUploadAudio,
-                  borderRadius: AppSpacing.roundedSm,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _audioFileName ?? 'Chọn tệp âm thanh (mp3, m4a, wav)',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        if (_audioFileName != null) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.edit_outlined, size: 16, color: AppColors.primaryLight),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Dung lượng tối đa: 150MB. Khuyến nghị chất lượng 320kbps.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                  ),
-                ),
-                if (_isUploadingAudio) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  LinearProgressIndicator(value: _uploadProgress, color: AppColors.primaryLight),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Đang tải lên ${(_uploadProgress * 100).toInt()}%...',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-                if (_audioFileName != null && !_isUploadingAudio) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
-                      borderRadius: AppSpacing.roundedSm,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.graphic_eq_rounded, size: 16, color: AppColors.primaryLight),
-                            SizedBox(width: 6),
-                            Text(
-                              'SoundCloud Waveform Preview: Đã phân tích dải tần',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        const SoundCloudWaveform(
-                          progress: 0.35,
-                          height: 44,
-                          showComments: false,
-                          isInteractive: true,
-                        ),
-                        const SizedBox(height: 4),
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('00:00', style: TextStyle(fontSize: 10, color: AppColors.onSurfaceMutedLight)),
-                            Text('25:30 (Độ nét cao 320kbps)', style: TextStyle(fontSize: 10, color: AppColors.onSurfaceMutedLight)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.xs,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    AppButton(
-                      label: _audioFileName != null ? 'Tải tệp khác từ máy' : 'Tải lên Audio từ máy',
-                      icon: const Icon(Icons.file_upload_outlined, size: 16),
-                      height: 38,
-                      type: AppButtonType.primary,
-                      onPressed: _pickAudioDirectly,
-                    ),
-                    AppButton(
-                      label: 'Chọn mẫu / URL',
-                      icon: const Icon(Icons.link_rounded, size: 16),
-                      height: 38,
-                      type: AppButtonType.secondary,
-                      onPressed: _handleUploadAudio,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          )
-        else
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-              borderRadius: AppSpacing.roundedMd,
-              border: Border.all(
-                color: _videoFileName != null ? AppColors.success : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
-                width: _videoFileName != null ? 1.5 : 1,
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  _videoFileName != null ? Icons.check_circle_rounded : Icons.video_call_outlined,
-                  size: 48,
-                  color: _videoFileName != null ? AppColors.success : AppColors.secondaryLight,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                InkWell(
-                  onTap: _pickVideoDirectly,
-                  borderRadius: AppSpacing.roundedSm,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _videoFileName ?? 'Chọn tệp video podcast (mp4, mov, mkv)',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        if (_videoFileName != null) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.edit_outlined, size: 16, color: AppColors.secondaryLight),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  'Lưu trữ Cloudflare R2 riêng tư. Hỗ trợ độ phân giải tối đa 4K, 500MB.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                if (_isUploadingVideo) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  LinearProgressIndicator(value: _videoUploadProgress, color: AppColors.secondaryLight),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Đang tải lên video ${(_videoUploadProgress * 100).toInt()}%...',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                ],
-                if (_videoFileName != null && !_isUploadingVideo) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Container(
-                    height: 120,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: AppSpacing.roundedSm,
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        const Icon(Icons.play_circle_filled_rounded, size: 48, color: Colors.white70),
-                        Positioned(
-                          bottom: 8,
-                          left: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text('1080p HD • Video Podcast R2', style: TextStyle(color: Colors.white, fontSize: 10)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.xs,
-                  alignment: WrapAlignment.center,
-                  children: [
-                    AppButton(
-                      label: _videoFileName != null ? 'Tải video khác từ máy' : 'Tải lên Video từ máy',
-                      icon: const Icon(Icons.file_upload_outlined, size: 16),
-                      height: 38,
-                      type: AppButtonType.primary,
-                      onPressed: _pickVideoDirectly,
-                    ),
-                    AppButton(
-                      label: 'Chọn mẫu / URL',
-                      icon: const Icon(Icons.link_rounded, size: 16),
-                      height: 38,
-                      type: AppButtonType.secondary,
-                      onPressed: _handleUploadVideo,
-                    ),
-                  ],
-                ),
-              ],
+        // Khung Upload Tệp Âm Thanh
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+            borderRadius: AppSpacing.roundedMd,
+            border: Border.all(
+              color: _audioFileName != null ? AppColors.success : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
+              width: _audioFileName != null ? 1.5 : 1,
             ),
           ),
+          child: Column(
+            children: [
+              Icon(
+                _audioFileName != null ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
+                size: 48,
+                color: _audioFileName != null ? AppColors.success : AppColors.primaryLight,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              InkWell(
+                onTap: _handleUploadAudio,
+                borderRadius: AppSpacing.roundedSm,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _audioFileName ?? 'Chọn tệp âm thanh (mp3, m4a, wav)',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      if (_audioFileName != null) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.edit_outlined, size: 16, color: AppColors.primaryLight),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Dung lượng tối đa: 150MB. Khuyến nghị chất lượng 320kbps.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                ),
+              ),
+              if (_isUploadingAudio) ...[
+                const SizedBox(height: AppSpacing.md),
+                LinearProgressIndicator(value: _uploadProgress, color: AppColors.primaryLight),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Đang tải lên ${(_uploadProgress * 100).toInt()}%...',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                alignment: WrapAlignment.center,
+                children: [
+                  AppButton(
+                    label: _audioFileName != null ? 'Tải tệp khác từ máy' : 'Tải lên Audio từ máy',
+                    icon: const Icon(Icons.file_upload_outlined, size: 16),
+                    height: 38,
+                    type: AppButtonType.primary,
+                    onPressed: _pickAudioDirectly,
+                  ),
+                  AppButton(
+                    label: 'Chọn mẫu / URL',
+                    icon: const Icon(Icons.link_rounded, size: 16),
+                    height: 38,
+                    type: AppButtonType.secondary,
+                    onPressed: _handleUploadAudio,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg),
 
         // Chọn ảnh bìa
@@ -1016,7 +836,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       );
     }
     return Image.network(
-      _selectedCoverUrl,
+      resolveImageUrl(_selectedCoverUrl),
       width: 84,
       height: 84,
       fit: BoxFit.cover,
@@ -1053,214 +873,267 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   }
 
   Widget _buildStep2(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppTextField(
-          label: 'Tiêu đề tập podcast',
-          hint: 'Ví dụ: Tập 15: Hiệp định Genève 1954 và Vĩ tuyến 17',
-          controller: _titleController,
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập tiêu đề' : null,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppTextField(
-          label: 'Mô tả tóm tắt nội dung',
-          hint: 'Giới thiệu khái quát về sự kiện hoặc nhân vật lịch sử...',
-          controller: _descController,
-          maxLines: 4,
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập mô tả' : null,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const Text('Giai đoạn lịch sử', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-        const SizedBox(height: AppSpacing.xs),
-        Wrap(
-          spacing: AppSpacing.sm,
-          children: _eras.map((era) {
-            final isSelected = _selectedEra == era;
-            return ChoiceChip(
-              label: Text(era),
-              selected: isSelected,
-              selectedColor: isDark ? AppColors.primaryDark : AppColors.primaryLight,
-              labelStyle: TextStyle(
-                color: isSelected ? Colors.white : (isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight),
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 12,
-              ),
-              onSelected: (selected) {
-                if (selected) setState(() => _selectedEra = era);
-              },
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const Text(
-          'Thuộc Series (Tuyển tập)',
-          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Consumer(
-          builder: (context, ref, _) {
-            final seriesList =
-                ref.watch(creatorSeriesProvider).value ?? [];
-            return DropdownButtonFormField<String?>(
-              initialValue: _selectedSeriesId,
-              decoration: const InputDecoration(
-                hintText: 'Chọn Series liên quan (tùy chọn)',
-                isDense: true,
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('Không thuộc Series nào (Tập đơn lẻ)'),
+    return Form(
+      key: _step2FormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            label: 'Tiêu đề tập podcast',
+            hint: 'Ví dụ: Tập 15: Hiệp định Genève 1954 và Vĩ tuyến 17',
+            controller: _titleController,
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập tiêu đề' : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            label: 'Mô tả tóm tắt nội dung',
+            hint: 'Giới thiệu khái quát về sự kiện hoặc nhân vật lịch sử...',
+            controller: _descController,
+            maxLines: 4,
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập mô tả' : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Danh mục chủ đề *',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Consumer(
+            builder: (context, ref, _) {
+              final categoriesAsync = ref.watch(categoriesProvider);
+              return categoriesAsync.when(
+                data: (categories) {
+                  if (categories.isEmpty) {
+                    return const Text(
+                      'Không có danh mục nào khả dụng',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    );
+                  }
+                  final currentId = categories.any((c) => c.id == _selectedCategoryId)
+                      ? _selectedCategoryId
+                      : categories.first.id;
+
+                  if (_selectedCategoryId == null && categories.isNotEmpty) {
+                    _selectedCategoryId = currentId;
+                    final match = categories.firstWhere(
+                      (c) => c.id == currentId,
+                      orElse: () => categories.first,
+                    );
+                    _selectedEra = match.name;
+                  }
+
+                  return DropdownButtonFormField<String>(
+                    initialValue: currentId,
+                    decoration: const InputDecoration(
+                      hintText: 'Chọn danh mục podcast *',
+                      isDense: true,
+                      prefixIcon: Icon(Icons.category_outlined, size: 20),
+                    ),
+                    items: categories
+                        .map((c) => DropdownMenuItem(
+                              value: c.id,
+                              child: Text(c.name),
+                            ))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _selectedCategoryId = val;
+                          final match = categories.firstWhere(
+                            (c) => c.id == val,
+                            orElse: () => categories.first,
+                          );
+                          _selectedEra = match.name;
+                        });
+                      }
+                    },
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Vui lòng chọn danh mục' : null,
+                  );
+                },
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: LinearProgressIndicator(),
                 ),
-                ...seriesList.map((s) => DropdownMenuItem<String?>(
-                      value: s.id,
-                      child: Text(s.title),
-                    )),
-              ],
-              onChanged: (val) => setState(() => _selectedSeriesId = val),
-            );
-          },
-        ),
-      ],
+                error: (err, st) => const Text(
+                  'Không thể tải danh mục từ máy chủ',
+                  style: TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Text(
+            'Thuộc Series (Tuyển tập)',
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Consumer(
+            builder: (context, ref, _) {
+              final seriesList =
+                  ref.watch(creatorSeriesProvider).value ?? [];
+              return DropdownButtonFormField<String?>(
+                initialValue: _selectedSeriesId,
+                decoration: const InputDecoration(
+                  hintText: 'Chọn Series liên quan (tùy chọn)',
+                  isDense: true,
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Không thuộc Series nào (Tập đơn lẻ)'),
+                  ),
+                  ...seriesList.map((s) => DropdownMenuItem<String?>(
+                        value: s.id,
+                        child: Text(s.title),
+                      )),
+                ],
+                onChanged: (val) => setState(() => _selectedSeriesId = val),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildStep3(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppTextField(
-          label: 'Nguồn tư liệu & Sách tham khảo (Bắt buộc)',
-          hint:
-              'Ghi rõ tên sách, tác giả, hồi ký, tài liệu lưu trữ để phục vụ kiểm duyệt...',
-          controller: _sourcesController,
-          maxLines: 3,
-          validator: (v) => (v == null || v.trim().isEmpty)
-              ? 'Vui lòng cung cấp nguồn tư liệu để đảm bảo tính xác thực'
-              : null,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Tài liệu PDF đính kèm (Nguồn xác thực)',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-            ),
-            TextButton.icon(
-              icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
-              label: Text(_selectedPdfFileName != null
-                  ? 'Đổi tệp PDF'
-                  : 'Tải lên PDF'),
-              onPressed: () async {
-                try {
-                  PlatformFile? file;
+    return Form(
+      key: _step3FormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppTextField(
+            label: 'Nguồn tư liệu & Sách tham khảo (Bắt buộc)',
+            hint:
+                'Ghi rõ tên sách, tác giả, hồi ký, tài liệu lưu trữ để phục vụ kiểm duyệt...',
+            controller: _sourcesController,
+            maxLines: 3,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Vui lòng cung cấp nguồn tư liệu để đảm bảo tính xác thực'
+                : null,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Tài liệu PDF đính kèm (Nguồn xác thực)',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.picture_as_pdf_rounded, size: 16),
+                label: Text(_selectedPdfFileName != null
+                    ? 'Đổi tệp PDF'
+                    : 'Tải lên PDF'),
+                onPressed: () async {
                   try {
-                    file = await FilePicker.pickFile(
-                      type: FileType.custom,
-                      allowedExtensions: ['pdf'],
-                    );
-                  } catch (_) {
-                    file = await FilePicker.pickFile(type: FileType.any);
-                  }
-                  final picked = file;
-                  if (picked != null && picked.name.isNotEmpty) {
-                    final bytes = await picked.readAsBytes();
-                    setState(() {
-                      _selectedPdfFileName = picked.name;
-                      _pdfFileBytes = bytes;
-                    });
-                  }
-                } catch (_) {}
-              },
+                    PlatformFile? file;
+                    try {
+                      file = await FilePicker.pickFile(
+                        type: FileType.custom,
+                        allowedExtensions: ['pdf'],
+                      );
+                    } catch (_) {
+                      file = await FilePicker.pickFile(type: FileType.any);
+                    }
+                    final picked = file;
+                    if (picked != null && picked.name.isNotEmpty) {
+                      final bytes = await picked.readAsBytes();
+                      setState(() {
+                        _selectedPdfFileName = picked.name;
+                        _pdfFileBytes = bytes;
+                      });
+                    }
+                  } catch (_) {}
+                },
+              ),
+            ],
+          ),
+          if (_selectedPdfFileName != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.surfaceVariantDark
+                    : AppColors.surfaceVariantLight,
+                borderRadius: AppSpacing.roundedSm,
+                border: Border.all(
+                    color: AppColors.secondaryLight.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.description_rounded,
+                      size: 20, color: AppColors.secondaryLight),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      _selectedPdfFileName!,
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    onPressed: () => setState(() {
+                      _selectedPdfFileName = null;
+                      _pdfFileBytes = null;
+                    }),
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
-        if (_selectedPdfFileName != null) ...[
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.lg),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Chế độ Độc quyền thành viên (Locked)',
+                style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text(
+                'Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập này.'),
+            value: _isExclusive,
+            activeThumbColor: AppColors.secondaryLight,
+            onChanged: (val) => setState(() => _isExclusive = val),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.surfaceVariantDark
-                  : AppColors.surfaceVariantLight,
-              borderRadius: AppSpacing.roundedSm,
-              border: Border.all(
-                  color: AppColors.secondaryLight.withValues(alpha: 0.5)),
+              color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+              borderRadius: AppSpacing.roundedMd,
             ),
             child: Row(
               children: [
-                const Icon(Icons.description_rounded,
-                    size: 20, color: AppColors.secondaryLight),
+                const Icon(Icons.info_outline_rounded, size: 20, color: AppColors.tertiaryLight),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    _selectedPdfFileName!,
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    'Podcast sau khi gửi sẽ được AI quét dữ liệu lịch sử tự động, sau đó chuyển tới Admin phê duyệt nếu cần thiết.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                    ),
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 16),
-                  onPressed: () => setState(() {
-                    _selectedPdfFileName = null;
-                    _pdfFileBytes = null;
-                  }),
                 ),
               ],
             ),
           ),
         ],
-        const SizedBox(height: AppSpacing.lg),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Chế độ Độc quyền thành viên (Locked)',
-              style: TextStyle(fontWeight: FontWeight.w600)),
-          subtitle: const Text(
-              'Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập này.'),
-          value: _isExclusive,
-          activeThumbColor: AppColors.secondaryLight,
-          onChanged: (val) => setState(() => _isExclusive = val),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
-            borderRadius: AppSpacing.roundedMd,
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.info_outline_rounded, size: 20, color: AppColors.tertiaryLight),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  'Podcast sau khi gửi sẽ được AI quét dữ liệu lịch sử tự động, sau đó chuyển tới Admin phê duyệt nếu cần thiết.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
 class _AudioSourceSelectorSheet extends StatefulWidget {
   final String? initialFileName;
-  final bool isVideo;
 
   const _AudioSourceSelectorSheet({
     this.initialFileName,
-    this.isVideo = false,
+    bool isVideo = false,
   });
 
   @override
@@ -1286,7 +1159,6 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final mediaLabel = widget.isVideo ? 'Video' : 'Audio';
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1302,14 +1174,14 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
           children: [
             Row(
               children: [
-                Icon(
-                  widget.isVideo ? Icons.video_collection_rounded : Icons.audiotrack_rounded,
-                  color: widget.isVideo ? AppColors.secondaryLight : AppColors.primaryLight,
+                const Icon(
+                  Icons.audiotrack_rounded,
+                  color: AppColors.primaryLight,
                 ),
                 const SizedBox(width: AppSpacing.sm),
-                Text(
-                  'Thay đổi tệp $mediaLabel',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                const Text(
+                  'Thay đổi tệp âm thanh',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(
@@ -1328,8 +1200,8 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
             ),
             const SizedBox(height: AppSpacing.md),
             AppTextField(
-              label: 'Tên tệp hoặc URL $mediaLabel',
-              hint: widget.isVideo ? 'Ví dụ: tap15_video.mp4 hoặc https://...' : 'Ví dụ: tap15_audio.mp3 hoặc https://...',
+              label: 'Tên tệp hoặc URL âm thanh',
+              hint: 'Ví dụ: tap15_audio.mp3 hoặc https://...',
               controller: _textController,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -1357,7 +1229,7 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
             SizedBox(
               width: double.infinity,
               child: AppButton(
-                label: 'Tải lên tệp mới từ máy (.${widget.isVideo ? 'mp4, .mov' : 'mp3, .wav'})',
+                label: 'Tải lên tệp mới từ máy (.mp3, .m4a, .wav, .mp4)',
                 type: AppButtonType.secondary,
                 icon: const Icon(Icons.file_upload_outlined, size: 18),
                 height: 40,
@@ -1367,13 +1239,11 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
                     try {
                       file = await FilePicker.pickFile(
                         type: FileType.custom,
-                        allowedExtensions: widget.isVideo
-                            ? ['mp4', 'mov', 'mkv', 'webm', 'avi', 'm4v']
-                            : ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'],
+                        allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'mp4'],
                       );
                     } catch (_) {
                       file = await FilePicker.pickFile(
-                        type: widget.isVideo ? FileType.video : FileType.audio,
+                        type: FileType.audio,
                       );
                     }
                     if (file != null && file.name.isNotEmpty) {
@@ -1574,7 +1444,7 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
                             fit: BoxFit.cover,
                           )
                         : Image.network(
-                            _previewUrl,
+                            resolveImageUrl(_previewUrl),
                             width: 50,
                             height: 50,
                             fit: BoxFit.cover,

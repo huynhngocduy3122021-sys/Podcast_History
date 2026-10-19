@@ -118,7 +118,11 @@ class StudioCommentsScreen extends ConsumerWidget {
             children: [
               CircleAvatar(
                 radius: 14,
-                backgroundImage: NetworkImage(c.authorAvatar),
+                backgroundImage: c.authorAvatar.isNotEmpty
+                    ? NetworkImage(c.authorAvatar)
+                    : null,
+                onBackgroundImageError: c.authorAvatar.isNotEmpty ? (_, _) {} : null,
+                child: const Icon(Icons.person, size: 14),
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
