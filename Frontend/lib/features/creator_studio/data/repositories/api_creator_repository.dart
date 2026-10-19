@@ -33,6 +33,7 @@ class ApiCreatorRepository implements CreatorRepository {
   final List<StudioComment> _cachedComments = [];
   final List<InteractiveForm> _cachedForms = [];
   final List<CreatorSeries> _cachedSeries = [];
+  final Set<String> _deletedPodcastIds = {};
 
   int _availableBalance = 0;
   int _pendingRelease = 0;
@@ -49,6 +50,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<CreatorProfile> getProfile() async {
+    if (!_apiClient.isAuthenticated) {
+      return _cachedProfile;
+    }
     try {
       // 1. Call GET /api/creator-applications/me
       final appData = await _apiClient.get(ApiEndpoints.myCreatorApplication);
@@ -140,6 +144,44 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   // ==========================================
+  // 1.5. CATEGORIES & DASHBOARD
+  // ==========================================
+
+  @override
+  Future<List<CreatorCategory>> getCategories() async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.categories,
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorCategory.fromJson)
+            .toList();
+      }
+    } catch (_) {}
+    return const [];
+  }
+
+  @override
+  Future<CreatorDashboardData> getDashboard({String period = '7d'}) async {
+    if (!_apiClient.isAuthenticated) {
+      return const CreatorDashboardData();
+    }
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorDashboard(period: period),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return CreatorDashboardData.fromJson(res);
+      }
+    } catch (_) {}
+    return const CreatorDashboardData();
+  }
+
+  // ==========================================
   // 2. PODCASTS MANAGEMENT
   // ==========================================
 
@@ -147,13 +189,28 @@ class ApiCreatorRepository implements CreatorRepository {
   Future<List<CreatorPodcast>> getPodcasts({
     PodcastStatus? filterStatus,
   }) async {
+    if (!_apiClient.isAuthenticated) {
+      return const [];
+    }
     try {
       // Call GET /api/creator/podcasts
-      final response = await _apiClient.get(ApiEndpoints.creatorPodcasts);
+      final response = await _apiClient.get(
+        ApiEndpoints.creatorPodcasts,
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
       if (response is List) {
         final list = <CreatorPodcast>[];
         for (final item in response) {
           if (item is Map<String, dynamic>) {
+            final id = item['podcastId']?.toString();
+            final statusStr = (item['status'] as String? ?? '').toUpperCase();
+            if (id != null && _deletedPodcastIds.contains(id)) {
+              continue;
+            }
+            if (statusStr == 'DELETED' || statusStr == 'ARCHIVED') {
+              if (id != null) _deletedPodcastIds.add(id);
+              continue;
+            }
             var mapped = _mapBackendPodcastToModel(item);
             final existing = _cachedPodcasts.cast<CreatorPodcast?>().firstWhere(
               (p) => p?.id == mapped.id,
@@ -176,6 +233,7 @@ class ApiCreatorRepository implements CreatorRepository {
               try {
                 final revRes = await _apiClient.get(
                   ApiEndpoints.creatorPodcastReviews(mapped.id),
+                  headers: const {'ngrok-skip-browser-warning': '1'},
                 );
                 if (revRes is Map<String, dynamic> &&
                     revRes['content'] is List) {
@@ -194,6 +252,7 @@ class ApiCreatorRepository implements CreatorRepository {
               try {
                 final refRes = await _apiClient.get(
                   ApiEndpoints.creatorPodcastReferences(mapped.id),
+                  headers: const {'ngrok-skip-browser-warning': '1'},
                 );
                 if (refRes is List && refRes.isNotEmpty) {
                   final firstRef = refRes.first as Map<String, dynamic>;
@@ -222,6 +281,29 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<CreatorPodcast?> getPodcastById(String id) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorPodcastById(id),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final mapped = _mapBackendPodcastToModel(res);
+        final idx = _cachedPodcasts.indexWhere((p) => p.id == id);
+        if (idx != -1) {
+          _cachedPodcasts[idx] = mapped;
+        } else {
+          _cachedPodcasts.add(mapped);
+        }
+        return mapped;
+      }
+    } catch (_) {}
+    final cached = _cachedPodcasts.where((p) => p.id == id);
+    if (cached.isNotEmpty) return cached.first;
+    return null;
+  }
+
+  @override
   Future<CreatorPodcast> createPodcast({
     required String title,
     required String description,
@@ -232,138 +314,156 @@ class ApiCreatorRepository implements CreatorRepository {
     required String? audioFileName,
     required Duration duration,
     List<int>? mediaBytes,
+    String? categoryId,
+    String? seriesId,
+    int? episodeNumber,
+    bool autoSubmit = false,
   }) async {
-    String? categoryId;
+    String? effectiveCategoryId = categoryId;
 
-    // 1. Get available categories from GET /api/categories and match eraTag
-    try {
-      final categoriesRes = await _apiClient.get(ApiEndpoints.categories);
-      if (categoriesRes is List && categoriesRes.isNotEmpty) {
-        final matching = categoriesRes.cast<Map<String, dynamic>>().firstWhere(
-          (c) =>
-              c['name']?.toString().toLowerCase().contains(
-                eraTag.toLowerCase(),
-              ) ==
-              true,
-          orElse: () => categoriesRes.first as Map<String, dynamic>,
-        );
-        categoryId = (matching['categoryId'] ?? matching['id'])?.toString();
-      }
-    } catch (_) {}
-
-    categoryId ??= '00000000-0000-0000-0000-000000000001';
-
-    // If coverUrl is a data URL and backend uploads is accessible, try uploading to R2:
-    String effectiveCoverUrl = coverUrl;
-    if (coverUrl.startsWith('data:image')) {
+    // 1. Resolve category ID
+    if (effectiveCategoryId == null || effectiveCategoryId.isEmpty) {
       try {
-        final mime = coverUrl.split(';').first.replaceFirst('data:', '');
-        final base64Part = coverUrl.split(',').last;
-        final bytes = base64Decode(base64Part);
-        final ext = mime.contains('png')
-            ? 'png'
-            : (mime.contains('webp') ? 'webp' : 'jpg');
-        final uploadedUrl = await uploadImageFile(
-          fileBytes: bytes,
-          filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
-          mimeType: mime,
-        );
-        if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-          effectiveCoverUrl = uploadedUrl;
+        final categories = await getCategories();
+        if (categories.isNotEmpty) {
+          final matching = categories.firstWhere(
+            (c) => c.name.toLowerCase().contains(eraTag.toLowerCase()),
+            orElse: () => categories.first,
+          );
+          effectiveCategoryId = matching.id;
         }
       } catch (_) {}
     }
 
-    String? createdPodcastId;
-    CreatorPodcast? createdPodcast;
+    if (effectiveCategoryId == null || effectiveCategoryId.isEmpty) {
+      throw Exception('Vui lòng chọn danh mục hợp lệ');
+    }
 
-    // 2. Call POST /api/creator/podcasts
+    // 2. Upload cover if data URL
+    String? effectiveCoverUrl;
+    if (coverUrl.isNotEmpty) {
+      if (coverUrl.startsWith('data:image')) {
+        try {
+          final mime = coverUrl.split(';').first.replaceFirst('data:', '');
+          final base64Part = coverUrl.split(',').last;
+          final bytes = base64Decode(base64Part);
+          final ext = mime.contains('png')
+              ? 'png'
+              : (mime.contains('webp') ? 'webp' : 'jpg');
+          final uploadedUrl = await uploadImageFile(
+            fileBytes: bytes,
+            filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
+            mimeType: mime,
+          );
+          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+            effectiveCoverUrl = uploadedUrl;
+          }
+        } catch (_) {}
+      } else if (!coverUrl.startsWith('data:')) {
+        effectiveCoverUrl = coverUrl;
+      }
+    }
+
+    final durationSecs = duration.inSeconds > 0 ? duration.inSeconds : 1800;
+
+    // 3. Create Draft Podcast: POST /api/creator/podcasts
     final podcastPayload = {
-      'categoryId': categoryId,
+      'categoryId': effectiveCategoryId,
       'title': title,
       'description': description.isNotEmpty ? description : null,
-      'thumbnailUrl': effectiveCoverUrl.isNotEmpty ? effectiveCoverUrl : null,
-      'durationSeconds': duration.inSeconds > 0 ? duration.inSeconds : 1500,
-      'episodeNumber': 1,
+      'thumbnailUrl': (effectiveCoverUrl != null && effectiveCoverUrl.length <= 2000)
+          ? effectiveCoverUrl
+          : null,
+      'durationSeconds': durationSecs,
+      'episodeNumber': episodeNumber ?? 1,
       'visibility': isExclusive ? 'MEMBERS_ONLY' : 'PUBLIC',
       'exclusive': isExclusive,
     };
 
-    try {
-      final res = await _apiClient.post(
-        ApiEndpoints.creatorPodcasts,
-        body: podcastPayload,
-      );
-      if (res is Map<String, dynamic>) {
-        createdPodcast = _mapBackendPodcastToModel(res);
-        createdPodcastId = createdPodcast.id;
-      }
-    } catch (_) {}
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorPodcasts,
+      body: podcastPayload,
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
 
-    // 3. If sources provided, call POST /api/creator/podcasts/{id}/references
-    if (createdPodcastId != null && sources.isNotEmpty) {
+    if (res is! Map<String, dynamic>) {
+      throw Exception('Không thể tạo podcast nháp từ máy chủ');
+    }
+
+    var createdPodcast = _mapBackendPodcastToModel(res);
+    final createdPodcastId = createdPodcast.id;
+
+    // 4. Assign series if selected: PUT /api/creator/podcasts/{id}/series
+    if (seriesId != null && seriesId.isNotEmpty) {
+      await assignPodcastToSeries(
+        podcastId: createdPodcastId,
+        seriesId: seriesId,
+      );
+    }
+
+    // 5. Upload media file (video or audio) if bytes provided: POST /api/creator/podcasts/{id}/video
+    if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
+      final nameLower = audioFileName.toLowerCase();
+      String mimeType = 'video/mp4';
+      if (nameLower.endsWith('.mp3')) {
+        mimeType = 'audio/mpeg';
+      } else if (nameLower.endsWith('.m4a')) {
+        mimeType = 'audio/mp4';
+      } else if (nameLower.endsWith('.wav')) {
+        mimeType = 'audio/wav';
+      } else if (nameLower.endsWith('.aac')) {
+        mimeType = 'audio/aac';
+      } else if (nameLower.endsWith('.webm')) {
+        mimeType = 'video/webm';
+      } else if (nameLower.endsWith('.mov')) {
+        mimeType = 'video/quicktime';
+      }
+
+      final uploaded = await uploadPodcastVideoFile(
+        podcastId: createdPodcastId,
+        fileBytes: mediaBytes,
+        filename: audioFileName,
+        mimeType: mimeType,
+      );
+      if (!uploaded) {
+        throw Exception(
+          'Upload tệp media thất bại! Podcast được lưu dưới dạng nháp (DRAFT).',
+        );
+      }
+    }
+
+    // 6. Add sources reference if provided: POST /api/creator/podcasts/{id}/references
+    if (sources.isNotEmpty) {
       try {
         await _apiClient.post(
           ApiEndpoints.creatorPodcastReferences(createdPodcastId),
           body: {
             'referenceType': 'OTHER',
-            'title': 'Nguồn tham khảo: $eraTag',
+            'title': 'Nguồn tham khảo: $title',
             'citationText': sources,
             'url': sources.startsWith('http') ? sources : null,
           },
+          headers: const {'ngrok-skip-browser-warning': '1'},
         );
       } catch (_) {}
     }
 
-    // 3.5 If video podcast, backend created podcast, and real media bytes provided, upload video file
-    if (createdPodcastId != null &&
-        audioFileName != null &&
-        mediaBytes != null &&
-        mediaBytes.isNotEmpty) {
-      final isVideo =
-          audioFileName.toLowerCase().endsWith('.mp4') ||
-          audioFileName.toLowerCase().endsWith('.mov') ||
-          audioFileName.toLowerCase().endsWith('.mkv') ||
-          audioFileName.toLowerCase().endsWith('.webm');
-      if (isVideo) {
-        try {
-          await uploadPodcastVideoFile(
-            podcastId: createdPodcastId,
-            fileBytes: mediaBytes,
-            filename: audioFileName,
-            mimeType: 'video/mp4',
-          );
-        } catch (_) {}
+    // 7. Auto-submit if requested
+    if (autoSubmit) {
+      createdPodcast = await submitPodcast(createdPodcastId);
+    } else {
+      final verified = await getPodcastById(createdPodcastId);
+      if (verified != null) {
+        createdPodcast = verified;
       }
     }
 
-    // 4. Submit podcast to review queue: POST /api/creator/podcasts/{id}/submit
-    if (createdPodcastId != null) {
-      try {
-        final submitRes = await _apiClient.post(
-          ApiEndpoints.creatorPodcastSubmit(createdPodcastId),
-        );
-        if (submitRes is Map<String, dynamic>) {
-          createdPodcast = _mapBackendPodcastToModel(submitRes);
-        }
-      } catch (_) {}
-    }
-
-    createdPodcast ??= CreatorPodcast(
-      id: createdPodcastId ?? 'pod_${_uuid.v4().substring(0, 8)}',
-      title: title,
-      description: description,
-      coverUrl: effectiveCoverUrl,
+    createdPodcast = createdPodcast.copyWith(
       audioFileName: audioFileName,
-      duration: duration,
-      createdAt: DateTime.now(),
-      eraTag: eraTag,
       sources: sources,
-      isExclusive: isExclusive,
-      listensCount: 0,
-      likesCount: 0,
-      commentsCount: 0,
-      status: PodcastStatus.aiModerating,
+      eraTag: eraTag,
+      categoryId: effectiveCategoryId,
+      seriesId: seriesId,
     );
 
     _cachedPodcasts.insert(0, createdPodcast);
@@ -386,58 +486,64 @@ class ApiCreatorRepository implements CreatorRepository {
     required String? audioFileName,
     required Duration duration,
     List<int>? mediaBytes,
+    String? categoryId,
+    String? seriesId,
+    int? episodeNumber,
+    bool autoSubmit = false,
   }) async {
-    String? categoryId;
+    String? effectiveCategoryId = categoryId;
 
-    // 1. Get available categories if needed and match eraTag
-    try {
-      final categoriesRes = await _apiClient.get(ApiEndpoints.categories);
-      if (categoriesRes is List && categoriesRes.isNotEmpty) {
-        final matching = categoriesRes.cast<Map<String, dynamic>>().firstWhere(
-          (c) =>
-              c['name']?.toString().toLowerCase().contains(
-                eraTag.toLowerCase(),
-              ) ==
-              true,
-          orElse: () => categoriesRes.first as Map<String, dynamic>,
-        );
-        categoryId = (matching['categoryId'] ?? matching['id'])?.toString();
-      }
-    } catch (_) {}
-
-    categoryId ??= '00000000-0000-0000-0000-000000000001';
-
-    // If coverUrl is a data URL and backend uploads is accessible, try uploading to R2:
-    String effectiveCoverUrl = coverUrl;
-    if (coverUrl.startsWith('data:image')) {
+    if (effectiveCategoryId == null || effectiveCategoryId.isEmpty) {
       try {
-        final mime = coverUrl.split(';').first.replaceFirst('data:', '');
-        final base64Part = coverUrl.split(',').last;
-        final bytes = base64Decode(base64Part);
-        final ext = mime.contains('png')
-            ? 'png'
-            : (mime.contains('webp') ? 'webp' : 'jpg');
-        final uploadedUrl = await uploadImageFile(
-          fileBytes: bytes,
-          filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
-          mimeType: mime,
-        );
-        if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-          effectiveCoverUrl = uploadedUrl;
+        final categories = await getCategories();
+        if (categories.isNotEmpty) {
+          final matching = categories.firstWhere(
+            (c) => c.name.toLowerCase().contains(eraTag.toLowerCase()),
+            orElse: () => categories.first,
+          );
+          effectiveCategoryId = matching.id;
         }
       } catch (_) {}
     }
 
+    effectiveCategoryId ??= '00000000-0000-0000-0000-000000000001';
+
+    String? effectiveCoverUrl;
+    if (coverUrl.isNotEmpty) {
+      if (coverUrl.startsWith('data:image')) {
+        try {
+          final mime = coverUrl.split(';').first.replaceFirst('data:', '');
+          final base64Part = coverUrl.split(',').last;
+          final bytes = base64Decode(base64Part);
+          final ext = mime.contains('png')
+              ? 'png'
+              : (mime.contains('webp') ? 'webp' : 'jpg');
+          final uploadedUrl = await uploadImageFile(
+            fileBytes: bytes,
+            filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
+            mimeType: mime,
+          );
+          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+            effectiveCoverUrl = uploadedUrl;
+          }
+        } catch (_) {}
+      } else if (!coverUrl.startsWith('data:')) {
+        effectiveCoverUrl = coverUrl;
+      }
+    }
+
     CreatorPodcast? updatedPodcast;
 
-    // 2. Call PUT /api/creator/podcasts/{id}
+    final durationSecs = duration.inSeconds > 0 ? duration.inSeconds : 1800;
     final podcastPayload = {
-      'categoryId': categoryId,
+      'categoryId': effectiveCategoryId,
       'title': title,
       'description': description.isNotEmpty ? description : null,
-      'thumbnailUrl': effectiveCoverUrl.isNotEmpty ? effectiveCoverUrl : null,
-      'durationSeconds': duration.inSeconds > 0 ? duration.inSeconds : 1500,
-      'episodeNumber': 1,
+      'thumbnailUrl': (effectiveCoverUrl != null && effectiveCoverUrl.length <= 2000)
+          ? effectiveCoverUrl
+          : null,
+      'durationSeconds': durationSecs,
+      'episodeNumber': episodeNumber ?? 1,
       'visibility': isExclusive ? 'MEMBERS_ONLY' : 'PUBLIC',
       'exclusive': isExclusive,
     };
@@ -446,55 +552,68 @@ class ApiCreatorRepository implements CreatorRepository {
       final res = await _apiClient.put(
         ApiEndpoints.creatorPodcastById(id),
         body: podcastPayload,
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
       if (res is Map<String, dynamic>) {
         updatedPodcast = _mapBackendPodcastToModel(res);
       }
     } catch (_) {}
 
-    // 3. If sources provided, call POST /api/creator/podcasts/{id}/references
+    if (seriesId != null && seriesId.isNotEmpty) {
+      await assignPodcastToSeries(
+        podcastId: id,
+        seriesId: seriesId,
+      );
+    }
+
     if (sources.isNotEmpty) {
       try {
         await _apiClient.post(
           ApiEndpoints.creatorPodcastReferences(id),
           body: {
             'referenceType': 'OTHER',
-            'title': 'Nguồn tham khảo: $eraTag',
+            'title': 'Nguồn tham khảo: $title',
             'citationText': sources,
             'url': sources.startsWith('http') ? sources : null,
           },
+          headers: const {'ngrok-skip-browser-warning': '1'},
         );
       } catch (_) {}
     }
 
-    // 3.5 If video podcast and real media bytes provided, upload video file to backend
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final isVideo =
-          audioFileName.toLowerCase().endsWith('.mp4') ||
-          audioFileName.toLowerCase().endsWith('.mov') ||
-          audioFileName.toLowerCase().endsWith('.mkv') ||
-          audioFileName.toLowerCase().endsWith('.webm');
-      if (isVideo) {
-        try {
-          await uploadPodcastVideoFile(
-            podcastId: id,
-            fileBytes: mediaBytes,
-            filename: audioFileName,
-            mimeType: 'video/mp4',
-          );
-        } catch (_) {}
+      final nameLower = audioFileName.toLowerCase();
+      String mimeType = 'video/mp4';
+      if (nameLower.endsWith('.mp3')) {
+        mimeType = 'audio/mpeg';
+      } else if (nameLower.endsWith('.m4a')) {
+        mimeType = 'audio/mp4';
+      } else if (nameLower.endsWith('.wav')) {
+        mimeType = 'audio/wav';
+      } else if (nameLower.endsWith('.aac')) {
+        mimeType = 'audio/aac';
+      } else if (nameLower.endsWith('.webm')) {
+        mimeType = 'video/webm';
+      } else if (nameLower.endsWith('.mov')) {
+        mimeType = 'video/quicktime';
+      }
+
+      final uploaded = await uploadPodcastVideoFile(
+        podcastId: id,
+        fileBytes: mediaBytes,
+        filename: audioFileName,
+        mimeType: mimeType,
+      );
+      if (!uploaded) {
+        throw Exception('Không thể tải tệp âm thanh lên máy chủ. Vui lòng kiểm tra dung lượng tệp (< 10MB) và thử lại.');
       }
     }
 
-    // 4. Submit podcast to review queue if not already submitted
-    try {
-      final submitRes = await _apiClient.post(
-        ApiEndpoints.creatorPodcastSubmit(id),
-      );
-      if (submitRes is Map<String, dynamic>) {
-        updatedPodcast = _mapBackendPodcastToModel(submitRes);
-      }
-    } catch (_) {}
+    if (autoSubmit) {
+      try {
+        updatedPodcast = await submitPodcast(id);
+      } catch (_) {}
+    }
 
     final existingIndex = _cachedPodcasts.indexWhere((p) => p.id == id);
     final fallbackPodcast = existingIndex != -1
@@ -504,15 +623,17 @@ class ApiCreatorRepository implements CreatorRepository {
             eraTag: eraTag,
             sources: sources,
             isExclusive: isExclusive,
-            coverUrl: coverUrl,
+            coverUrl: effectiveCoverUrl ?? coverUrl,
             audioFileName: audioFileName,
             duration: duration,
+            categoryId: effectiveCategoryId,
+            seriesId: seriesId,
           )
         : CreatorPodcast(
             id: id,
             title: title,
             description: description,
-            coverUrl: coverUrl,
+            coverUrl: effectiveCoverUrl ?? coverUrl,
             audioFileName: audioFileName,
             duration: duration,
             createdAt: DateTime.now(),
@@ -523,13 +644,16 @@ class ApiCreatorRepository implements CreatorRepository {
             likesCount: 0,
             commentsCount: 0,
             status: PodcastStatus.aiModerating,
+            categoryId: effectiveCategoryId,
+            seriesId: seriesId,
           );
 
-    final finalPodcast =
-        updatedPodcast?.copyWith(
+    final finalPodcast = updatedPodcast?.copyWith(
           audioFileName: audioFileName,
           sources: sources,
           eraTag: eraTag,
+          categoryId: effectiveCategoryId,
+          seriesId: seriesId,
         ) ??
         fallbackPodcast;
 
@@ -543,11 +667,25 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> deletePodcast(String id) async {
-    try {
-      await _apiClient.delete(ApiEndpoints.creatorPodcastById(id));
-    } catch (_) {}
+  Future<CreatorPodcast> submitPodcast(String podcastId) async {
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorPodcastSubmit(podcastId),
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
+    if (res is Map<String, dynamic>) {
+      final updated = _mapBackendPodcastToModel(res);
+      final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+      if (idx != -1) {
+        _cachedPodcasts[idx] = updated;
+      }
+      return updated;
+    }
+    throw Exception('Không thể gửi podcast cho Admin duyệt');
+  }
 
+  @override
+  Future<void> deletePodcast(String id) async {
+    _deletedPodcastIds.add(id);
     _cachedPodcasts.removeWhere((p) => p.id == id);
     _cachedProfile = _cachedProfile.copyWith(
       currentPodcastCount: (_cachedProfile.currentPodcastCount - 1).clamp(
@@ -555,12 +693,20 @@ class ApiCreatorRepository implements CreatorRepository {
         999,
       ),
     );
+
+    try {
+      await _apiClient.delete(
+        ApiEndpoints.creatorPodcastById(id),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+    } catch (_) {}
   }
 
   // ==========================================
   // 3. MEDIA UPLOADS
   // ==========================================
 
+  @override
   Future<String?> uploadImageFile({
     required List<int> fileBytes,
     required String filename,
@@ -573,6 +719,7 @@ class ApiCreatorRepository implements CreatorRepository {
         filename: filename,
         fileBytes: fileBytes,
         mimeType: mimeType,
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
       if (res is Map<String, dynamic>) {
         final url = res['publicUrl'] ?? res['url'] ?? res['objectKey'];
@@ -584,12 +731,22 @@ class ApiCreatorRepository implements CreatorRepository {
     return null;
   }
 
+  @override
   Future<bool> uploadPodcastVideoFile({
     required String podcastId,
     required List<int> fileBytes,
     required String filename,
     String mimeType = 'video/mp4',
   }) async {
+    const maxAllowedBytes = 100 * 1024 * 1024; // Giới hạn theo cấu hình hệ thống: 100MB
+    if (fileBytes.length > maxAllowedBytes) {
+      final sizeMb = (fileBytes.length / (1024 * 1024)).toStringAsFixed(1);
+      throw ApiException(
+        statusCode: 413,
+        message: 'Tệp tải lên (${sizeMb}MB) vượt quá giới hạn tối đa của hệ thống (100MB). Vui lòng chọn tệp nhỏ hơn 100MB.',
+      );
+    }
+
     try {
       final res = await _apiClient.uploadMultipart(
         ApiEndpoints.creatorPodcastVideo(podcastId),
@@ -597,13 +754,44 @@ class ApiCreatorRepository implements CreatorRepository {
         filename: filename,
         fileBytes: fileBytes,
         mimeType: mimeType,
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
-      return res != null;
-    } catch (_) {
+      if (res != null) {
+        if (res is Map<String, dynamic>) {
+          final media = res['media'] as Map<String, dynamic>?;
+          final objKey = media?['objectKey']?.toString() ?? res['mediaUrl']?.toString();
+          final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+          if (idx != -1 && objKey != null && objKey.isNotEmpty) {
+            _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+              videoUrl: objKey,
+              audioFileName: filename,
+            );
+          }
+        }
+        return true;
+      }
       return false;
+    } catch (e) {
+      if (mimeType != 'video/mp4') {
+        try {
+          final resFallback = await _apiClient.uploadMultipart(
+            ApiEndpoints.creatorPodcastVideo(podcastId),
+            fileFieldName: 'file',
+            filename: filename,
+            fileBytes: fileBytes,
+            mimeType: 'video/mp4',
+            headers: const {'ngrok-skip-browser-warning': '1'},
+          );
+          if (resFallback != null) {
+            return true;
+          }
+        } catch (_) {}
+      }
+      rethrow;
     }
   }
 
+  @override
   Future<bool> uploadPdfReferenceFile({
     required String podcastId,
     String? referenceId,
@@ -621,6 +809,7 @@ class ApiCreatorRepository implements CreatorRepository {
         try {
           final existing = await _apiClient.get(
             ApiEndpoints.creatorPodcastReferences(podcastId),
+            headers: const {'ngrok-skip-browser-warning': '1'},
           );
           if (existing is List && existing.isNotEmpty) {
             targetRefId = existing.first['referenceId']?.toString();
@@ -635,6 +824,7 @@ class ApiCreatorRepository implements CreatorRepository {
               'title': filename,
               'citationText': 'Tài liệu nguồn tham khảo: $filename',
             },
+            headers: const {'ngrok-skip-browser-warning': '1'},
           );
           if (createRes is Map<String, dynamic>) {
             targetRefId = createRes['referenceId']?.toString();
@@ -652,6 +842,7 @@ class ApiCreatorRepository implements CreatorRepository {
         filename: filename,
         fileBytes: fileBytes,
         mimeType: 'application/pdf',
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
       return res != null;
     } catch (_) {
@@ -665,6 +856,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<PodcastRequest>> getRequests() async {
+    if (!_apiClient.isAuthenticated) {
+      return const [];
+    }
     try {
       // Call GET /api/creator/requests/incoming
       final response = await _apiClient.get(ApiEndpoints.incomingRequests);
@@ -676,8 +870,17 @@ class ApiCreatorRepository implements CreatorRepository {
             list.add(req);
           }
         }
+        // Preserve any processed requests (accepted, inProduction, delivered, completed, rejected)
+        final nonPending = _cachedRequests
+            .where((r) => r.status != CustomRequestStatus.sent)
+            .toList();
         _cachedRequests.clear();
         _cachedRequests.addAll(list);
+        for (final p in nonPending) {
+          if (!_cachedRequests.any((r) => r.id == p.id)) {
+            _cachedRequests.add(p);
+          }
+        }
       }
     } catch (_) {}
 
@@ -700,6 +903,13 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<void> acceptRequest(String id) async {
+    final req = await getRequestById(id);
+    final totalBudget = (req != null && req.totalBudget > 0)
+        ? req.totalBudget
+        : 2000000;
+    final m1Amount = (totalBudget * 0.3).round();
+    final m2Amount = totalBudget - m1Amount;
+
     try {
       // Call POST /api/creator/requests/{requestId}/accept
       final body = {
@@ -708,12 +918,12 @@ class ApiCreatorRepository implements CreatorRepository {
           {
             'name': 'Giai đoạn 1: Đề cương & Kịch bản chi tiết',
             'description': 'Hoàn thiện nghiên cứu lịch sử và khung nội dung',
-            'amount': 500000.0,
+            'amount': m1Amount > 0 ? m1Amount.toDouble() : 500000.0,
           },
           {
             'name': 'Giai đoạn 2: Thu âm & Hậu kỳ hoàn chỉnh',
             'description': 'Bản audio chất lượng cao',
-            'amount': 1500000.0,
+            'amount': m2Amount > 0 ? m2Amount.toDouble() : 1500000.0,
           },
         ],
       };
@@ -722,8 +932,30 @@ class ApiCreatorRepository implements CreatorRepository {
 
     final index = _cachedRequests.indexWhere((r) => r.id == id);
     if (index != -1) {
-      _cachedRequests[index] = _cachedRequests[index].copyWith(
+      final existing = _cachedRequests[index];
+      final milestones = existing.milestones.isNotEmpty
+          ? existing.milestones
+          : [
+              RequestMilestone(
+                id: 'm1_${existing.id}',
+                title: 'Giai đoạn 1: Đề cương & Kịch bản chi tiết',
+                percentage: 30,
+                amount: m1Amount,
+                isCompleted: false,
+                isApproved: false,
+              ),
+              RequestMilestone(
+                id: 'm2_${existing.id}',
+                title: 'Giai đoạn 2: Thu âm & Hậu kỳ hoàn chỉnh',
+                percentage: 70,
+                amount: m2Amount,
+                isCompleted: false,
+                isApproved: false,
+              ),
+            ];
+      _cachedRequests[index] = existing.copyWith(
         status: CustomRequestStatus.accepted,
+        milestones: milestones,
       );
     }
   }
@@ -806,6 +1038,14 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<Map<String, int>> getWalletBalance() async {
+    if (!_apiClient.isAuthenticated) {
+      return {
+        'available': _availableBalance,
+        'pending': _pendingRelease,
+        'holding': _holdingWithdraw,
+        'totalWithdrawn': _totalWithdrawn,
+      };
+    }
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorWallet);
       if (res is Map<String, dynamic>) {
@@ -813,6 +1053,8 @@ class ApiCreatorRepository implements CreatorRepository {
             (res['availableBalance'] as num?)?.toInt() ?? _availableBalance;
         _holdingWithdraw =
             (res['heldBalance'] as num?)?.toInt() ?? _holdingWithdraw;
+        _pendingRelease =
+            (res['pendingRelease'] as num?)?.toInt() ?? _pendingRelease;
       }
     } catch (_) {}
 
@@ -826,6 +1068,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<WalletTransaction>> getTransactions() async {
+    if (!_apiClient.isAuthenticated) {
+      return const [];
+    }
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorTransactions);
       if (res is List) {
@@ -859,6 +1104,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<BankAccount>> getBankAccounts() async {
+    if (!_apiClient.isAuthenticated) {
+      return List.unmodifiable(_cachedBankAccounts);
+    }
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorBankAccounts);
       if (res is List) {
@@ -885,12 +1133,19 @@ class ApiCreatorRepository implements CreatorRepository {
     String accountNumber,
     String accountHolder,
   ) async {
-    await getBankAccounts();
+    final newAccount = BankAccount(
+      id: _uuid.v4(),
+      bankName: bankName,
+      accountNumber: accountNumber,
+      accountHolder: accountHolder,
+      isDefault: _cachedBankAccounts.isEmpty,
+    );
+    _cachedBankAccounts.add(newAccount);
   }
 
   @override
   Future<void> deleteBankAccount(String id) async {
-    await getBankAccounts();
+    _cachedBankAccounts.removeWhere((a) => a.id == id);
   }
 
   @override
@@ -899,6 +1154,9 @@ class ApiCreatorRepository implements CreatorRepository {
     String bankAccountId,
     String pin,
   ) async {
+    if (!_apiClient.isAuthenticated) {
+      throw Exception('Vui lòng đăng nhập để thực hiện rút tiền.');
+    }
     try {
       await _apiClient.post(
         ApiEndpoints.creatorWithdraw,
@@ -927,6 +1185,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<void> releaseFunds() async {
+    if (!_apiClient.isAuthenticated) {
+      return;
+    }
     try {
       await _apiClient.post(ApiEndpoints.creatorReleaseFunds);
     } catch (_) {}
@@ -957,6 +1218,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<StudioComment>> getComments() async {
+    if (!_apiClient.isAuthenticated) {
+      return List.unmodifiable(_cachedComments);
+    }
     final allComments = <StudioComment>[];
     try {
       final podcasts = _cachedPodcasts.isNotEmpty
@@ -1068,6 +1332,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<CreatorSeries>> getSeries() async {
+    if (!_apiClient.isAuthenticated) {
+      return List.unmodifiable(_cachedSeries);
+    }
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorSeries);
       if (res is List) {
@@ -1129,6 +1396,7 @@ class ApiCreatorRepository implements CreatorRepository {
     return null;
   }
 
+  @override
   Future<bool> assignPodcastToSeries({
     required String podcastId,
     required String seriesId,
@@ -1137,6 +1405,7 @@ class ApiCreatorRepository implements CreatorRepository {
       final res = await _apiClient.put(
         ApiEndpoints.creatorPodcastSeries(podcastId),
         body: {'seriesId': seriesId},
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
       return res != null;
     } catch (_) {
@@ -1144,10 +1413,12 @@ class ApiCreatorRepository implements CreatorRepository {
     }
   }
 
+  @override
   Future<bool> removePodcastFromSeries({required String podcastId}) async {
     try {
       final res = await _apiClient.delete(
         ApiEndpoints.creatorPodcastSeries(podcastId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
       return res != null;
     } catch (_) {
@@ -1178,6 +1449,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<List<InteractiveForm>> getForms() async {
+    if (!_apiClient.isAuthenticated) {
+      return List.unmodifiable(_cachedForms);
+    }
     try {
       final res = await _apiClient.get(ApiEndpoints.creatorPolls);
       if (res is Map<String, dynamic> && res['content'] is List) {
@@ -1276,6 +1550,8 @@ class ApiCreatorRepository implements CreatorRepository {
         break;
       case 'PENDING_REVIEW':
       case 'PENDING_ADMIN':
+      case 'IN_REVIEW':
+      case 'UNDER_REVIEW':
         status = PodcastStatus.pendingAdmin;
         break;
       case 'AI_MODERATING':
@@ -1284,6 +1560,7 @@ class ApiCreatorRepository implements CreatorRepository {
       case 'REJECTED':
         status = PodcastStatus.rejected;
         break;
+      case 'DRAFT':
       default:
         status = PodcastStatus.draft;
     }
@@ -1297,15 +1574,30 @@ class ApiCreatorRepository implements CreatorRepository {
     final isExclusive =
         json['exclusive'] == true || json['visibility'] == 'MEMBERS_ONLY';
 
+    final mediaKeyStr = json['mediaKey'] as String?;
+    String? resolvedAudioName = json['audioFileName'] as String?;
+    if (resolvedAudioName == null && mediaKeyStr != null && mediaKeyStr.isNotEmpty) {
+      resolvedAudioName = mediaKeyStr.split('/').last;
+    }
+    String? resolvedMediaType = json['mediaType'] as String?;
+    if (resolvedAudioName != null) {
+      final nameLower = resolvedAudioName.toLowerCase();
+      if (nameLower.endsWith('.mp3') ||
+          nameLower.endsWith('.wav') ||
+          nameLower.endsWith('.m4a') ||
+          nameLower.endsWith('.aac') ||
+          nameLower.endsWith('.flac') ||
+          nameLower.endsWith('.ogg')) {
+        resolvedMediaType = 'audio/mpeg';
+      }
+    }
+
     return CreatorPodcast(
       id: json['podcastId']?.toString() ?? _uuid.v4(),
       title: json['title'] as String? ?? 'Chưa đặt tiêu đề',
       description: json['description'] as String? ?? '',
       coverUrl: json['thumbnailUrl'] as String? ?? '',
-      audioFileName:
-          json['audioFileName'] as String? ??
-          json['mediaKey'] as String? ??
-          json['videoUrl'] as String?,
+      audioFileName: resolvedAudioName ?? json['videoUrl'] as String?,
       duration: Duration(seconds: durationSeconds),
       createdAt: createdAt,
       eraTag: json['categoryName'] as String? ?? '',
@@ -1315,6 +1607,11 @@ class ApiCreatorRepository implements CreatorRepository {
       likesCount: 0,
       commentsCount: 0,
       status: status,
+      categoryId: json['categoryId']?.toString(),
+      seriesId: json['seriesId']?.toString(),
+      seriesTitle: json['seriesTitle'] as String?,
+      mediaType: resolvedMediaType,
+      videoUrl: json['videoUrl'] as String?,
     );
   }
 

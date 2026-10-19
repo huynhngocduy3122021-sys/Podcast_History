@@ -40,6 +40,8 @@ class ApiEndpoints {
       '/api/creator/podcasts/$id/reviews';
   static String creatorPodcastAppeals(String id) =>
       '/api/creator/podcasts/$id/appeals';
+  static String creatorDashboard({String period = '7d'}) =>
+      '/api/creator/dashboard?period=$period';
 
   // Uploads
   static const String uploads = '/api/uploads';
@@ -75,5 +77,7 @@ class ApiEndpoints {
   static String creatorPollClose(String id) => '/api/creator/polls/$id/close';
   static String creatorPollResults(String id) =>
       '/api/creator/polls/$id/results';
+  static String creatorPollResponses(String id) =>
+      '/api/creator/polls/$id/responses';
   static const String creatorUpgradePremium = '/api/creator/upgrade-premium';
 }

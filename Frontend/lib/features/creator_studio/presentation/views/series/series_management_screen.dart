@@ -208,77 +208,120 @@ class _SeriesManagementScreenState
     final slugCtrl = TextEditingController();
     final descCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    String? selectedCategoryId;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text(
-          'Tạo Series Podcast Mới',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppTextField(
-                label: 'Tiêu đề Series',
-                controller: titleCtrl,
-                hint: 'Ví dụ: Kháng chiến chống Mỹ cứu nước',
-                validator: (v) => (v == null || v.trim().isEmpty)
-                    ? 'Vui lòng nhập tiêu đề series'
-                    : null,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                label: 'Slug (Đường dẫn)',
-                controller: slugCtrl,
-                hint: 'Ví dụ: khang-chien-chong-my',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppTextField(
-                label: 'Mô tả tóm tắt Series',
-                controller: descCtrl,
-                maxLines: 3,
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text(
+            'Tạo Series Podcast Mới',
+            style: TextStyle(fontWeight: FontWeight.w700),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Hủy'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppTextField(
+                    label: 'Tiêu đề Series *',
+                    controller: titleCtrl,
+                    hint: 'Ví dụ: Kháng chiến chống Mỹ cứu nước',
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Vui lòng nhập tiêu đề series'
+                        : null,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final categoriesAsync = ref.watch(categoriesProvider);
+                      return categoriesAsync.when(
+                        data: (categories) {
+                          if (categories.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          selectedCategoryId ??= categories.first.id;
+                          return DropdownButtonFormField<String>(
+                            initialValue: selectedCategoryId,
+                            decoration: const InputDecoration(
+                              labelText: 'Danh mục chủ đề *',
+                              isDense: true,
+                              prefixIcon:
+                                  Icon(Icons.category_outlined, size: 20),
+                            ),
+                            items: categories
+                                .map((c) => DropdownMenuItem(
+                                      value: c.id,
+                                      child: Text(c.name),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setDialogState(() => selectedCategoryId = val);
+                            },
+                            validator: (v) => (v == null || v.isEmpty)
+                                ? 'Vui lòng chọn danh mục'
+                                : null,
+                          );
+                        },
+                        loading: () => const LinearProgressIndicator(),
+                        error: (err, st) => const SizedBox.shrink(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Slug (Đường dẫn)',
+                    controller: slugCtrl,
+                    hint: 'Ví dụ: khang-chien-chong-my',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Mô tả tóm tắt Series',
+                    controller: descCtrl,
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
           ),
-          AppButton(
-            label: 'Tạo Series',
-            width: 120,
-            onPressed: () async {
-              if (formKey.currentState?.validate() == true) {
-                final title = titleCtrl.text.trim();
-                final slug = slugCtrl.text.trim().isNotEmpty
-                    ? slugCtrl.text.trim()
-                    : title.toLowerCase().replaceAll(' ', '-');
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Hủy'),
+            ),
+            AppButton(
+              label: 'Tạo Series',
+              width: 120,
+              onPressed: () async {
+                if (formKey.currentState?.validate() == true) {
+                  final title = titleCtrl.text.trim();
+                  final slug = slugCtrl.text.trim().isNotEmpty
+                      ? slugCtrl.text.trim()
+                      : title.toLowerCase().replaceAll(' ', '-');
 
-                await ref.read(creatorSeriesProvider.notifier).createSeries(
-                      title: title,
-                      slug: slug,
-                      categoryId: '',
-                      description: descCtrl.text.trim(),
+                  await ref.read(creatorSeriesProvider.notifier).createSeries(
+                        title: title,
+                        slug: slug,
+                        categoryId: selectedCategoryId ?? '',
+                        description: descCtrl.text.trim(),
+                      );
+
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Đã tạo series "$title" thành công!'),
+                        backgroundColor: AppColors.success,
+                      ),
                     );
-
-                if (ctx.mounted) Navigator.of(ctx).pop();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Đã tạo series "$title" thành công!'),
-                      backgroundColor: AppColors.success,
-                    ),
-                  );
+                  }
                 }
-              }
-            },
-          ),
-        ],
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

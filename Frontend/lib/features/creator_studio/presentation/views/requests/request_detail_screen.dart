@@ -240,7 +240,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage(req.listenerAvatar),
+                backgroundImage: req.listenerAvatar.isNotEmpty
+                    ? NetworkImage(req.listenerAvatar)
+                    : null,
+                onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                child: const Icon(Icons.person, size: 20),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -330,7 +334,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         children: [
           const Text('Các mốc giải ngân (Escrow Milestones)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           const SizedBox(height: AppSpacing.sm),
-          ...req.milestones.map((m) {
+          if (req.milestones.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                'Chưa có mốc giải ngân (sẽ được tạo khi bạn chấp thuận đơn hàng).',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                ),
+              ),
+            )
+          else
+            ...req.milestones.map((m) {
             return Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.xs),
               padding: const EdgeInsets.all(AppSpacing.sm),

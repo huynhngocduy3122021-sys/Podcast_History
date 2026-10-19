@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
+import 'package:podcast_history/core/utils/image_url_helper.dart';
 import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
@@ -60,17 +62,22 @@ class CreatorPodcastPlayerSheet extends ConsumerStatefulWidget {
 }
 
 class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayerSheet> {
-  late bool _isPlaying;
-  late double _progress;
   late bool _isLiked;
   final TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _isPlaying = widget.initialPlaying;
-    _progress = widget.initialProgress;
     _isLiked = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final notifier = ref.read(audioPlayerServiceProvider.notifier);
+      final current = ref.read(audioPlayerServiceProvider);
+      if (current.podcastId != widget.podcast.id) {
+        notifier.play(widget.podcast);
+      } else if (!current.isPlaying && widget.initialPlaying) {
+        notifier.resume();
+      }
+    });
   }
 
   @override
@@ -80,21 +87,24 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
   }
 
   void _setProgress(double val) {
-    setState(() => _progress = val.clamp(0.0, 1.0));
+    ref.read(audioPlayerServiceProvider.notifier).seekFraction(val);
   }
 
   void _seekBySeconds(int seconds) {
-    if (widget.podcast.duration.inSeconds <= 0) return;
-    final currentSec = widget.podcast.duration.inSeconds * _progress;
-    final nextSec = (currentSec + seconds).clamp(0.0, widget.podcast.duration.inSeconds.toDouble());
-    _setProgress(nextSec / widget.podcast.duration.inSeconds);
+    ref.read(audioPlayerServiceProvider.notifier).seekBySeconds(seconds);
   }
 
   void _submitComment() {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
-    final currentSeconds = (widget.podcast.duration.inSeconds * _progress).toInt();
+    final audioState = ref.read(audioPlayerServiceProvider);
+    final isCurrent = audioState.podcastId == widget.podcast.id;
+    final progress = isCurrent ? audioState.progress : widget.initialProgress;
+    final duration = (isCurrent && audioState.duration > Duration.zero)
+        ? audioState.duration
+        : widget.podcast.duration;
+    final currentSeconds = (duration.inSeconds * progress).toInt();
     final profile = ref.read(creatorProfileProvider).value;
 
     final newComment = StudioComment(
@@ -123,10 +133,18 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
   @override
   Widget build(BuildContext context) {
     final pod = widget.podcast;
-    final totalSeconds = pod.duration.inSeconds;
-    final currentSeconds = (totalSeconds * _progress).toInt();
-    final currentTimestampStr = AppFormatters.formatDuration(Duration(seconds: currentSeconds));
-    final totalTimestampStr = AppFormatters.formatDuration(pod.duration);
+    final audioState = ref.watch(audioPlayerServiceProvider);
+    final isCurrent = audioState.podcastId == pod.id;
+    final isPlaying = isCurrent && audioState.isPlaying;
+    final progress = isCurrent ? audioState.progress : widget.initialProgress;
+    final totalDuration = (isCurrent && audioState.duration > Duration.zero)
+        ? audioState.duration
+        : pod.duration;
+    final currentPosition = isCurrent
+        ? audioState.position
+        : Duration(seconds: (totalDuration.inSeconds * progress).toInt());
+    final currentTimestampStr = AppFormatters.formatDuration(currentPosition);
+    final totalTimestampStr = AppFormatters.formatDuration(totalDuration);
 
     final commentsAsync = ref.watch(creatorCommentsProvider);
 
@@ -230,7 +248,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                                     ),
                                   )
                                 : Image.network(
-                                    pod.coverUrl,
+                                    resolveImageUrl(pod.coverUrl),
                                     width: 68,
                                     height: 68,
                                     fit: BoxFit.cover,
@@ -332,34 +350,12 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
 
               // Dải sóng âm thanh SoundCloud Waveform tương tác
               SoundCloudWaveform(
-                progress: _progress,
+                progress: progress.clamp(0.0, 1.0),
                 height: 56,
                 playedColor: const Color(0xFFFF6B1A),
                 unplayedColor: Colors.white30,
                 onSeek: (frac) => _setProgress(frac),
-                comments: [
-                  TimedCommentPin(
-                    fraction: 0.15,
-                    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-                    authorName: 'Hoàng Long',
-                    content: 'Đoạn này xúc động quá!',
-                    onTap: () => _setProgress(0.15),
-                  ),
-                  TimedCommentPin(
-                    fraction: 0.45,
-                    avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
-                    authorName: 'Mai Phương',
-                    content: 'Âm thanh pháo kéo chân thực',
-                    onTap: () => _setProgress(0.45),
-                  ),
-                  TimedCommentPin(
-                    fraction: 0.72,
-                    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
-                    authorName: 'Bác Ba',
-                    content: 'Ký ức thời khó quên',
-                    onTap: () => _setProgress(0.72),
-                  ),
-                ],
+                comments: const [],
               ),
               const SizedBox(height: 8),
 
@@ -373,7 +369,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                   trackHeight: 3,
                 ),
                 child: Slider(
-                  value: _progress,
+                  value: progress.clamp(0.0, 1.0),
                   min: 0,
                   max: 1,
                   onChanged: (val) => _setProgress(val),
@@ -398,13 +394,42 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                       foregroundColor: Colors.black,
                       fixedSize: const Size(60, 60),
                     ),
-                    onPressed: () {
-                      setState(() => _isPlaying = !_isPlaying);
-                      widget.onPlayToggle?.call();
+                    onPressed: () async {
+                      try {
+                        if (widget.onPlayToggle != null) {
+                          widget.onPlayToggle!();
+                        } else {
+                          await ref.read(audioPlayerServiceProvider.notifier).togglePlay(pod);
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          final errStr = e.toString();
+                          final isCors = errStr.contains('WebAudioError') ||
+                              errStr.contains('CORS') ||
+                              errStr.contains('MEDIA_ELEMENT_ERROR') ||
+                              errStr.contains('Code: 4');
+                          final hasMedia = (pod.videoUrl != null && pod.videoUrl!.isNotEmpty) ||
+                              (pod.audioFileName != null && pod.audioFileName!.isNotEmpty);
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isCors
+                                    ? 'Trình duyệt chặn phát âm thanh do chính sách CORS của Cloudflare R2. Vui lòng cấu hình CORS cho bucket R2 hoặc thử trên ứng dụng Mobile.'
+                                    : (hasMedia
+                                        ? 'Không thể phát âm thanh: ${errStr.replaceAll('Exception:', '').trim()}'
+                                        : 'Tập podcast "${pod.title}" chưa có tệp âm thanh trên máy chủ.'),
+                              ),
+                              backgroundColor: AppColors.error,
+                              duration: const Duration(seconds: 6),
+                            ),
+                          );
+                        }
+                      }
                     },
-                    tooltip: _isPlaying ? 'Tạm dừng' : 'Phát',
+                    tooltip: isPlaying ? 'Tạm dừng' : 'Phát',
                     icon: Icon(
-                      _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       size: 36,
                     ),
                   ),
@@ -568,8 +593,9 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                             CircleAvatar(
                               radius: 16,
                               backgroundImage: c.authorAvatar.isNotEmpty ? NetworkImage(c.authorAvatar) : null,
+                              onBackgroundImageError: c.authorAvatar.isNotEmpty ? (_, _) {} : null,
                               backgroundColor: AppColors.primaryLight,
-                              child: c.authorAvatar.isEmpty ? const Icon(Icons.person, size: 16, color: Colors.white) : null,
+                              child: const Icon(Icons.person, size: 16, color: Colors.white),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
