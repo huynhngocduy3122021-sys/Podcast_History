@@ -56,6 +56,7 @@ class ApiClient {
     final headers = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'ngrok-skip-browser-warning': '1',
     };
     if (_accessToken != null && _accessToken!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $_accessToken';
@@ -157,9 +158,10 @@ class ApiClient {
     List<int>? fileBytes,
     String? mimeType,
     Map<String, String>? fields,
+    Map<String, dynamic>? queryParams,
     Map<String, String>? headers,
   }) async {
-    final uri = _buildUri(endpoint);
+    final uri = _buildUri(endpoint, queryParams);
     _log('MULTIPART POST $uri with file: $filename ($fileFieldName)');
     try {
       final request = http.MultipartRequest('POST', uri);
@@ -200,7 +202,7 @@ class ApiClient {
     _log('Status: ${response.statusCode}, Body: ${response.body}');
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) {
-        return null;
+        return const <String, dynamic>{'success': true};
       }
       try {
         final decoded = jsonDecode(utf8.decode(response.bodyBytes));

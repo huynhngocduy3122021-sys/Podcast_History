@@ -1,12 +1,11 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
-import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 
 class CreatorRegistrationScreen extends ConsumerStatefulWidget {
   const CreatorRegistrationScreen({super.key});
@@ -20,25 +19,13 @@ class _CreatorRegistrationScreenState
     extends ConsumerState<CreatorRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
-  final _handleCtrl = TextEditingController();
   final _bioCtrl = TextEditingController();
   final _socialCtrl = TextEditingController();
-  String _selectedCategory = 'Kháng chiến 1945–1975';
-  String? _sampleVoiceName;
   bool _isSubmitting = false;
-
-  final List<String> _categories = [
-    'Kháng Pháp & Cách mạng (1858–1954)',
-    'Kháng chiến 1945–1975',
-    'Nhân vật & Sự kiện Lịch sử',
-    'Thời kỳ Bao cấp & Đổi Mới 1986',
-    'Văn hóa & Di sản Lịch sử',
-  ];
 
   @override
   void dispose() {
     _nameCtrl.dispose();
-    _handleCtrl.dispose();
     _bioCtrl.dispose();
     _socialCtrl.dispose();
     super.dispose();
@@ -46,56 +33,42 @@ class _CreatorRegistrationScreenState
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_sampleVoiceName == null || _sampleVoiceName!.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vui lòng chọn tệp mẫu giọng đọc thử trước khi gửi hồ sơ.'),
-          backgroundColor: AppColors.warning,
-        ),
-      );
-      return;
-    }
     setState(() => _isSubmitting = true);
-
-    await ref
-        .read(creatorProfileProvider.notifier)
-        .submitRegistration(
-          channelName: _nameCtrl.text.trim(),
-          handle: _handleCtrl.text.trim(),
-          bio: _bioCtrl.text.trim(),
-          category: _selectedCategory,
-          socialLink: _socialCtrl.text.trim(),
-          sampleVoiceName: _sampleVoiceName!,
-        );
-
-    setState(() => _isSubmitting = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.',
+    try {
+      await ref
+          .read(creatorProfileProvider.notifier)
+          .submitRegistration(
+            channelName: _nameCtrl.text.trim(),
+            bio: _bioCtrl.text.trim(),
+            socialLink: _socialCtrl.text.trim(),
+          );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.',
+            ),
+            backgroundColor: AppColors.success,
           ),
-          backgroundColor: AppColors.success,
-        ),
-      );
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(creatorProfileProvider).value;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(title: const Text('Hồ sơ Creator & Đăng ký')),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenMargin),
         children: [
-          // Banner trạng thái xét duyệt
-          if (profile != null) _buildStatusHeader(profile, isDark),
+          if (profile != null && profile.status != CreatorStatus.notRegistered)
+            _buildStatusHeader(profile, isDark),
           const SizedBox(height: AppSpacing.lg),
-
           Form(
             key: _formKey,
             child: Column(
@@ -109,42 +82,18 @@ class _CreatorRegistrationScreenState
                 AppTextField(
                   label: 'Tên kênh người kể',
                   controller: _nameCtrl,
-                  validator: (v) => (v == null || v.isEmpty)
+                  validator: (value) => value == null || value.trim().isEmpty
                       ? 'Vui lòng nhập tên kênh'
                       : null,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                AppTextField(
-                  label: 'Tên định danh (Handle)',
-                  hint: '@tenkenh',
-                  controller: _handleCtrl,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Vui lòng nhập handle' : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   label: 'Giới thiệu kênh & Định hướng nội dung',
                   controller: _bioCtrl,
                   maxLines: 3,
-                  validator: (v) => (v == null || v.isEmpty)
+                  validator: (value) => value == null || value.trim().isEmpty
                       ? 'Vui lòng giới thiệu kênh'
                       : null,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                const Text(
-                  'Lĩnh vực lịch sử chuyên sâu',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedCategory,
-                  decoration: const InputDecoration(),
-                  items: _categories
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _selectedCategory = val);
-                  },
                 ),
                 const SizedBox(height: AppSpacing.md),
                 AppTextField(
@@ -152,84 +101,7 @@ class _CreatorRegistrationScreenState
                   controller: _socialCtrl,
                   hint: 'https://...',
                 ),
-                const SizedBox(height: AppSpacing.lg),
-
-                // Upload tệp giọng đọc thử
-                const Text(
-                  'Mẫu giọng đọc thử (Voice Sample)',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.surfaceDark
-                        : AppColors.surfaceLight,
-                    borderRadius: AppSpacing.roundedMd,
-                    border: Border.all(
-                      color: isDark
-                          ? AppColors.outlineDark
-                          : AppColors.outlineLight,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.mic_rounded,
-                        color: AppColors.primaryLight,
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text(
-                          _sampleVoiceName ?? 'Chưa chọn file mẫu giọng',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          try {
-                            PlatformFile? file;
-                            try {
-                              file = await FilePicker.pickFile(
-                                type: FileType.custom,
-                                allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg'],
-                              );
-                            } catch (_) {
-                              file = await FilePicker.pickFile(type: FileType.audio);
-                            }
-                            if (file != null) {
-                              final fileName = file.name;
-                              if (fileName.isNotEmpty) {
-                                setState(() => _sampleVoiceName = fileName);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Đã chọn tệp: $fileName')),
-                                  );
-                                }
-                              }
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Không thể chọn tệp: $e'),
-                                  backgroundColor: AppColors.error,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        child: const Text('Chọn file'),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: AppSpacing.xxl),
-
                 AppButton(
                   label: profile?.status == CreatorStatus.rejected
                       ? 'Gửi lại hồ sơ xét duyệt'
@@ -246,37 +118,37 @@ class _CreatorRegistrationScreenState
   }
 
   Widget _buildStatusHeader(CreatorProfile profile, bool isDark) {
-    Color bg;
-    IconData icon;
-    String title;
-    String desc;
-
+    late Color background;
+    late IconData icon;
+    late String title;
+    late String description;
     switch (profile.status) {
+      case CreatorStatus.notRegistered:
+        return const SizedBox.shrink();
       case CreatorStatus.approved:
-        bg = AppColors.successContainer;
+        background = AppColors.successContainer;
         icon = Icons.check_circle_rounded;
         title = 'Tài khoản Creator đã được duyệt';
-        desc = 'Bạn có đầy đủ quyền đăng podcast, nhận đơn đặt theo yêu cầu và rút tiền từ ví.';
-        break;
+        description = 'Bạn có đầy đủ quyền đăng podcast, nhận đơn đặt theo yêu cầu và rút tiền từ ví.';
       case CreatorStatus.pending:
-        bg = AppColors.warningContainer;
+        background = AppColors.warningContainer;
         icon = Icons.hourglass_top_rounded;
         title = 'Hồ sơ đang chờ Admin xét duyệt';
-        desc = 'Thời gian xử lý dự kiến từ 24 - 48 giờ làm việc. Chúng tôi sẽ gửi thông báo ngay khi có kết quả.';
-        break;
+        description = 'Thời gian xử lý dự kiến từ 24 - 48 giờ làm việc. Chúng tôi sẽ gửi thông báo ngay khi có kết quả.';
       case CreatorStatus.rejected:
-        bg = AppColors.errorContainer;
+        background = AppColors.errorContainer;
         icon = Icons.cancel_rounded;
         title = 'Hồ sơ bị từ chối';
-        desc =
+        description =
             profile.rejectReason ??
-            'Hồ sơ thiếu nguồn xác thực hoặc mẫu giọng đọc chưa đạt chuẩn.';
-        break;
+            'Hồ sơ chưa đủ thông tin hoặc nguồn xác thực để xét duyệt.';
     }
-
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(color: bg, borderRadius: AppSpacing.roundedMd),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: AppSpacing.roundedMd,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -298,7 +170,10 @@ class _CreatorRegistrationScreenState
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(desc, style: const TextStyle(fontSize: 12, height: 1.35)),
+                Text(
+                  description,
+                  style: const TextStyle(fontSize: 12, height: 1.35),
+                ),
               ],
             ),
           ),

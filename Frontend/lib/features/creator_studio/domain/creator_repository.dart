@@ -5,16 +5,20 @@ abstract class CreatorRepository {
   Future<CreatorProfile> getProfile();
   Future<void> submitRegistration({
     required String channelName,
-    required String handle,
     required String bio,
-    required String category,
     required String socialLink,
-    required String sampleVoiceName,
   });
   Future<void> upgradeToPremium();
 
+  // Categories
+  Future<List<CreatorCategory>> getCategories();
+
+  // Dashboard
+  Future<CreatorDashboardData> getDashboard({String period = '7d'});
+
   // Podcasts
   Future<List<CreatorPodcast>> getPodcasts({PodcastStatus? filterStatus});
+  Future<CreatorPodcast?> getPodcastById(String id);
   Future<CreatorPodcast> createPodcast({
     required String title,
     required String description,
@@ -25,6 +29,10 @@ abstract class CreatorRepository {
     required String? audioFileName,
     required Duration duration,
     List<int>? mediaBytes,
+    String? categoryId,
+    String? seriesId,
+    int? episodeNumber,
+    bool autoSubmit = false,
   });
   Future<CreatorPodcast> updatePodcast({
     required String id,
@@ -37,8 +45,37 @@ abstract class CreatorRepository {
     required String? audioFileName,
     required Duration duration,
     List<int>? mediaBytes,
+    String? categoryId,
+    String? seriesId,
+    int? episodeNumber,
+    bool autoSubmit = false,
   });
+  Future<CreatorPodcast> submitPodcast(String podcastId);
   Future<void> deletePodcast(String id);
+
+  // Media & Uploads
+  Future<String?> uploadImageFile({
+    required List<int> fileBytes,
+    required String filename,
+    String mimeType = 'image/jpeg',
+  });
+  Future<bool> uploadPodcastVideoFile({
+    required String podcastId,
+    required List<int> fileBytes,
+    required String filename,
+    String mimeType = 'video/mp4',
+  });
+  Future<bool> assignPodcastToSeries({
+    required String podcastId,
+    required String seriesId,
+  });
+  Future<bool> removePodcastFromSeries({required String podcastId});
+  Future<bool> uploadPdfReferenceFile({
+    required String podcastId,
+    String? referenceId,
+    required List<int> fileBytes,
+    required String filename,
+  });
 
   // Custom Requests (Podcast theo yêu cầu)
   Future<List<PodcastRequest>> getRequests();

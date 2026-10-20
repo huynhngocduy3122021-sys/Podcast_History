@@ -126,7 +126,11 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundImage: NetworkImage(req.listenerAvatar),
+                      backgroundImage: req.listenerAvatar.isNotEmpty
+                          ? NetworkImage(req.listenerAvatar)
+                          : null,
+                      onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                      child: const Icon(Icons.person, size: 16),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Column(

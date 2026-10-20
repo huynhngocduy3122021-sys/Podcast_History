@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/services/session_storage/session_storage.dart';
 import 'core/theme/app_theme.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
@@ -24,6 +26,43 @@ class Account {
   final String email, name;
   final UserRole role;
   final AuthSession session;
+
+  Map<String, dynamic> toJson() => {
+    'email': email,
+    'name': name,
+    'role': role.name,
+    'session': {
+      'user': {
+        'id': session.user.id,
+        'username': session.user.username,
+        'email': session.user.email,
+        'displayName': session.user.displayName,
+        'role': session.user.role,
+        'avatarUrl': session.user.avatarUrl,
+        'bio': session.user.bio,
+      },
+      'accessToken': session.accessToken,
+      'refreshToken': session.refreshToken,
+      'tokenType': session.tokenType,
+      'expiresIn': session.expiresIn,
+      'refreshExpiresIn': session.refreshExpiresIn,
+    },
+  };
+
+  factory Account.fromJson(Map<String, dynamic> json) {
+    final roleStr = json['role'] as String? ?? 'listener';
+    final role = UserRole.values.firstWhere(
+      (r) => r.name.toLowerCase() == roleStr.toLowerCase(),
+      orElse: () => UserRole.listener,
+    );
+    final sessionMap = json['session'] as Map<String, dynamic>;
+    return Account(
+      email: json['email'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      role: role,
+      session: AuthSession.fromJson(sessionMap),
+    );
+  }
 }
 
 class VietCastApp extends StatefulWidget {
@@ -35,6 +74,38 @@ class VietCastApp extends StatefulWidget {
 class _AppState extends State<VietCastApp> {
   ThemeMode mode = ThemeMode.light;
   Account? account;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSavedSession();
+  }
+
+  void _restoreSavedSession() {
+    try {
+      final raw = SessionStorage.getItem('vietcast_saved_account');
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as Map<String, dynamic>;
+        final restored = Account.fromJson(decoded);
+        setState(() => account = restored);
+      }
+    } catch (_) {}
+  }
+
+  void _saveSession(Account? acc) {
+    setState(() => account = acc);
+    if (acc != null) {
+      try {
+        SessionStorage.setItem(
+          'vietcast_saved_account',
+          jsonEncode(acc.toJson()),
+        );
+      } catch (_) {}
+    } else {
+      SessionStorage.removeItem('vietcast_saved_account');
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ProviderScope(
     overrides: [
@@ -62,41 +133,45 @@ class _AppState extends State<VietCastApp> {
       },
       home: account == null
           ? AuthPage(
-              onAuthenticated: (value) => setState(() => account = value),
+              onAuthenticated: (value) => _saveSession(value),
             )
           : switch (account!.role) {
               UserRole.listener => Shell(
                 session: account!.session,
-                onSessionRefreshed: (session) => setState(() {
+                onSessionRefreshed: (session) {
                   final current = account;
                   if (current != null &&
                       current.session.user.id == session.user.id) {
-                    account = Account(
-                      email: current.email,
-                      name: current.name,
-                      role: current.role,
-                      session: session,
-                    );
-                  }
-                }),
-                onProfileUpdated: (user) => setState(() {
-                  final current = account;
-                  if (current != null) {
-                    account = Account(
-                      email: user.email,
-                      name: user.displayName,
-                      role: current.role,
-                      session: AuthSession(
-                        user: user,
-                        accessToken: current.session.accessToken,
-                        refreshToken: current.session.refreshToken,
-                        tokenType: current.session.tokenType,
-                        expiresIn: current.session.expiresIn,
-                        refreshExpiresIn: current.session.refreshExpiresIn,
+                    _saveSession(
+                      Account(
+                        email: current.email,
+                        name: current.name,
+                        role: current.role,
+                        session: session,
                       ),
                     );
                   }
-                }),
+                },
+                onProfileUpdated: (user) {
+                  final current = account;
+                  if (current != null) {
+                    _saveSession(
+                      Account(
+                        email: user.email,
+                        name: user.displayName,
+                        role: current.role,
+                        session: AuthSession(
+                          user: user,
+                          accessToken: current.session.accessToken,
+                          refreshToken: current.session.refreshToken,
+                          tokenType: current.session.tokenType,
+                          expiresIn: current.session.expiresIn,
+                          refreshExpiresIn: current.session.refreshExpiresIn,
+                        ),
+                      ),
+                    );
+                  }
+                },
                 displayName: account!.name,
                 onTheme: toggleTheme,
                 onLogout: logout,
@@ -121,7 +196,7 @@ class _AppState extends State<VietCastApp> {
 
   Future<void> logout() async {
     final session = account?.session;
-    setState(() => account = null);
+    _saveSession(null);
     if (session != null) {
       try {
         await AuthApi().logout(session.refreshToken);
@@ -617,21 +692,19 @@ class _ShellState extends State<Shell> {
         onPlay: play,
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
+        onWallet: _openWallet,
         hasUnreadNotifications: notifications.any((item) => !item.read),
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
       ),
       Discover(onOpen: openShow),
+      const LivestreamPage(),
       LibraryPage(
         api: api,
         likedTitles: likedShowTitles,
         savedTitles: savedShowTitles,
         onOpen: openShow,
         onOpenCreator: _showCreatorProfile,
-      ),
-      ListenerWalletPage(
-        balance: walletBalance,
-        onTopUp: () => setState(() => walletBalance += 200000),
       ),
       Profile(
         displayName: widget.displayName,
@@ -696,14 +769,14 @@ class _ShellState extends State<Shell> {
         label: 'Kham pha',
       ),
       NavigationDestination(
+        icon: Icon(Icons.live_tv_outlined),
+        selectedIcon: Icon(Icons.live_tv),
+        label: 'Livestream',
+      ),
+      NavigationDestination(
         icon: Icon(Icons.library_music_outlined),
         selectedIcon: Icon(Icons.library_music),
         label: 'Thu vien',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.account_balance_wallet_outlined),
-        selectedIcon: Icon(Icons.account_balance_wallet),
-        label: 'Vi',
       ),
       NavigationDestination(
         icon: Icon(Icons.person_outline),
@@ -729,6 +802,15 @@ class _ShellState extends State<Shell> {
           }
         });
       },
+    ),
+  );
+
+  void _openWallet() => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ListenerWalletPage(
+        balance: walletBalance,
+        onTopUp: () => setState(() => walletBalance += 200000),
+      ),
     ),
   );
   void openPlayer() => _showPlayer(current!);
@@ -818,6 +900,7 @@ class Home extends StatelessWidget {
     required this.onPlay,
     required this.onOpen,
     required this.onSearch,
+    required this.onWallet,
     required this.hasUnreadNotifications,
     required this.onNotifications,
     required this.onProfile,
@@ -825,7 +908,7 @@ class Home extends StatelessWidget {
   final String displayName;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
-  final VoidCallback onSearch, onNotifications, onProfile;
+  final VoidCallback onSearch, onWallet, onNotifications, onProfile;
   final bool hasUnreadNotifications;
   @override
   Widget build(BuildContext context) => CustomScrollView(
@@ -867,6 +950,11 @@ class Home extends StatelessWidget {
                 onPressed: onSearch,
                 tooltip: 'Tim kiem',
                 icon: const Icon(Icons.search),
+              ),
+              IconButton(
+                onPressed: onWallet,
+                tooltip: 'Ví',
+                icon: const Icon(Icons.account_balance_wallet_outlined),
               ),
               IconButton(
                 onPressed: onNotifications,
@@ -2188,6 +2276,37 @@ class _NotificationPanelState extends State<NotificationPanel> {
       ),
     );
   }
+}
+
+class LivestreamPage extends StatelessWidget {
+  const LivestreamPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => PageFrame(
+    title: 'Livestream',
+    children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.live_tv, size: 42),
+              const SizedBox(height: 12),
+              Text(
+                'Livestream sắp ra mắt',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Các buổi phát trực tiếp lịch sử và giao lưu với Creator sẽ xuất hiện tại đây.',
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class ListenerWalletPage extends StatelessWidget {
