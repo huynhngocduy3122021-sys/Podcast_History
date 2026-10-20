@@ -2751,22 +2751,6 @@ class _AuthState extends ConsumerState<AuthPage> {
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ],
-      if (register) ...[
-        const SizedBox(height: 16),
-        const Text('Chu de quan tam'),
-        Wrap(
-          spacing: 8,
-          children: ['Khang Phap', 'Nhan vat', 'Doi Moi', 'Doi song']
-              .map(
-                (x) => FilterChip(
-                  label: Text(x),
-                  selected: x == 'Nhan vat',
-                  onSelected: (_) {},
-                ),
-              )
-              .toList(),
-        ),
-      ],
       const SizedBox(height: 20),
       FilledButton(
         onPressed: loading ? null : submit,
