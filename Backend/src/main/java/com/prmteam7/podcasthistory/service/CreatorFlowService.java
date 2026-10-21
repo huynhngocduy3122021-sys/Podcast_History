@@ -40,9 +40,6 @@ public class CreatorFlowService {
     private final PodcastRepository podcastRepository;
     private final MediaUploadService mediaUploadService;
     private final R2PlaybackUrlService playbackUrlService;
-    private final CreatorSystemPlanService creatorSystemPlans;
-    private final AiModerationService aiModeration;
-    private final PodcastTranscriptService transcriptService;
 
     public CreatorFlowService(
             AppUserRepository appUserRepository,
@@ -51,10 +48,7 @@ public class CreatorFlowService {
             SeriesRepository seriesRepository,
             PodcastRepository podcastRepository,
             MediaUploadService mediaUploadService,
-            R2PlaybackUrlService playbackUrlService,
-            CreatorSystemPlanService creatorSystemPlans,
-            AiModerationService aiModeration,
-            PodcastTranscriptService transcriptService) {
+            R2PlaybackUrlService playbackUrlService) {
         this.appUserRepository = appUserRepository;
         this.producerProfileRepository = producerProfileRepository;
         this.categoryRepository = categoryRepository;
@@ -62,9 +56,6 @@ public class CreatorFlowService {
         this.podcastRepository = podcastRepository;
         this.mediaUploadService = mediaUploadService;
         this.playbackUrlService = playbackUrlService;
-        this.creatorSystemPlans = creatorSystemPlans;
-        this.aiModeration = aiModeration;
-        this.transcriptService = transcriptService;
     }
 
     @Transactional(readOnly = true)
@@ -214,8 +205,6 @@ public class CreatorFlowService {
         requireEditable(podcast);
 
         String previousKey = podcast.getMediaUrl();
-        if (previousKey == null || previousKey.isBlank())
-            creatorSystemPlans.assertCanUpload(profile.getProducerProfileId());
         MediaUploadResponse media = mediaUploadService.uploadPodcastVideo(file, userId, podcastId);
         org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
             new org.springframework.transaction.support.TransactionSynchronization() {
@@ -226,29 +215,14 @@ public class CreatorFlowService {
                         mediaUploadService.deletePodcastVideo(key, userId, podcastId);
                     } catch (RuntimeException failure) {
                         org.slf4j.LoggerFactory.getLogger(CreatorFlowService.class)
-                            .warn("Không thể dọn media R2 của podcast {}", podcastId, failure);
+                            .warn("Không thể dọn video R2 của podcast {}", podcastId, failure);
                     }
                 }
             });
         podcast.setMediaUrl(media.objectKey());
         podcast.setMediaType(media.contentType());
         podcastRepository.save(podcast);
-        transcriptService.enqueue(podcast); // dùng để tạo transcript cho podcast,sẽ dùng Whisper để tạo transcript
         return new PodcastVideoItem(podcastId, podcast.getTitle(), podcast.getStatus(), media);
-    }
-
-    @Transactional
-    public PodcastItem uploadPodcastThumbnail(UUID userId, UUID podcastId, MultipartFile file) {
-        ProducerProfile profile = approvedCreator(userId);
-        Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
-        requireEditable(podcast);
-
-        MediaUploadResponse media = mediaUploadService.uploadPodcastThumbnail(file, userId, podcastId);
-        String thumbnailUrl = media.publicUrl() == null || media.publicUrl().isBlank()
-                ? media.objectKey()
-                : media.publicUrl();
-        podcast.setThumbnailUrl(thumbnailUrl);
-        return toPodcastItem(podcastRepository.save(podcast));
     }
 
     @Transactional
@@ -256,20 +230,16 @@ public class CreatorFlowService {
         ProducerProfile profile = approvedCreator(userId);
         Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
         requireEditable(podcast);
-        String mediaType = podcast.getMediaType();
-        boolean hasPlayableMedia = mediaType != null
-                && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"));
-        if (podcast.getMediaUrl() == null || podcast.getMediaUrl().isBlank() || !hasPlayableMedia) {
-            throw new InvalidFlowRequestException("Hãy upload video hoặc audio cho podcast trước khi gửi duyệt.");
+        if (podcast.getMediaUrl() == null || podcast.getMediaUrl().isBlank()
+                || podcast.getMediaType() == null || !podcast.getMediaType().startsWith("video/")) {
+            throw new InvalidFlowRequestException("Hãy upload video cho podcast trước khi gửi duyệt.");
         }
         if (podcast.getDurationSeconds() == null || podcast.getDurationSeconds() <= 0) {
             throw new InvalidFlowRequestException("Thời lượng podcast phải lớn hơn 0.");
         }
         podcast.setStatus("PENDING_REVIEW");
         podcast.setPublishedAt(null);
-        podcastRepository.save(podcast);
-        aiModeration.enqueue(podcast);
-        return toPodcastItem(podcast);
+        return toPodcastItem(podcastRepository.save(podcast));
     }
 
     @Transactional

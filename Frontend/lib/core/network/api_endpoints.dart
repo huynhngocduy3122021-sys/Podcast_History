@@ -28,8 +28,6 @@ class ApiEndpoints {
   static String creatorPodcastById(String id) => '/api/creator/podcasts/$id';
   static String creatorPodcastVideo(String id) =>
       '/api/creator/podcasts/$id/video';
-  static String creatorPodcastThumbnail(String id) =>
-      '/api/creator/podcasts/$id/thumbnail';
   static String creatorPodcastSubmit(String id) =>
       '/api/creator/podcasts/$id/submit';
   static String creatorPodcastSeries(String id) =>
@@ -44,6 +42,9 @@ class ApiEndpoints {
       '/api/creator/podcasts/$id/appeals';
   static String creatorDashboard({String period = '7d'}) =>
       '/api/creator/dashboard?period=$period';
+
+  // Uploads
+  static const String uploads = '/api/uploads';
 
   // Creator Requests (Podcast theo yêu cầu)
   static const String incomingRequests = '/api/creator/requests/incoming';

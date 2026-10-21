@@ -80,10 +80,9 @@ public class ListenerFlowController {
     }
 
     @GetMapping("/creators")
-    @Operation(summary = "Danh sách và tìm kiếm kênh Creator đã được duyệt",
-            description = "Truyền q để tìm theo tên kênh, không phân biệt chữ hoa/thường. Bỏ q để lấy toàn bộ danh sách.")
-    public List<CreatorItem> getCreators(@RequestParam(required = false) String q) {
-        return listenerFlowService.getCreators(q);
+    @Operation(summary = "Danh sách creator đã được duyệt")
+    public List<CreatorItem> getCreators() {
+        return listenerFlowService.getCreators();
     }
 
     @GetMapping("/creators/{creatorId}")

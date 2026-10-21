@@ -247,14 +247,8 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> categories() async =>
       _list('GET', '/api/categories', authenticated: false);
 
-  Future<List<Map<String, dynamic>>> creators({String? query}) =>
-      _list(
-        'GET',
-        '/api/creators',
-        queryParameters: query?.trim().isNotEmpty == true
-            ? {'q': query!.trim()}
-            : null,
-      );
+  Future<List<Map<String, dynamic>>> creators() =>
+      _list('GET', '/api/creators');
 
   Future<Map<String, dynamic>> creator(String creatorId) =>
       _sendMap('GET', '/api/creators/$creatorId');
@@ -314,19 +308,6 @@ class ListenerApi {
     ),
   );
 
-  Future<int> commentCount(String podcastId) async {
-    final json = await _send(
-      'GET',
-      '/api/podcasts/$podcastId/comments',
-      queryParameters: {'page': '0', 'size': '1'},
-    );
-    if (json is Map<String, dynamic>) {
-      return (json['totalElements'] as num?)?.toInt() ??
-          (json['content'] is List ? (json['content'] as List).length : 0);
-    }
-    return json is List ? json.length : 0;
-  }
-
   Future<Map<String, dynamic>> createComment(
     String podcastId,
     String content, {
@@ -359,7 +340,7 @@ class ListenerApi {
           });
     final response = await _client.send(request);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException('Không thể mở luồng bình luận.', response.statusCode);
+      throw ApiException('Khong the mo comment stream.', response.statusCode);
     }
     yield* response.stream
         .transform(utf8.decoder)
@@ -510,14 +491,8 @@ class ListenerApi {
     String method,
     String path, {
     bool authenticated = true,
-    Map<String, String>? queryParameters,
   }) async {
-    final json = await _send(
-      method,
-      path,
-      queryParameters: queryParameters,
-      authenticated: authenticated,
-    );
+    final json = await _send(method, path, authenticated: authenticated);
     if (json is List) {
       return json
           .map((item) => Map<String, dynamic>.from(item as Map))

@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
-import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
@@ -468,7 +467,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final profile = ref.watch(creatorProfileProvider).value;
 
-    final isLimitReached = kPackagesEnabled && (profile != null && !profile.isPremium && profile.currentPodcastCount >= profile.maxFreePodcasts);
+    final isLimitReached = (profile != null && !profile.isPremium && profile.currentPodcastCount >= profile.maxFreePodcasts);
 
     return Scaffold(
       appBar: AppBar(
@@ -1090,7 +1089,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
-          if (kPackagesEnabled) SwitchListTile(
+          SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Chế độ Độc quyền thành viên (Locked)',
                 style: TextStyle(fontWeight: FontWeight.w600)),

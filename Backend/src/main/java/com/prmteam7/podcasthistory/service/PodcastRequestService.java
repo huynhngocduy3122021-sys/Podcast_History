@@ -114,7 +114,7 @@ public class PodcastRequestService {
     }
 
     @Transactional(readOnly = true)
-    public List<SeriesRequestResponse> getListenerRequests(UUID listenerId) { // UUID là 
+    public List<SeriesRequestResponse> getListenerRequests(UUID listenerId) {
         requireRole(requireActiveUser(listenerId), UserRole.LISTENER);
         return requestRepository.findAllByUser_UserIdOrderByCreatedAtDesc(listenerId)
                 .stream().map(this::toRequestResponse).toList();

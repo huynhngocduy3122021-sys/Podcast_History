@@ -43,8 +43,6 @@ public interface PodcastRepository
 
   long countByProducerProfile_ProducerProfileId(UUID creatorId);
 
-  long countByProducerProfile_ProducerProfileIdAndMediaUrlIsNotNull(UUID creatorId);
-
   @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
   Optional<Podcast> findByPodcastIdAndProducerProfile_ProducerProfileId(
       UUID podcastId, UUID creatorId);
