@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
+import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
@@ -310,7 +311,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                             label: pod.statusDisplay,
                             type: pod.statusType,
                           ),
-                          if (pod.isExclusive) ...[
+                          if (kPackagesEnabled && pod.isExclusive) ...[
                             const SizedBox(width: AppSpacing.xs),
                             const StatusChip(
                               label: 'Độc quyền 🔒',

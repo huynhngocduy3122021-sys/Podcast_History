@@ -174,7 +174,7 @@ public class AdminContentService {
     if (request.decision() == CaseDecision.ACCEPT) {
       AdminSupportService.state(podcast.getStatus(), "HIDDEN", "REJECTED");
       if (podcast.getMediaUrl() == null || podcast.getMediaUrl().isBlank())
-        throw new ResourceConflictException("Podcast chưa có video để xét duyệt lại.");
+        throw new ResourceConflictException("Podcast chưa có media video hoặc audio để xét duyệt lại.");
       podcast.setStatus("PENDING_REVIEW");
       podcast.setPublishedAt(null);
     }
