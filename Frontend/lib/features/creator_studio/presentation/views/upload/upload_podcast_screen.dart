@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -44,6 +45,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   String? _selectedPdfFileName;
   List<int>? _pdfFileBytes;
   List<int>? _pickedMediaBytes;
+  int? _pickedDurationSeconds;
 
   @override
   void initState() {
@@ -116,6 +118,9 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
         try {
           final bytes = await file.readAsBytes();
           _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
+          if (_pickedMediaBytes != null) {
+            _pickedDurationSeconds = await _readAudioDuration(_pickedMediaBytes!);
+          }
         } catch (_) {}
         await _applySelectedMedia(file.name);
       }
@@ -125,6 +130,20 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           SnackBar(content: Text('Lỗi chọn tệp âm thanh: $e'), backgroundColor: AppColors.error),
         );
       }
+    }
+  }
+
+  Future<int?> _readAudioDuration(List<int> bytes) async {
+    final player = AudioPlayer();
+    try {
+      await player.setSourceBytes(Uint8List.fromList(bytes));
+      final duration = await player.getDuration();
+      final seconds = duration?.inSeconds;
+      return seconds != null && seconds > 0 ? seconds : null;
+    } catch (_) {
+      return null;
+    } finally {
+      await player.dispose();
     }
   }
 
@@ -327,7 +346,9 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                   isExclusive: _isExclusive,
                   coverUrl: _selectedCoverUrl,
                   audioFileName: effectiveMedia,
-                  duration: widget.editingPodcast!.duration.inSeconds > 0
+                  duration: _pickedDurationSeconds != null
+                      ? Duration(seconds: _pickedDurationSeconds!)
+                      : widget.editingPodcast!.duration.inSeconds > 0
                       ? widget.editingPodcast!.duration
                       : const Duration(minutes: 30),
                   mediaBytes: _pickedMediaBytes,
@@ -367,7 +388,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           isExclusive: _isExclusive,
           coverUrl: _selectedCoverUrl,
           audioFileName: effectiveMedia,
-          duration: const Duration(minutes: 30),
+          duration: Duration(seconds: _pickedDurationSeconds ?? 1800),
           mediaBytes: null,
           seriesId: null,
           autoSubmit: false,

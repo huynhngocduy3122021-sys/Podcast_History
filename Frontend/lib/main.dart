@@ -227,6 +227,18 @@ class Show {
   final String? id;
   final String? creatorId;
   final int? durationSeconds;
+
+  Show copyWith({String? duration, int? durationSeconds}) => Show(
+    title,
+    channel,
+    period,
+    duration ?? this.duration,
+    colors,
+    member: member,
+    id: id,
+    creatorId: creatorId,
+    durationSeconds: durationSeconds ?? this.durationSeconds,
+  );
 }
 
 String _formatVnd(int amount) =>
@@ -290,6 +302,7 @@ class _ShellState extends State<Shell> {
   late final ListenerApi api;
   late final AudioPlayer _audioPlayer;
   StreamSubscription<Duration>? _audioPositionSubscription;
+  StreamSubscription<Duration>? _audioDurationSubscription;
   StreamSubscription<PlayerState>? _audioStateSubscription;
   StreamSubscription<void>? _audioCompleteSubscription;
   int _playRequest = 0;
@@ -336,6 +349,19 @@ class _ShellState extends State<Shell> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
+    _audioDurationSubscription = _audioPlayer.onDurationChanged.listen((duration) {
+      final show = current;
+      if (!mounted || show == null || duration.inSeconds <= 0) return;
+      final updated = show.copyWith(
+        duration: _formatDuration(duration.inSeconds),
+        durationSeconds: duration.inSeconds,
+      );
+      setState(() {
+        current = updated;
+        final index = shows.indexWhere((item) => item.id == show.id);
+        if (index >= 0) shows[index] = updated;
+      });
+    });
     _audioPositionSubscription = _audioPlayer.onPositionChanged.listen((position) {
       final show = current;
       if (!mounted || show == null) return;
@@ -572,7 +598,6 @@ class _ShellState extends State<Shell> {
     play(show);
     commentSubscription?.cancel();
     if (show.id != null) {
-      unawaited(api.listeningHistoryForPodcast(show.id!));
       commentSubscription = api
           .commentStream(show.id!)
           .listen((_) {}, onError: (_) {});
@@ -584,6 +609,7 @@ class _ShellState extends State<Shell> {
   void dispose() {
     commentSubscription?.cancel();
     _audioPositionSubscription?.cancel();
+    _audioDurationSubscription?.cancel();
     _audioStateSubscription?.cancel();
     _audioCompleteSubscription?.cancel();
     final show = current;
