@@ -21,7 +21,7 @@
 | Comment/report | Tạo/list/sửa/xóa comment, mốc video timestampSeconds, SSE comment-created; tạo/list/sửa/rút report |
 | Thành viên kênh | Danh sách gói, tạo checkout PENDING, theo dõi/hủy subscription; Admin CRUD gói, đối soát/hoàn tiền thủ công |
 | Đăng ký Creator | Gửi/xem hồ sơ của mình; Admin xem/lọc/duyệt/từ chối; lưu Creator_profile |
-| CC xuất bản | CRUD podcast/series, gắn/gỡ series, upload video gắn podcast, nguồn tham khảo/PDF optional, gửi duyệt, xem review/khiếu nại |
+| CC xuất bản | CRUD podcast/series, gắn/gỡ series, upload video/audio gắn podcast, nguồn tham khảo/PDF optional, gửi duyệt, xem review/khiếu nại |
 | Podcast theo yêu cầu | Listener gửi/list, CC nhận/từ chối và tạo các mốc, upload bản bàn giao, Listener approve/yêu cầu sửa, tranh chấp mốc |
 | Admin/Staff | Dashboard, duyệt/preview/review podcast, hide/restore/delete, claim/resolve report, xử lý appeal; Staff có route riêng |
 | Admin tài khoản | Danh sách/chi tiết/sửa/khóa/xác minh/đổi role/thu hồi phiên, tạo Staff, audit log |

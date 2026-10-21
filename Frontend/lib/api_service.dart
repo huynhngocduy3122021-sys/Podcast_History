@@ -247,8 +247,14 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> categories() async =>
       _list('GET', '/api/categories', authenticated: false);
 
-  Future<List<Map<String, dynamic>>> creators() =>
-      _list('GET', '/api/creators');
+  Future<List<Map<String, dynamic>>> creators({String? query}) =>
+      _list(
+        'GET',
+        '/api/creators',
+        queryParameters: query?.trim().isNotEmpty == true
+            ? {'q': query!.trim()}
+            : null,
+      );
 
   Future<Map<String, dynamic>> creator(String creatorId) =>
       _sendMap('GET', '/api/creators/$creatorId');
@@ -504,8 +510,14 @@ class ListenerApi {
     String method,
     String path, {
     bool authenticated = true,
+    Map<String, String>? queryParameters,
   }) async {
-    final json = await _send(method, path, authenticated: authenticated);
+    final json = await _send(
+      method,
+      path,
+      queryParameters: queryParameters,
+      authenticated: authenticated,
+    );
     if (json is List) {
       return json
           .map((item) => Map<String, dynamic>.from(item as Map))

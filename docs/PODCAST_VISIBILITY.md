@@ -23,19 +23,19 @@ Trường cũ `exclusive` vẫn được chấp nhận: `false` = `PUBLIC`,
 thì phải khớp, nếu không API trả `400`. Response Creator, Listener và Admin
 trả cả `visibility` và `exclusive`. DB tiếp tục lưu trong `Podcast.is_exclusive`.
 
-## Xem video qua API Listener
+## Xem media qua API Listener
 
 `GET /api/podcasts/{podcastId}/playback` yêu cầu JWT của tài khoản đang hoạt động.
 Frontend dùng `playbackUrl`; gọi lại API khi URL có chữ ký hết hạn.
 
 Creator có thể lấy link trực tiếp trong `GET /api/creator/podcasts/{podcastId}`:
-response có `videoUrl` và `videoUrlExpiresAt`. URL có chữ ký hiệu lực 5 phút;
-URL public có `videoUrlExpiresAt=null`. Chưa upload video hoặc podcast đã xóa
+response có `videoUrl` và `videoUrlExpiresAt` dùng cho media video hoặc audio. URL có chữ ký hiệu lực 5 phút;
+URL public có `videoUrlExpiresAt=null`. Chưa upload media hoặc podcast đã xóa
 thì `videoUrl=null`. Quyền sở hữu vẫn được kiểm tra trước khi cấp URL.
 
 | Trạng thái | Chủ kênh đang hoạt động, hồ sơ đã duyệt | Người nghe khác |
 |---|---|---|
-| DRAFT/PENDING_REVIEW/REJECTED | Xem trước nếu đã có video | Không được xem |
+| DRAFT/PENDING_REVIEW/REJECTED | Xem trước nếu đã có media video/audio | Không được xem |
 | APPROVED/PUBLISHED, PUBLIC | Được xem | Được xem |
 | APPROVED/PUBLISHED, MEMBERS_ONLY | Được xem, không cần mua thành viên | Cần thành viên kênh còn hiệu lực |
 | DELETED | Không được xem | Không được xem |
