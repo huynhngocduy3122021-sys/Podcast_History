@@ -34,7 +34,7 @@ class SoundCloudWaveform extends StatefulWidget {
 
   const SoundCloudWaveform({
     super.key,
-    this.progress = 0.35,
+    this.progress = 0.0,
     this.onSeek,
     this.peaks,
     this.comments = const [],
