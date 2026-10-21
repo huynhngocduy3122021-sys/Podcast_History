@@ -3,8 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import 'core/services/session_storage/session_storage.dart';
+import 'core/package_features.dart';
 import 'core/theme/app_theme.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
@@ -233,7 +235,7 @@ String _formatVnd(int amount) =>
 final fallbackShows = <Show>[
   Show(
     'Nhung ngay dau cua nen doc lap',
-    'Su Viet ke chuyen',
+    'Sử Việt kể chuyện',
     '1945 - 1954',
     '32:18',
     [Color(0xFF6D3026), Color(0xFFC68C58)],
@@ -246,7 +248,7 @@ final fallbackShows = <Show>[
     [Color(0xFF254A50), Color(0xFF93B4A4)],
   ),
   Show(
-    'Doi Moi: Tu y tuong den buoc ngoat',
+    'Đổi Mới: Từ ý tưởng đến bước ngoặt',
     'VietCast Originals',
     '1986 - nay',
     '28:44',
@@ -254,8 +256,8 @@ final fallbackShows = <Show>[
     member: true,
   ),
   Show(
-    'Nhan vat: Nguyen An Ninh',
-    'Goc nhin Viet Nam',
+    'Nhân vật: Nguyễn An Ninh',
+    'Góc nhìn Việt Nam',
     '1858 - 1945',
     '24:10',
     [Color(0xFF273B5A), Color(0xFFA3B4D0)],
@@ -286,10 +288,19 @@ class Shell extends StatefulWidget {
 
 class _ShellState extends State<Shell> {
   late final ListenerApi api;
+  late final AudioPlayer _audioPlayer;
+  StreamSubscription<Duration>? _audioPositionSubscription;
+  StreamSubscription<PlayerState>? _audioStateSubscription;
+  StreamSubscription<void>? _audioCompleteSubscription;
+  int _playRequest = 0;
+  int _lastSavedSecond = -1;
+  Duration _latestPosition = Duration.zero;
   bool apiLoading = true;
   bool usingSamplePodcasts = true;
   String? apiError;
   final commentsByPodcast = <String, List<CommentData>>{};
+  final likeCountsByPodcast = <String, int>{};
+  final commentCountsByPodcast = <String, int>{};
   final creatorDetails = <String, Map<String, dynamic>>{};
   StreamSubscription<String>? commentSubscription;
   int tab = 0;
@@ -302,20 +313,20 @@ class _ShellState extends State<Shell> {
   final notifications = <AppNotification>[
     const AppNotification(
       id: 'new-episode',
-      title: 'Su Viet ke chuyen da dang tap moi',
-      subtitle: '12 phut truoc',
+      title: 'Sử Việt kể chuyện đã đăng tập mới',
+      subtitle: '12 phút trước',
       icon: Icons.mic_none,
     ),
     const AppNotification(
       id: 'membership',
-      title: 'Ban da tro thanh thanh vien',
-      subtitle: 'Hom qua',
+      title: 'Bạn đã trở thành thành viên',
+      subtitle: 'Hôm qua',
       icon: Icons.workspace_premium_outlined,
     ),
     const AppNotification(
       id: 'liked-comment',
-      title: 'Lan Anh da thich binh luan cua ban',
-      subtitle: '2 ngay truoc',
+      title: 'Lan Anh đã thích bình luận của bạn',
+      subtitle: '2 ngày trước',
       icon: Icons.favorite_border,
       read: true,
     ),
@@ -324,6 +335,40 @@ class _ShellState extends State<Shell> {
   @override
   void initState() {
     super.initState();
+    _audioPlayer = AudioPlayer();
+    _audioPositionSubscription = _audioPlayer.onPositionChanged.listen((position) {
+      final show = current;
+      if (!mounted || show == null) return;
+      _latestPosition = position;
+      final duration = show.durationSeconds ?? 0;
+      if (duration <= 0) return;
+      setState(() {
+        final progress = (position.inSeconds / duration).clamp(0.0, 1.0);
+        progressByShow[show.title] = progress;
+        if (show.id != null &&
+            (position.inSeconds - _lastSavedSecond).abs() >= 5) {
+          _lastSavedSecond = position.inSeconds;
+          unawaited(
+            api.saveProgress(
+              show.id!,
+              progressSeconds: position.inSeconds,
+              completed: progress >= .99,
+            ),
+          );
+        }
+      });
+    });
+    _audioStateSubscription = _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() => playing = state == PlayerState.playing);
+    });
+    _audioCompleteSubscription = _audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted || current == null) return;
+      setState(() {
+        playing = false;
+        progressByShow[current!.title] = 1;
+      });
+    });
     api = ListenerApi(
       accessToken: widget.session.accessToken,
       refreshToken: widget.session.refreshToken,
@@ -396,6 +441,7 @@ class _ShellState extends State<Shell> {
             (podcast) async => (
               likes: await api.likes(podcast.id),
               comments: await api.comments(podcast.id),
+              commentCount: await api.commentCount(podcast.id),
             ),
           ),
         );
@@ -405,6 +451,9 @@ class _ShellState extends State<Shell> {
           if (interaction.likes['likedByMe'] == true) {
             likedShowTitles.add(podcast.title);
           }
+          likeCountsByPodcast[podcast.id] =
+              (interaction.likes['likeCount'] as num?)?.toInt() ?? 0;
+          commentCountsByPodcast[podcast.id] = interaction.commentCount;
           commentsByPodcast[podcast.id] = interaction.comments
               .map(
                 (comment) => CommentData(
@@ -425,7 +474,11 @@ class _ShellState extends State<Shell> {
       for (final item in results[1] as List<Map<String, dynamic>>) {
         final title = '${item['podcastTitle'] ?? ''}';
         final seconds = (item['progressSeconds'] as num?)?.toInt() ?? 0;
-        if (title.isNotEmpty) progressByShow[title] = seconds / 86400;
+        final show = shows.where((item) => item.title == title).firstOrNull;
+        final duration = show?.durationSeconds ?? 0;
+        if (title.isNotEmpty && duration > 0) {
+          progressByShow[title] = (seconds / duration).clamp(0.0, 1.0);
+        }
       }
       for (final item in results[2] as List<Map<String, dynamic>>) {
         final title = '${item['title'] ?? ''}';
@@ -457,16 +510,68 @@ class _ShellState extends State<Shell> {
     }
   }
 
-  void play(Show s) => setState(() {
-    current = s;
-    playing = true;
-  });
+  void play(Show s) {
+    setState(() {
+      current = s;
+      playing = true;
+    });
+    unawaited(_startPlayback(s));
+  }
+
+  Future<void> _startPlayback(Show show) async {
+    final request = ++_playRequest;
+    if (show.id == null) {
+      if (mounted) {
+        setState(() => playing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Podcast này chưa có audio trên máy chủ.')),
+        );
+      }
+      return;
+    }
+
+    try {
+      final playback = await api.playback(show.id!);
+      final playbackUrl = playback['playbackUrl']?.toString().trim();
+      if (playbackUrl == null || playbackUrl.isEmpty) {
+        throw const FormatException('API không trả về playbackUrl.');
+      }
+      if (request != _playRequest) return;
+      final resumeSeconds =
+          (playback['resumeFromSeconds'] as num?)?.toInt() ?? 0;
+      _lastSavedSecond = resumeSeconds;
+      await _audioPlayer.stop();
+      await _audioPlayer.play(UrlSource(playbackUrl));
+      if (resumeSeconds > 0 && request == _playRequest) {
+        await _audioPlayer.seek(Duration(seconds: resumeSeconds));
+      }
+    } catch (error) {
+      if (!mounted || request != _playRequest) return;
+      setState(() => playing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể phát audio: $error')),
+      );
+    }
+  }
+
+  Future<void> togglePlayback() async {
+    final show = current;
+    if (show == null) return;
+    if (playing) {
+      await _audioPlayer.pause();
+      return;
+    }
+    if (_audioPlayer.state == PlayerState.paused) {
+      await _audioPlayer.resume();
+      return;
+    }
+    await _startPlayback(show);
+  }
 
   void openShow(Show show) {
     play(show);
     commentSubscription?.cancel();
     if (show.id != null) {
-      unawaited(api.playback(show.id!));
       unawaited(api.listeningHistoryForPodcast(show.id!));
       commentSubscription = api
           .commentStream(show.id!)
@@ -478,6 +583,21 @@ class _ShellState extends State<Shell> {
   @override
   void dispose() {
     commentSubscription?.cancel();
+    _audioPositionSubscription?.cancel();
+    _audioStateSubscription?.cancel();
+    _audioCompleteSubscription?.cancel();
+    final show = current;
+    if (show?.id != null) {
+      final seconds = _latestPosition.inSeconds;
+      unawaited(
+        api.saveProgress(
+          show!.id!,
+          progressSeconds: seconds,
+          completed: false,
+        ),
+      );
+    }
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -488,6 +608,9 @@ class _ShellState extends State<Shell> {
       likedShowTitles.remove(show.title);
     }
     if (show.id != null) {
+      final currentCount = likeCountsByPodcast[show.id!] ?? 0;
+      likeCountsByPodcast[show.id!] =
+          (currentCount + (liked ? 1 : -1)).clamp(0, 1 << 31).toInt();
       unawaited(liked ? api.like(show.id!) : api.unlike(show.id!));
     }
   });
@@ -525,13 +648,13 @@ class _ShellState extends State<Shell> {
             .then((_) {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Da gui bao cao "$reason" cho admin.')),
+                SnackBar(content: Text('Đã gửi báo cáo "$reason" cho admin.')),
               );
             })
             .catchError((_) {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Khong the gui bao cao luc nay.')),
+                const SnackBar(content: Text('Không thể gửi báo cáo lúc này.')),
               );
             });
       },
@@ -541,7 +664,7 @@ class _ShellState extends State<Shell> {
   Future<void> _showMembership(Show show) async {
     if (show.creatorId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Podcast nay chua co creator ID.')),
+        const SnackBar(content: Text('Podcast này chưa có Creator ID.')),
       );
       return;
     }
@@ -551,7 +674,7 @@ class _ShellState extends State<Shell> {
       if (plans.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Creator chua co goi membership active.'),
+            content: Text('Creator chưa có gói membership đang hoạt động.'),
           ),
         );
         return;
@@ -563,14 +686,14 @@ class _ShellState extends State<Shell> {
       showDialog<void>(
         context: context,
         builder: (_) => AlertDialog(
-          title: Text('Dang ky $planName'),
+          title: Text('Đăng ký $planName'),
           content: Text(
             'Goi cua ${show.channel}: $price. Backend se tao checkout o trang thai cho thanh toan.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Huy'),
+              child: const Text('Hủy'),
             ),
             FilledButton(
               onPressed: () async {
@@ -588,11 +711,11 @@ class _ShellState extends State<Shell> {
                 } catch (_) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Khong the tao checkout.')),
+                    const SnackBar(content: Text('Không thể tạo phiên thanh toán.')),
                   );
                 }
               },
-              child: const Text('Tao checkout'),
+              child: const Text('Tạo phiên thanh toán'),
             ),
           ],
         ),
@@ -600,7 +723,7 @@ class _ShellState extends State<Shell> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Khong the tai goi membership.')),
+          const SnackBar(content: Text('Không thể tải gói membership.')),
         );
       }
     }
@@ -626,13 +749,20 @@ class _ShellState extends State<Shell> {
     isDismissible: true,
     enableDrag: true,
     barrierColor: Colors.black54,
-    barrierLabel: 'Dong player',
+    barrierLabel: 'Đóng trình phát',
     backgroundColor: Colors.transparent,
     builder: (_) => Player(
       show: show,
+      audioPlayer: _audioPlayer,
       playing: playing,
       initialProgress: progressByShow[show.title] ?? 0,
       initialLiked: likedShowTitles.contains(show.title),
+      initialLikeCount: show.id == null
+          ? 0
+          : (likeCountsByPodcast[show.id!] ?? 0),
+      initialCommentCount: show.id == null
+          ? 0
+          : (commentCountsByPodcast[show.id!] ?? 0),
       initialSaved: savedShowTitles.contains(show.title),
       initialComments: show.id == null ? null : commentsByPodcast[show.id!],
       loadComments: show.id == null
@@ -658,6 +788,7 @@ class _ShellState extends State<Shell> {
           );
         }
       },
+      onSeek: (position) => _audioPlayer.seek(position),
       onComment: show.id == null
           ? null
           : (text, timestampSeconds) async {
@@ -680,7 +811,7 @@ class _ShellState extends State<Shell> {
       onReport: () => _showReport(show),
       onMembership: () => _showMembership(show),
       onCreatorProfile: () => _showCreatorProfile(show),
-      onToggle: () => setState(() => playing = !playing),
+      onToggle: togglePlayback,
     ),
   );
 
@@ -692,21 +823,19 @@ class _ShellState extends State<Shell> {
         onPlay: play,
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
+        onWallet: _openWallet,
         hasUnreadNotifications: notifications.any((item) => !item.read),
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
       ),
-      Discover(onOpen: openShow),
+      Discover(api: api, onOpen: openShow, onOpenCreator: _showCreatorProfile),
+      const LivestreamPage(),
       LibraryPage(
         api: api,
         likedTitles: likedShowTitles,
         savedTitles: savedShowTitles,
         onOpen: openShow,
         onOpenCreator: _showCreatorProfile,
-      ),
-      ListenerWalletPage(
-        balance: walletBalance,
-        onTopUp: () => setState(() => walletBalance += 200000),
       ),
       Profile(
         displayName: widget.displayName,
@@ -747,7 +876,7 @@ class _ShellState extends State<Shell> {
                 MiniPlayer(
                   show: current!,
                   playing: playing,
-                  onToggle: () => setState(() => playing = !playing),
+                  onToggle: togglePlayback,
                   onOpen: openPlayer,
                 ),
                 nav,
@@ -768,7 +897,12 @@ class _ShellState extends State<Shell> {
       NavigationDestination(
         icon: Icon(Icons.explore_outlined),
         selectedIcon: Icon(Icons.explore),
-        label: 'Kham pha',
+        label: 'Khám phá',
+      ),
+      NavigationDestination(
+        icon: Icon(Icons.live_tv_outlined),
+        selectedIcon: Icon(Icons.live_tv),
+        label: 'Livestream',
       ),
       NavigationDestination(
         icon: Icon(Icons.library_music_outlined),
@@ -776,14 +910,9 @@ class _ShellState extends State<Shell> {
         label: 'Thu vien',
       ),
       NavigationDestination(
-        icon: Icon(Icons.account_balance_wallet_outlined),
-        selectedIcon: Icon(Icons.account_balance_wallet),
-        label: 'Vi',
-      ),
-      NavigationDestination(
         icon: Icon(Icons.person_outline),
         selectedIcon: Icon(Icons.person),
-        label: 'Ca nhan',
+        label: 'Cá nhân',
       ),
     ],
   );
@@ -804,6 +933,15 @@ class _ShellState extends State<Shell> {
           }
         });
       },
+    ),
+  );
+
+  void _openWallet() => Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ListenerWalletPage(
+        balance: walletBalance,
+        onTopUp: () => setState(() => walletBalance += 200000),
+      ),
     ),
   );
   void openPlayer() => _showPlayer(current!);
@@ -849,9 +987,9 @@ class AdminShell extends StatelessWidget {
       ),
       NavigationDestination(
         icon: Icon(Icons.notifications_none),
-        label: 'Thong bao',
+        label: 'Thông báo',
       ),
-      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Ca nhan'),
+      NavigationDestination(icon: Icon(Icons.person_outline), label: 'Cá nhân'),
     ],
   );
 }
@@ -893,6 +1031,7 @@ class Home extends StatelessWidget {
     required this.onPlay,
     required this.onOpen,
     required this.onSearch,
+    required this.onWallet,
     required this.hasUnreadNotifications,
     required this.onNotifications,
     required this.onProfile,
@@ -900,7 +1039,7 @@ class Home extends StatelessWidget {
   final String displayName;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
-  final VoidCallback onSearch, onNotifications, onProfile;
+  final VoidCallback onSearch, onWallet, onNotifications, onProfile;
   final bool hasUnreadNotifications;
   @override
   Widget build(BuildContext context) => CustomScrollView(
@@ -927,7 +1066,7 @@ class Home extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Chao buoi toi,'),
+                    Text('Chào buổi tối,'),
                     Text(
                       displayName,
                       style: TextStyle(
@@ -940,12 +1079,17 @@ class Home extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onSearch,
-                tooltip: 'Tim kiem',
+                tooltip: 'Tìm kiếm',
                 icon: const Icon(Icons.search),
               ),
               IconButton(
+                onPressed: onWallet,
+                tooltip: 'Ví',
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+              ),
+              IconButton(
                 onPressed: onNotifications,
-                tooltip: 'Thong bao',
+                tooltip: 'Thông báo',
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -984,13 +1128,13 @@ class Home extends StatelessWidget {
       ),
       SliverToBoxAdapter(
         child: Section(
-          title: 'Tiep tuc nghe',
+          title: 'Tiếp tục nghe',
           child: Resume(show: shows[0], onOpen: onOpen),
         ),
       ),
       SliverToBoxAdapter(
         child: Section(
-          title: 'Danh cho ban',
+          title: 'Dành cho bạn',
           child: SizedBox(
             height: 224,
             child: ListView.separated(
@@ -1026,7 +1170,7 @@ class TimelineFilter extends StatefulWidget {
 class _TimelineFilterState extends State<TimelineFilter> {
   String selected = '1945 - 1954';
   static const periods = [
-    'Tat ca',
+    'Tất cả',
     '1858 - 1945',
     '1945 - 1954',
     '1954 - 1975',
@@ -1036,11 +1180,11 @@ class _TimelineFilterState extends State<TimelineFilter> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = selected == 'Tat ca'
+    final filtered = selected == 'Tất cả'
         ? shows
         : shows.where((show) => show.period == selected).toList();
     return Section(
-      title: 'Theo dong thoi gian',
+      title: 'Theo dòng thời gian',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1077,7 +1221,7 @@ class _TimelineFilterState extends State<TimelineFilter> {
                 subtitle: Text('${show.channel}  •  ${show.duration}'),
                 trailing: IconButton(
                   onPressed: () => widget.onPlay(show),
-                  tooltip: 'Phat',
+                  tooltip: 'Phát',
                   icon: const Icon(Icons.play_circle_outline),
                 ),
               ),
@@ -1086,7 +1230,7 @@ class _TimelineFilterState extends State<TimelineFilter> {
           if (filtered.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text('Chua co podcast trong moc thoi gian nay.'),
+              child: Text('Chưa có podcast trong mốc thời gian này.'),
             ),
         ],
       ),
@@ -1133,7 +1277,7 @@ class Resume extends StatelessWidget {
           subtitle: Text(show.channel),
           trailing: IconButton(
             onPressed: () => onOpen(show),
-            tooltip: 'Mo va phat tiep',
+            tooltip: 'Mở và phát tiếp',
             icon: const Icon(Icons.play_circle_filled, size: 38),
           ),
         ),
@@ -1161,7 +1305,7 @@ class ShowCard extends StatelessWidget {
             bottom: 8,
             child: IconButton.filled(
               onPressed: onOpen,
-              tooltip: 'Mo va phat',
+              tooltip: 'Mở và phát',
               icon: const Icon(Icons.play_arrow),
             ),
           ),
@@ -1225,8 +1369,15 @@ class Art extends StatelessWidget {
 }
 
 class Discover extends StatefulWidget {
-  const Discover({super.key, required this.onOpen});
+  const Discover({
+    super.key,
+    required this.api,
+    required this.onOpen,
+    required this.onOpenCreator,
+  });
+  final ListenerApi api;
   final ValueChanged<Show> onOpen;
+  final ValueChanged<Show> onOpenCreator;
   @override
   State<Discover> createState() => _DiscoverState();
 }
@@ -1234,16 +1385,64 @@ class Discover extends StatefulWidget {
 class _DiscoverState extends State<Discover> {
   String query = '';
   final searchController = TextEditingController();
-  final searchHistory = <String>['lich su Viet Nam', 'Doi Moi', 'Truong Son'];
+  final searchHistory = <String>['lịch sử Việt Nam', 'Đổi Mới', 'Trường Sơn'];
+  Timer? creatorSearchTimer;
+  int creatorSearchRequest = 0;
+  bool creatorSearchLoading = false;
+  String? creatorSearchError;
+  List<Map<String, dynamic>> creatorResults = const [];
 
   @override
   void dispose() {
+    creatorSearchTimer?.cancel();
     searchController.dispose();
     super.dispose();
   }
 
+  void updateQuery(String value) {
+    creatorSearchTimer?.cancel();
+    final next = value.trim();
+    setState(() {
+      query = next;
+      creatorSearchRequest++;
+      creatorResults = const [];
+      creatorSearchLoading = next.isNotEmpty;
+      creatorSearchError = null;
+    });
+    if (next.isNotEmpty) {
+      creatorSearchTimer = Timer(
+        const Duration(milliseconds: 300),
+        () => loadCreators(next),
+      );
+    }
+  }
+
+  Future<void> loadCreators(String value) async {
+    final request = ++creatorSearchRequest;
+    setState(() {
+      creatorSearchLoading = true;
+      creatorSearchError = null;
+    });
+    try {
+      final results = await widget.api.creators(query: value);
+      if (!mounted || request != creatorSearchRequest) return;
+      setState(() {
+        creatorResults = results;
+        creatorSearchLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || request != creatorSearchRequest) return;
+      setState(() {
+        creatorResults = const [];
+        creatorSearchLoading = false;
+        creatorSearchError = 'Không tải được danh sách kênh.';
+      });
+    }
+  }
+
   void search(String value) {
     final next = value.trim();
+    creatorSearchTimer?.cancel();
     setState(() {
       query = next;
       if (next.isNotEmpty) {
@@ -1252,6 +1451,16 @@ class _DiscoverState extends State<Discover> {
         if (searchHistory.length > 6) searchHistory.removeLast();
       }
     });
+    if (next.isEmpty) {
+      creatorSearchRequest++;
+      setState(() {
+        creatorResults = const [];
+        creatorSearchLoading = false;
+        creatorSearchError = null;
+      });
+    } else {
+      loadCreators(next);
+    }
   }
 
   void pickHistory(String value) {
@@ -1273,26 +1482,26 @@ class _DiscoverState extends State<Discover> {
         .toList();
     return CustomScrollView(
       slivers: [
-        const SliverAppBar(title: Text('Kham pha'), pinned: true),
+        const SliverAppBar(title: Text('Khám phá'), pinned: true),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: searchController,
-              onChanged: (v) => setState(() => query = v),
+              onChanged: updateQuery,
               onSubmitted: search,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Tim podcast, kenh, playlist',
+                hintText: 'Tìm podcast, kênh, playlist',
                 suffixIcon: query.isEmpty
                     ? null
                     : IconButton(
                         onPressed: () {
                           searchController.clear();
-                          setState(() => query = '');
+                          updateQuery('');
                         },
-                        tooltip: 'Xoa tim kiem',
+                        tooltip: 'Xóa tìm kiếm',
                         icon: const Icon(Icons.close),
                       ),
               ),
@@ -1307,12 +1516,12 @@ class _DiscoverState extends State<Discover> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Lich su tim kiem',
+                    'Lịch sử tìm kiếm',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   TextButton(
                     onPressed: () => setState(() => searchHistory.clear()),
-                    child: const Text('Xoa lich su'),
+                    child: const Text('Xóa lịch sử'),
                   ),
                 ],
               ),
@@ -1322,7 +1531,7 @@ class _DiscoverState extends State<Discover> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: searchHistory.isEmpty
-                  ? const Text('Chua co lich su tim kiem.')
+                  ? const Text('Chưa có lịch sử tìm kiếm.')
                   : Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -1342,7 +1551,7 @@ class _DiscoverState extends State<Discover> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 28, 16, 8),
               child: Text(
-                'Audio goi y',
+                'Audio gợi ý',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -1361,7 +1570,56 @@ class _DiscoverState extends State<Discover> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Text(
-                '${result.length} audio tim thay',
+                'Kênh Creator',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ),
+          if (creatorSearchLoading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: LinearProgressIndicator(),
+              ),
+            )
+          else if (creatorSearchError != null || creatorResults.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(creatorSearchError ?? 'Không tìm thấy kênh phù hợp.'),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate((_, i) {
+                final creator = creatorResults[i];
+                final creatorId = creator['creatorProfileId']?.toString();
+                final name = creator['channelName']?.toString() ?? 'Content Creator';
+                return Card(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                    title: Text(name),
+                    subtitle: Text(creator['description']?.toString() ?? ''),
+                    onTap: creatorId == null
+                        ? null
+                        : () => widget.onOpenCreator(Show(
+                              name,
+                              name,
+                              'Creator',
+                              '',
+                              const [Color(0xFF254A50), Color(0xFF93B4A4)],
+                              creatorId: creatorId,
+                            )),
+                  ),
+                );
+              }, childCount: creatorResults.length),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+              child: Text(
+                '${result.length} audio tìm thấy',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -1370,7 +1628,7 @@ class _DiscoverState extends State<Discover> {
             const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Khong tim thay audio phu hop.'),
+                child: Text('Không tìm thấy audio phù hợp.'),
               ),
             )
           else
@@ -1405,7 +1663,7 @@ class _AudioResultTile extends StatelessWidget {
       subtitle: Text('${show.channel} • ${show.duration}'),
       trailing: IconButton(
         onPressed: onOpen,
-        tooltip: 'Mo va phat',
+        tooltip: 'Mở và phát',
         icon: const Icon(Icons.play_circle_outline),
       ),
     ),
@@ -1487,7 +1745,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
   PlaylistData get listenLater => PlaylistData(
     name: 'Nghe sau',
-    description: 'Nhung podcast ban da luu de nghe sau',
+    description: 'Những podcast bạn đã lưu để nghe sau',
     showTitles: widget.savedTitles.toList(),
     colors: const [Color(0xFF7A3F31), Color(0xFFE0B84A)],
     isDefault: true,
@@ -1501,32 +1759,32 @@ class _LibraryPageState extends State<LibraryPage> {
     final result = await showDialog<(String, String)>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Tao playlist moi'),
+        title: const Text('Tạo playlist mới'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Ten playlist'),
+              decoration: const InputDecoration(labelText: 'Tên playlist'),
             ),
             TextField(
               controller: descriptionController,
-              decoration: const InputDecoration(labelText: 'Mo ta'),
+              decoration: const InputDecoration(labelText: 'Mô tả'),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Huy'),
+            child: const Text('Hủy'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, (
               nameController.text.trim(),
               descriptionController.text.trim(),
             )),
-            child: const Text('Tao playlist'),
+            child: const Text('Tạo playlist'),
           ),
         ],
       ),
@@ -1539,7 +1797,7 @@ class _LibraryPageState extends State<LibraryPage> {
         PlaylistData(
           name: result.$1,
           description: result.$2.isEmpty
-              ? 'Playlist ca nhan cua ban'
+              ? 'Playlist cá nhân của bạn'
               : result.$2,
           showTitles: widget.savedTitles.toList(),
           colors: const [Color(0xFF254A50), Color(0xFF93B4A4)],
@@ -1562,13 +1820,13 @@ class _LibraryPageState extends State<LibraryPage> {
   @override
   Widget build(BuildContext context) => CustomScrollView(
     slivers: [
-      const SliverAppBar(title: Text('Thu vien'), pinned: true),
+      const SliverAppBar(title: Text('Thư viện'), pinned: true),
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'liked', label: Text('Da thich')),
+              ButtonSegment(value: 'liked', label: Text('Đã thích')),
               ButtonSegment(value: 'playlist', label: Text('Playlist')),
               ButtonSegment(value: 'creators', label: Text('Content Creator')),
             ],
@@ -1599,13 +1857,13 @@ class _LibraryPageState extends State<LibraryPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Playlist cua ban',
+                  'Playlist của bạn',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 FilledButton.tonalIcon(
                   onPressed: createPlaylist,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Tao moi'),
+                  label: const Text('Tạo mới'),
                 ),
               ],
             ),
@@ -1627,7 +1885,7 @@ class _LibraryPageState extends State<LibraryPage> {
             child: Padding(
               padding: EdgeInsets.all(28),
               child: Center(
-                child: Text('Ban chua theo doi Content Creator nao.'),
+                child: Text('Bạn chưa theo dõi Content Creator nào.'),
               ),
             ),
           )
@@ -1732,7 +1990,7 @@ class PlaylistCard extends StatelessWidget {
             ),
             IconButton(
               onPressed: onTap,
-              tooltip: 'Mo playlist',
+              tooltip: 'Mở playlist',
               icon: const Icon(Icons.chevron_right),
             ),
           ],
@@ -1784,21 +2042,21 @@ class PlaylistEmptyState extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           kind == 'liked'
-              ? 'Chua co audio yeu thich'
-              : 'Playlist nay chua co podcast',
+              ? 'Chưa có audio yêu thích'
+              : 'Playlist này chưa có podcast',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 8),
         const Text(
-          'Kham pha podcast moi va luu lai de nghe sau.',
+          'Khám phá podcast mới và lưu lại để nghe sau.',
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 18),
         FilledButton.tonalIcon(
           onPressed: () {},
           icon: const Icon(Icons.explore_outlined),
-          label: const Text('Kham pha podcast'),
+          label: const Text('Khám phá podcast'),
         ),
       ],
     ),
@@ -1862,31 +2120,31 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
     final result = await showDialog<(String, String)>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Chinh sua playlist'),
+        title: const Text('Chỉnh sửa playlist'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Ten playlist'),
+              decoration: const InputDecoration(labelText: 'Tên playlist'),
             ),
             TextField(
               controller: descriptionController,
-              decoration: const InputDecoration(labelText: 'Mo ta'),
+              decoration: const InputDecoration(labelText: 'Mô tả'),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Huy'),
+            child: const Text('Hủy'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, (
               nameController.text.trim(),
               descriptionController.text.trim(),
             )),
-            child: const Text('Luu'),
+            child: const Text('Lưu'),
           ),
         ],
       ),
@@ -1919,7 +2177,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
           if (!widget.playlist.isDefault)
             IconButton(
               onPressed: editPlaylist,
-              tooltip: 'Chinh sua playlist',
+              tooltip: 'Chỉnh sửa playlist',
               icon: const Icon(Icons.edit_outlined),
             ),
         ],
@@ -1944,7 +2202,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                               () => widget.playlist.coverIndex =
                                   (widget.playlist.coverIndex + 1) % 4,
                             ),
-                            tooltip: 'Doi anh bia',
+                            tooltip: 'Đổi ảnh bìa',
                             icon: const Icon(Icons.image_outlined, size: 18),
                           ),
                         ),
@@ -1984,7 +2242,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                           ? null
                           : () => widget.onOpen(items.first),
                       icon: const Icon(Icons.play_arrow),
-                      label: const Text('Phat tat ca'),
+                      label: const Text('Phát tất cả'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1995,7 +2253,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                             final shuffled = [...items]..shuffle();
                             widget.onOpen(shuffled.first);
                           },
-                    tooltip: 'Phat ngau nhien',
+                    tooltip: 'Phát ngẫu nhiên',
                     icon: const Icon(Icons.shuffle),
                   ),
                 ],
@@ -2033,7 +2291,7 @@ class _PlaylistDetailScreenState extends State<PlaylistDetailScreen> {
                       itemBuilder: (_) => const [
                         PopupMenuItem(
                           value: 'remove',
-                          child: Text('Xoa khoi playlist'),
+                          child: Text('Xóa khỏi playlist'),
                         ),
                       ],
                     ),
@@ -2052,24 +2310,24 @@ class AlertPage extends StatelessWidget {
   const AlertPage({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Thong bao')),
+    appBar: AppBar(title: const Text('Thông báo')),
     body: ListView(
       padding: const EdgeInsets.all(16),
       children: const [
         ListTile(
           leading: Icon(Icons.mic_none),
-          title: Text('Su Viet ke chuyen da dang tap moi'),
-          subtitle: Text('12 phut truoc'),
+          title: Text('Sử Việt kể chuyện đã đăng tập mới'),
+          subtitle: Text('12 phút trước'),
         ),
         ListTile(
           leading: Icon(Icons.workspace_premium_outlined),
-          title: Text('Ban da tro thanh thanh vien'),
-          subtitle: Text('Hom qua'),
+          title: Text('Bạn đã trở thành thành viên'),
+          subtitle: Text('Hôm qua'),
         ),
         ListTile(
           leading: Icon(Icons.favorite_border),
-          title: Text('Lan Anh da thich binh luan cua ban'),
-          subtitle: Text('2 ngay truoc'),
+          title: Text('Lan Anh đã thích bình luận của bạn'),
+          subtitle: Text('2 ngày trước'),
         ),
       ],
     ),
@@ -2136,7 +2394,7 @@ class _NotificationPanelState extends State<NotificationPanel> {
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
           child: Text(
-            'Khong co thong bao.',
+            'Không có thông báo.',
             style: TextStyle(color: Colors.white60),
           ),
         )
@@ -2232,11 +2490,11 @@ class _NotificationPanelState extends State<NotificationPanel> {
                 IconButton(
                   onPressed: () => Navigator.pop(context),
                   color: Colors.white,
-                  tooltip: 'Ve trang chu',
+                  tooltip: 'Về trang chủ',
                   icon: const Icon(Icons.keyboard_arrow_down),
                 ),
                 const Text(
-                  'Thong bao',
+                  'Thông báo',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -2251,18 +2509,49 @@ class _NotificationPanelState extends State<NotificationPanel> {
                     setState(() {});
                   },
                   color: Colors.white,
-                  tooltip: 'Danh dau da doc',
+                  tooltip: 'Đánh dấu đã đọc',
                   icon: const Icon(Icons.done_all),
                 ),
               ],
             ),
-            section('Chua doc', unread),
-            section('Da doc', read),
+            section('Chưa đọc', unread),
+            section('Đã đọc', read),
           ],
         ),
       ),
     );
   }
+}
+
+class LivestreamPage extends StatelessWidget {
+  const LivestreamPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => PageFrame(
+    title: 'Livestream',
+    children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.live_tv, size: 42),
+              const SizedBox(height: 12),
+              Text(
+                'Livestream sắp ra mắt',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Các buổi phát trực tiếp lịch sử và giao lưu với Creator sẽ xuất hiện tại đây.',
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class ListenerWalletPage extends StatelessWidget {
@@ -2276,7 +2565,7 @@ class ListenerWalletPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => PageFrame(
-    title: 'Vi cua ban',
+    title: 'Ví của bạn',
     children: [
       Card(
         child: Padding(
@@ -2284,29 +2573,29 @@ class ListenerWalletPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('So du VietCast'),
+              const Text('Số dư VietCast'),
               Text(
                 _formatVnd(balance),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              const Text('Dung de ung ho creator va dang ky membership'),
+              const Text('Dùng để ủng hộ creator và đăng ký membership'),
               const SizedBox(height: 14),
               FilledButton.icon(
                 onPressed: onTopUp,
                 icon: const Icon(Icons.add_card),
-                label: const Text('Nap tien'),
+                label: const Text('Nạp tiền'),
               ),
             ],
           ),
         ),
       ),
       const SizedBox(height: 16),
-      const Text('Giao dich gan day'),
+      const Text('Giao dịch gần đây'),
       const Transaction(
         title: 'Membership VietCast Originals',
         amount: '-79.000 VND',
       ),
-      const Transaction(title: 'Nap tien vao vi', amount: '+200.000 VND'),
+      const Transaction(title: 'Nạp tiền vào ví', amount: '+200.000 VND'),
     ],
   );
 }
@@ -2329,7 +2618,7 @@ class Profile extends StatelessWidget {
   final ValueChanged<AuthSession>? onSessionChanged;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Ca nhan')),
+    appBar: AppBar(title: const Text('Cá nhân')),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -2350,12 +2639,12 @@ class Profile extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
-        const Center(child: Text('Nguoi nghe lich su Viet Nam')),
+        const Center(child: Text('Người nghe lịch sử Việt Nam')),
         const SizedBox(height: 20),
         Setting(
           icon: Icons.account_circle_outlined,
-          title: 'Ho so cua toi',
-          subtitle: 'Xem va chinh sua thong tin, doi mat khau',
+          title: 'Hồ sơ của tôi',
+          subtitle: 'Xem và chỉnh sửa thông tin, đổi mật khẩu',
           onTap: session == null
               ? null
               : () => Navigator.of(context).push(
@@ -2370,7 +2659,7 @@ class Profile extends StatelessWidget {
         ),
         Setting(
           icon: Icons.mic_rounded,
-          title: 'Dang ky lam Creator',
+          title: 'Đăng ký làm Creator',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const CreatorRegistrationScreen(),
@@ -2379,10 +2668,10 @@ class Profile extends StatelessWidget {
         ),
         Setting(
           icon: Icons.dark_mode_outlined,
-          title: 'Giao dien toi',
+          title: 'Giao diện tối',
           onTap: onTheme,
         ),
-        Setting(icon: Icons.logout, title: 'Dang xuat', onTap: onLogout),
+        Setting(icon: Icons.logout, title: 'Đăng xuất', onTap: onLogout),
       ],
     ),
   );
@@ -2456,11 +2745,11 @@ class _ProfileEditorState extends State<ProfileEditor> {
           .showSnackBar(SnackBar(content: Text(value)));
 
   Future<void> _saveProfile() async {
-    _message('API hien tai chua cung cap endpoint cap nhat ho so.');
+    _message('API hiện tại chưa cung cấp endpoint cập nhật hồ sơ.');
   }
 
   Future<void> _changePassword() async {
-    _message('API hien tai chua cung cap endpoint doi mat khau.');
+    _message('API hiện tại chưa cung cấp endpoint đổi mật khẩu.');
   }
 
   InputDecoration _decoration(String label, {Widget? suffix}) =>
@@ -2468,18 +2757,18 @@ class _ProfileEditorState extends State<ProfileEditor> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Ho so cua toi')),
+    appBar: AppBar(title: const Text('Hồ sơ của tôi')),
     body: ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
       children: [
         Text(
-          'Thong tin ca nhan',
+          'Thông tin cá nhân',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         const SizedBox(height: 12),
         TextFormField(
           controller: displayNameController,
-          decoration: _decoration('Ten hien thi'),
+          decoration: _decoration('Tên hiển thị'),
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -2497,7 +2786,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
         TextFormField(
           controller: bioController,
           maxLines: 3,
-          decoration: _decoration('Gioi thieu'),
+          decoration: _decoration('Giới thiệu'),
         ),
         const SizedBox(height: 16),
         Align(
@@ -2505,17 +2794,17 @@ class _ProfileEditorState extends State<ProfileEditor> {
           child: FilledButton.icon(
             onPressed: savingProfile ? null : _saveProfile,
             icon: const Icon(Icons.save_outlined),
-            label: Text(savingProfile ? 'Dang luu...' : 'Luu thay doi'),
+            label: Text(savingProfile ? 'Đang lưu...' : 'Lưu thay đổi'),
           ),
         ),
         const Divider(height: 40),
-        Text('Bao mat', style: Theme.of(context).textTheme.titleLarge),
+        Text('Bảo mật', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 12),
         TextFormField(
           controller: currentPasswordController,
           obscureText: obscureCurrent,
           decoration: _decoration(
-            'Mat khau hien tai',
+            'Mật khẩu hiện tại',
             suffix: IconButton(
               icon: Icon(
                 obscureCurrent
@@ -2531,7 +2820,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
           controller: newPasswordController,
           obscureText: obscureNew,
           decoration: _decoration(
-            'Mat khau moi',
+            'Mật khẩu mới',
             suffix: IconButton(
               icon: Icon(
                 obscureNew
@@ -2546,7 +2835,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
         TextFormField(
           controller: confirmPasswordController,
           obscureText: obscureNew,
-          decoration: _decoration('Xac nhan mat khau moi'),
+          decoration: _decoration('Xác nhận mật khẩu mới'),
         ),
         const SizedBox(height: 16),
         Align(
@@ -2554,7 +2843,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
           child: OutlinedButton.icon(
             onPressed: changingPassword ? null : _changePassword,
             icon: const Icon(Icons.lock_reset_outlined),
-            label: Text(changingPassword ? 'Dang cap nhat...' : 'Doi mat khau'),
+            label: Text(changingPassword ? 'Đang cập nhật...' : 'Đổi mật khẩu'),
           ),
         ),
       ],
@@ -2619,7 +2908,7 @@ class _AuthState extends ConsumerState<AuthPage> {
         final email = emailController.text.trim();
         if (username.length < 3 || displayName.isEmpty || email.isEmpty) {
           throw const ApiException(
-            'Vui long dien day du thong tin dang ky.',
+            'Vui lòng điền đầy đủ thông tin đăng ký.',
             400,
           );
         }
@@ -2644,7 +2933,7 @@ class _AuthState extends ConsumerState<AuthPage> {
     } on ApiException catch (exception) {
       if (mounted) setState(() => error = exception.message);
     } catch (_) {
-      if (mounted) setState(() => error = 'Khong the ket noi den may chu API.');
+      if (mounted) setState(() => error = 'Không thể kết nối đến máy chủ API.');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -2652,11 +2941,11 @@ class _AuthState extends ConsumerState<AuthPage> {
 
   @override
   Widget build(BuildContext context) => PageFrame(
-    title: register ? 'Dang ky VietCast' : 'Dang nhap VietCast',
+    title: register ? 'Đăng ký VietCast' : 'Đăng nhập VietCast',
     children: [
       const Icon(Icons.mic_external_on, size: 56, color: Color(0xFFB3261E)),
       Text(
-        register ? 'Tao tai khoan VietCast' : 'Chao mung ban tro lai',
+        register ? 'Tạo tài khoản VietCast' : 'Chào mừng bạn trở lại',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       const SizedBox(height: 20),
@@ -2670,7 +2959,7 @@ class _AuthState extends ConsumerState<AuthPage> {
         TextField(
           controller: displayNameController,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(labelText: 'Ten hien thi'),
+          decoration: const InputDecoration(labelText: 'Tên hiển thị'),
         ),
         const SizedBox(height: 12),
       ],
@@ -2680,7 +2969,7 @@ class _AuthState extends ConsumerState<AuthPage> {
             ? TextInputType.emailAddress
             : TextInputType.text,
         decoration: InputDecoration(
-          labelText: register ? 'Email' : 'Username hoac email',
+          labelText: register ? 'Email' : 'Username hoặc email',
         ),
       ),
       const SizedBox(height: 12),
@@ -2688,9 +2977,9 @@ class _AuthState extends ConsumerState<AuthPage> {
         controller: passwordController,
         obscureText: obscurePassword,
         decoration: InputDecoration(
-          labelText: 'Mat khau',
+          labelText: 'Mật khẩu',
           suffixIcon: IconButton(
-            tooltip: obscurePassword ? 'Hien mat khau' : 'An mat khau',
+            tooltip: obscurePassword ? 'Hiện mật khẩu' : 'Ẩn mật khẩu',
             icon: Icon(
               obscurePassword
                   ? Icons.visibility_outlined
@@ -2707,22 +2996,6 @@ class _AuthState extends ConsumerState<AuthPage> {
           style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ],
-      if (register) ...[
-        const SizedBox(height: 16),
-        const Text('Chu de quan tam'),
-        Wrap(
-          spacing: 8,
-          children: ['Khang Phap', 'Nhan vat', 'Doi Moi', 'Doi song']
-              .map(
-                (x) => FilterChip(
-                  label: Text(x),
-                  selected: x == 'Nhan vat',
-                  onSelected: (_) {},
-                ),
-              )
-              .toList(),
-        ),
-      ],
       const SizedBox(height: 20),
       FilledButton(
         onPressed: loading ? null : submit,
@@ -2732,11 +3005,11 @@ class _AuthState extends ConsumerState<AuthPage> {
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : Text(register ? 'Dang ky' : 'Dang nhap'),
+            : Text(register ? 'Đăng ký' : 'Đăng nhập'),
       ),
       TextButton(
         onPressed: () => setState(() => register = !register),
-        child: Text(register ? 'Da co tai khoan?' : 'Chua co tai khoan?'),
+        child: Text(register ? 'Đã có tài khoản?' : 'Chưa có tài khoản?'),
       ),
     ],
   );
@@ -2764,7 +3037,7 @@ class CreatorPage extends StatelessWidget {
           builder: (_) => const UploadSheet(),
         ),
         icon: const Icon(Icons.add),
-        label: const Text('Dang podcast'),
+        label: const Text('Đăng podcast'),
       ),
       const SizedBox(height: 16),
       ...shows
@@ -2774,8 +3047,8 @@ class CreatorPage extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: Art(show: s, size: 56),
               title: Text(s.title),
-              subtitle: Text('Da dang • ${s.duration}'),
-              trailing: const Chip(label: Text('Da dang')),
+              subtitle: Text('Đã đăng • ${s.duration}'),
+              trailing: const Chip(label: Text('Đã đăng')),
             ),
           ),
     ],
@@ -2791,7 +3064,7 @@ class UploadSheet extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Tao podcast moi',
+          'Tạo podcast mới',
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: 16),
@@ -2799,7 +3072,7 @@ class UploadSheet extends StatelessWidget {
         const SizedBox(height: 12),
         const TextField(
           maxLines: 3,
-          decoration: InputDecoration(labelText: 'Mo ta'),
+        decoration: InputDecoration(labelText: 'Mô tả'),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
@@ -2810,7 +3083,7 @@ class UploadSheet extends StatelessWidget {
         const SizedBox(height: 12),
         FilledButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Luu ban nhap'),
+          child: const Text('Lưu bản nháp'),
         ),
       ],
     ),
@@ -2837,7 +3110,7 @@ class _RequestState extends State<RequestPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Ke chuyen ve Doi Moi',
+                'Kể chuyện về Đổi Mới',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const Text('Ngan sach 2.500.000 VND • Han 28/10/2026'),
@@ -2873,12 +3146,12 @@ class _RequestState extends State<RequestPage> {
       OutlinedButton.icon(
         onPressed: () {},
         icon: const Icon(Icons.chat_outlined),
-        label: const Text('Mo chat'),
+        label: const Text('Mở chat'),
       ),
       OutlinedButton.icon(
         onPressed: () {},
         icon: const Icon(Icons.add),
-        label: const Text('Tao yeu cau moi'),
+        label: const Text('Tạo yêu cầu mới'),
       ),
     ],
   );
@@ -2907,14 +3180,14 @@ class _WalletState extends State<WalletPage> {
                 '12.450.000 VND',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
-              const Text('Dang cho release: 3.200.000 VND'),
+              const Text('Đang chờ giải ngân: 3.200.000 VND'),
               const SizedBox(height: 12),
               FilledButton.tonalIcon(
                 onPressed: pending
                     ? null
                     : () => setState(() => pending = true),
                 icon: const Icon(Icons.account_balance),
-                label: Text(pending ? 'Dang xu ly...' : 'Rut tien'),
+                label: Text(pending ? 'Đang xử lý...' : 'Rút tiền'),
               ),
             ],
           ),
@@ -2939,7 +3212,7 @@ class Transaction extends StatelessWidget {
     contentPadding: EdgeInsets.zero,
     leading: const Icon(Icons.receipt_long_outlined),
     title: Text(title),
-    subtitle: const Text('Dang xu ly'),
+    subtitle: const Text('Đang xử lý'),
     trailing: Text(amount),
   );
 }
@@ -2953,7 +3226,7 @@ class AdminPage extends StatelessWidget {
       const Row(
         children: [
           Metric(label: 'Cho duyet', value: '18'),
-          Metric(label: 'Bao cao', value: '7'),
+          Metric(label: 'Báo cáo', value: '7'),
         ],
       ),
       const SizedBox(height: 20),
@@ -3025,12 +3298,12 @@ class _MembershipState extends State<MembershipPage> {
               const Text('79.000 VND / thang'),
               const SizedBox(height: 12),
               const Text(
-                'Noi dung doc quyen\nGui yeu cau podcast\nBadge thanh vien',
+                'Nội dung độc quyền\nGửi yêu cầu podcast\nHuy hiệu thành viên',
               ),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: paid ? null : () => setState(() => paid = true),
-                child: Text(paid ? 'Da la thanh vien' : 'Dang ky membership'),
+                child: Text(paid ? 'Đã là thành viên' : 'Đăng ký membership'),
               ),
             ],
           ),
@@ -3101,7 +3374,7 @@ class MiniPlayer extends StatelessWidget {
             subtitle: Text(show.channel),
             trailing: IconButton(
               onPressed: onToggle,
-              tooltip: playing ? 'Tam dung' : 'Phat',
+              tooltip: playing ? 'Tạm dừng' : 'Phát',
               icon: Icon(playing ? Icons.pause : Icons.play_arrow),
             ),
           ),
@@ -3115,14 +3388,18 @@ class Player extends StatefulWidget {
   const Player({
     super.key,
     required this.show,
+    required this.audioPlayer,
     required this.displayName,
     required this.playing,
     required this.initialProgress,
     required this.initialLiked,
+    required this.initialLikeCount,
+    required this.initialCommentCount,
     required this.initialSaved,
     this.initialComments,
     this.loadComments,
     required this.onProgressChanged,
+    required this.onSeek,
     this.onComment,
     required this.onLikedChanged,
     required this.onSavedChanged,
@@ -3132,13 +3409,18 @@ class Player extends StatefulWidget {
     required this.onToggle,
   });
   final Show show;
+  final AudioPlayer audioPlayer;
   final String displayName;
   final bool playing;
   final double initialProgress;
-  final bool initialLiked, initialSaved;
+  final bool initialLiked;
+  final int initialLikeCount;
+  final int initialCommentCount;
+  final bool initialSaved;
   final List<CommentData>? initialComments;
   final Future<List<CommentData>> Function()? loadComments;
   final ValueChanged<double> onProgressChanged;
+  final Future<void> Function(Duration) onSeek;
   final Future<CommentData> Function(String, int)? onComment;
   final ValueChanged<bool> onLikedChanged, onSavedChanged;
   final VoidCallback onReport, onMembership, onCreatorProfile;
@@ -3151,7 +3433,15 @@ class Player extends StatefulWidget {
 class _PlayerState extends State<Player> {
   late bool playing = widget.playing;
   late double progress = widget.initialProgress;
+  Duration position = Duration.zero;
+  Duration duration = Duration.zero;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
+  StreamSubscription<void>? _completeSubscription;
   late bool liked = widget.initialLiked;
+  late int likeCount = widget.initialLikeCount;
+  late int commentCount = widget.initialCommentCount;
   final commentController = TextEditingController();
   late final comments = List<CommentData>.of(
     widget.initialComments ?? const [],
@@ -3161,7 +3451,38 @@ class _PlayerState extends State<Player> {
   @override
   void initState() {
     super.initState();
+    _positionSubscription = widget.audioPlayer.onPositionChanged.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        position = value;
+        progress = _progressFor(value, duration);
+      });
+    });
+    _durationSubscription = widget.audioPlayer.onDurationChanged.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        duration = value;
+        progress = _progressFor(position, value);
+      });
+    });
+    _playerStateSubscription = widget.audioPlayer.onPlayerStateChanged.listen((value) {
+      if (!mounted) return;
+      setState(() => playing = value == PlayerState.playing);
+    });
+    _completeSubscription = widget.audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        position = duration;
+        progress = 1;
+        playing = false;
+      });
+    });
     unawaited(_loadComments());
+  }
+
+  double _progressFor(Duration current, Duration total) {
+    if (total.inMilliseconds <= 0) return progress;
+    return (current.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
   }
 
   Future<void> _loadComments() async {
@@ -3196,15 +3517,29 @@ class _PlayerState extends State<Player> {
 
   @override
   void dispose() {
-    widget.onProgressChanged(progress);
+    _positionSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _playerStateSubscription?.cancel();
+    _completeSubscription?.cancel();
+    widget.onProgressChanged(_currentProgress);
     commentController.dispose();
     super.dispose();
   }
 
   void setProgress(double value) {
     final next = value.clamp(0.0, 1.0);
-    setState(() => progress = next);
+    final total = _effectiveDuration;
+    final nextPosition = total > Duration.zero
+        ? Duration(milliseconds: (total.inMilliseconds * next).round())
+        : Duration.zero;
+    setState(() {
+      progress = next;
+      position = nextPosition;
+    });
     widget.onProgressChanged(next);
+    if (total > Duration.zero) {
+      unawaited(widget.onSeek(nextPosition));
+    }
   }
 
   void seekBy(double amount) {
@@ -3234,7 +3569,7 @@ class _PlayerState extends State<Player> {
       );
       return false;
     }
-    final seconds = (progress * _durationSeconds).floor();
+    final seconds = (_currentProgress * _effectiveDuration.inSeconds).floor();
     setState(() => _sendingComment = true);
     try {
       final saved = await send(text.trim(), seconds);
@@ -3242,6 +3577,9 @@ class _PlayerState extends State<Player> {
       setState(() {
         comments.removeWhere((comment) => comment.id == saved.id);
         comments.insert(0, saved);
+        commentCount = commentCount < comments.length
+            ? comments.length
+            : commentCount + 1;
       });
       return true;
     } catch (error) {
@@ -3265,8 +3603,21 @@ class _PlayerState extends State<Player> {
         .fold<int>(0, (total, part) => total * 60 + (int.tryParse(part) ?? 0));
   }
 
+  Duration get _effectiveDuration => duration > Duration.zero
+      ? duration
+      : Duration(seconds: _durationSeconds);
+
+  double get _currentProgress {
+    if (duration > Duration.zero) {
+      return _progressFor(position, duration);
+    }
+    return progress;
+  }
+
   String get _timestamp {
-    final seconds = (progress * _durationSeconds).floor();
+    final seconds = duration > Duration.zero
+        ? position.inSeconds
+        : (progress * _durationSeconds).floor();
     return _formatDuration(seconds);
   }
 
@@ -3275,12 +3626,20 @@ class _PlayerState extends State<Player> {
     return '${(wholeSeconds ~/ 60).toString().padLeft(2, '0')}:${(wholeSeconds % 60).toString().padLeft(2, '0')}';
   }
 
+  String _formatCount(int value) {
+    if (value < 1000) return '$value';
+    final thousands = value / 1000;
+    return '${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)}K';
+  }
+
   CommentData? get timelineComment {
     final nearby = comments
         .where(
           (comment) =>
               comment.time.isNotEmpty &&
-              (comment.position - progress).abs() <= .04,
+              (comment.positionForDuration(_effectiveDuration.inSeconds) -
+                      _currentProgress)
+                  .abs() <= .04,
         )
         .toList();
     if (nearby.isEmpty) return null;
@@ -3309,24 +3668,24 @@ class _PlayerState extends State<Player> {
   void _showShare() => showDialog<void>(
     context: context,
     builder: (_) => AlertDialog(
-      title: const Text('Chia se podcast'),
+      title: const Text('Chia sẻ podcast'),
       content: SelectableText(
         'https://vietcast.local/podcast/${widget.show.title.toLowerCase().replaceAll(' ', '-')}',
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Dong'),
+          child: const Text('Đóng'),
         ),
         FilledButton.icon(
           onPressed: () {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Da sao chep duong dan chia se.')),
+              const SnackBar(content: Text('Đã sao chép đường dẫn chia sẻ.')),
             );
           },
           icon: const Icon(Icons.copy),
-          label: const Text('Sao chep'),
+          label: const Text('Sao chép'),
         ),
       ],
     ),
@@ -3385,12 +3744,12 @@ class _PlayerState extends State<Player> {
               children: [
                 IconButton(
                   onPressed: () => Navigator.pop(context),
-                  tooltip: 'Thu nho',
+                  tooltip: 'Thu nhỏ',
                   color: Colors.white,
                   icon: const Icon(Icons.keyboard_arrow_down),
                 ),
                 const Text(
-                  'Dang phat',
+                  'Đang phát',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -3399,7 +3758,7 @@ class _PlayerState extends State<Player> {
                 ),
                 IconButton(
                   onPressed: () {},
-                  tooltip: 'Them tuy chon',
+                  tooltip: 'Thêm tùy chọn',
                   color: Colors.white,
                   icon: const Icon(Icons.tune),
                 ),
@@ -3450,7 +3809,7 @@ class _PlayerState extends State<Player> {
                   child: Text('|', style: TextStyle(color: Colors.white38)),
                 ),
                 Text(
-                  _formatDuration(_durationSeconds),
+                  _formatDuration(_effectiveDuration.inSeconds),
                   style: const TextStyle(
                     color: Colors.white54,
                     fontSize: 30,
@@ -3471,12 +3830,15 @@ class _PlayerState extends State<Player> {
                     onPanUpdate: (details) => setProgress(
                       details.localPosition.dx / constraints.maxWidth,
                     ),
-                    child: Waveform(progress: progress),
+                    child: Waveform(progress: _currentProgress),
                   ),
                   if (timelineComment != null)
                     Positioned(
-                      left: (constraints.maxWidth * timelineComment!.position)
-                          .clamp(4.0, constraints.maxWidth - 210),
+                    left: (constraints.maxWidth *
+                            timelineComment!.positionForDuration(
+                              _effectiveDuration.inSeconds,
+                            ))
+                        .clamp(4.0, constraints.maxWidth - 210),
                       top: 4,
                       child: CommentMarker(comment: timelineComment!),
                     ),
@@ -3492,12 +3854,12 @@ class _PlayerState extends State<Player> {
                 trackHeight: 3,
               ),
               child: Slider(
-                value: progress,
+                value: _currentProgress,
                 min: 0,
                 max: 1,
                 onChanged: setProgress,
                 semanticFormatterCallback: (value) =>
-                    'Vi tri phat ${_formatDuration(value * _durationSeconds)}',
+                    'Vị trí phát ${_formatDuration(value * _effectiveDuration.inSeconds)}',
               ),
             ),
             const SizedBox(height: 12),
@@ -3519,7 +3881,7 @@ class _PlayerState extends State<Player> {
                     setState(() => playing = !playing);
                     widget.onToggle();
                   },
-                  tooltip: playing ? 'Tam dung' : 'Phat',
+                  tooltip: playing ? 'Tạm dừng' : 'Phát',
                   icon: Icon(
                     playing ? Icons.pause : Icons.play_arrow,
                     size: 32,
@@ -3544,31 +3906,35 @@ class _PlayerState extends State<Player> {
               children: [
                 _PlayerAction(
                   icon: liked ? Icons.favorite : Icons.favorite_border,
-                  label: liked ? '17.1K' : '17K',
+                  label: _formatCount(likeCount),
                   active: liked,
                   onTap: () {
-                    setState(() => liked = !liked);
+                    setState(() {
+                      liked = !liked;
+                      likeCount += liked ? 1 : -1;
+                      if (likeCount < 0) likeCount = 0;
+                    });
                     widget.onLikedChanged(liked);
                   },
                 ),
                 _PlayerAction(
                   icon: Icons.chat_bubble_outline,
-                  label: '${comments.length + 464}',
+                  label: _formatCount(commentCount),
                   onTap: _showComments,
                 ),
                 _PlayerAction(
                   icon: Icons.ios_share,
-                  label: 'Chia se',
+                  label: 'Chia sẻ',
                   onTap: _showShare,
                 ),
                 _PlayerAction(
                   icon: Icons.playlist_add,
-                  label: 'Luu',
+                  label: 'Lưu',
                   onTap: _showPlaylist,
                 ),
                 _PlayerAction(
                   icon: Icons.more_horiz,
-                  label: 'Them',
+                  label: 'Thêm',
                   onTap: _showMore,
                 ),
               ],
@@ -3578,7 +3944,7 @@ class _PlayerState extends State<Player> {
             const Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text(
-                'Binh luan theo thoi gian',
+                'Bình luận theo thời gian',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -3668,7 +4034,7 @@ class _CommentComposer extends StatelessWidget {
           ),
         IconButton(
           onPressed: sending ? null : onSubmit,
-          tooltip: 'Gui binh luan',
+          tooltip: 'Gửi bình luận',
           visualDensity: VisualDensity.compact,
           style: IconButton.styleFrom(
             backgroundColor: const Color(0xFFB3261E),
@@ -3747,14 +4113,18 @@ class CommentData {
   }
 
   double get position {
+    return positionForDuration(durationSeconds);
+  }
+
+  double positionForDuration(int actualDurationSeconds) {
     final parts = time.split(':');
     final seconds = parts.fold<int>(
       0,
       (total, part) => total * 60 + (int.tryParse(part) ?? 0),
     );
-    return durationSeconds <= 0
+    return actualDurationSeconds <= 0
         ? 0
-        : (seconds / durationSeconds).clamp(0.0, 1.0);
+        : (seconds / actualDurationSeconds).clamp(0.0, 1.0);
   }
 }
 
@@ -3832,7 +4202,7 @@ class _CommentsPanelState extends State<CommentsPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Binh luan',
+            'Bình luận',
             style: TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -3882,7 +4252,6 @@ class PlaylistPanel extends StatefulWidget {
 
 class _PlaylistPanelState extends State<PlaylistPanel> {
   late bool favorites = widget.initialSaved;
-  bool listenLater = false;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -3891,7 +4260,7 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
       children: [
         const ListTile(
           title: Text(
-            'Luu vao playlist',
+            'Lưu vào playlist',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
         ),
@@ -3904,32 +4273,18 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
           },
           activeColor: Colors.deepOrange,
           title: const Text(
-            'Podcast yeu thich',
+            'Nghe sau',
             style: TextStyle(color: Colors.white),
           ),
           subtitle: const Text(
-            'Playlist ca nhan',
-            style: TextStyle(color: Colors.white60),
-          ),
-        ),
-        CheckboxListTile(
-          value: listenLater,
-          onChanged: (value) {
-            final next = value ?? false;
-            setState(() => listenLater = next);
-            widget.onChanged(next);
-          },
-          activeColor: Colors.deepOrange,
-          title: const Text('Nghe sau', style: TextStyle(color: Colors.white)),
-          subtitle: const Text(
-            'Luu de quay lai sau',
+            'Lưu để quay lại sau',
             style: TextStyle(color: Colors.white60),
           ),
         ),
         ListTile(
           leading: const Icon(Icons.add, color: Colors.white),
           title: const Text(
-            'Tao playlist moi',
+            'Tạo playlist mới',
             style: TextStyle(color: Colors.white),
           ),
           onTap: () => Navigator.pop(context),
@@ -3950,14 +4305,14 @@ class ReportPanel extends StatefulWidget {
 }
 
 class _ReportPanelState extends State<ReportPanel> {
-  String reason = 'Noi dung sai su that';
+  String reason = 'Nội dung sai sự thật';
   final customController = TextEditingController();
   static const reasons = [
-    'Noi dung sai su that',
-    'Vi pham ban quyen',
-    'Ngon tu khong phu hop',
-    'Spam hoac quang cao',
-    'Khac',
+    'Nội dung sai sự thật',
+    'Vi phạm bản quyền',
+    'Ngôn từ không phù hợp',
+    'Spam hoặc quảng cáo',
+    'Khác',
   ];
 
   @override
@@ -3967,10 +4322,10 @@ class _ReportPanelState extends State<ReportPanel> {
   }
 
   void submit() {
-    final report = reason == 'Khac' ? customController.text.trim() : reason;
+    final report = reason == 'Khác' ? customController.text.trim() : reason;
     if (report.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui long nhap noi dung bao cao.')),
+        const SnackBar(content: Text('Vui lòng nhập nội dung báo cáo.')),
       );
       return;
     }
@@ -3986,7 +4341,7 @@ class _ReportPanelState extends State<ReportPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Bao cao podcast',
+            'Báo cáo podcast',
             style: TextStyle(
               color: Colors.white,
               fontSize: 20,
@@ -4012,7 +4367,7 @@ class _ReportPanelState extends State<ReportPanel> {
                 )
                 .toList(),
           ),
-          if (reason == 'Khac') ...[
+          if (reason == 'Khác') ...[
             const SizedBox(height: 12),
             TextField(
               controller: customController,
@@ -4021,7 +4376,7 @@ class _ReportPanelState extends State<ReportPanel> {
               maxLines: 5,
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
-                hintText: 'Viet noi dung ban muon bao cao cho admin...',
+                hintText: 'Viết nội dung bạn muốn báo cáo cho admin...',
                 hintStyle: TextStyle(color: Colors.white60),
                 border: OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
@@ -4036,7 +4391,7 @@ class _ReportPanelState extends State<ReportPanel> {
             child: FilledButton.icon(
               onPressed: submit,
               icon: const Icon(Icons.send),
-              label: const Text('Gui bao cao cho admin'),
+              label: const Text('Gửi báo cáo cho admin'),
             ),
           ),
         ],
@@ -4065,6 +4420,7 @@ class CreatorProfilePanel extends StatefulWidget {
 class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
   bool following = false;
   bool loadingFollow = true;
+  bool isMember = false;
 
   @override
   void initState() {
@@ -4079,16 +4435,109 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       return;
     }
     try {
-      final follows = await widget.api.follows(size: 100);
+      final results = await Future.wait<dynamic>([
+        widget.api.follows(size: 100),
+        widget.api.subscriptions(),
+      ]);
+      final follows = results[0] as List<Map<String, dynamic>>;
+      final subscriptions = results[1] as List<Map<String, dynamic>>;
       if (!mounted) return;
       setState(() {
         following = follows.any(
           (item) => '${item['creatorProfileId']}' == creatorId,
         );
+        isMember = subscriptions.any(
+          (item) =>
+              '${item['creatorProfileId']}' == creatorId &&
+              '${item['status']}'.toUpperCase() == 'ACTIVE',
+        );
         loadingFollow = false;
       });
     } catch (_) {
       if (mounted) setState(() => loadingFollow = false);
+    }
+  }
+
+  Future<void> _showRequestDialog() async {
+    final creatorId = widget.show.creatorId;
+    if (creatorId == null) return;
+    if (!isMember) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bạn cần là thành viên của kênh để gửi yêu cầu.'),
+        ),
+      );
+      return;
+    }
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
+    final result = await showDialog<(String, String)>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Yêu cầu audio'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Chủ đề / tiêu đề audio',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descriptionController,
+                minLines: 4,
+                maxLines: 6,
+                decoration: const InputDecoration(
+                  labelText: 'Mô tả yêu cầu',
+                  hintText: 'Bạn muốn Creator làm nội dung gì?',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, (
+              titleController.text.trim(),
+              descriptionController.text.trim(),
+            )),
+            child: const Text('Gửi yêu cầu'),
+          ),
+        ],
+      ),
+    );
+    titleController.dispose();
+    descriptionController.dispose();
+    if (!mounted || result == null) return;
+    if (result.$1.isEmpty || result.$2.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập đủ chủ đề và mô tả.')),
+      );
+      return;
+    }
+    try {
+      await widget.api.createSeriesRequest(
+        creatorId,
+        requestedTitle: result.$1,
+        description: result.$2,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã gửi yêu cầu audio tới Creator.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Không thể gửi yêu cầu: $error')),
+      );
     }
   }
 
@@ -4110,7 +4559,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            following ? 'Da theo doi creator.' : 'Da bo theo doi creator.',
+            following ? 'Đã theo dõi creator.' : 'Đã bỏ theo dõi creator.',
           ),
         ),
       );
@@ -4118,7 +4567,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       if (!mounted) return;
       setState(() => loadingFollow = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Khong the cap nhat theo doi: $exception')),
+        SnackBar(content: Text('Không thể cập nhật theo dõi: $exception')),
       );
     }
   }
@@ -4159,7 +4608,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                       ),
                     ),
                     const Text(
-                      'Content creator lich su Viet Nam',
+                      'Content creator lịch sử Việt Nam',
                       style: TextStyle(color: Colors.white60),
                     ),
                   ],
@@ -4179,27 +4628,42 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Icon(following ? Icons.person_remove : Icons.person_add),
-              label: Text(following ? 'Dang theo doi' : 'Theo doi creator'),
+              label: Text(following ? 'Đang theo dõi' : 'Theo dõi creator'),
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
+          if (kPackagesEnabled) SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: widget.show.creatorId == null
                   ? null
                   : widget.onMembership,
               icon: const Icon(Icons.workspace_premium_outlined),
-              label: const Text('Dang ky thanh vien'),
+              label: const Text('Đăng ký thành viên'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
                 side: const BorderSide(color: Colors.white54),
               ),
             ),
           ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: loadingFollow || !isMember
+                  ? null
+                  : _showRequestDialog,
+              icon: const Icon(Icons.record_voice_over_outlined),
+              label: Text(
+                isMember
+                    ? 'Yêu cầu audio'
+                    : 'Yêu cầu audio (cần thành viên)',
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
           const Text(
-            'Audio da dang',
+            'Audio đã đăng',
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -4228,7 +4692,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Playlist cua creator',
+            'Playlist của creator',
             style: TextStyle(
               color: Colors.white,
               fontSize: 16,
@@ -4242,7 +4706,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
               child: Icon(Icons.queue_music, color: Colors.white),
             ),
             title: const Text(
-              'Lich su Viet Nam',
+              'Lịch sử Việt Nam',
               style: TextStyle(color: Colors.white),
             ),
             subtitle: Text(
@@ -4257,11 +4721,11 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
               child: Icon(Icons.queue_music, color: Colors.white),
             ),
             title: const Text(
-              'Tuyen tap noi bat',
+              'Tuyển tập nổi bật',
               style: TextStyle(color: Colors.white),
             ),
             subtitle: const Text(
-              'Playlist cong khai',
+            'Playlist công khai',
               style: TextStyle(color: Colors.white60),
             ),
           ),
@@ -4290,7 +4754,7 @@ class MorePanel extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.flag_outlined, color: Colors.white),
           title: const Text(
-            'Bao cao podcast',
+            'Báo cáo podcast',
             style: TextStyle(color: Colors.white),
           ),
           onTap: () {
@@ -4298,13 +4762,13 @@ class MorePanel extends StatelessWidget {
             onReport();
           },
         ),
-        ListTile(
+        if (kPackagesEnabled) ListTile(
           leading: const Icon(
             Icons.workspace_premium_outlined,
             color: Colors.white,
           ),
           title: const Text(
-            'Dang ky thanh vien',
+            'Đăng ký thành viên',
             style: TextStyle(color: Colors.white),
           ),
           onTap: () {
@@ -4315,7 +4779,7 @@ class MorePanel extends StatelessWidget {
         ListTile(
           leading: const Icon(Icons.person_outline, color: Colors.white),
           title: const Text(
-            'Xem profile Content creator',
+            'Xem hồ sơ Content Creator',
             style: TextStyle(color: Colors.white),
           ),
           subtitle: Text(

@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.request.AdminRequests.*;
+import com.prmteam7.podcasthistory.config.PackageFeatures;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
 import com.prmteam7.podcasthistory.enums.ManualPaymentResult;
 import com.prmteam7.podcasthistory.exception.*;
@@ -27,6 +28,7 @@ public class AdminFinanceService {
   private final SubscriptionRepository subscriptions;
   private final AppUserRepository users;
   private final ContractRepository contracts;
+  private final PackageFeatures packageFeatures;
 
   public AdminFinanceService(
       AdminSupportService support,
@@ -38,7 +40,8 @@ public class AdminFinanceService {
       PaymentMethodRepository paymentMethods,
       SubscriptionRepository subscriptions,
       AppUserRepository users,
-      ContractRepository contracts) {
+      ContractRepository contracts,
+      PackageFeatures packageFeatures) {
     this.support = support;
     this.withdrawals = withdrawals;
     this.reviews = reviews;
@@ -49,6 +52,7 @@ public class AdminFinanceService {
     this.subscriptions = subscriptions;
     this.users = users;
     this.contracts = contracts;
+    this.packageFeatures = packageFeatures;
   }
 
   public Page<WithdrawalItem> withdrawals(UUID actor, String status, int page, int size) {
@@ -258,6 +262,7 @@ public class AdminFinanceService {
       if (payments.existsByProviderTransactionId(reference))
         throw new ResourceConflictException("Mã giao dịch đã được sử dụng.");
       if (p.getSubscription() != null) {
+        packageFeatures.requireMemberships();
         Subscription s =
             subscriptions
                 .lockById(p.getSubscription().getSubscriptionId())

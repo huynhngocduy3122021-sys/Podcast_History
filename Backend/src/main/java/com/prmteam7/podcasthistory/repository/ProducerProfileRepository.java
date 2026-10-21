@@ -54,4 +54,7 @@ public interface ProducerProfileRepository
 
   List<ProducerProfile> findAllByVerificationStatusIgnoreCaseOrderByChannelNameAsc(
       String verificationStatus);
+
+  List<ProducerProfile> findAllByVerificationStatusIgnoreCaseAndChannelNameContainingIgnoreCaseOrderByChannelNameAsc(
+      String verificationStatus, String channelName);
 }

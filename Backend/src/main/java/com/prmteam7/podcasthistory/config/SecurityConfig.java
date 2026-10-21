@@ -63,8 +63,6 @@ public class SecurityConfig {
                     .hasRole("CREATOR")
                     .requestMatchers("/api/listener/**")
                     .hasRole("LISTENER")
-                    .requestMatchers("/api/uploads/**")
-                    .authenticated()
                     .requestMatchers("/api/creator-applications/**")
                     .authenticated()
                     .requestMatchers("/api/auth/me")
