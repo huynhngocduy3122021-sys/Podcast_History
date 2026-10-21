@@ -7,9 +7,11 @@ import 'package:podcast_history/core/widgets/app_confirm_dialog.dart';
 import 'package:podcast_history/core/widgets/empty_state_widget.dart';
 import 'package:podcast_history/core/widgets/error_state_widget.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/upload/upload_podcast_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/soundcloud_podcast_card.dart';
+import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 
 class PodcastListScreen extends ConsumerStatefulWidget {
   const PodcastListScreen({super.key});
@@ -24,8 +26,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
   final List<String> _tabs = [
     'Tất cả',
     'Đã đăng',
-    'Đang duyệt AI',
-    'Chờ Admin',
+    'Chờ Admin duyệt',
     'Nháp',
     'Bị từ chối',
   ];
@@ -34,10 +35,19 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController.addListener(_onTabChanged);
+    Future.microtask(() => ref.read(creatorPodcastsProvider.notifier).loadPodcasts());
+  }
+
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) {
+      ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+    }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
@@ -65,10 +75,14 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
         foregroundColor: isDark ? AppColors.onPrimaryDark : AppColors.onPrimaryLight,
         icon: const Icon(Icons.add_rounded),
         label: const Text('Đăng podcast'),
-        onPressed: () {
-          Navigator.of(context).push(
+        onPressed: () async {
+          final res = await Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const UploadPodcastScreen()),
           );
+          ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+          if (res == 'draft_saved') {
+            _tabController.animateTo(3);
+          }
         },
       ),
       body: podcastsAsync.when(
@@ -80,12 +94,11 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
           return TabBarView(
             controller: _tabController,
             children: [
-              _buildPodcastList(podcasts, null, isDark),
-              _buildPodcastList(podcasts, PodcastStatus.published, isDark),
-              _buildPodcastList(podcasts, PodcastStatus.aiModerating, isDark),
-              _buildPodcastList(podcasts, PodcastStatus.pendingAdmin, isDark),
-              _buildPodcastList(podcasts, PodcastStatus.draft, isDark),
-              _buildPodcastList(podcasts, PodcastStatus.rejected, isDark),
+              _buildPodcastList(podcasts, isDark: isDark),
+              _buildPodcastList(podcasts, filter: PodcastStatus.published, isDark: isDark),
+              _buildPodcastList(podcasts, filter: PodcastStatus.pendingAdmin, isDark: isDark),
+              _buildPodcastList(podcasts, filter: PodcastStatus.draft, includePending: false, isDark: isDark),
+              _buildPodcastList(podcasts, filter: PodcastStatus.rejected, isDark: isDark),
             ],
           );
         },
@@ -93,49 +106,335 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
     );
   }
 
-  Widget _buildPodcastList(List<CreatorPodcast> all, PodcastStatus? filter, bool isDark) {
-    final list = filter == null ? all : all.where((p) => p.status == filter).toList();
+  Widget _buildPodcastList(
+    List<CreatorPodcast> all, {
+    PodcastStatus? filter,
+    bool includePending = false,
+    required bool isDark,
+  }) {
+    final list = filter == null
+        ? all
+        : (includePending
+            ? all.where((p) => p.status == PodcastStatus.draft || p.status == PodcastStatus.pendingAdmin).toList()
+            : all.where((p) => p.status == filter).toList());
 
-    if (list.isEmpty) {
-      return EmptyStateWidget(
-        title: 'Chưa có podcast nào',
-        description: 'Tải lên tập podcast đầu tiên để chia sẻ với người nghe.',
-        actionLabel: 'Tạo podcast',
-        onAction: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const UploadPodcastScreen()),
+    return RefreshIndicator(
+      onRefresh: () => ref.read(creatorPodcastsProvider.notifier).loadPodcasts(),
+      child: list.isEmpty
+          ? LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: EmptyStateWidget(
+                    title: 'Chưa có podcast nào',
+                    description: 'Tải lên tập podcast đầu tiên để chia sẻ với người nghe.',
+                    actionLabel: 'Tạo podcast',
+                    onAction: () async {
+                      final res = await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const UploadPodcastScreen()),
+                      );
+                      ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+                      if (res == 'draft_saved') {
+                        _tabController.animateTo(3);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            )
+          : ListView.separated(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.screenMargin),
+              itemCount: list.length,
+              separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+              itemBuilder: (context, index) {
+                final pod = list[index];
+                return _buildPodcastItem(pod, isDark);
+              },
+            ),
+    );
+  }
+
+  String? _submittingPodcastId;
+
+  Future<void> _submitToAdminReview(CreatorPodcast pod) async {
+    setState(() => _submittingPodcastId = pod.id);
+    try {
+      // 1. Kiểm tra nếu có audio bytes đang lưu trong bộ nhớ tạm thời thì tải lên trước
+      final cachedBytes = ref.read(audioPlayerServiceProvider.notifier).getCachedBytes(pod.id);
+      if (cachedBytes != null && cachedBytes.isNotEmpty && cachedBytes.length <= 100 * 1024 * 1024) {
+        final repo = ref.read(creatorRepositoryProvider);
+        final name = pod.audioFileName ?? 'audio.mp3';
+        final mime = name.endsWith('.wav')
+            ? 'audio/wav'
+            : (name.endsWith('.m4a') || name.endsWith('.mp4') ? 'audio/mp4' : 'audio/mpeg');
+        try {
+          await repo.uploadPodcastVideoFile(
+            podcastId: pod.id,
+            fileBytes: cachedBytes,
+            filename: name,
+            mimeType: mime,
           );
-        },
-      );
-    }
+        } catch (_) {}
+      }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.screenMargin),
-      itemCount: list.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-      itemBuilder: (context, index) {
-        final pod = list[index];
-        return _buildPodcastItem(pod, isDark);
+      await ref.read(creatorPodcastsProvider.notifier).submitPodcast(pod.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã gửi tập "${pod.title}" đến Admin để kiểm duyệt!'),
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      final errStr = e.toString();
+      if (errStr.contains('upload') || errStr.contains('400')) {
+        if (mounted) {
+          _showUploadAudioDialog(pod);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi khi gửi duyệt: $e'),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _submittingPodcastId = null);
+      }
+    }
+  }
+
+  Future<void> _showUploadAudioDialog(CreatorPodcast pod) async {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        bool isUploading = false;
+        String? statusText;
+
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(modalContext).viewInsets.bottom + AppSpacing.xl,
+                top: AppSpacing.lg,
+                left: AppSpacing.lg,
+                right: AppSpacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cloud_upload_rounded, color: AppColors.primaryLight, size: 24),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      const Expanded(
+                        child: Text(
+                          'Cần tải lên tệp âm thanh',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: isUploading ? null : () => Navigator.of(modalContext).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Tập podcast "${pod.title}" chưa có tệp âm thanh trên máy chủ. Bạn vui lòng chọn tệp âm thanh (.mp3, .wav, .m4a <= 100MB) để hệ thống tải lên và gửi Admin duyệt ngay.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  if (statusText != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight.withValues(alpha: 0.1),
+                        borderRadius: AppSpacing.roundedSm,
+                      ),
+                      child: Row(
+                        children: [
+                          if (isUploading)
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryLight),
+                            )
+                          else
+                            const Icon(Icons.info_outline, size: 16, color: AppColors.primaryLight),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              statusText!,
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.primaryLight),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      label: isUploading ? 'Đang tải lên...' : 'Chọn tệp âm thanh & Gửi duyệt',
+                      icon: isUploading
+                          ? null
+                          : const Icon(Icons.file_upload_outlined, size: 18),
+                      isLoading: isUploading,
+                      onPressed: isUploading
+                          ? null
+                          : () async {
+                              try {
+                                PlatformFile? file;
+                                try {
+                                  file = await FilePicker.pickFile(
+                                    type: FileType.custom,
+                                    allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac', 'mp4'],
+                                  );
+                                } catch (_) {
+                                  file = await FilePicker.pickFile(type: FileType.audio);
+                                }
+                                if (file == null || file.name.isEmpty) return;
+
+                                List<int>? bytes;
+                                try {
+                                  bytes = await file.readAsBytes();
+                                } catch (_) {}
+                                if (bytes == null || bytes.isEmpty) {
+                                  throw Exception('Không đọc được dữ liệu tệp.');
+                                }
+                                if (bytes.length > 100 * 1024 * 1024) {
+                                  final mb = (bytes.length / (1024 * 1024)).toStringAsFixed(1);
+                                  throw Exception('Tệp ($mb MB) vượt quá giới hạn tối đa 100MB của máy chủ.');
+                                }
+
+                                setModalState(() {
+                                  isUploading = true;
+                                  statusText = 'Đang tải lên tệp ${file!.name}...';
+                                });
+
+                                final repo = ref.read(creatorRepositoryProvider);
+                                final nameLower = file.name.toLowerCase();
+                                String mimeType = 'audio/mpeg';
+                                if (nameLower.endsWith('.wav')) {
+                                  mimeType = 'audio/wav';
+                                } else if (nameLower.endsWith('.m4a') || nameLower.endsWith('.mp4')) {
+                                  mimeType = 'audio/mp4';
+                                } else if (nameLower.endsWith('.aac')) {
+                                  mimeType = 'audio/aac';
+                                }
+
+                                final uploadSuccess = await repo.uploadPodcastVideoFile(
+                                  podcastId: pod.id,
+                                  fileBytes: bytes,
+                                  filename: file.name,
+                                  mimeType: mimeType,
+                                );
+                                if (!uploadSuccess) {
+                                  throw Exception('Tải tệp âm thanh lên máy chủ thất bại.');
+                                }
+
+                                ref.read(audioPlayerServiceProvider.notifier).cacheBytes(pod.id, bytes);
+
+                                setModalState(() {
+                                  statusText = 'Đã tải tệp xong! Đang gửi Admin duyệt...';
+                                });
+
+                                await ref.read(creatorPodcastsProvider.notifier).submitPodcast(pod.id);
+                                await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+
+                                if (ctx.mounted) {
+                                  Navigator.of(ctx).pop();
+                                }
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Đã tải lên tệp và gửi tập "${pod.title}" đến Admin kiểm duyệt thành công!'),
+                                      backgroundColor: AppColors.success,
+                                      duration: const Duration(seconds: 4),
+                                    ),
+                                  );
+                                }
+                              } catch (err) {
+                                setModalState(() {
+                                  isUploading = false;
+                                  statusText = 'Lỗi: $err';
+                                });
+                              }
+                            },
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    width: double.infinity,
+                    child: AppButton(
+                      label: 'Chỉnh sửa toàn bộ tập podcast',
+                      type: AppButtonType.secondary,
+                      onPressed: isUploading
+                          ? null
+                          : () {
+                              Navigator.of(ctx).pop();
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => UploadPodcastScreen(editingPodcast: pod),
+                                ),
+                              );
+                            },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
       },
     );
   }
 
-  String? _activePlayingId;
-
   Widget _buildPodcastItem(CreatorPodcast pod, bool isDark) {
     final profile = ref.watch(creatorProfileProvider).value;
-    final isPlaying = _activePlayingId == pod.id;
+    final audioState = ref.watch(audioPlayerServiceProvider);
+    final isPlaying = audioState.podcastId == pod.id && audioState.isPlaying;
 
     return Column(
       children: [
         SoundCloudPodcastCard(
           podcast: pod,
-          creatorName: profile?.name ?? 'Sử Kể Đêm Khuya',
+          creatorName: (profile?.name.isNotEmpty == true)
+              ? profile!.name
+              : 'Creator',
           isPlaying: isPlaying,
           onPlayToggle: () {
-            setState(() {
-              _activePlayingId = isPlaying ? null : pod.id;
-            });
+            ref.read(audioPlayerServiceProvider.notifier).togglePlay(pod);
           },
           onEdit: () {
             Navigator.of(context).push(
@@ -145,25 +444,105 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
             );
           },
           onDelete: () => _confirmDelete(pod),
+          onSubmitReview: pod.status == PodcastStatus.draft
+              ? () => _submitToAdminReview(pod)
+              : null,
         ),
 
-        // Hiển thị thêm nếu là AI Moderating
-        if (pod.status == PodcastStatus.aiModerating) ...[
+        // Hiển thị nút "Chờ Admin duyệt" khi podcast đang ở trạng thái Nháp (DRAFT)
+        if (pod.status == PodcastStatus.draft) ...[
           const SizedBox(height: AppSpacing.xs),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             decoration: BoxDecoration(
-              color: AppColors.infoContainer,
+              color: isDark ? AppColors.surfaceVariantDark : const Color(0xFFF9F7F5),
               borderRadius: AppSpacing.roundedSm,
+              border: Border.all(
+                color: isDark ? AppColors.outlineDark : const Color(0xFFE4DCD3),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.psychology_rounded, size: 18, color: AppColors.info),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.edit_document, size: 18, color: AppColors.primaryLight),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Bản nháp (Chưa gửi duyệt)',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        'Bấm nút bên để gửi tới Admin kiểm duyệt.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                ElevatedButton.icon(
+                  icon: _submittingPodcastId == pod.id
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.send_rounded, size: 14),
+                  label: const Text(
+                    'Chờ Admin duyệt',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryLight,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    minimumSize: const Size(0, 36),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _submittingPodcastId != null ? null : () => _submitToAdminReview(pod),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // Hiển thị trạng thái Chờ Admin duyệt
+        if (pod.status == PodcastStatus.pendingAdmin) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.surfaceVariantDark : AppColors.warningContainer,
+              borderRadius: AppSpacing.roundedSm,
+              border: Border.all(
+                color: isDark ? AppColors.outlineDark : const Color(0xFFFFE082),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.hourglass_top_rounded, size: 16, color: AppColors.warning),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'AI đang thẩm định tư liệu lịch sử (${((pod.aiModerationScore ?? 0.9) * 100).toInt()}% độ tin cậy)',
-                    style: const TextStyle(fontSize: 12, color: AppColors.info, fontWeight: FontWeight.w600),
+                    'Đang chờ Admin duyệt nội dung trước khi xuất bản.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isDark ? const Color(0xFFFFCA28) : AppColors.warning,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -199,17 +578,33 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                   style: const TextStyle(fontSize: 12, color: AppColors.error),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                AppButton(
-                  label: 'Sửa & Gửi lại',
-                  height: 32,
-                  type: AppButtonType.destructive,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => UploadPodcastScreen(editingPodcast: pod),
+                Row(
+                  children: [
+                    Expanded(
+                      child: AppButton(
+                        label: 'Sửa & Gửi lại',
+                        height: 32,
+                        type: AppButtonType.destructive,
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  UploadPodcastScreen(editingPodcast: pod),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  },
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: AppButton(
+                        label: 'Khiếu nại',
+                        height: 32,
+                        type: AppButtonType.secondary,
+                        onPressed: () => _showAppealDialog(pod),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -227,13 +622,93 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
       confirmLabel: 'Xóa vĩnh viễn',
       isDestructive: true,
       onConfirm: () async {
-        await ref.read(creatorPodcastsProvider.notifier).deletePodcast(pod.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Đã xóa tập "${pod.title}"')),
-          );
+        try {
+          await ref.read(creatorPodcastsProvider.notifier).deletePodcast(pod.id);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Đã xóa tập "${pod.title}" thành công'),
+                backgroundColor: AppColors.success,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Lỗi khi xóa: $e'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
         }
       },
+    );
+  }
+
+  void _showAppealDialog(CreatorPodcast pod) {
+    final noteCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Gửi khiếu nại kiểm duyệt',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tập: "${pod.title}"',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Nếu bạn cho rằng nội dung bị từ chối nhầm lẫn, hãy cung cấp thêm bằng chứng lịch sử hoặc giải trình chi tiết cho Admin:',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppColors.onSurfaceMutedLight,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: noteCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Nhập nội dung giải trình khiếu nại...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          AppButton(
+            label: 'Gửi khiếu nại',
+            width: 130,
+            onPressed: () async {
+              final note = noteCtrl.text.trim();
+              if (note.isNotEmpty) {
+                final repo = ref.read(creatorRepositoryProvider);
+                await repo.submitPodcastAppeal(podcastId: pod.id, note: note);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content:
+                          Text('Đã gửi khiếu nại đến ban quản trị VietCast.'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }

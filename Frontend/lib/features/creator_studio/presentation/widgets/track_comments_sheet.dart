@@ -66,14 +66,19 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
     final newComment = StudioComment(
       id: 'cmt_${DateTime.now().millisecondsSinceEpoch}',
       podcastTitle: widget.podcast.title,
-      authorName: profile?.name ?? 'Sử Kể Đêm Khuya',
+      authorName: (profile?.name.isNotEmpty == true)
+          ? profile!.name
+          : 'Creator',
       authorAvatar: profile?.avatarUrl ?? '',
       content: text,
       timestampSeconds: _attachTimestamp ? currentSeconds : 0,
       createdAt: DateTime.now(),
     );
 
-    ref.read(creatorCommentsProvider.notifier).addComment(newComment);
+    ref.read(creatorCommentsProvider.notifier).addComment(
+      newComment,
+      podcastId: widget.podcast.id,
+    );
 
     _textController.clear();
     FocusScope.of(context).unfocus();
@@ -270,9 +275,8 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                             backgroundImage: c.authorAvatar.isNotEmpty
                                 ? NetworkImage(c.authorAvatar)
                                 : null,
-                            child: c.authorAvatar.isEmpty
-                                ? const Icon(Icons.person, size: 18)
-                                : null,
+                            onBackgroundImageError: c.authorAvatar.isNotEmpty ? (_, _) {} : null,
+                            child: const Icon(Icons.person, size: 18),
                           ),
                           const SizedBox(width: AppSpacing.md),
                           Expanded(

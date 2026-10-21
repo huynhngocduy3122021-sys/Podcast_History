@@ -118,7 +118,11 @@ class StudioCommentsScreen extends ConsumerWidget {
             children: [
               CircleAvatar(
                 radius: 14,
-                backgroundImage: NetworkImage(c.authorAvatar),
+                backgroundImage: c.authorAvatar.isNotEmpty
+                    ? NetworkImage(c.authorAvatar)
+                    : null,
+                onBackgroundImageError: c.authorAvatar.isNotEmpty ? (_, _) {} : null,
+                child: const Icon(Icons.person, size: 14),
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
@@ -177,6 +181,18 @@ class StudioCommentsScreen extends ConsumerWidget {
                 icon: const Icon(Icons.reply_rounded, size: 16, color: AppColors.primaryLight),
                 label: const Text('Trả lời'),
                 onPressed: () => _showReplyDialog(context, c),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
+                label: const Text('Xóa', style: TextStyle(color: AppColors.error)),
+                onPressed: () async {
+                  await ref.read(creatorCommentsProvider.notifier).deleteComment(c.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Đã xóa bình luận!')),
+                    );
+                  }
+                },
               ),
             ],
           ),

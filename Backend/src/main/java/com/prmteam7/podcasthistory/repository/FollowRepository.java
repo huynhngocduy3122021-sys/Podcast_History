@@ -11,6 +11,8 @@ import com.prmteam7.podcasthistory.model.Follow;
 
 public interface FollowRepository extends JpaRepository<Follow, UUID> {
 
+    long countByProducerProfile_ProducerProfileId(UUID creatorId);
+
     Optional<Follow> findByUser_UserIdAndProducerProfile_ProducerProfileId(UUID userId, UUID creatorId);
 
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"producerProfile"})

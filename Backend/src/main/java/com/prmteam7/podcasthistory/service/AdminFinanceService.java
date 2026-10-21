@@ -8,6 +8,7 @@ import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -22,6 +23,7 @@ public class AdminFinanceService {
   private final UserWalletRepository wallets;
   private final WalletTransactionRepository transactions;
   private final PaymentRepository payments;
+  private final PaymentMethodRepository paymentMethods;
   private final SubscriptionRepository subscriptions;
   private final AppUserRepository users;
   private final ContractRepository contracts;
@@ -33,6 +35,7 @@ public class AdminFinanceService {
       UserWalletRepository wallets,
       WalletTransactionRepository transactions,
       PaymentRepository payments,
+      PaymentMethodRepository paymentMethods,
       SubscriptionRepository subscriptions,
       AppUserRepository users,
       ContractRepository contracts) {
@@ -42,6 +45,7 @@ public class AdminFinanceService {
     this.wallets = wallets;
     this.transactions = transactions;
     this.payments = payments;
+    this.paymentMethods = paymentMethods;
     this.subscriptions = subscriptions;
     this.users = users;
     this.contracts = contracts;
@@ -294,6 +298,7 @@ public class AdminFinanceService {
       p.setPaidAt(now);
       p.setProviderTransactionId(reference);
       p.setProvider("MANUAL_TRANSFER");
+      ensurePaymentMethod(p);
     } else {
       p.setStatus("FAILED");
       if (p.getSubscription() != null) {
@@ -309,6 +314,27 @@ public class AdminFinanceService {
         "Kết quả đối soát thanh toán",
         body.result() + ": " + body.note());
     return paymentItem(payments.save(p));
+  }
+
+  private void ensurePaymentMethod(Payment payment) {
+    String methodCode = payment.getPaymentMethod();
+    if (methodCode == null || methodCode.isBlank()) {
+      methodCode = "MANUAL_TRANSFER";
+    } else {
+      methodCode = methodCode.trim().toUpperCase(Locale.ROOT);
+    }
+    payment.setPaymentMethod(methodCode);
+
+    PaymentMethod method = paymentMethods
+        .findFirstByPayment_PaymentIdAndMethodCodeIgnoreCase(payment.getPaymentId(), methodCode)
+        .orElseGet(PaymentMethod::new);
+    method.setPayment(payment);
+    method.setMethodCode(methodCode);
+    method.setDisplayName("MANUAL_TRANSFER".equals(methodCode)
+        ? "Manual transfer"
+        : methodCode);
+    method.setIsActive(true);
+    paymentMethods.save(method);
   }
 
   @Transactional

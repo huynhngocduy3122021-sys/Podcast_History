@@ -29,6 +29,11 @@ class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadProfile() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data(CreatorProfile.empty);
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final profile = await _repo.getProfile();
@@ -40,19 +45,13 @@ class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
 
   Future<void> submitRegistration({
     required String channelName,
-    required String handle,
     required String bio,
-    required String category,
     required String socialLink,
-    required String sampleVoiceName,
   }) async {
     await _repo.submitRegistration(
       channelName: channelName,
-      handle: handle,
       bio: bio,
-      category: category,
       socialLink: socialLink,
-      sampleVoiceName: sampleVoiceName,
     );
     await loadProfile();
   }
@@ -68,6 +67,45 @@ final creatorProfileProvider =
       CreatorProfileNotifier.new,
     );
 
+// Categories Controller
+class CreatorCategoriesNotifier
+    extends Notifier<AsyncValue<List<CreatorCategory>>> {
+  @override
+  AsyncValue<List<CreatorCategory>> build() {
+    Future.microtask(() => loadCategories());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadCategories() async {
+    try {
+      state = const AsyncValue.loading();
+      final list = await _repo.getCategories();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+}
+
+final categoriesProvider = NotifierProvider<
+    CreatorCategoriesNotifier,
+    AsyncValue<List<CreatorCategory>>>(
+  CreatorCategoriesNotifier.new,
+);
+
+// Creator Dashboard Provider
+final creatorDashboardProvider =
+    FutureProvider.family<CreatorDashboardData, String>((ref, period) async {
+  final token = ref.watch(creatorAccessTokenProvider);
+  if (token == null || token.isEmpty) {
+    return const CreatorDashboardData();
+  }
+  final repo = ref.watch(creatorRepositoryProvider);
+  return repo.getDashboard(period: period);
+});
+
 // Podcasts Controller
 class CreatorPodcastsNotifier
     extends Notifier<AsyncValue<List<CreatorPodcast>>> {
@@ -80,6 +118,11 @@ class CreatorPodcastsNotifier
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadPodcasts({PodcastStatus? filter}) async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final list = await _repo.getPodcasts(filterStatus: filter);
@@ -89,7 +132,11 @@ class CreatorPodcastsNotifier
     }
   }
 
-  Future<void> createPodcast({
+  Future<CreatorPodcast?> getPodcastById(String id) async {
+    return _repo.getPodcastById(id);
+  }
+
+  Future<CreatorPodcast> createPodcast({
     required String title,
     required String description,
     required String eraTag,
@@ -98,8 +145,13 @@ class CreatorPodcastsNotifier
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
+    String? categoryId,
+    String? seriesId,
+    int? episodeNumber,
+    bool autoSubmit = false,
   }) async {
-    await _repo.createPodcast(
+    final pod = await _repo.createPodcast(
       title: title,
       description: description,
       eraTag: eraTag,
@@ -108,12 +160,18 @@ class CreatorPodcastsNotifier
       coverUrl: coverUrl,
       audioFileName: audioFileName,
       duration: duration,
+      mediaBytes: mediaBytes,
+      categoryId: categoryId,
+      seriesId: seriesId,
+      episodeNumber: episodeNumber,
+      autoSubmit: autoSubmit,
     );
     await loadPodcasts();
     ref.read(creatorProfileProvider.notifier).loadProfile();
+    return pod;
   }
 
-  Future<void> updatePodcast({
+  Future<CreatorPodcast> updatePodcast({
     required String id,
     required String title,
     required String description,
@@ -123,8 +181,13 @@ class CreatorPodcastsNotifier
     required String coverUrl,
     required String? audioFileName,
     required Duration duration,
+    List<int>? mediaBytes,
+    String? categoryId,
+    String? seriesId,
+    int? episodeNumber,
+    bool autoSubmit = false,
   }) async {
-    await _repo.updatePodcast(
+    final pod = await _repo.updatePodcast(
       id: id,
       title: title,
       description: description,
@@ -134,8 +197,20 @@ class CreatorPodcastsNotifier
       coverUrl: coverUrl,
       audioFileName: audioFileName,
       duration: duration,
+      mediaBytes: mediaBytes,
+      categoryId: categoryId,
+      seriesId: seriesId,
+      episodeNumber: episodeNumber,
+      autoSubmit: autoSubmit,
     );
     await loadPodcasts();
+    return pod;
+  }
+
+  Future<CreatorPodcast> submitPodcast(String id) async {
+    final pod = await _repo.submitPodcast(id);
+    await loadPodcasts();
+    return pod;
   }
 
   Future<void> deletePodcast(String id) async {
@@ -162,6 +237,11 @@ class CreatorRequestsNotifier
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadRequests() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final list = await _repo.getRequests();
@@ -181,8 +261,20 @@ class CreatorRequestsNotifier
     await loadRequests();
   }
 
-  Future<void> deliverWork(String id, String fileUrl, String note) async {
-    await _repo.deliverWork(id, fileUrl, note);
+  Future<void> deliverWork(
+    String id,
+    String fileUrl,
+    String note, {
+    List<int>? fileBytes,
+    String? filename,
+  }) async {
+    await _repo.deliverWork(
+      id,
+      fileUrl,
+      note,
+      fileBytes: fileBytes,
+      filename: filename,
+    );
     await loadRequests();
   }
 
@@ -224,6 +316,19 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadWallet() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data(
+        WalletState(
+          available: 0,
+          pending: 0,
+          holding: 0,
+          totalWithdrawn: 0,
+          transactions: [],
+        ),
+      );
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final balance = await _repo.getWalletBalance();
@@ -273,6 +378,11 @@ class BankAccountsNotifier extends Notifier<AsyncValue<List<BankAccount>>> {
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadAccounts() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final list = await _repo.getBankAccounts();
@@ -314,6 +424,11 @@ class CreatorCommentsNotifier
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadComments() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final list = await _repo.getComments();
@@ -333,15 +448,78 @@ class CreatorCommentsNotifier
     await loadComments();
   }
 
-  void addComment(StudioComment comment) {
+  Future<void> deleteComment(String id) async {
+    await _repo.deleteComment(id);
+    await loadComments();
+  }
+
+  Future<void> addComment(StudioComment comment, {String? podcastId}) async {
     final current = state.value ?? [];
     state = AsyncValue.data([comment, ...current]);
+    if (podcastId != null) {
+      await _repo.addCommentToPodcast(
+        podcastId: podcastId,
+        content: comment.content,
+        timestampSeconds: comment.timestampSeconds,
+        podcastTitle: comment.podcastTitle,
+      );
+      await loadComments();
+    }
   }
 }
 
 final creatorCommentsProvider =
     NotifierProvider<CreatorCommentsNotifier, AsyncValue<List<StudioComment>>>(
       CreatorCommentsNotifier.new,
+    );
+
+// Series Controller
+class CreatorSeriesNotifier extends Notifier<AsyncValue<List<CreatorSeries>>> {
+  @override
+  AsyncValue<List<CreatorSeries>> build() {
+    Future.microtask(() => loadSeries());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadSeries() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+    try {
+      state = const AsyncValue.loading();
+      final list = await _repo.getSeries();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<CreatorSeries?> createSeries({
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description = '',
+    String coverUrl = '',
+  }) async {
+    final series = await _repo.createSeries(
+      title: title,
+      slug: slug,
+      categoryId: categoryId,
+      description: description,
+      coverUrl: coverUrl,
+    );
+    await loadSeries();
+    return series;
+  }
+}
+
+final creatorSeriesProvider =
+    NotifierProvider<CreatorSeriesNotifier, AsyncValue<List<CreatorSeries>>>(
+      CreatorSeriesNotifier.new,
     );
 
 // Forms Controller
@@ -355,6 +533,11 @@ class CreatorFormsNotifier extends Notifier<AsyncValue<List<InteractiveForm>>> {
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
   Future<void> loadForms() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
     try {
       state = const AsyncValue.loading();
       final list = await _repo.getForms();

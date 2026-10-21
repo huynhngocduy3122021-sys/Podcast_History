@@ -135,7 +135,9 @@ public class SecurityConfig {
 
   @Bean
   org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
-      @Value("${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}") String origins) {
+      @Value(
+              "${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}")
+          String origins) {
     var config = new org.springframework.web.cors.CorsConfiguration();
     config.setAllowedOriginPatterns(
         java.util.Arrays.stream(origins.split(","))
