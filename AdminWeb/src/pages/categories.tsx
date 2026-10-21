@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -14,6 +14,7 @@ import type { Category, CategoryForm } from '../lib/admin-contracts'
 import { Button } from '../components/ui/button'
 import { ConfirmDialog } from '../components/ui/confirm-dialog'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
+import { Pagination } from '../components/pagination'
 import { useFeedback } from '../components/feedback'
 import { identityOf, sameIdentity } from '../lib/identity'
 
@@ -110,12 +111,20 @@ function DeactivateCategory({ category, disabled }: { category: Category; disabl
 export function CategoriesPage() {
   const { user } = useAuth()
   const [editor, setEditor] = useState<Category | 'new' | null>(null)
+  const [page, setPage] = useState(0)
+  const pageSize = 20
   const query = useQuery({ queryKey: adminKeys.categories(user?.id), enabled: user?.role === 'ADMIN', queryFn: ({ signal }) => backend.categories(signal) })
+  const categories = query.data ?? []
+  const totalPages = Math.max(1, Math.ceil(categories.length / pageSize))
+  useEffect(() => {
+    if (page >= totalPages) setPage(Math.max(0, totalPages - 1))
+  }, [page, totalPages])
+  const visibleCategories = categories.slice(page * pageSize, (page + 1) * pageSize)
   return <>
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Tổ chức nội dung</p><h1 className="mt-2 text-3xl font-bold">Quản lý danh mục</h1><p className="mt-2 text-sm text-muted-foreground">Quản lý tên, slug và trạng thái của toàn bộ danh mục.</p></div><div className="flex gap-3"><Button variant="outline" disabled={query.isFetching || editor !== null} onClick={() => { void query.refetch() }}><RefreshCw className="size-4" />Làm mới</Button><Button disabled={editor !== null || user?.role !== 'ADMIN'} onClick={() => setEditor('new')}><Plus className="size-4" />Tạo danh mục</Button></div></div>
     {editor !== null && <CategoryEditor key={editor === 'new' ? 'new' : editor.categoryId} category={editor === 'new' ? undefined : editor} onClose={() => setEditor(null)} />}
     <section className="panel"><div className="panel-heading"><h2 className="font-semibold">Tất cả danh mục</h2><p className="text-xs text-muted-foreground">{query.data ? `${query.data.length} danh mục · ` : ''}Bao gồm danh mục ngừng hoạt động</p></div>
-      {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data?.length ? <div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Danh mục</th><th>Slug</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{query.data.map(category => <tr key={category.categoryId}><td className="max-w-xs"><p className="font-semibold">{category.name}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{category.description || 'Chưa có mô tả'}</p></td><td className="max-w-xs break-all font-mono text-xs">{category.slug}</td><td><span className={`badge whitespace-nowrap ${category.active ? 'bg-success/10 text-success' : ''}`}>{category.active ? 'Đang hoạt động' : 'Ngừng hoạt động'}</span></td><td><div className="flex justify-end gap-2"><Button variant="outline" disabled={editor !== null} aria-label={`Chỉnh sửa ${category.name}`} onClick={() => setEditor(category)}><Pencil className="size-4" />Sửa</Button><DeactivateCategory category={category} disabled={editor !== null} /></div></td></tr>)}</tbody></table></div> : <EmptyState title="Chưa có danh mục" message="Tạo danh mục đầu tiên để tổ chức nội dung VietCast." />}
+      {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data?.length ? <><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Danh mục</th><th>Slug</th><th>Trạng thái</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{visibleCategories.map(category => <tr key={category.categoryId}><td className="max-w-xs"><p className="font-semibold">{category.name}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{category.description || 'Chưa có mô tả'}</p></td><td className="max-w-xs break-all font-mono text-xs">{category.slug}</td><td><span className={`badge whitespace-nowrap ${category.active ? 'bg-success/10 text-success' : ''}`}>{category.active ? 'Đang hoạt động' : 'Ngừng hoạt động'}</span></td><td><div className="flex justify-end gap-2"><Button variant="outline" disabled={editor !== null} aria-label={`Chỉnh sửa ${category.name}`} onClick={() => setEditor(category)}><Pencil className="size-4" />Sửa</Button><DeactivateCategory category={category} disabled={editor !== null} /></div></td></tr>)}</tbody></table></div><Pagination page={{ number: page, size: pageSize, totalElements: categories.length, totalPages }} pending={query.isFetching} onPageChange={setPage} /></> : <EmptyState title="Chưa có danh mục" message="Tạo danh mục đầu tiên để tổ chức nội dung VietCast." />}
     </section>
   </>
 }
