@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
-import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
@@ -25,7 +24,7 @@ class _FormBuilderScreenState extends ConsumerState<FormBuilderScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final isPremium = !kPackagesEnabled || (profile?.isPremium ?? false);
+    final isPremium = profile?.isPremium ?? false;
 
     return Scaffold(
       appBar: AppBar(

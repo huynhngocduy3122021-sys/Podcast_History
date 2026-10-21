@@ -7,18 +7,6 @@ import 'package:podcast_history/core/network/api_endpoints.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/domain/creator_repository.dart';
 
-class _CoverUploadData {
-  const _CoverUploadData({
-    required this.bytes,
-    required this.filename,
-    required this.mimeType,
-  });
-
-  final List<int> bytes;
-  final String filename;
-  final String mimeType;
-}
-
 class ApiCreatorRepository implements CreatorRepository {
   final ApiClient _apiClient;
   final _uuid = const Uuid();
@@ -351,11 +339,30 @@ class ApiCreatorRepository implements CreatorRepository {
       throw Exception('Vui lòng chọn danh mục hợp lệ');
     }
 
-    // Create the draft first so the uploaded cover can be linked to its podcast.
-    final coverUpload = _prepareCoverUpload(coverUrl);
-    final effectiveCoverUrl = coverUpload == null
-        ? _externalCoverUrl(coverUrl)
-        : null;
+    // 2. Upload cover if data URL
+    String? effectiveCoverUrl;
+    if (coverUrl.isNotEmpty) {
+      if (coverUrl.startsWith('data:image')) {
+        try {
+          final mime = coverUrl.split(';').first.replaceFirst('data:', '');
+          final base64Part = coverUrl.split(',').last;
+          final bytes = base64Decode(base64Part);
+          final ext = mime.contains('png')
+              ? 'png'
+              : (mime.contains('webp') ? 'webp' : 'jpg');
+          final uploadedUrl = await uploadImageFile(
+            fileBytes: bytes,
+            filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
+            mimeType: mime,
+          );
+          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+            effectiveCoverUrl = uploadedUrl;
+          }
+        } catch (_) {}
+      } else if (!coverUrl.startsWith('data:')) {
+        effectiveCoverUrl = coverUrl;
+      }
+    }
 
     final durationSecs = duration.inSeconds > 0 ? duration.inSeconds : 1800;
 
@@ -386,19 +393,6 @@ class ApiCreatorRepository implements CreatorRepository {
     var createdPodcast = _mapBackendPodcastToModel(res);
     final createdPodcastId = createdPodcast.id;
 
-    if (coverUpload != null) {
-      final withCover = await uploadPodcastThumbnailFile(
-        podcastId: createdPodcastId,
-        fileBytes: coverUpload.bytes,
-        filename: coverUpload.filename,
-        mimeType: coverUpload.mimeType,
-      );
-      if (withCover == null) {
-        throw Exception('Upload ảnh bìa thất bại; podcast vẫn được lưu ở dạng nháp.');
-      }
-      createdPodcast = withCover;
-    }
-
     // 4. Assign series if selected: PUT /api/creator/podcasts/{id}/series
     if (seriesId != null && seriesId.isNotEmpty) {
       await assignPodcastToSeries(
@@ -409,9 +403,20 @@ class ApiCreatorRepository implements CreatorRepository {
 
     // 5. Upload media file (video or audio) if bytes provided: POST /api/creator/podcasts/{id}/video
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final mimeType = _podcastMediaTypeForFilename(audioFileName);
-      if (mimeType == null) {
-        throw Exception('Định dạng media podcast chưa được hỗ trợ.');
+      final nameLower = audioFileName.toLowerCase();
+      String mimeType = 'video/mp4';
+      if (nameLower.endsWith('.mp3')) {
+        mimeType = 'audio/mpeg';
+      } else if (nameLower.endsWith('.m4a')) {
+        mimeType = 'audio/mp4';
+      } else if (nameLower.endsWith('.wav')) {
+        mimeType = 'audio/wav';
+      } else if (nameLower.endsWith('.aac')) {
+        mimeType = 'audio/aac';
+      } else if (nameLower.endsWith('.webm')) {
+        mimeType = 'video/webm';
+      } else if (nameLower.endsWith('.mov')) {
+        mimeType = 'video/quicktime';
       }
 
       final uploaded = await uploadPodcastVideoFile(
@@ -503,22 +508,28 @@ class ApiCreatorRepository implements CreatorRepository {
 
     effectiveCategoryId ??= '00000000-0000-0000-0000-000000000001';
 
-    final coverUpload = _prepareCoverUpload(coverUrl);
-    String? effectiveCoverUrl = coverUpload == null
-        ? _externalCoverUrl(coverUrl)
-        : null;
-
-    if (coverUpload != null) {
-      final withCover = await uploadPodcastThumbnailFile(
-        podcastId: id,
-        fileBytes: coverUpload.bytes,
-        filename: coverUpload.filename,
-        mimeType: coverUpload.mimeType,
-      );
-      if (withCover == null || withCover.coverUrl.isEmpty) {
-        throw Exception('Upload ảnh bìa thất bại; podcast chưa được cập nhật.');
+    String? effectiveCoverUrl;
+    if (coverUrl.isNotEmpty) {
+      if (coverUrl.startsWith('data:image')) {
+        try {
+          final mime = coverUrl.split(';').first.replaceFirst('data:', '');
+          final base64Part = coverUrl.split(',').last;
+          final bytes = base64Decode(base64Part);
+          final ext = mime.contains('png')
+              ? 'png'
+              : (mime.contains('webp') ? 'webp' : 'jpg');
+          final uploadedUrl = await uploadImageFile(
+            fileBytes: bytes,
+            filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
+            mimeType: mime,
+          );
+          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
+            effectiveCoverUrl = uploadedUrl;
+          }
+        } catch (_) {}
+      } else if (!coverUrl.startsWith('data:')) {
+        effectiveCoverUrl = coverUrl;
       }
-      effectiveCoverUrl = withCover.coverUrl;
     }
 
     CreatorPodcast? updatedPodcast;
@@ -571,9 +582,20 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final mimeType = _podcastMediaTypeForFilename(audioFileName);
-      if (mimeType == null) {
-        throw Exception('Định dạng media podcast chưa được hỗ trợ.');
+      final nameLower = audioFileName.toLowerCase();
+      String mimeType = 'video/mp4';
+      if (nameLower.endsWith('.mp3')) {
+        mimeType = 'audio/mpeg';
+      } else if (nameLower.endsWith('.m4a')) {
+        mimeType = 'audio/mp4';
+      } else if (nameLower.endsWith('.wav')) {
+        mimeType = 'audio/wav';
+      } else if (nameLower.endsWith('.aac')) {
+        mimeType = 'audio/aac';
+      } else if (nameLower.endsWith('.webm')) {
+        mimeType = 'video/webm';
+      } else if (nameLower.endsWith('.mov')) {
+        mimeType = 'video/quicktime';
       }
 
       final uploaded = await uploadPodcastVideoFile(
@@ -685,85 +707,28 @@ class ApiCreatorRepository implements CreatorRepository {
   // ==========================================
 
   @override
-  Future<CreatorPodcast?> uploadPodcastThumbnailFile({
-    required String podcastId,
+  Future<String?> uploadImageFile({
     required List<int> fileBytes,
     required String filename,
     String mimeType = 'image/jpeg',
   }) async {
-    final res = await _apiClient.uploadMultipart(
-      ApiEndpoints.creatorPodcastThumbnail(podcastId),
-      fileFieldName: 'file',
-      filename: filename,
-      fileBytes: fileBytes,
-      mimeType: mimeType,
-      headers: const {'ngrok-skip-browser-warning': '1'},
-    );
-    if (res is! Map<String, dynamic>) {
-      return null;
-    }
-
-    final mapped = _mapBackendPodcastToModel(res);
-    final index = _cachedPodcasts.indexWhere((podcast) => podcast.id == podcastId);
-    if (index == -1) {
-      _cachedPodcasts.add(mapped);
-    } else {
-      _cachedPodcasts[index] = mapped.copyWith(
-        audioFileName: _cachedPodcasts[index].audioFileName,
-        sources: _cachedPodcasts[index].sources,
-        eraTag: _cachedPodcasts[index].eraTag,
+    try {
+      final res = await _apiClient.uploadMultipart(
+        ApiEndpoints.uploads,
+        fileFieldName: 'file',
+        filename: filename,
+        fileBytes: fileBytes,
+        mimeType: mimeType,
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
-    }
-    return mapped;
-  }
-
-  _CoverUploadData? _prepareCoverUpload(String coverUrl) {
-    final value = coverUrl.trim();
-    if (value.isEmpty) return null;
-    if (!value.startsWith('data:')) {
-      return null;
-    }
-    if (!value.startsWith('data:image/')) {
-      throw Exception('Ảnh bìa phải là data URL image hợp lệ.');
-    }
-
-    final commaIndex = value.indexOf(',');
-    final semicolonIndex = value.indexOf(';');
-    if (commaIndex <= semicolonIndex || semicolonIndex < 5) {
-      throw Exception('Dữ liệu ảnh bìa không hợp lệ.');
-    }
-
-    final mimeType = value.substring(5, semicolonIndex).toLowerCase();
-    if (mimeType == 'image/svg+xml') {
-      throw Exception('Không hỗ trợ SVG làm ảnh bìa.');
-    }
-    final bytes = base64Decode(value.substring(commaIndex + 1));
-    if (bytes.isEmpty) {
-      throw Exception('Ảnh bìa rỗng.');
-    }
-
-    final extension = switch (mimeType) {
-      'image/png' => 'png',
-      'image/webp' => 'webp',
-      'image/gif' => 'gif',
-      'image/avif' => 'avif',
-      'image/heic' => 'heic',
-      'image/heif' => 'heif',
-      'image/jpeg' => 'jpg',
-      _ => throw Exception('Định dạng ảnh bìa chưa được hỗ trợ: $mimeType'),
-    };
-
-    return _CoverUploadData(
-      bytes: bytes,
-      filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$extension',
-      mimeType: mimeType,
-    );
-  }
-
-  String? _externalCoverUrl(String coverUrl) {
-    final value = coverUrl.trim();
-    if (value.isEmpty || value.startsWith('data:')) return null;
-    return value;
+      if (res is Map<String, dynamic>) {
+        final url = res['publicUrl'] ?? res['url'] ?? res['objectKey'];
+        if (url != null) {
+          return url.toString();
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   @override
@@ -824,27 +789,6 @@ class ApiCreatorRepository implements CreatorRepository {
       }
       rethrow;
     }
-  }
-
-  String? _podcastMediaTypeForFilename(String filename) {
-    final extension = filename.toLowerCase().split('.').last;
-    return switch (extension) {
-      'mp4' => 'video/mp4',
-      'mov' => 'video/quicktime',
-      'm4v' => 'video/x-m4v',
-      'webm' => 'video/webm',
-      'mkv' => 'video/x-matroska',
-      '3gp' => 'video/3gpp',
-      'avi' => 'video/x-msvideo',
-      'mp3' => 'audio/mpeg',
-      'm4a' => 'audio/mp4',
-      'aac' => 'audio/aac',
-      'wav' => 'audio/wav',
-      'ogg' || 'oga' => 'audio/ogg',
-      'opus' => 'audio/opus',
-      'flac' => 'audio/flac',
-      _ => null,
-    };
   }
 
   @override

@@ -1,7 +1,6 @@
 package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.CommentCreate;
-import com.prmteam7.podcasthistory.config.PackageFeatures;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.CommentUpdate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.ListeningProgress;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.MembershipCheckout;
@@ -92,7 +91,6 @@ public class ListenerFlowService {
   private final SeriesRequestRepository seriesRequestRepository;
   private final R2PlaybackUrlService playbackUrlService;
   private final CommentRealtimeHub commentRealtimeHub;
-  private final PackageFeatures packageFeatures;
 
   public ListenerFlowService(
       AppUserRepository userRepository,
@@ -111,8 +109,7 @@ public class ListenerFlowService {
       PaymentRepository paymentRepository,
       SeriesRequestRepository seriesRequestRepository,
       R2PlaybackUrlService playbackUrlService,
-      CommentRealtimeHub commentRealtimeHub,
-      PackageFeatures packageFeatures) {
+      CommentRealtimeHub commentRealtimeHub) {
     this.userRepository = userRepository;
     this.categoryRepository = categoryRepository;
     this.producerProfileRepository = producerProfileRepository;
@@ -130,7 +127,6 @@ public class ListenerFlowService {
     this.seriesRequestRepository = seriesRequestRepository;
     this.playbackUrlService = playbackUrlService;
     this.commentRealtimeHub = commentRealtimeHub;
-    this.packageFeatures = packageFeatures;
   }
 
   @Transactional(readOnly = true)
@@ -158,14 +154,12 @@ public class ListenerFlowService {
   }
 
   @Transactional(readOnly = true)
-  public java.util.List<CreatorItem> getCreators(String search) {
-    String query = search == null ? "" : search.trim();
-    java.util.List<ProducerProfile> creators = query.isEmpty()
-        ? producerProfileRepository.findAllByVerificationStatusIgnoreCaseOrderByChannelNameAsc("APPROVED")
-        : producerProfileRepository
-            .findAllByVerificationStatusIgnoreCaseAndChannelNameContainingIgnoreCaseOrderByChannelNameAsc(
-                "APPROVED", query);
-    return creators.stream().map(this::toCreatorItem).toList();
+  public java.util.List<CreatorItem> getCreators() {
+    return producerProfileRepository
+        .findAllByVerificationStatusIgnoreCaseOrderByChannelNameAsc("APPROVED")
+        .stream()
+        .map(this::toCreatorItem)
+        .toList();
   }
 
   @Transactional(readOnly = true)
@@ -179,8 +173,7 @@ public class ListenerFlowService {
     assertCanPlay(userId, podcast);
     String storedMedia = podcast.getMediaUrl();
     R2PlaybackUrlService.PlaybackUrl playback =
-        playbackUrlService.create(storedMedia,
-            packageFeatures.membershipsEnabled() && Boolean.TRUE.equals(podcast.getIsExclusive()));
+        playbackUrlService.create(storedMedia, Boolean.TRUE.equals(podcast.getIsExclusive()));
     int resume =
         listeningHistoryRepository
             .findByUser_UserIdAndPodcast_PodcastId(userId, podcastId)
@@ -440,7 +433,6 @@ public class ListenerFlowService {
   @Transactional(readOnly = true)
   public java.util.List<MembershipPlanItem> getMembershipPlans(UUID creatorId) {
     requireCreator(creatorId);
-    if (!packageFeatures.membershipsEnabled()) return java.util.List.of();
     return membershipPlanRepository
         .findAllByProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByPriceAsc(
             creatorId, "ACTIVE")
@@ -462,7 +454,6 @@ public class ListenerFlowService {
 
   @Transactional
   public MembershipCheckoutItem createMembershipCheckout(UUID userId, MembershipCheckout request) {
-    packageFeatures.requireMemberships();
     MembershipPlan plan =
         membershipPlanRepository
             .lockById(request.membershipPlanId())
@@ -556,22 +547,22 @@ public class ListenerFlowService {
       UUID userId, UUID creatorId, SeriesRequestCreate request) {
     ProducerProfile creator = requireCreator(creatorId);
     assertCreatorApproved(creator);
-    Subscription membership = null;
-    if (packageFeatures.membershipsEnabled()) {
-      membership = subscriptionRepository
-          .findTopByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseAndEndAtAfterOrderByEndAtDesc(
-              userId, creatorId, "ACTIVE", Instant.now())
-          .filter(subscription -> !subscription.getStartAt().isAfter(Instant.now()))
-          .orElseThrow(() -> new ResourceForbiddenException(
-              "Bạn cần membership còn hiệu lực tại kênh này để gửi yêu cầu."));
-    }
+    Subscription membership =
+        subscriptionRepository
+            .findTopByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseAndEndAtAfterOrderByEndAtDesc(
+                userId, creatorId, "ACTIVE", Instant.now())
+            .filter(subscription -> !subscription.getStartAt().isAfter(Instant.now()))
+            .orElseThrow(
+                () ->
+                    new ResourceForbiddenException(
+                        "Bạn cần membership còn hiệu lực tại kênh này để gửi yêu cầu."));
     SeriesRequest seriesRequest = new SeriesRequest();
     seriesRequest.setUser(requireUser(userId));
     seriesRequest.setProducerProfile(creator);
     seriesRequest.setRequestedTitle(request.requestedTitle().trim());
     seriesRequest.setDescription(request.description().trim());
     seriesRequest.setRequestFee(BigDecimal.ZERO);
-    seriesRequest.setCurrency(membership == null ? "VND" : membership.getMembershipPlan().getCurrency());
+    seriesRequest.setCurrency(membership.getMembershipPlan().getCurrency());
     seriesRequest.setStatus("PENDING");
     return toSeriesRequestItem(seriesRequestRepository.save(seriesRequest));
   }
@@ -595,7 +586,6 @@ public class ListenerFlowService {
   }
 
   private void assertCanPlay(UUID userId, Podcast podcast) {
-    if (!packageFeatures.membershipsEnabled()) return;
     if (isOwner(userId, podcast) || !Boolean.TRUE.equals(podcast.getIsExclusive())) {
       return;
     }
@@ -732,9 +722,8 @@ public class ListenerFlowService {
         podcast.getThumbnailUrl(),
         podcast.getDurationSeconds(),
         podcast.getEpisodeNumber(),
-        packageFeatures.membershipsEnabled() && Boolean.TRUE.equals(podcast.getIsExclusive()),
-        com.prmteam7.podcasthistory.enums.PodcastVisibility.fromExclusive(
-            packageFeatures.membershipsEnabled() && Boolean.TRUE.equals(podcast.getIsExclusive())),
+        Boolean.TRUE.equals(podcast.getIsExclusive()),
+        com.prmteam7.podcasthistory.enums.PodcastVisibility.fromExclusive(podcast.getIsExclusive()),
         podcast.getPublishedAt(),
         series == null ? null : series.getSeriesId(),
         series == null ? null : series.getTitle(),

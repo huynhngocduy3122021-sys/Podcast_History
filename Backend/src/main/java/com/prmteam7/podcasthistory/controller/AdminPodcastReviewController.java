@@ -4,10 +4,6 @@ import com.prmteam7.podcasthistory.dto.request.CreatorRequests.ReviewNote;
 import com.prmteam7.podcasthistory.dto.response.CreatorResponses.PodcastReviewItem;
 import com.prmteam7.podcasthistory.dto.response.CreatorResponses.PodcastReviewResult;
 import com.prmteam7.podcasthistory.service.PodcastReviewService;
-import com.prmteam7.podcasthistory.service.AiModerationService;
-import com.prmteam7.podcasthistory.dto.response.AiModerationItem;
-import com.prmteam7.podcasthistory.dto.response.PodcastTranscriptItem;
-import com.prmteam7.podcasthistory.service.PodcastTranscriptService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,41 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminPodcastReviewController {
 
   private final PodcastReviewService podcastReviewService;
-  private final AiModerationService aiModerationService;
-  private final PodcastTranscriptService transcriptService;
 
-  public AdminPodcastReviewController(PodcastReviewService podcastReviewService,
-      AiModerationService aiModerationService, PodcastTranscriptService transcriptService) {
+  public AdminPodcastReviewController(PodcastReviewService podcastReviewService) {
     this.podcastReviewService = podcastReviewService;
-    this.aiModerationService = aiModerationService;
-    this.transcriptService = transcriptService;
-  }
-
-  @GetMapping("/{podcastId}/transcript")
-  @Operation(summary = "Xem transcript của audio/video hiện tại")
-  public PodcastTranscriptItem transcript(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
-    return transcriptService.current(userId(jwt), podcastId);
-  }
-
-  @PostMapping("/{podcastId}/transcript")
-  @Operation(summary = "Thử phiên âm lại audio/video hiện tại")
-  public PodcastTranscriptItem retryTranscript(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
-    return transcriptService.retry(userId(jwt), podcastId);
-  }
-
-  @GetMapping("/{podcastId}/ai-moderation")
-  @Operation(summary = "Lịch sử AI kiểm duyệt podcast; current cho biết kết quả còn khớp nội dung")
-  public org.springframework.data.domain.Page<AiModerationItem> aiModeration(
-      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId,
-      @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
-    return aiModerationService.history(userId(jwt), podcastId, page, size);
-  }
-
-  @PostMapping("/{podcastId}/ai-moderation")
-  @Operation(summary = "Chạy lại AI kiểm duyệt cho podcast đang chờ Admin")
-  public AiModerationItem retryAiModeration(
-      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
-    return aiModerationService.retry(userId(jwt), podcastId);
   }
 
   @GetMapping("/page")

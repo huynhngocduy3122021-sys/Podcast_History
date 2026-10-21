@@ -3,7 +3,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
-import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
@@ -95,10 +94,8 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 const SizedBox(height: AppSpacing.lg),
 
                 // Banner gói Free vs Premium
-                if (kPackagesEnabled) ...[
-                  _buildPlanLimitBanner(context, profile, isDark),
-                  const SizedBox(height: AppSpacing.lg),
-                ],
+                _buildPlanLimitBanner(context, profile, isDark),
+                const SizedBox(height: AppSpacing.lg),
 
                 // Lưới chỉ số thống kê (Metrics)
                 Text(
@@ -291,7 +288,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     const SizedBox(height: AppSpacing.xs),
                     Row(
                       children: [
-                        if (kPackagesEnabled && profile.isPremium)
+                        if (profile.isPremium)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                             decoration: BoxDecoration(
@@ -315,7 +312,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                               ],
                             ),
                           )
-                        else if (kPackagesEnabled)
+                        else
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                             decoration: BoxDecoration(
