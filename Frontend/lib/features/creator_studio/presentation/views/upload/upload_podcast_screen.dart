@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -43,6 +44,22 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
   String? _selectedPdfFileName;
   List<int>? _pdfFileBytes;
   List<int>? _pickedMediaBytes;
+  Duration? _detectedDuration;
+
+  Future<void> _detectDurationFromBytes(List<int> bytes) async {
+    try {
+      final notifier = ref.read(audioPlayerServiceProvider.notifier);
+      final dur = await notifier.probeDuration(
+        'temp_upload_${DateTime.now().millisecondsSinceEpoch}',
+        bytes: bytes,
+      );
+      if (dur != null && dur > Duration.zero && mounted) {
+        setState(() {
+          _detectedDuration = dur;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void initState() {
@@ -115,6 +132,9 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
         try {
           final bytes = await file.readAsBytes();
           _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
+          if (_pickedMediaBytes != null) {
+            unawaited(_detectDurationFromBytes(_pickedMediaBytes!));
+          }
         } catch (_) {}
         await _applySelectedMedia(file.name);
       }
@@ -137,6 +157,12 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       builder: (ctx) => _AudioSourceSelectorSheet(
         initialFileName: _audioFileName,
         isVideo: false,
+        onFilePicked: (file, bytes) {
+          _pickedMediaBytes = bytes.isNotEmpty ? bytes : null;
+          if (_pickedMediaBytes != null) {
+            unawaited(_detectDurationFromBytes(_pickedMediaBytes!));
+          }
+        },
       ),
     );
 
@@ -326,12 +352,17 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                   isExclusive: _isExclusive,
                   coverUrl: _selectedCoverUrl,
                   audioFileName: effectiveMedia,
-                  duration: widget.editingPodcast!.duration.inSeconds > 0
-                      ? widget.editingPodcast!.duration
-                      : const Duration(minutes: 30),
+                  duration: _detectedDuration ??
+                      (widget.editingPodcast!.duration.inSeconds > 0
+                          ? widget.editingPodcast!.duration
+                          : const Duration(minutes: 30)),
                   mediaBytes: _pickedMediaBytes,
                   autoSubmit: false,
                 );
+
+        if (_detectedDuration != null) {
+          ref.read(audioPlayerServiceProvider.notifier).setKnownDuration(resultPodcast.id, _detectedDuration!);
+        }
 
         // Upload PDF Reference if selected
         if (_pdfFileBytes != null && _selectedPdfFileName != null) {
@@ -366,13 +397,16 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           isExclusive: _isExclusive,
           coverUrl: _selectedCoverUrl,
           audioFileName: effectiveMedia,
-          duration: const Duration(minutes: 30),
+          duration: _detectedDuration ?? const Duration(minutes: 30),
           mediaBytes: null,
           seriesId: null,
           autoSubmit: false,
         );
 
         final podcastId = draftPodcast.id;
+        if (_detectedDuration != null) {
+          ref.read(audioPlayerServiceProvider.notifier).setKnownDuration(podcastId, _detectedDuration!);
+        }
 
         // Step 5: PUT /api/creator/podcasts/{id}/series (Optional)
         if (_selectedSeriesId != null && _selectedSeriesId!.isNotEmpty) {
@@ -1130,10 +1164,13 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
 
 class _AudioSourceSelectorSheet extends StatefulWidget {
   final String? initialFileName;
+  final bool isVideo;
+  final void Function(PlatformFile file, List<int> bytes)? onFilePicked;
 
   const _AudioSourceSelectorSheet({
     this.initialFileName,
-    bool isVideo = false,
+    this.isVideo = false,
+    this.onFilePicked,
   });
 
   @override
@@ -1247,6 +1284,13 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
                       );
                     }
                     if (file != null && file.name.isNotEmpty) {
+                      List<int> bytes = [];
+                      try {
+                        bytes = await file.readAsBytes();
+                      } catch (_) {}
+                      if (bytes.isNotEmpty) {
+                        widget.onFilePicked?.call(file, bytes);
+                      }
                       if (context.mounted) {
                         Navigator.of(context).pop(file.name);
                       }

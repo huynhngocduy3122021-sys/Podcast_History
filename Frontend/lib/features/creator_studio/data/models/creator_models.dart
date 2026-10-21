@@ -634,8 +634,10 @@ class GrowthDataPoint {
 
   factory GrowthDataPoint.fromJson(Map<String, dynamic> json) {
     return GrowthDataPoint(
-      date: json['date'] as String? ?? '',
-      value: (json['value'] as num?)?.toDouble() ?? 0.0,
+      date: json['label'] as String? ?? json['date'] as String? ?? '',
+      value: (json['listens'] as num?)?.toDouble() ??
+          (json['value'] as num?)?.toDouble() ??
+          0.0,
     );
   }
 }
@@ -646,6 +648,11 @@ class DashboardMetrics {
   final int followers;
   final double earnings;
   final double growthRate;
+  final int trackCount;
+  final int monthlyListens;
+  final double availableBalance;
+  final double pendingRelease;
+  final String currency;
 
   const DashboardMetrics({
     this.views = 0,
@@ -653,15 +660,31 @@ class DashboardMetrics {
     this.followers = 0,
     this.earnings = 0.0,
     this.growthRate = 0.0,
+    this.trackCount = 0,
+    this.monthlyListens = 0,
+    this.availableBalance = 0.0,
+    this.pendingRelease = 0.0,
+    this.currency = 'USD',
   });
 
   factory DashboardMetrics.fromJson(Map<String, dynamic> json) {
     return DashboardMetrics(
-      views: (json['views'] as num?)?.toInt() ?? 0,
+      views: (json['totalListens'] as num?)?.toInt() ??
+          (json['views'] as num?)?.toInt() ??
+          0,
       likes: (json['likes'] as num?)?.toInt() ?? 0,
-      followers: (json['followers'] as num?)?.toInt() ?? 0,
-      earnings: (json['earnings'] as num?)?.toDouble() ?? 0.0,
+      followers: (json['followerCount'] as num?)?.toInt() ??
+          (json['followers'] as num?)?.toInt() ??
+          0,
+      earnings: (json['monthlyRevenue'] as num?)?.toDouble() ??
+          (json['earnings'] as num?)?.toDouble() ??
+          0.0,
       growthRate: (json['growthRate'] as num?)?.toDouble() ?? 0.0,
+      trackCount: (json['trackCount'] as num?)?.toInt() ?? 0,
+      monthlyListens: (json['monthlyListens'] as num?)?.toInt() ?? 0,
+      availableBalance: (json['availableBalance'] as num?)?.toDouble() ?? 0.0,
+      pendingRelease: (json['pendingRelease'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency'] as String? ?? 'USD',
     );
   }
 }
@@ -688,7 +711,8 @@ class CreatorDashboardData {
   factory CreatorDashboardData.fromJson(Map<String, dynamic> json) {
     final prof = json['profile'] as Map<String, dynamic>? ?? {};
     final met = json['metrics'] as Map<String, dynamic>? ?? {};
-    final seriesList = (json['growthSeries'] as List?)
+    final rawGrowth = (json['growth'] ?? json['growthSeries']) as List?;
+    final seriesList = rawGrowth
             ?.whereType<Map<String, dynamic>>()
             .map(GrowthDataPoint.fromJson)
             .toList() ??
@@ -697,7 +721,7 @@ class CreatorDashboardData {
     return CreatorDashboardData(
       creatorProfileId: prof['creatorProfileId']?.toString() ?? '',
       channelName: prof['channelName'] as String? ?? '',
-      bio: prof['bio'] as String? ?? '',
+      bio: prof['description'] as String? ?? prof['bio'] as String? ?? '',
       avatarUrl: prof['avatarUrl'] as String? ?? '',
       verificationStatus: prof['verificationStatus'] as String? ?? '',
       metrics: DashboardMetrics.fromJson(met),
