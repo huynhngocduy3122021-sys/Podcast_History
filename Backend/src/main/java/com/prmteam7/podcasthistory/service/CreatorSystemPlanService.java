@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.request.CreatorSystemPlanWrite;
+import com.prmteam7.podcasthistory.config.PackageFeatures;
 import com.prmteam7.podcasthistory.dto.response.CreatorSystemPlanView;
 import com.prmteam7.podcasthistory.dto.response.CreatorSystemSubscriptionView;
 import com.prmteam7.podcasthistory.exception.*;
@@ -21,21 +22,25 @@ public class CreatorSystemPlanService {
   private final ProducerProfileRepository creators;
   private final PodcastRepository podcasts;
   private final AdminSupportService adminSupport;
+  private final PackageFeatures packageFeatures;
 
   public CreatorSystemPlanService(
       CreatorSystemPlanRepository plans,
       CreatorSystemSubscriptionRepository subscriptions,
       ProducerProfileRepository creators,
       PodcastRepository podcasts,
-      AdminSupportService adminSupport) {
+      AdminSupportService adminSupport,
+      PackageFeatures packageFeatures) {
     this.plans = plans;
     this.subscriptions = subscriptions;
     this.creators = creators;
     this.podcasts = podcasts;
     this.adminSupport = adminSupport;
+    this.packageFeatures = packageFeatures;
   }
 
   public List<CreatorSystemPlanView> available() {
+    if (!packageFeatures.creatorPlansEnabled()) return List.of();
     return plans.findAllByStatusIgnoreCaseOrderByPriceAsc("ACTIVE").stream().map(this::view).toList();
   }
 
@@ -86,6 +91,11 @@ public class CreatorSystemPlanService {
 
   public CreatorSystemSubscriptionView current(UUID userId) {
     var profile = approvedCreator(userId, false);
+    if (!packageFeatures.creatorPlansEnabled()) {
+      var used = podcasts.countByProducerProfile_ProducerProfileIdAndMediaUrlIsNotNull(profile.getProducerProfileId());
+      return new CreatorSystemSubscriptionView("DISABLED", null, "Gói đang tạm tắt",
+          null, null, null, used, null, false, null, null, null, null, List.of());
+    }
     var now = Instant.now();
     var active = activeSubscription(profile.getProducerProfileId(), now);
     var plan = active.map(CreatorSystemSubscription::getPlan).orElseGet(this::freePlan);
@@ -96,6 +106,7 @@ public class CreatorSystemPlanService {
 
   @Transactional
   public CreatorSystemSubscriptionView subscribe(UUID userId, UUID planId) {
+    packageFeatures.requireCreatorPlans();
     var profile = approvedCreator(userId, true);
     var now = Instant.now();
     if (activeSubscription(profile.getProducerProfileId(), now).isPresent())
@@ -122,6 +133,7 @@ public class CreatorSystemPlanService {
 
   @Transactional
   public void assertCanUpload(UUID creatorProfileId) {
+    if (!packageFeatures.creatorPlansEnabled()) return;
     // Serialize upload quota checks for one channel while the media transaction is open.
     creators.findByIdForUpdate(creatorProfileId)
         .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kênh CC."));

@@ -41,6 +41,8 @@ public class CreatorFlowService {
     private final MediaUploadService mediaUploadService;
     private final R2PlaybackUrlService playbackUrlService;
     private final CreatorSystemPlanService creatorSystemPlans;
+    private final AiModerationService aiModeration;
+    private final PodcastTranscriptService transcriptService;
 
     public CreatorFlowService(
             AppUserRepository appUserRepository,
@@ -50,7 +52,9 @@ public class CreatorFlowService {
             PodcastRepository podcastRepository,
             MediaUploadService mediaUploadService,
             R2PlaybackUrlService playbackUrlService,
-            CreatorSystemPlanService creatorSystemPlans) {
+            CreatorSystemPlanService creatorSystemPlans,
+            AiModerationService aiModeration,
+            PodcastTranscriptService transcriptService) {
         this.appUserRepository = appUserRepository;
         this.producerProfileRepository = producerProfileRepository;
         this.categoryRepository = categoryRepository;
@@ -59,6 +63,8 @@ public class CreatorFlowService {
         this.mediaUploadService = mediaUploadService;
         this.playbackUrlService = playbackUrlService;
         this.creatorSystemPlans = creatorSystemPlans;
+        this.aiModeration = aiModeration;
+        this.transcriptService = transcriptService;
     }
 
     @Transactional(readOnly = true)
@@ -227,7 +233,22 @@ public class CreatorFlowService {
         podcast.setMediaUrl(media.objectKey());
         podcast.setMediaType(media.contentType());
         podcastRepository.save(podcast);
+        transcriptService.enqueue(podcast); // dùng để tạo transcript cho podcast,sẽ dùng Whisper để tạo transcript
         return new PodcastVideoItem(podcastId, podcast.getTitle(), podcast.getStatus(), media);
+    }
+
+    @Transactional
+    public PodcastItem uploadPodcastThumbnail(UUID userId, UUID podcastId, MultipartFile file) {
+        ProducerProfile profile = approvedCreator(userId);
+        Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
+        requireEditable(podcast);
+
+        MediaUploadResponse media = mediaUploadService.uploadPodcastThumbnail(file, userId, podcastId);
+        String thumbnailUrl = media.publicUrl() == null || media.publicUrl().isBlank()
+                ? media.objectKey()
+                : media.publicUrl();
+        podcast.setThumbnailUrl(thumbnailUrl);
+        return toPodcastItem(podcastRepository.save(podcast));
     }
 
     @Transactional
@@ -246,7 +267,9 @@ public class CreatorFlowService {
         }
         podcast.setStatus("PENDING_REVIEW");
         podcast.setPublishedAt(null);
-        return toPodcastItem(podcastRepository.save(podcast));
+        podcastRepository.save(podcast);
+        aiModeration.enqueue(podcast);
+        return toPodcastItem(podcast);
     }
 
     @Transactional

@@ -36,15 +36,6 @@ public class MediaUploadService {
         this.properties = properties;
     }
 
-    public MediaUploadResponse upload(MultipartFile file, UUID userId) {
-        UploadFileType fileType = validateAndResolveFile(file);
-        if (!fileType.contentType().startsWith("image/")) {
-            throw new InvalidMediaUploadException(
-                    "Video hoặc audio phải được upload qua API của podcast để liên kết đúng podcast.");
-        }
-        return store(file, userId, null, fileType);
-    }
-
     public MediaUploadResponse uploadPodcastVideo(MultipartFile file, UUID userId, UUID podcastId) {
         UploadFileType fileType = validateAndResolveFile(file);
         if (!fileType.contentType().startsWith("video/")
@@ -52,6 +43,16 @@ public class MediaUploadService {
             throw new InvalidMediaUploadException("API này chỉ chấp nhận file video hoặc audio.");
         }
         return store(file, userId, podcastId, fileType);
+    }
+
+    public MediaUploadResponse uploadPodcastThumbnail(MultipartFile file, UUID userId, UUID podcastId) {
+        UploadFileType fileType = validateAndResolveFile(file);
+        if (!fileType.contentType().startsWith("image/")) {
+            throw new InvalidMediaUploadException("Ảnh bìa podcast chỉ chấp nhận file ảnh.");
+        }
+        String prefix = normalizeFolder(properties.getFolder()) + "/" + userId
+                + "/podcasts/" + podcastId + "/thumbnail";
+        return store(file, userId, podcastId, null, fileType, prefix);
     }
 
     public MediaUploadResponse uploadMilestoneMedia(MultipartFile file, UUID userId, UUID milestoneId) {
@@ -179,10 +180,14 @@ public class MediaUploadService {
                     .build();
             client.putObject(request, RequestBody.fromFile(tempFile.toFile()));
 
+            String resolvedPublicUrl = fileType.contentType().startsWith("image/")
+                    || (podcastId == null && privatePrefix == null)
+                    ? publicUrl(objectKey)
+                    : null;
             return new MediaUploadResponse(
                     objectKey,
                     properties.getBucketName().trim(),
-                    podcastId == null && privatePrefix == null ? publicUrl(objectKey) : null,
+                    resolvedPublicUrl,
                     fileType.contentType(),
                     file.getSize());
         } catch (IOException | RuntimeException exception) {

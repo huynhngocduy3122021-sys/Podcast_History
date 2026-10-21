@@ -94,15 +94,16 @@ Upload video/audio/PDF dùng multipart/form-data với field file tên chính x�
 3. GET  /api/creator/series
    hoặc POST /api/creator/series nếu tạo series mới
 4. POST /api/creator/podcasts                       -> nhận podcastId
-5. PUT  /api/creator/podcasts/{podcastId}/series    -> tùy chọn
-6. POST /api/creator/podcasts/{podcastId}/video     -> upload video hoặc audio, bắt buộc
-7. POST /api/creator/podcasts/{podcastId}/references -> tùy chọn
-8. POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file -> tùy chọn
-9. GET  /api/creator/podcasts/{podcastId}           -> kiểm tra
-10. POST /api/creator/podcasts/{podcastId}/submit   -> gửi Admin
+5. POST /api/creator/podcasts/{podcastId}/thumbnail -> tùy chọn, khi chọn ảnh từ máy
+6. PUT  /api/creator/podcasts/{podcastId}/series    -> tùy chọn
+7. POST /api/creator/podcasts/{podcastId}/video     -> upload video hoặc audio, bắt buộc
+8. POST /api/creator/podcasts/{podcastId}/references -> tùy chọn
+9. POST /api/creator/podcasts/{podcastId}/references/{referenceId}/file -> tùy chọn
+10. GET  /api/creator/podcasts/{podcastId}           -> kiểm tra
+11. POST /api/creator/podcasts/{podcastId}/submit   -> gửi Admin
 ~~~
 
-Podcast được tạo ở DRAFT. Chỉ gọi bước 10 sau khi bước 6 trả HTTP 2xx; submit thành công chuyển trạng thái thành PENDING_REVIEW.
+Podcast được tạo ở DRAFT. Chỉ gọi bước 11 sau khi bước 7 trả HTTP 2xx; submit thành công chuyển trạng thái thành PENDING_REVIEW.
 
 ## 5. Lấy category cho form
 
@@ -244,6 +245,29 @@ final podcast = await apiClient.post(
 
 final podcastId = podcast['podcastId'] as String;
 ~~~
+
+### 7.4 Upload ảnh bìa từ máy
+
+Sau khi tạo draft, upload ảnh bằng multipart để backend gắn ảnh trực tiếp vào podcast. Field file phải tên chính xác là `file`:
+
+~~~http
+POST /api/creator/podcasts/{podcastId}/thumbnail
+Authorization: Bearer accessToken
+Content-Type: multipart/form-data
+~~~
+
+~~~dart
+final updated = await apiClient.uploadMultipart(
+  '/api/creator/podcasts/$podcastId/thumbnail',
+  fileFieldName: 'file',
+  filename: imageFilename,
+  fileBytes: imageBytes,
+  mimeType: imageMimeType, // image/jpeg, image/png hoặc image/webp
+  headers: {'ngrok-skip-browser-warning': '1'},
+);
+~~~
+
+Response trả về podcast và trường `thumbnailUrl`. Ảnh này được dùng làm ảnh bìa cho cả podcast audio và video. Không gửi ảnh qua endpoint `/video`.
 
 ## 8. Sửa và gắn series
 
@@ -555,7 +579,9 @@ Content-Type: application/json
 - [ ] Đã lưu accessToken sau login.
 - [ ] Dropdown category gửi categoryId, dropdown series gửi seriesId.
 - [ ] Body create có categoryId, title, durationSeconds và visibility hoặc exclusive.
-- [ ] Upload dùng multipart field chính xác là file cho cả video và audio.
+- [ ] Upload ảnh bìa/audio/video dùng multipart field chính xác là `file`.
+- [ ] Nếu ảnh chọn từ máy, gọi `/api/creator/podcasts/{podcastId}/thumbnail` sau khi tạo draft.
+- [ ] Kiểm tra response có `thumbnailUrl` trước khi gửi podcast duyệt.
 - [ ] Request qua ngrok có ngrok-skip-browser-warning: 1.
 - [ ] Không tự đặt Content-Type cho MultipartRequest.
 - [ ] Chỉ gọi submit sau khi upload trả HTTP 2xx.

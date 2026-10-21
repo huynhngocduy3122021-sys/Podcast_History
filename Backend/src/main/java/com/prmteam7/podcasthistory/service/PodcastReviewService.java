@@ -13,6 +13,8 @@ import com.prmteam7.podcasthistory.model.Series;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.ModerationReviewRepository;
 import com.prmteam7.podcasthistory.repository.PodcastRepository;
+import com.prmteam7.podcasthistory.repository.AiModerationResultRepository;
+import com.prmteam7.podcasthistory.repository.PodcastTranscriptRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -28,18 +30,24 @@ public class PodcastReviewService {
   private final ModerationReviewRepository moderationReviewRepository;
   private final AdminSupportService support;
   private final R2PlaybackUrlService playback;
+  private final AiModerationResultRepository aiResults;
+  private final PodcastTranscriptRepository transcripts;
 
   public PodcastReviewService(
       AppUserRepository appUserRepository,
       PodcastRepository podcastRepository,
       ModerationReviewRepository moderationReviewRepository,
       AdminSupportService support,
-      R2PlaybackUrlService playback) {
+      R2PlaybackUrlService playback,
+      AiModerationResultRepository aiResults,
+      PodcastTranscriptRepository transcripts) {
     this.appUserRepository = appUserRepository;
     this.podcastRepository = podcastRepository;
     this.moderationReviewRepository = moderationReviewRepository;
     this.support = support;
     this.playback = playback;
+    this.aiResults = aiResults;
+    this.transcripts = transcripts;
   }
 
   @Transactional(readOnly = true)
@@ -185,6 +193,12 @@ public class PodcastReviewService {
     review.setDecision(decision);
     review.setNote(note == null || note.isBlank() ? null : note.trim());
     review.setReviewedAt(reviewedAt);
+    transcripts.findByPodcast_PodcastIdAndMediaKey(podcastId, podcast.getMediaUrl())
+        .ifPresent(transcript -> aiResults
+            .findFirstByPodcast_PodcastIdAndStatusAndSourceHashAndTranscript_TranscriptIdAndTranscriptHashOrderByCreatedAtDesc(
+                podcastId, "COMPLETED", AiModerationService.hash(podcast), transcript.getTranscriptId(),
+                AiModerationService.hashText(transcript.getFullText()))
+            .ifPresent(review::setModerationResult));
     moderationReviewRepository.save(review);
     support.audit(reviewer, decision, "PODCAST", podcastId, review.getNote());
     support.notify(

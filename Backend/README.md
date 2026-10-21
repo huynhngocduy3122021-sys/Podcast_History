@@ -97,9 +97,9 @@ It returns:
 
 Create an R2 bucket and an R2 API token with Object Read & Write permission for that bucket. Fill `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in `Backend/.env`. The endpoint format is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; R2 uses region `auto`. Spring Boot loads `.env` when started from either the repository root or the `Backend` directory. `Backend/.env` is ignored by Git; `.env.example` lists the variables. Restart the backend after changing the file.
 
-`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It accepts image, video, and audio media and returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
+Create a draft podcast first, then upload its cover through `POST /api/creator/podcasts/{podcastId}/thumbnail` with authenticated `multipart/form-data` and the file field named `file`. The response is the updated podcast with `thumbnailUrl`. Set `R2_PUBLIC_BASE_URL` to the bucket's enabled R2.dev URL or custom domain so clients can display the uploaded cover. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
 
-To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its video with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. An Admin reviews the queue at `GET /api/admin/podcasts/pending-review` and approves or rejects it. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series. Images can still be uploaded through `POST /api/uploads`.
+To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its cover with `POST /api/creator/podcasts/{podcastId}/thumbnail` and its video or audio with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. An Admin reviews the queue at `GET /api/admin/podcasts/pending-review` and approves or rejects it. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series.
 
 For Flutter on an Android emulator, use `http://10.0.2.2:8081` as the API base URL. For Flutter on a physical device, use the computer's LAN IP address and ensure both devices are on the same network.
 
@@ -109,7 +109,7 @@ All `/api` routes below require `Authorization: Bearer <accessToken>`, except he
 
 | Feature | Routes |
 |---|---|
-| Explore | `GET /api/podcasts?q=&categoryId=&creatorId=&seriesId=&page=0&size=20`, `GET /api/podcasts/{podcastId}`, `GET /api/categories`, `GET /api/creators`, `GET /api/creators/{creatorId}` |
+| Explore | `GET /api/podcasts?q=&categoryId=&creatorId=&seriesId=&page=0&size=20`, `GET /api/podcasts/{podcastId}`, `GET /api/categories`, `GET /api/creators?q=channelName`, `GET /api/creators/{creatorId}` |
 | Playback/history | `GET /api/podcasts/{podcastId}/playback`; `PUT /api/podcasts/{podcastId}/listening-progress`; `GET /api/me/listening-history`; `GET/DELETE /api/me/listening-history/{podcastId}` |
 | Likes | `GET /api/podcasts/{podcastId}/likes`; `PUT/DELETE /api/podcasts/{podcastId}/like` |
 | Comments | `GET/POST /api/podcasts/{podcastId}/comments`; `GET /api/podcasts/{podcastId}/comments/stream` (SSE); `PUT/DELETE /api/comments/{commentId}` |
@@ -118,6 +118,8 @@ All `/api` routes below require `Authorization: Bearer <accessToken>`, except he
 | Saved podcasts | `GET /api/me/saved-podcasts`; `PUT/DELETE /api/me/saved-podcasts/{podcastId}` |
 | Membership | `GET /api/creators/{creatorId}/membership-plans`; `GET/POST /api/me/subscriptions`; `DELETE /api/me/subscriptions/{subscriptionId}` |
 | Creator requests | `GET /api/me/series-requests`; `POST /api/creators/{creatorId}/series-requests`; `PUT/DELETE /api/me/series-requests/{requestId}` |
+
+Search channels with `GET /api/creators?q=history`. The optional `q` matches part of `channelName` without case sensitivity and returns approved Creator channels sorted by name. Omitting `q` keeps the full list response. Each item includes `creatorProfileId`, `channelName`, `description`, `avatarUrl`, and `websiteUrl`; use `creatorProfileId` with `GET /api/podcasts?creatorId=<UUID>` to list that channel's published podcasts.
 
 Membership checkout currently creates a `PENDING` subscription and payment record. It does not grant access or mark payment successful; connect a payment provider and verify its signed callback before enabling membership. Listener series requests start with a zero request fee; any paid custom-production contract belongs to Flow 4. The `is_exclusive` column defaults to `false` and is added by Hibernate `ddl-auto=update` or `db/migrations/2026-10-12_add_podcast_exclusive.sql`. For exclusive media, store the R2 object key in `Podcast.media_url` and keep the R2 bucket private; playback responses use a five-minute signed URL.
 
