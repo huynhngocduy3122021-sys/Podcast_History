@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +6,7 @@ import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
+import 'package:podcast_history/core/utils/image_url_helper.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/error_state_widget.dart';
 import 'package:podcast_history/core/widgets/metric_card.dart';
@@ -28,10 +30,15 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final periodStr = _chartPeriodIndex == 0
+        ? '7d'
+        : (_chartPeriodIndex == 1 ? '4w' : '12m');
     final profileAsync = ref.watch(creatorProfileProvider);
     final podcastsAsync = ref.watch(creatorPodcastsProvider);
     final requestsAsync = ref.watch(creatorRequestsProvider);
     final walletAsync = ref.watch(walletProvider);
+    final dashboardAsync = ref.watch(creatorDashboardProvider(periodStr));
+    final dashboardData = dashboardAsync.value;
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -40,16 +47,6 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
       appBar: AppBar(
         title: const Text('Creator Studio'),
         actions: [
-          IconButton(
-            tooltip: 'Làm mới',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () {
-              ref.read(creatorProfileProvider.notifier).loadProfile();
-              ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
-              ref.read(creatorRequestsProvider.notifier).loadRequests();
-              ref.read(walletProvider.notifier).loadWallet();
-            },
-          ),
           IconButton(
             tooltip: 'Hội viên kênh',
             icon: const Icon(Icons.stars_rounded, color: AppColors.secondaryLight),
@@ -62,12 +59,24 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorStateWidget(
-          onRetry: () => ref.read(creatorProfileProvider.notifier).loadProfile(),
+          onRetry: () {
+            ref.read(creatorProfileProvider.notifier).loadProfile();
+            ref.invalidate(creatorDashboardProvider(periodStr));
+          },
         ),
         data: (profile) {
           final podcasts = podcastsAsync.value ?? [];
           final requests = requestsAsync.value ?? [];
           final wallet = walletAsync.value;
+          final totalListens = (dashboardData != null && dashboardData.metrics.views > 0)
+              ? dashboardData.metrics.views
+              : podcasts.fold<int>(0, (sum, p) => sum + p.listensCount);
+          final followersCount = (dashboardData != null && dashboardData.metrics.followers > 0)
+              ? dashboardData.metrics.followers
+              : profile.followersCount;
+          final monthlyRevenue = (dashboardData != null && dashboardData.metrics.earnings > 0)
+              ? dashboardData.metrics.earnings.toInt()
+              : (wallet?.available ?? 0);
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -75,6 +84,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
               await ref.read(creatorRequestsProvider.notifier).loadRequests();
               await ref.read(walletProvider.notifier).loadWallet();
+              ref.invalidate(creatorDashboardProvider(periodStr));
             },
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.screenMargin),
@@ -89,7 +99,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
 
                 // Lưới chỉ số thống kê (Metrics)
                 Text(
-                  'Tổng quan tháng này',
+                  'Tổng quan ($periodStr)',
                   style: theme.textTheme.titleMedium,
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -98,23 +108,19 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     Expanded(
                       child: MetricCard(
                         title: 'Tổng lượt nghe',
-                        value: '45.2K',
+                        value: AppFormatters.formatCompactNumber(totalListens),
                         icon: Icons.headphones_rounded,
-                        trendText: '+18%',
-                        isPositiveTrend: true,
-                        onTap: () => widget.onNavigateTab?.call(1),
+                        onTap: () => widget.onNavigateTab?.call(0),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: MetricCard(
                         title: 'Người theo dõi',
-                        value: AppFormatters.formatCompactNumber(profile.followersCount),
+                        value: AppFormatters.formatCompactNumber(followersCount),
                         icon: Icons.group_rounded,
                         iconColor: AppColors.tertiaryLight,
-                        trendText: '+12%',
-                        isPositiveTrend: true,
-                        onTap: () => widget.onNavigateTab?.call(1),
+                        onTap: () => widget.onNavigateTab?.call(0),
                       ),
                     ),
                   ],
@@ -124,24 +130,21 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                   children: [
                     Expanded(
                       child: MetricCard(
-                        title: 'Doanh thu tháng',
-                        value: AppFormatters.formatVND(wallet?.available ?? 6850000),
+                        title: 'Doanh thu',
+                        value: AppFormatters.formatVND(monthlyRevenue),
                         icon: Icons.account_balance_wallet_rounded,
                         iconColor: AppColors.success,
-                        trendText: '+24%',
-                        isPositiveTrend: true,
-                        onTap: () => widget.onNavigateTab?.call(3),
+                        onTap: () => widget.onNavigateTab?.call(2),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: MetricCard(
                         title: 'Chờ release',
-                        value: AppFormatters.formatVND(wallet?.pending ?? 1200000),
+                        value: AppFormatters.formatVND(wallet?.pending ?? 0),
                         icon: Icons.hourglass_bottom_rounded,
                         iconColor: AppColors.warning,
-                        subtitle: 'Từ 2 đơn hoàn tất',
-                        onTap: () => widget.onNavigateTab?.call(3),
+                        onTap: () => widget.onNavigateTab?.call(2),
                       ),
                     ),
                   ],
@@ -149,7 +152,12 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 const SizedBox(height: AppSpacing.xl),
 
                 // Biểu đồ lượt nghe
-                _buildGrowthChart(context, isDark),
+                _buildGrowthChart(
+                  context,
+                  totalListens,
+                  isDark,
+                  dashboardData?.growthSeries ?? const [],
+                ),
                 const SizedBox(height: AppSpacing.xl),
 
                 // Yêu cầu podcast cần xử lý nhanh
@@ -179,15 +187,19 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               : [const Color(0xFFFFFFFF), const Color(0xFFFBF8F3)],
         ),
         borderRadius: AppSpacing.roundedMd,
-        image: DecorationImage(
-          image: NetworkImage(profile.bannerUrl),
-          fit: BoxFit.cover,
-          onError: (e, s) {},
-          colorFilter: ColorFilter.mode(
-            isDark ? Colors.black.withValues(alpha: 0.72) : Colors.white.withValues(alpha: 0.92),
-            isDark ? BlendMode.darken : BlendMode.lighten,
-          ),
-        ),
+        image: profile.bannerUrl.isNotEmpty
+            ? DecorationImage(
+                image: NetworkImage(profile.bannerUrl),
+                fit: BoxFit.cover,
+                onError: (e, s) {},
+                colorFilter: ColorFilter.mode(
+                  isDark
+                      ? Colors.black.withValues(alpha: 0.72)
+                      : Colors.white.withValues(alpha: 0.92),
+                  isDark ? BlendMode.darken : BlendMode.lighten,
+                ),
+              )
+            : null,
         border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
         boxShadow: [
           BoxShadow(
@@ -221,8 +233,21 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 ),
                 child: CircleAvatar(
                   radius: 34,
-                  backgroundImage: NetworkImage(profile.avatarUrl),
+                  backgroundImage: profile.avatarUrl.isNotEmpty
+                      ? NetworkImage(profile.avatarUrl)
+                      : null,
+                  onBackgroundImageError: profile.avatarUrl.isNotEmpty ? (_, _) {} : null,
                   backgroundColor: AppColors.surfaceVariantLight,
+                  child: Text(
+                    profile.name.isNotEmpty
+                        ? profile.name[0].toUpperCase()
+                        : 'C',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppColors.primaryLight,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -341,7 +366,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   minimumSize: const Size(0, 36),
                 ),
-                onPressed: () => widget.onNavigateTab?.call(1),
+                onPressed: () => widget.onNavigateTab?.call(0),
               ),
             ],
           ),
@@ -439,7 +464,60 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
     );
   }
 
-  Widget _buildGrowthChart(BuildContext context, bool isDark) {
+  Widget _buildGrowthChart(
+    BuildContext context,
+    int totalListens,
+    bool isDark,
+    List<GrowthDataPoint> growthSeries,
+  ) {
+    final hasSeries = growthSeries.isNotEmpty;
+    if (totalListens == 0 && !hasSeries) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          borderRadius: AppSpacing.roundedMd,
+          border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(
+                Icons.show_chart_rounded,
+                size: 40,
+                color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Chưa có dữ liệu thống kê tăng trưởng lượt nghe',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final spots = hasSeries
+        ? growthSeries
+            .asMap()
+            .entries
+            .map((e) => FlSpot(e.key.toDouble(), e.value.value))
+            .toList()
+        : const [
+            FlSpot(0, 3.2),
+            FlSpot(1, 4.5),
+            FlSpot(2, 4.0),
+            FlSpot(3, 6.8),
+            FlSpot(4, 5.9),
+            FlSpot(5, 8.4),
+            FlSpot(6, 9.6),
+          ];
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -495,7 +573,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                       reservedSize: 32,
                       getTitlesWidget: (value, meta) {
                         return Text(
-                          '${value.toInt()}K',
+                          '${value.toInt()}',
                           style: TextStyle(
                             fontSize: 10,
                             color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -508,10 +586,22 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     sideTitles: SideTitles(
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
-                        const days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-                        if (value.toInt() >= 0 && value.toInt() < days.length) {
+                        final idx = value.toInt();
+                        if (hasSeries && idx >= 0 && idx < growthSeries.length) {
+                          final dateStr = growthSeries[idx].date;
+                          final display = dateStr.contains('-') ? dateStr.split('-').last : dateStr;
                           return Text(
-                            days[value.toInt()],
+                            display,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                            ),
+                          );
+                        }
+                        const days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+                        if (idx >= 0 && idx < days.length) {
+                          return Text(
+                            days[idx],
                             style: TextStyle(
                               fontSize: 10,
                               color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -526,15 +616,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 3.2),
-                      FlSpot(1, 4.5),
-                      FlSpot(2, 4.0),
-                      FlSpot(3, 6.8),
-                      FlSpot(4, 5.9),
-                      FlSpot(5, 8.4),
-                      FlSpot(6, 9.6),
-                    ],
+                    spots: spots,
                     isCurved: true,
                     color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
                     barWidth: 3,
@@ -568,7 +650,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
             TextButton(
-              onPressed: () => widget.onNavigateTab?.call(2), // Sang tab Đơn đặt
+              onPressed: () => widget.onNavigateTab?.call(1), // Sang tab Đơn đặt
               child: const Text('Xem tất cả'),
             ),
           ],
@@ -615,7 +697,11 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                         children: [
                           CircleAvatar(
                             radius: 14,
-                            backgroundImage: NetworkImage(req.listenerAvatar),
+                            backgroundImage: req.listenerAvatar.isNotEmpty
+                                ? NetworkImage(req.listenerAvatar)
+                                : null,
+                            onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                            child: const Icon(Icons.person, size: 14),
                           ),
                           const SizedBox(width: AppSpacing.sm),
                           Text(
@@ -656,7 +742,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                       AppButton(
                         label: 'Xem chi tiết đơn',
                         height: 36,
-                        onPressed: () => widget.onNavigateTab?.call(2),
+                        onPressed: () => widget.onNavigateTab?.call(1),
                       ),
                     ],
                   ),
@@ -680,29 +766,68 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
             TextButton(
-              onPressed: () => widget.onNavigateTab?.call(1), // Sang tab Podcast
+              onPressed: () => widget.onNavigateTab?.call(0), // Sang tab Podcast
               child: const Text('Xem tất cả tracks'),
             ),
           ],
         ),
-        ...podcasts.take(3).map(
-          (pod) => Container(
-            margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+        if (podcasts.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
               borderRadius: AppSpacing.roundedMd,
-              border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+              border: Border.all(
+                color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+              ),
             ),
-            child: InkWell(
-              borderRadius: AppSpacing.roundedMd,
-              onTap: () {
-                final profile = ref.read(creatorProfileProvider).value;
-                CreatorPodcastPlayerSheet.show(
-                  context: context,
-                  podcast: pod,
-                  creatorName: profile?.name ?? 'Sử Kể Đêm Khuya',
-                );
-              },
+            child: Center(
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.mic_none_rounded,
+                    size: 36,
+                    color: isDark
+                        ? AppColors.onSurfaceMutedDark
+                        : AppColors.onSurfaceMutedLight,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Chưa có track nào được tải lên.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark
+                          ? AppColors.onSurfaceMutedDark
+                          : AppColors.onSurfaceMutedLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...podcasts.take(3).map(
+            (pod) => Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                borderRadius: AppSpacing.roundedMd,
+                border: Border.all(
+                  color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+                ),
+              ),
+              child: InkWell(
+                borderRadius: AppSpacing.roundedMd,
+                onTap: () {
+                  final profile = ref.read(creatorProfileProvider).value;
+                  CreatorPodcastPlayerSheet.show(
+                    context: context,
+                    podcast: pod,
+                    creatorName: (profile?.name.isNotEmpty == true)
+                        ? profile!.name
+                        : 'Creator',
+                  );
+                },
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
@@ -715,12 +840,38 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              Image.network(
-                                pod.coverUrl,
-                                width: 52,
-                                height: 52,
-                                fit: BoxFit.cover,
-                              ),
+                              pod.coverUrl.isEmpty
+                                  ? Container(
+                                      width: 52,
+                                      height: 52,
+                                      color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                      child: const Icon(Icons.mic_rounded, color: AppColors.onSurfaceMutedLight, size: 24),
+                                    )
+                                  : pod.coverUrl.startsWith('data:image')
+                                      ? Image.memory(
+                                          base64Decode(pod.coverUrl.split(',').last),
+                                          width: 52,
+                                          height: 52,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            width: 52,
+                                            height: 52,
+                                            color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                            child: const Icon(Icons.mic_rounded, color: AppColors.onSurfaceMutedLight, size: 24),
+                                          ),
+                                        )
+                                      : Image.network(
+                                          resolveImageUrl(pod.coverUrl),
+                                          width: 52,
+                                          height: 52,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, _, _) => Container(
+                                            width: 52,
+                                            height: 52,
+                                            color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                                            child: const Icon(Icons.mic_rounded, color: AppColors.onSurfaceMutedLight, size: 24),
+                                          ),
+                                        ),
                               Container(
                                 width: 28,
                                 height: 28,

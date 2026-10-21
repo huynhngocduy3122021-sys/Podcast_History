@@ -1,18 +1,34 @@
 package com.prmteam7.podcasthistory.repository;
 
-import com.prmteam7.podcasthistory.model.WithdrawalRequest;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.data.jpa.repository.*;
+
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.prmteam7.podcasthistory.model.WithdrawalRequest;
 
 public interface WithdrawalRequestRepository
     extends JpaRepository<WithdrawalRequest, UUID>, JpaSpecificationExecutor<WithdrawalRequest> {
-  long countByStatus(String status);
 
-  boolean existsByPayoutReference(String reference);
+    long countByStatus(String status);
 
-  @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-  @Query("select w from WithdrawalRequest w where w.withdrawalRequestId=:id")
-  Optional<WithdrawalRequest> lockById(
-      @org.springframework.data.repository.query.Param("id") UUID id);
+    boolean existsByPayoutReference(String reference);
+
+    List<WithdrawalRequest> findAllByProducerProfile_ProducerProfileIdOrderByRequestedAtDesc(UUID producerProfileId);
+
+    List<WithdrawalRequest> findAllByStatusOrderByRequestedAtAsc(String status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select withdrawal from WithdrawalRequest withdrawal where withdrawal.withdrawalRequestId = :id")
+    Optional<WithdrawalRequest> findByIdForUpdate(@Param("id") UUID id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select withdrawal from WithdrawalRequest withdrawal where withdrawal.withdrawalRequestId = :id")
+    Optional<WithdrawalRequest> lockById(@Param("id") UUID id);
 }

@@ -41,6 +41,8 @@ public interface PodcastRepository
   @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
   List<Podcast> findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(UUID creatorId);
 
+  long countByProducerProfile_ProducerProfileId(UUID creatorId);
+
   @EntityGraph(attributePaths = {"series", "category", "producerProfile"})
   Optional<Podcast> findByPodcastIdAndProducerProfile_ProducerProfileId(
       UUID podcastId, UUID creatorId);

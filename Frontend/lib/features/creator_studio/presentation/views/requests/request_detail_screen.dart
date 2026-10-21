@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -239,7 +240,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage(req.listenerAvatar),
+                backgroundImage: req.listenerAvatar.isNotEmpty
+                    ? NetworkImage(req.listenerAvatar)
+                    : null,
+                onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                child: const Icon(Icons.person, size: 20),
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
@@ -329,7 +334,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         children: [
           const Text('Các mốc giải ngân (Escrow Milestones)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
           const SizedBox(height: AppSpacing.sm),
-          ...req.milestones.map((m) {
+          if (req.milestones.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                'Chưa có mốc giải ngân (sẽ được tạo khi bạn chấp thuận đơn hàng).',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                ),
+              ),
+            )
+          else
+            ...req.milestones.map((m) {
             return Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.xs),
               padding: const EdgeInsets.all(AppSpacing.sm),
@@ -569,46 +587,166 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   }
 
   void _handleDeliver(PodcastRequest req) {
-    final noteController = TextEditingController(text: 'Đã hoàn thiện bản thu âm chuẩn 320kbps theo đúng kịch bản.');
-    final nav = Navigator.of(context);
+    final linkController = TextEditingController();
+    final noteController = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
+    PlatformFile? pickedFile;
+    List<int>? pickedBytes;
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nộp bài cho người nghe', style: TextStyle(fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Người nghe sẽ nghe thử và có quyền Duyệt để giải phóng tiền hoặc Yêu cầu chỉnh sửa.'),
-            const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              label: 'Ghi chú bàn giao',
-              controller: noteController,
-              maxLines: 3,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final byteCount = pickedBytes?.length ?? 0;
+          return AlertDialog(
+            title: const Text('Nộp bài cho người nghe', style: TextStyle(fontWeight: FontWeight.w700)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Người nghe sẽ nghe thử và có quyền Duyệt để giải phóng tiền hoặc Yêu cầu chỉnh sửa.'),
+                  const SizedBox(height: AppSpacing.md),
+                  InkWell(
+                    onTap: isSubmitting
+                        ? null
+                        : () async {
+                            try {
+                              PlatformFile? file;
+                              try {
+                                file = await FilePicker.pickFile(
+                                  type: FileType.custom,
+                                  allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'mp4'],
+                                );
+                              } catch (_) {
+                                file = await FilePicker.pickFile(type: FileType.audio);
+                              }
+                              if (file != null && file.name.isNotEmpty) {
+                                final selectedName = file.name;
+                                final bytes = await file.readAsBytes();
+                                setDialogState(() {
+                                  pickedFile = file;
+                                  pickedBytes = bytes.isNotEmpty ? bytes : null;
+                                  if (linkController.text.trim().isEmpty) {
+                                    linkController.text = selectedName;
+                                  }
+                                });
+                              }
+                            } catch (e) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text('Lỗi chọn tệp: $e'), backgroundColor: AppColors.error),
+                              );
+                            }
+                          },
+                    borderRadius: AppSpacing.roundedSm,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.08),
+                        border: Border.all(
+                          color: pickedFile != null ? AppColors.success : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
+                        ),
+                        borderRadius: AppSpacing.roundedSm,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            pickedFile != null ? Icons.check_circle_rounded : Icons.audio_file_rounded,
+                            color: pickedFile != null ? AppColors.success : (isDark ? AppColors.primaryDark : AppColors.primaryLight),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  pickedFile != null ? pickedFile!.name : 'Chọn tệp âm thanh bàn giao (.mp3, .wav, .m4a)',
+                                  style: TextStyle(
+                                    fontWeight: pickedFile != null ? FontWeight.bold : FontWeight.normal,
+                                    fontSize: 13,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                if (byteCount > 0)
+                                  Text(
+                                    '${(byteCount / 1024).toStringAsFixed(1)} KB',
+                                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.upload_file_rounded, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Liên kết âm thanh / Tên tệp bàn giao',
+                    hint: 'https://... hoặc tên tệp hoàn thiện',
+                    controller: linkController,
+                    readOnly: isSubmitting,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Ghi chú bàn giao',
+                    hint: 'Mô tả tóm tắt bản thu âm...',
+                    controller: noteController,
+                    maxLines: 3,
+                    readOnly: isSubmitting,
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Hủy')),
-          AppButton(
-            label: 'Nộp ngay',
-            width: 120,
-            onPressed: () async {
-              await ref.read(creatorRequestsProvider.notifier).deliverWork(
-                    req.id,
-                    'https://vietcast.example.com/audio/deliveries/${req.id}.mp3',
-                    noteController.text.trim(),
-                  );
-              nav.pop();
-              messenger.showSnackBar(
-                const SnackBar(
-                  content: Text('Đã nộp bài thành công! Đang chờ người nghe duyệt.'),
-                  backgroundColor: AppColors.success,
-                ),
-              );
-            },
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Hủy'),
+              ),
+              AppButton(
+                label: isSubmitting ? 'Đang nộp...' : 'Nộp ngay',
+                width: 120,
+                isLoading: isSubmitting,
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final link = linkController.text.trim();
+                        final note = noteController.text.trim();
+                        setDialogState(() {
+                          isSubmitting = true;
+                        });
+                        try {
+                          await ref.read(creatorRequestsProvider.notifier).deliverWork(
+                                req.id,
+                                link.isNotEmpty ? link : (pickedFile?.name ?? 'delivery_${req.id}.mp3'),
+                                note.isNotEmpty ? note : 'Bản thu âm hoàn thiện cho đơn đặt podcast.',
+                                fileBytes: pickedBytes,
+                                filename: pickedFile?.name,
+                              );
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã nộp bài thành công! Đang chờ người nghe duyệt.'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        } catch (e) {
+                          setDialogState(() {
+                            isSubmitting = false;
+                          });
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Lỗi nộp bài: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      },
+              ),
+            ],
+          );
+        },
       ),
     );
   }

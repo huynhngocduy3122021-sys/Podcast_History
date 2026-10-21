@@ -7,6 +7,7 @@ import 'package:podcast_history/features/creator_studio/presentation/views/comme
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/form_builder_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/premium_upgrade_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 
 class CreatorMoreScreen extends ConsumerWidget {
   final VoidCallback? onTheme;
@@ -36,6 +37,14 @@ class CreatorMoreScreen extends ConsumerWidget {
                 subtitle: 'Ghim, ẩn và trả lời bình luận theo mốc thời gian',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const StudioCommentsScreen()),
+                ),
+              ),
+              _MenuItem(
+                icon: Icons.video_collection_rounded,
+                title: 'Quản lý Series & Tuyển tập',
+                subtitle: 'Tạo chuỗi series và gắn các tập podcast liên quan',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SeriesManagementScreen()),
                 ),
               ),
               _MenuItem(

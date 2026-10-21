@@ -230,9 +230,9 @@ class ListenerApi {
       'page': '$page',
       'size': '$size',
       if (query?.trim().isNotEmpty ?? false) 'q': query!.trim(),
-      if (categoryId case final value?) 'categoryId': value,
-      if (creatorId case final value?) 'creatorId': value,
-      if (seriesId case final value?) 'seriesId': value,
+      'categoryId': ?categoryId,
+      'creatorId': ?creatorId,
+      'seriesId': ?seriesId,
     };
     final json = await _send(
       'GET',
@@ -308,6 +308,19 @@ class ListenerApi {
     ),
   );
 
+  Future<int> commentCount(String podcastId) async {
+    final json = await _send(
+      'GET',
+      '/api/podcasts/$podcastId/comments',
+      queryParameters: {'page': '0', 'size': '1'},
+    );
+    if (json is Map<String, dynamic>) {
+      return (json['totalElements'] as num?)?.toInt() ??
+          (json['content'] is List ? (json['content'] as List).length : 0);
+    }
+    return json is List ? json.length : 0;
+  }
+
   Future<Map<String, dynamic>> createComment(
     String podcastId,
     String content, {
@@ -340,7 +353,7 @@ class ListenerApi {
           });
     final response = await _client.send(request);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ApiException('Khong the mo comment stream.', response.statusCode);
+      throw ApiException('Không thể mở luồng bình luận.', response.statusCode);
     }
     yield* response.stream
         .transform(utf8.decoder)
@@ -359,7 +372,7 @@ class ListenerApi {
       'targetType': targetType,
       'targetId': targetId,
       'reasonCode': reasonCode,
-      if (description case final value?) 'description': value,
+      'description': ?description,
     },
   );
 
@@ -383,7 +396,7 @@ class ListenerApi {
     '/api/me/reports/$reportId',
     body: {
       'reasonCode': reasonCode,
-      if (description case final value?) 'description': value,
+      'description': ?description,
     },
   );
 
