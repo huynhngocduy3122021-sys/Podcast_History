@@ -23,14 +23,22 @@ class ApiException implements Exception {
 class ApiClient {
   String _baseUrl;
   String? _accessToken;
+  String? _refreshToken;
+  final void Function(String newAccessToken, String newRefreshToken)? onTokensRefreshed;
+  final VoidCallback? onSessionExpired;
   final http.Client _client;
+  Future<bool>? _refreshFuture;
 
   ApiClient({
     String? baseUrl,
     String? initialToken,
+    String? initialRefreshToken,
+    this.onTokensRefreshed,
+    this.onSessionExpired,
     http.Client? client,
   })  : _baseUrl = baseUrl ?? _resolveDefaultBaseUrl(),
         _accessToken = initialToken,
+        _refreshToken = initialRefreshToken,
         _client = client ?? http.Client();
 
   static String _resolveDefaultBaseUrl() {
@@ -48,6 +56,11 @@ class ApiClient {
   String? get accessToken => _accessToken;
   void setToken(String? token) {
     _accessToken = token;
+  }
+
+  String? get refreshToken => _refreshToken;
+  void setRefreshToken(String? token) {
+    _refreshToken = token;
   }
 
   bool get isAuthenticated => _accessToken != null && _accessToken!.isNotEmpty;
@@ -80,75 +93,145 @@ class ApiClient {
     return baseUri;
   }
 
+  Future<bool> _performRefresh() {
+    if (_refreshFuture != null) {
+      return _refreshFuture!;
+    }
+
+    final future = () async {
+      final rToken = _refreshToken;
+      if (rToken == null || rToken.isEmpty) {
+        onSessionExpired?.call();
+        return false;
+      }
+
+      try {
+        final uri = _buildUri(ApiEndpoints.refresh);
+        _log('POST $uri (Refreshing token)');
+        final response = await _client.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': '1',
+          },
+          body: jsonEncode({'refreshToken': rToken}),
+        );
+
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+          final newAccess = data['accessToken']?.toString();
+          final newRefresh = data['refreshToken']?.toString();
+          if (newAccess != null && newAccess.isNotEmpty) {
+            _accessToken = newAccess;
+            if (newRefresh != null && newRefresh.isNotEmpty) {
+              _refreshToken = newRefresh;
+            }
+            _log('Token refresh successful! New accessToken: ${_accessToken!.substring(0, 10)}...');
+            onTokensRefreshed?.call(_accessToken!, _refreshToken ?? '');
+            return true;
+          }
+        } else {
+          _logError('Refresh token response ${response.statusCode}', response.body);
+        }
+      } catch (e) {
+        _logError('Token refresh failed', e);
+      }
+
+      onSessionExpired?.call();
+      return false;
+    }();
+
+    _refreshFuture = future;
+    return future.whenComplete(() => _refreshFuture = null);
+  }
+
+  Future<dynamic> _requestWithRetry(
+    Future<http.Response> Function() sendRequest, {
+    String? requestContext,
+  }) async {
+    http.Response response;
+    try {
+      response = await sendRequest();
+    } catch (e) {
+      _logError(requestContext ?? 'Request', e);
+      rethrow;
+    }
+
+    if (response.statusCode == 401 && _refreshToken != null && _refreshToken!.isNotEmpty) {
+      _log('Received 401 for $requestContext, attempting token refresh...');
+      final success = await _performRefresh();
+      if (success) {
+        _log('Token refreshed, retrying $requestContext...');
+        try {
+          response = await sendRequest();
+        } catch (e) {
+          _logError('Retry $requestContext', e);
+          rethrow;
+        }
+      }
+    }
+
+    return _handleResponse(response);
+  }
+
   Future<dynamic> get(
     String endpoint, {
     Map<String, dynamic>? queryParams,
     Map<String, String>? headers,
-  }) async {
+  }) {
     final uri = _buildUri(endpoint, queryParams);
     _log('GET $uri');
-    try {
-      final response = await _client.get(uri, headers: _buildHeaders(headers));
-      return _handleResponse(response);
-    } catch (e) {
-      _logError('GET $uri', e);
-      rethrow;
-    }
+    return _requestWithRetry(
+      () => _client.get(uri, headers: _buildHeaders(headers)),
+      requestContext: 'GET $uri',
+    );
   }
 
   Future<dynamic> post(
     String endpoint, {
     dynamic body,
     Map<String, String>? headers,
-  }) async {
+  }) {
     final uri = _buildUri(endpoint);
     _log('POST $uri body: $body');
-    try {
-      final response = await _client.post(
+    return _requestWithRetry(
+      () => _client.post(
         uri,
         headers: _buildHeaders(headers),
         body: body != null ? jsonEncode(body) : null,
-      );
-      return _handleResponse(response);
-    } catch (e) {
-      _logError('POST $uri', e);
-      rethrow;
-    }
+      ),
+      requestContext: 'POST $uri',
+    );
   }
 
   Future<dynamic> put(
     String endpoint, {
     dynamic body,
     Map<String, String>? headers,
-  }) async {
+  }) {
     final uri = _buildUri(endpoint);
     _log('PUT $uri body: $body');
-    try {
-      final response = await _client.put(
+    return _requestWithRetry(
+      () => _client.put(
         uri,
         headers: _buildHeaders(headers),
         body: body != null ? jsonEncode(body) : null,
-      );
-      return _handleResponse(response);
-    } catch (e) {
-      _logError('PUT $uri', e);
-      rethrow;
-    }
+      ),
+      requestContext: 'PUT $uri',
+    );
   }
 
   Future<dynamic> delete(
     String endpoint, {
     Map<String, String>? headers,
-  }) async {
+  }) {
     final uri = _buildUri(endpoint);
     _log('DELETE $uri');
-    try {
-      final response = await _client.delete(uri, headers: _buildHeaders(headers));
-      return _handleResponse(response);
-    } catch (e) {
-      _logError('DELETE $uri', e);
-      rethrow;
-    }
+    return _requestWithRetry(
+      () => _client.delete(uri, headers: _buildHeaders(headers)),
+      requestContext: 'DELETE $uri',
+    );
   }
 
   Future<dynamic> uploadMultipart(
@@ -160,10 +243,11 @@ class ApiClient {
     Map<String, String>? fields,
     Map<String, dynamic>? queryParams,
     Map<String, String>? headers,
-  }) async {
+  }) {
     final uri = _buildUri(endpoint, queryParams);
     _log('MULTIPART POST $uri with file: $filename ($fileFieldName)');
-    try {
+
+    Future<http.Response> sendMultipart() async {
       final request = http.MultipartRequest('POST', uri);
       final requestHeaders = _buildHeaders(headers);
       requestHeaders.remove('Content-Type'); // MultipartRequest sets boundary automatically
@@ -190,12 +274,13 @@ class ApiClient {
       }
 
       final streamedResponse = await _client.send(request);
-      final response = await http.Response.fromStream(streamedResponse);
-      return _handleResponse(response);
-    } catch (e) {
-      _logError('MULTIPART POST $uri', e);
-      rethrow;
+      return http.Response.fromStream(streamedResponse);
     }
+
+    return _requestWithRetry(
+      sendMultipart,
+      requestContext: 'MULTIPART POST $uri',
+    );
   }
 
   dynamic _handleResponse(http.Response response) {

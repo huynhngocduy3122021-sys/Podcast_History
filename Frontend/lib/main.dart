@@ -114,6 +114,36 @@ class _AppState extends State<VietCastApp> {
       creatorAccessTokenProvider.overrideWithValue(
         account?.session.accessToken,
       ),
+      creatorRefreshTokenProvider.overrideWithValue(
+        account?.session.refreshToken,
+      ),
+      creatorSessionRefreshCallbackProvider.overrideWithValue(
+        (newAccessToken, newRefreshToken) {
+          final current = account;
+          if (current != null) {
+            _saveSession(
+              Account(
+                email: current.email,
+                name: current.name,
+                role: current.role,
+                session: AuthSession(
+                  user: current.session.user,
+                  accessToken: newAccessToken,
+                  refreshToken: newRefreshToken,
+                  tokenType: current.session.tokenType,
+                  expiresIn: current.session.expiresIn,
+                  refreshExpiresIn: current.session.refreshExpiresIn,
+                ),
+              ),
+            );
+          }
+        },
+      ),
+      creatorSessionExpiredCallbackProvider.overrideWithValue(
+        () {
+          logout();
+        },
+      ),
     ],
     child: MaterialApp(
       title: 'VietCast',

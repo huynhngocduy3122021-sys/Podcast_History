@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
@@ -6,10 +7,24 @@ import 'package:podcast_history/features/creator_studio/domain/creator_repositor
 
 // Inject the authenticated session into Creator Studio API calls.
 final creatorAccessTokenProvider = Provider<String?>((ref) => null);
+final creatorRefreshTokenProvider = Provider<String?>((ref) => null);
+final creatorSessionRefreshCallbackProvider =
+    Provider<void Function(String newAccessToken, String newRefreshToken)?>((ref) => null);
+final creatorSessionExpiredCallbackProvider = Provider<VoidCallback?>((ref) => null);
 
 // API Client Provider
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(initialToken: ref.watch(creatorAccessTokenProvider));
+  final accessToken = ref.watch(creatorAccessTokenProvider);
+  final refreshToken = ref.watch(creatorRefreshTokenProvider);
+  final onTokensRefreshed = ref.watch(creatorSessionRefreshCallbackProvider);
+  final onSessionExpired = ref.watch(creatorSessionExpiredCallbackProvider);
+
+  return ApiClient(
+    initialToken: accessToken,
+    initialRefreshToken: refreshToken,
+    onTokensRefreshed: onTokensRefreshed,
+    onSessionExpired: onSessionExpired,
+  );
 });
 
 // Single repository instance - backed by real API calls
@@ -168,6 +183,7 @@ class CreatorPodcastsNotifier
     );
     await loadPodcasts();
     ref.read(creatorProfileProvider.notifier).loadProfile();
+    ref.invalidate(creatorDashboardProvider);
     return pod;
   }
 
@@ -204,12 +220,14 @@ class CreatorPodcastsNotifier
       autoSubmit: autoSubmit,
     );
     await loadPodcasts();
+    ref.invalidate(creatorDashboardProvider);
     return pod;
   }
 
   Future<CreatorPodcast> submitPodcast(String id) async {
     final pod = await _repo.submitPodcast(id);
     await loadPodcasts();
+    ref.invalidate(creatorDashboardProvider);
     return pod;
   }
 
@@ -217,6 +235,7 @@ class CreatorPodcastsNotifier
     await _repo.deletePodcast(id);
     await loadPodcasts();
     ref.read(creatorProfileProvider.notifier).loadProfile();
+    ref.invalidate(creatorDashboardProvider);
   }
 }
 

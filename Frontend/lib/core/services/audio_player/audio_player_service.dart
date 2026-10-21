@@ -19,7 +19,7 @@ class AudioPlaybackState {
     this.podcast,
     this.isPlaying = false,
     this.position = Duration.zero,
-    this.duration = const Duration(minutes: 30),
+    this.duration = Duration.zero,
     this.isLoading = false,
     this.progress = 0.0,
   });
@@ -48,6 +48,7 @@ class AudioPlaybackState {
 class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
   late final AudioPlayer _player;
   final Map<String, Uint8List> _cachedBytes = {};
+  final Map<String, Duration> _knownDurations = {};
   StreamSubscription? _posSub;
   StreamSubscription? _durSub;
   StreamSubscription? _stateSub;
@@ -76,6 +77,9 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
 
     _durSub = _player.onDurationChanged.listen((dur) {
       if (dur.inMilliseconds > 0) {
+        if (state.podcastId != null) {
+          _knownDurations[state.podcastId!] = dur;
+        }
         final frac = (state.position.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0);
         state = state.copyWith(duration: dur, progress: frac);
       }
@@ -96,10 +100,88 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
   }
 
   void cacheBytes(String podcastId, List<int> bytes) {
-    _cachedBytes[podcastId] = Uint8List.fromList(bytes);
+    final u8 = Uint8List.fromList(bytes);
+    _cachedBytes[podcastId] = u8;
+    probeDuration(podcastId, bytes: u8);
   }
 
   Uint8List? getCachedBytes(String podcastId) => _cachedBytes[podcastId];
+
+  Duration? getKnownDuration(String podcastId) => _knownDurations[podcastId];
+
+  void setKnownDuration(String podcastId, Duration duration) {
+    if (duration > Duration.zero) {
+      _knownDurations[podcastId] = duration;
+    }
+  }
+
+  Future<Duration?> probeDuration(String podcastId, {String? url, List<int>? bytes}) async {
+    if (_knownDurations.containsKey(podcastId) && _knownDurations[podcastId]! > Duration.zero) {
+      return _knownDurations[podcastId];
+    }
+    final cached = bytes ?? _cachedBytes[podcastId];
+    AudioPlayer? probePlayer;
+    try {
+      probePlayer = AudioPlayer();
+      final completer = Completer<Duration?>();
+      final sub = probePlayer.onDurationChanged.listen((d) {
+        if (!completer.isCompleted && d.inMilliseconds > 0) {
+          completer.complete(d);
+        }
+      });
+
+      if (cached != null && cached.isNotEmpty) {
+        await probePlayer.setSource(BytesSource(Uint8List.fromList(cached)));
+      } else if (url != null && url.isNotEmpty) {
+        await probePlayer.setSource(UrlSource(url));
+      } else {
+        await sub.cancel();
+        await probePlayer.dispose();
+        return null;
+      }
+
+      final detected = await completer.future.timeout(
+        const Duration(seconds: 4),
+        onTimeout: () => probePlayer?.getDuration(),
+      );
+
+      await sub.cancel();
+      await probePlayer.dispose();
+
+      if (detected != null && detected > Duration.zero) {
+        _knownDurations[podcastId] = detected;
+        return detected;
+      }
+    } catch (_) {
+      try {
+        await probePlayer?.dispose();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  Future<Duration?> resolveDurationForPodcast(CreatorPodcast podcast) async {
+    if (_knownDurations.containsKey(podcast.id) && _knownDurations[podcast.id]! > Duration.zero) {
+      return _knownDurations[podcast.id];
+    }
+
+    if (_cachedBytes.containsKey(podcast.id)) {
+      return probeDuration(podcast.id, bytes: _cachedBytes[podcast.id]);
+    }
+
+    if (podcast.videoUrl != null && podcast.videoUrl!.startsWith('http')) {
+      return probeDuration(podcast.id, url: podcast.videoUrl);
+    }
+
+    try {
+      final detail = await ref.read(creatorRepositoryProvider).getPodcastById(podcast.id);
+      if (detail?.videoUrl != null && detail!.videoUrl!.startsWith('http')) {
+        return await probeDuration(podcast.id, url: detail.videoUrl);
+      }
+    } catch (_) {}
+
+    return null;
+  }
 
   Future<void> togglePlay(CreatorPodcast podcast, {List<int>? fileBytes}) async {
     if (state.podcastId == podcast.id) {
@@ -114,11 +196,16 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
   }
 
   Future<void> play(CreatorPodcast podcast, {List<int>? fileBytes}) async {
+    final knownDur = _knownDurations[podcast.id];
+    final effectiveDur = (knownDur != null && knownDur > Duration.zero)
+        ? knownDur
+        : (podcast.duration.inSeconds > 0 ? podcast.duration : Duration.zero);
+
     state = state.copyWith(
       podcastId: podcast.id,
       podcast: podcast,
       isLoading: true,
-      duration: podcast.duration.inSeconds > 0 ? podcast.duration : const Duration(minutes: 30),
+      duration: effectiveDur,
       position: Duration.zero,
       progress: 0.0,
     );

@@ -41,9 +41,47 @@ class SoundCloudPodcastCard extends ConsumerStatefulWidget {
 }
 
 class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
-  double _playbackProgress = 0.28;
+  double _playbackProgress = 0.0;
   bool _isLiked = false;
   bool _isReposted = false;
+  Duration? _probedDuration;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOrProbeDuration();
+  }
+
+  @override
+  void didUpdateWidget(covariant SoundCloudPodcastCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.podcast.id != widget.podcast.id ||
+        oldWidget.podcast.videoUrl != widget.podcast.videoUrl) {
+      _checkOrProbeDuration();
+    }
+  }
+
+  void _checkOrProbeDuration() {
+    final notifier = ref.read(audioPlayerServiceProvider.notifier);
+    final known = notifier.getKnownDuration(widget.podcast.id);
+    if (known != null && known > Duration.zero) {
+      _probedDuration = known;
+      return;
+    }
+
+    final isDefaultDuration = widget.podcast.duration.inSeconds == 0 ||
+        widget.podcast.duration.inSeconds == 1800;
+
+    if (isDefaultDuration) {
+      notifier.resolveDurationForPodcast(widget.podcast).then((dur) {
+        if (dur != null && dur > Duration.zero && mounted) {
+          setState(() {
+            _probedDuration = dur;
+          });
+        }
+      });
+    }
+  }
 
   void _openPlayer() {
     if (widget.onCardTap != null) {
@@ -56,7 +94,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
       context: context,
       podcast: widget.podcast,
       creatorName: widget.creatorName,
-      isPlaying: isCurrent ? audioState.isPlaying : true,
+      isPlaying: isCurrent ? audioState.isPlaying : false,
       progress: isCurrent ? audioState.progress : _playbackProgress,
       onEdit: widget.onEdit,
     );
@@ -83,12 +121,14 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
     final isCurrent = audioState.podcastId == pod.id;
     final isPlaying = isCurrent ? audioState.isPlaying : false;
     final progress = isCurrent ? audioState.progress : _playbackProgress;
+
+    final knownDur = _probedDuration ?? ref.watch(audioPlayerServiceProvider.notifier).getKnownDuration(pod.id);
+    final totalDur = (isCurrent && audioState.duration.inSeconds > 0)
+        ? audioState.duration
+        : (knownDur ?? (pod.duration.inSeconds > 0 ? pod.duration : Duration.zero));
     final currentPos = isCurrent
         ? audioState.position
-        : Duration(seconds: (pod.duration.inSeconds * progress).toInt());
-    final totalDur = isCurrent && audioState.duration.inSeconds > 0
-        ? audioState.duration
-        : pod.duration;
+        : (progress > 0 ? Duration(seconds: (totalDur.inSeconds * progress).toInt()) : Duration.zero);
 
     return Container(
       decoration: BoxDecoration(
