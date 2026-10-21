@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
+import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/comments/studio_comments_screen.dart';
@@ -50,7 +51,7 @@ class CreatorMoreScreen extends ConsumerWidget {
               _MenuItem(
                 icon: Icons.poll_rounded,
                 title: 'Biểu mẫu Khảo sát & Ý kiến',
-                subtitle: 'Tạo form thu thập ý kiến người nghe (Studio Premium)',
+                subtitle: 'Tạo form thu thập ý kiến người nghe',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const FormBuilderScreen()),
                 ),
@@ -63,7 +64,7 @@ class CreatorMoreScreen extends ConsumerWidget {
           _buildMenuSection(
             'Nâng cấp & Bản quyền',
             [
-              _MenuItem(
+              if (kPackagesEnabled) _MenuItem(
                 icon: Icons.workspace_premium_rounded,
                 iconColor: AppColors.secondaryLight,
                 title: 'Gói Studio Premium',

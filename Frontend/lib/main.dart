@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 import 'core/services/session_storage/session_storage.dart';
+import 'core/package_features.dart';
 import 'core/theme/app_theme.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
@@ -853,7 +854,7 @@ class _ShellState extends State<Shell> {
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
       ),
-      Discover(onOpen: openShow),
+      Discover(api: api, onOpen: openShow, onOpenCreator: _showCreatorProfile),
       const LivestreamPage(),
       LibraryPage(
         api: api,
@@ -1394,8 +1395,15 @@ class Art extends StatelessWidget {
 }
 
 class Discover extends StatefulWidget {
-  const Discover({super.key, required this.onOpen});
+  const Discover({
+    super.key,
+    required this.api,
+    required this.onOpen,
+    required this.onOpenCreator,
+  });
+  final ListenerApi api;
   final ValueChanged<Show> onOpen;
+  final ValueChanged<Show> onOpenCreator;
   @override
   State<Discover> createState() => _DiscoverState();
 }
@@ -1404,15 +1412,63 @@ class _DiscoverState extends State<Discover> {
   String query = '';
   final searchController = TextEditingController();
   final searchHistory = <String>['lịch sử Việt Nam', 'Đổi Mới', 'Trường Sơn'];
+  Timer? creatorSearchTimer;
+  int creatorSearchRequest = 0;
+  bool creatorSearchLoading = false;
+  String? creatorSearchError;
+  List<Map<String, dynamic>> creatorResults = const [];
 
   @override
   void dispose() {
+    creatorSearchTimer?.cancel();
     searchController.dispose();
     super.dispose();
   }
 
+  void updateQuery(String value) {
+    creatorSearchTimer?.cancel();
+    final next = value.trim();
+    setState(() {
+      query = next;
+      creatorSearchRequest++;
+      creatorResults = const [];
+      creatorSearchLoading = next.isNotEmpty;
+      creatorSearchError = null;
+    });
+    if (next.isNotEmpty) {
+      creatorSearchTimer = Timer(
+        const Duration(milliseconds: 300),
+        () => loadCreators(next),
+      );
+    }
+  }
+
+  Future<void> loadCreators(String value) async {
+    final request = ++creatorSearchRequest;
+    setState(() {
+      creatorSearchLoading = true;
+      creatorSearchError = null;
+    });
+    try {
+      final results = await widget.api.creators(query: value);
+      if (!mounted || request != creatorSearchRequest) return;
+      setState(() {
+        creatorResults = results;
+        creatorSearchLoading = false;
+      });
+    } catch (_) {
+      if (!mounted || request != creatorSearchRequest) return;
+      setState(() {
+        creatorResults = const [];
+        creatorSearchLoading = false;
+        creatorSearchError = 'Không tải được danh sách kênh.';
+      });
+    }
+  }
+
   void search(String value) {
     final next = value.trim();
+    creatorSearchTimer?.cancel();
     setState(() {
       query = next;
       if (next.isNotEmpty) {
@@ -1421,6 +1477,16 @@ class _DiscoverState extends State<Discover> {
         if (searchHistory.length > 6) searchHistory.removeLast();
       }
     });
+    if (next.isEmpty) {
+      creatorSearchRequest++;
+      setState(() {
+        creatorResults = const [];
+        creatorSearchLoading = false;
+        creatorSearchError = null;
+      });
+    } else {
+      loadCreators(next);
+    }
   }
 
   void pickHistory(String value) {
@@ -1448,7 +1514,7 @@ class _DiscoverState extends State<Discover> {
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: searchController,
-              onChanged: (v) => setState(() => query = v),
+              onChanged: updateQuery,
               onSubmitted: search,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
@@ -1459,7 +1525,7 @@ class _DiscoverState extends State<Discover> {
                     : IconButton(
                         onPressed: () {
                           searchController.clear();
-                          setState(() => query = '');
+                          updateQuery('');
                         },
                         tooltip: 'Xóa tìm kiếm',
                         icon: const Icon(Icons.close),
@@ -1529,6 +1595,55 @@ class _DiscoverState extends State<Discover> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: Text(
+                'Kênh Creator',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+          ),
+          if (creatorSearchLoading)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: LinearProgressIndicator(),
+              ),
+            )
+          else if (creatorSearchError != null || creatorResults.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(creatorSearchError ?? 'Không tìm thấy kênh phù hợp.'),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate((_, i) {
+                final creator = creatorResults[i];
+                final creatorId = creator['creatorProfileId']?.toString();
+                final name = creator['channelName']?.toString() ?? 'Content Creator';
+                return Card(
+                  margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                    title: Text(name),
+                    subtitle: Text(creator['description']?.toString() ?? ''),
+                    onTap: creatorId == null
+                        ? null
+                        : () => widget.onOpenCreator(Show(
+                              name,
+                              name,
+                              'Creator',
+                              '',
+                              const [Color(0xFF254A50), Color(0xFF93B4A4)],
+                              creatorId: creatorId,
+                            )),
+                  ),
+                );
+              }, childCount: creatorResults.length),
+            ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
               child: Text(
                 '${result.length} audio tìm thấy',
                 style: Theme.of(context).textTheme.titleMedium,
@@ -4543,7 +4658,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
+          if (kPackagesEnabled) SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: widget.show.creatorId == null
@@ -4673,7 +4788,7 @@ class MorePanel extends StatelessWidget {
             onReport();
           },
         ),
-        ListTile(
+        if (kPackagesEnabled) ListTile(
           leading: const Icon(
             Icons.workspace_premium_outlined,
             color: Colors.white,

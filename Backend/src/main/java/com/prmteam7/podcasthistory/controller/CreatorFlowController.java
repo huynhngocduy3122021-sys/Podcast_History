@@ -34,7 +34,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/creator")
-@Tag(name = "Content Creator", description = "Quản lý series, podcast, upload video và gửi duyệt")
+@Tag(name = "Content Creator", description = "Quản lý series, podcast, upload ảnh bìa, video/audio và gửi duyệt")
 @SecurityRequirement(name = "bearerAuth")
 public class CreatorFlowController {
 
@@ -132,7 +132,7 @@ public class CreatorFlowController {
 
     @PostMapping(value = "/podcasts/{podcastId}/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Upload video và gắn object key vào podcast được chỉ định")
+    @Operation(summary = "Upload video hoặc audio và gắn media vào podcast được chỉ định")
     public PodcastVideoItem uploadVideo(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID podcastId,
@@ -140,8 +140,18 @@ public class CreatorFlowController {
         return creatorFlowService.uploadPodcastVideo(userId(jwt), podcastId, file);
     }
 
+    @PostMapping(value = "/podcasts/{podcastId}/thumbnail", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Upload ảnh bìa podcast", description = "Gửi multipart/form-data với field file. Trả về podcast đã cập nhật thumbnailUrl.")
+    public PodcastItem uploadThumbnail(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID podcastId,
+            @RequestPart("file") MultipartFile file) {
+        return creatorFlowService.uploadPodcastThumbnail(userId(jwt), podcastId, file);
+    }
+
     @PostMapping("/podcasts/{podcastId}/submit")
-    @Operation(summary = "Gửi podcast có video cho Admin duyệt")
+    @Operation(summary = "Gửi podcast có video hoặc audio cho Admin duyệt")
     public PodcastItem submitPodcast(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
         return creatorFlowService.submitPodcast(userId(jwt), podcastId);
     }
