@@ -7,7 +7,7 @@ REST API for the Flutter application, built with Java 17, Maven, Spring Boot 4.1
 See [Admin/Staff API guide](../docs/ADMIN_STAFF_API.md) for dashboard, user access,
 reports, moderation preview/history, appeals, contract disputes, membership plans,
 manual payment reconciliation/refunds and withdrawal review. Staff handles content;
-Admin handles users, roles and finance. AI moderation is deferred.
+Admin handles users, roles and finance. Podcast moderation uses Whisper transcripts and Gemini; a `SAFE` + `APPROVE` result automatically approves the podcast, while other outcomes stay in the Admin review queue.
 
 The additive schema migration is `db/migrations/2026-10-13_admin_operations.sql`.
 With the current `ddl-auto=update`, restarting applies entity schema additions.
@@ -99,7 +99,7 @@ Create an R2 bucket and an R2 API token with Object Read & Write permission for 
 
 Create a draft podcast first, then upload its cover through `POST /api/creator/podcasts/{podcastId}/thumbnail` with authenticated `multipart/form-data` and the file field named `file`. The response is the updated podcast with `thumbnailUrl`. Set `R2_PUBLIC_BASE_URL` to the bucket's enabled R2.dev URL or custom domain so clients can display the uploaded cover. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
 
-To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its cover with `POST /api/creator/podcasts/{podcastId}/thumbnail` and its video or audio with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. An Admin reviews the queue at `GET /api/admin/podcasts/pending-review` and approves or rejects it. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series.
+To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its cover with `POST /api/creator/podcasts/{podcastId}/thumbnail` and its video or audio with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. Gemini automatically approves podcasts when its completed result is `SAFE` with recommendation `APPROVE`; an Admin reviews remaining cases at `GET /api/admin/podcasts/pending-review`. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series.
 
 For Flutter on an Android emulator, use `http://10.0.2.2:8081` as the API base URL. For Flutter on a physical device, use the computer's LAN IP address and ensure both devices are on the same network.
 

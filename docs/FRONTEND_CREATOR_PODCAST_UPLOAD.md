@@ -456,7 +456,7 @@ POST /api/creator/podcasts/{podcastId}/submit
 Authorization: Bearer accessToken
 ~~~
 
-Không có body. Backend chỉ cho submit khi podcast thuộc Creator hiện tại, đã có media video hoặc audio và durationSeconds lớn hơn 0. Thành công chuyển status thành PENDING_REVIEW.
+Không có body. Backend chỉ cho submit khi podcast thuộc Creator hiện tại, đã có media video hoặc audio và durationSeconds lớn hơn 0. Response submit trả `PENDING_REVIEW` trước khi AI hoàn tất. Nếu transcript hoàn tất và AI trả `SAFE` + `APPROVE`, backend tự chuyển podcast sang `APPROVED`; frontend cần tải lại chi tiết podcast để cập nhật trạng thái. Kết quả `REVIEW`, `REJECT` hoặc lỗi vẫn ở `PENDING_REVIEW` để Admin/Staff xử lý.
 
 ## 13. Đoạn code luồng hoàn chỉnh
 
