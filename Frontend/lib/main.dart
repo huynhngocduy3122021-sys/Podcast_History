@@ -8,6 +8,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'core/services/session_storage/session_storage.dart';
 import 'core/package_features.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/image_url_helper.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
@@ -254,6 +255,7 @@ class Show {
     this.description = '',
     this.categoryId,
     this.categoryName = '',
+    this.thumbnailUrl,
   });
   final String title, channel, period, duration;
   final List<Color> colors;
@@ -265,8 +267,9 @@ class Show {
   final String description;
   final String? categoryId;
   final String categoryName;
+  final String? thumbnailUrl;
 
-  Show copyWith({String? duration, int? durationSeconds}) => Show(
+  Show copyWith({String? duration, int? durationSeconds, String? thumbnailUrl}) => Show(
     title,
     channel,
     period,
@@ -280,6 +283,7 @@ class Show {
     categoryName: categoryName,
     seriesTitle: seriesTitle,
     description: description,
+    thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
   );
 }
 
@@ -508,6 +512,7 @@ class _ShellState extends State<Shell> {
             categoryName: podcast.categoryName,
             seriesTitle: podcast.seriesTitle,
             description: podcast.description,
+            thumbnailUrl: podcast.thumbnailUrl,
           );
         }).toList();
         final interactionResponses = await Future.wait(
@@ -1423,43 +1428,62 @@ class Art extends StatelessWidget {
   final Show show;
   final double size;
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) {
+    final thumbnailUrl = resolveImageUrl(show.thumbnailUrl);
+    return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      gradient: LinearGradient(colors: show.colors),
-    ),
-    child: Stack(
-      children: [
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(colors: show.colors),
+        ),
+        child: thumbnailUrl.isEmpty
+            ? _fallbackArt()
+            : thumbnailUrl.startsWith('data:image')
+            ? Image.memory(
+                base64Decode(thumbnailUrl.split(',').last),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallbackArt(),
+              )
+            : Image.network(
+                thumbnailUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _fallbackArt(),
+              ),
+      ),
+    );
+  }
+
+  Widget _fallbackArt() => Stack(
+    children: [
+      const Positioned(
+        top: 12,
+        left: 12,
+        child: Icon(Icons.mic_none, color: Colors.white, size: 30),
+      ),
+      Positioned(
+        left: 10,
+        bottom: 10,
+        child: Text(
+          'VIETCAST',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: size * .075,
+          ),
+        ),
+      ),
+      if (show.member)
         const Positioned(
-          top: 12,
-          left: 12,
-          child: Icon(Icons.mic_none, color: Colors.white, size: 30),
-        ),
-        Positioned(
-          left: 10,
-          bottom: 10,
-          child: Text(
-            'VIETCAST',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: size * .075,
-            ),
+          top: 8,
+          right: 8,
+          child: Chip(
+            label: Text('MEM'),
+            visualDensity: VisualDensity.compact,
           ),
         ),
-        if (show.member)
-          const Positioned(
-            top: 8,
-            right: 8,
-            child: Chip(
-              label: Text('MEM'),
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-      ],
-    ),
+    ],
   );
 }
 
@@ -4973,6 +4997,7 @@ class PodcastInfoPanel extends StatefulWidget {
 class _PodcastInfoPanelState extends State<PodcastInfoPanel> {
   late final Future<Map<String, dynamic>>? transcriptFuture =
       widget.loadTranscript?.call();
+  bool _isTranscriptExpanded = false;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -5047,16 +5072,34 @@ class _PodcastInfoPanelState extends State<PodcastInfoPanel> {
                 }
                 final transcript = snapshot.data?['fullText']?.toString() ?? '';
                 final status = snapshot.data?['status']?.toString() ?? '';
-                return Text(
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
                   transcript.isNotEmpty
                       ? transcript
                       : (status.isNotEmpty
                           ? 'Script đang được xử lý ($status).'
                           : 'Chưa có nội dung script.'),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    height: 1.45,
-                  ),
+                      maxLines: _isTranscriptExpanded ? null : 5,
+                      overflow: _isTranscriptExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        height: 1.45,
+                      ),
+                    ),
+                    if (transcript.isNotEmpty)
+                      TextButton(
+                        onPressed: () => setState(
+                          () => _isTranscriptExpanded = !_isTranscriptExpanded,
+                        ),
+                        child: Text(
+                          _isTranscriptExpanded ? 'Thu gọn' : 'Mở rộng',
+                        ),
+                      ),
+                  ],
                 );
               },
             ),

@@ -272,7 +272,7 @@ class ListenerApi {
       ListenerPodcast.fromJson(await _send('GET', '/api/podcasts/$podcastId'));
 
   Future<Map<String, dynamic>> podcastTranscript(String podcastId) =>
-      _sendMap('GET', '/api/podcasts/$podcastId/transcript');
+      _sendMap('GET', '/api/podcast-transcripts/$podcastId');
 
   Future<Map<String, dynamic>> playback(String podcastId) =>
       _sendMap('GET', '/api/podcasts/$podcastId/playback');
