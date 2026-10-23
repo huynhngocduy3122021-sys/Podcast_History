@@ -4,7 +4,7 @@ REST API for the Flutter application, built with Java 17, Maven, Spring Boot 4.1
 
 ## Admin and Staff operations
 
-See [Admin/Staff API guide](../docs/ADMIN_STAFF_API.md) for dashboard, user access,
+See the [Admin API guide](../docs/admin/README.md) and [Staff API guide](../docs/staff/README.md) for dashboard, user access,
 reports, moderation preview/history, appeals, contract disputes, membership plans,
 manual payment reconciliation/refunds and withdrawal review. Staff handles content;
 Admin handles users, roles and finance. Podcast moderation uses Whisper transcripts and Gemini; a `SAFE` + `APPROVE` result automatically approves the podcast, while other outcomes stay in the Admin review queue.
@@ -48,7 +48,7 @@ $env:DB_PASSWORD = '<your PostgreSQL password>'
 mvn spring-boot:run
 ```
 
-The backend maps the latest ERD plus a supporting refresh-token table. Creator applications use `Creator_profile.verification_status`; there is no separate creator-application table. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds system roles and, in the default local `dev` profile, the shared development accounts described in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md).
+The backend maps the latest ERD plus a supporting refresh-token table. Creator applications use `Creator_profile.verification_status`; there is no separate creator-application table. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds system roles and, in the default local `dev` profile, the shared development accounts described in [`docs/TEST_ACCOUNTS.md`](../docs/TEST_ACCOUNTS.md).
 
 ## Gói CC đăng ký với hệ thống
 
@@ -157,7 +157,7 @@ A logged-in Listener submits a channel application through `POST /api/creator-ap
 
 An Admin approves with `POST /api/admin/creator-applications/{applicationId}/approve` (optional `note`) or rejects with `POST /api/admin/creator-applications/{applicationId}/reject` (required `note`). Approval changes `Creator_profile.verification_status` to `APPROVED` and the user's role to `CREATOR`; requests under `/api/creator/**` require that role. The account should refresh its JWT or log in again to receive a token containing the new role.
 
-Development credentials and the startup seeding behavior are documented in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role and cannot access `/api/admin/**`.
+Development credentials and the startup seeding behavior are documented in [`docs/TEST_ACCOUNTS.md`](../docs/TEST_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role and cannot access `/api/admin/**`.
 
 ```sql
 UPDATE "User"
