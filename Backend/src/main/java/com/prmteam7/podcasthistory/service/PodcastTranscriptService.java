@@ -90,6 +90,20 @@ public class PodcastTranscriptService {
                 transcript.getProcessedAt(), true);
     }
 
+    @Transactional(readOnly = true)
+    public PodcastTranscriptItem currentPublished(UUID podcastId) {
+        Podcast podcast = podcasts.findByPodcastId(podcastId)
+                .filter(item -> item.getPublishedAt() != null)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy podcast đã xuất bản."));
+        PodcastTranscript transcript = transcripts
+                .findByPodcast_PodcastIdAndMediaKey(podcastId, podcast.getMediaUrl())
+                .orElseThrow(() -> new ResourceNotFoundException("Podcast chưa có script."));
+        return new PodcastTranscriptItem(transcript.getTranscriptId(), podcastId, transcript.getMediaKey(),
+                transcript.getStatus(), transcript.getLanguage(), transcript.getModelName(),
+                transcript.getFullText(), transcript.getSegments(), transcript.getErrorMessage(),
+                transcript.getProcessedAt(), true);
+    }
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Async
     public void onRequested(Requested event) {

@@ -42,7 +42,9 @@ import com.prmteam7.podcasthistory.dto.response.ListenerResponses.ReportItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.SavedPodcastItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.SeriesRequestItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.SubscriptionItem;
+import com.prmteam7.podcasthistory.dto.response.PodcastTranscriptItem;
 import com.prmteam7.podcasthistory.service.ListenerFlowService;
+import com.prmteam7.podcasthistory.service.PodcastTranscriptService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -56,9 +58,12 @@ import jakarta.validation.Valid;
 public class ListenerFlowController {
 
     private final ListenerFlowService listenerFlowService;
+    private final PodcastTranscriptService transcriptService;
 
-    public ListenerFlowController(ListenerFlowService listenerFlowService) {
+    public ListenerFlowController(ListenerFlowService listenerFlowService,
+            PodcastTranscriptService transcriptService) {
         this.listenerFlowService = listenerFlowService;
+        this.transcriptService = transcriptService;
     }
 
     @GetMapping("/podcasts")
@@ -77,6 +82,14 @@ public class ListenerFlowController {
     @Operation(summary = "Xem chi tiết podcast")
     public PodcastItem getPodcast(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
         return listenerFlowService.getPodcast(userId(jwt), podcastId);
+    }
+
+    @GetMapping("/podcasts/{podcastId}/transcript")
+    @Operation(summary = "Xem script của podcast đã xuất bản")
+    public PodcastTranscriptItem getPodcastTranscript(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID podcastId) {
+        listenerFlowService.getPodcast(userId(jwt), podcastId);
+        return transcriptService.currentPublished(podcastId);
     }
 
     @GetMapping("/creators")
