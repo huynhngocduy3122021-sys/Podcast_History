@@ -1,12 +1,15 @@
 package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.response.PodcastTranscriptItem;
+import com.prmteam7.podcasthistory.dto.response.PodcastTranscriptView;
 import com.prmteam7.podcasthistory.exception.ResourceConflictException;
+import com.prmteam7.podcasthistory.exception.ResourceForbiddenException;
 import com.prmteam7.podcasthistory.exception.ResourceNotFoundException;
 import com.prmteam7.podcasthistory.model.Podcast;
 import com.prmteam7.podcasthistory.model.PodcastTranscript;
 import com.prmteam7.podcasthistory.repository.PodcastRepository;
 import com.prmteam7.podcasthistory.repository.PodcastTranscriptRepository;
+import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import java.time.Instant;
 import java.time.Duration;
 import java.util.UUID;
@@ -23,16 +26,22 @@ public class PodcastTranscriptService {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(PodcastTranscriptService.class);
     private final PodcastTranscriptRepository transcripts;
     private final PodcastRepository podcasts;
+    private final AppUserRepository users;
     private final WhisperTranscriptionClient whisper;
     private final AdminSupportService support;
+    private final ListenerFlowService listenerFlow;
     private final ApplicationEventPublisher events;
 
     public PodcastTranscriptService(PodcastTranscriptRepository transcripts, PodcastRepository podcasts,
-            WhisperTranscriptionClient whisper, AdminSupportService support, ApplicationEventPublisher events) {
+            AppUserRepository users,
+            WhisperTranscriptionClient whisper, AdminSupportService support,
+            ListenerFlowService listenerFlow, ApplicationEventPublisher events) {
         this.transcripts = transcripts;
         this.podcasts = podcasts;
+        this.users = users;
         this.whisper = whisper;
         this.support = support;
+        this.listenerFlow = listenerFlow;
         this.events = events;
     }
 
@@ -81,13 +90,61 @@ public class PodcastTranscriptService {
         support.actor(actor, false);
         Podcast podcast = podcasts.findByPodcastId(podcastId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy podcast."));
-        PodcastTranscript transcript = transcripts
-                .findByPodcast_PodcastIdAndMediaKey(podcastId, podcast.getMediaUrl())
-                .orElseThrow(() -> new ResourceNotFoundException("Podcast chưa có transcript."));
+        return currentItem(podcast);
+    }
+
+    @Transactional(readOnly = true)
+    public PodcastTranscriptView currentForViewer(UUID actor, UUID podcastId) {
+        var user = users.findByUserId(actor)
+                .filter(item -> Boolean.TRUE.equals(item.getIsActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản đang hoạt động."));
+        String role = user.getRole() == null ? "" : user.getRole().getRoleCode();
+        if ("CREATOR".equalsIgnoreCase(role)) {
+            Podcast podcast = podcasts.findByPodcastId(podcastId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy podcast."));
+            var profile = podcast.getProducerProfile();
+            if (!profile.getUser().getUserId().equals(actor)
+                    || !"APPROVED".equalsIgnoreCase(profile.getVerificationStatus())) {
+                throw new ResourceNotFoundException("Không tìm thấy podcast thuộc kênh này.");
+            }
+            PodcastTranscript transcript = findCurrentTranscript(podcast);
+            return view(podcastId, transcript, transcript.getErrorMessage());
+        }
+        if ("LISTENER".equalsIgnoreCase(role)) {
+            listenerFlow.requireReferenceAccess(actor, podcastId);
+            Podcast podcast = podcasts.findByPodcastId(podcastId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy podcast."));
+            return completedView(podcast);
+        }
+        throw new ResourceForbiddenException("Chỉ chủ kênh hoặc Listener có quyền nghe được xem transcript.");
+    }
+
+    private PodcastTranscriptItem currentItem(Podcast podcast) {
+        UUID podcastId = podcast.getPodcastId();
+        PodcastTranscript transcript = findCurrentTranscript(podcast);
         return new PodcastTranscriptItem(transcript.getTranscriptId(), podcastId, transcript.getMediaKey(),
                 transcript.getStatus(), transcript.getLanguage(), transcript.getModelName(),
                 transcript.getFullText(), transcript.getSegments(), transcript.getErrorMessage(),
                 transcript.getProcessedAt(), true);
+    }
+
+    private PodcastTranscriptView completedView(Podcast podcast) {
+        PodcastTranscript transcript = findCurrentTranscript(podcast);
+        if (!"COMPLETED".equals(transcript.getStatus())) {
+            throw new ResourceNotFoundException("Podcast chưa có transcript hoàn tất.");
+        }
+        return view(podcast.getPodcastId(), transcript, null);
+    }
+
+    private PodcastTranscript findCurrentTranscript(Podcast podcast) {
+        return transcripts.findByPodcast_PodcastIdAndMediaKey(podcast.getPodcastId(), podcast.getMediaUrl())
+                .orElseThrow(() -> new ResourceNotFoundException("Podcast chưa có transcript."));
+    }
+
+    private PodcastTranscriptView view(UUID podcastId, PodcastTranscript transcript, String errorMessage) {
+        return new PodcastTranscriptView(podcastId, transcript.getStatus(), transcript.getLanguage(),
+                transcript.getModelName(), transcript.getFullText(), transcript.getSegments(),
+                errorMessage, transcript.getProcessedAt());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

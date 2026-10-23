@@ -125,8 +125,8 @@ public class PodcastReviewService {
             r ->
                 new com.prmteam7.podcasthistory.dto.response.AdminResponses.ReviewItem(
                     r.getModerationReviewId(),
-                    r.getReviewerUser().getUserId(),
-                    r.getReviewerUser().getDisplayName(),
+                    r.getReviewerUser() == null ? null : r.getReviewerUser().getUserId(),
+                    r.getReviewerUser() == null ? "AI" : r.getReviewerUser().getDisplayName(),
                     r.getDecision(),
                     r.getNote(),
                     r.getReviewedAt()));
@@ -160,6 +160,42 @@ public class PodcastReviewService {
   @Transactional
   public PodcastReviewResult approve(UUID reviewerId, UUID podcastId, String note) {
     return review(reviewerId, podcastId, "APPROVED", note);
+  }
+
+  @Transactional
+  public void autoApprove(UUID moderationResultId) {
+    var result = aiResults.findById(moderationResultId).orElse(null);
+    if (result == null || !"COMPLETED".equals(result.getStatus())
+        || !"SAFE".equals(result.getOverallLabel())
+        || !"APPROVE".equals(result.getRecommendation())) return;
+
+    Podcast podcast = podcastRepository.lockById(result.getPodcast().getPodcastId()).orElse(null);
+    if (podcast == null || !"PENDING_REVIEW".equalsIgnoreCase(podcast.getStatus())
+        || !AiModerationService.hash(podcast).equals(result.getSourceHash())
+        || !java.util.Objects.equals(podcast.getMediaUrl(), result.getMediaKey())) return;
+
+    var transcript = transcripts.findByPodcast_PodcastIdAndMediaKey(
+        podcast.getPodcastId(), podcast.getMediaUrl()).orElse(null);
+    if (transcript == null || !"COMPLETED".equals(transcript.getStatus())
+        || result.getTranscript() == null
+        || !transcript.getTranscriptId().equals(result.getTranscript().getTranscriptId())
+        || !AiModerationService.hashText(transcript.getFullText()).equals(result.getTranscriptHash())) return;
+
+    Instant approvedAt = Instant.now();
+    podcast.setStatus("APPROVED");
+    podcast.setPublishedAt(approvedAt);
+    podcastRepository.save(podcast);
+
+    ModerationReview review = new ModerationReview();
+    review.setPodcast(podcast);
+    review.setModerationResult(result);
+    review.setDecision("APPROVED");
+    review.setNote("AI tự động duyệt: " + result.getReason());
+    review.setReviewedAt(approvedAt);
+    moderationReviewRepository.save(review);
+
+    support.notify(podcast.getProducerProfile().getUser(), "PODCAST_REVIEW",
+        "Kết quả duyệt podcast", podcast.getTitle() + ": APPROVED (AI tự động duyệt)");
   }
 
   @Transactional

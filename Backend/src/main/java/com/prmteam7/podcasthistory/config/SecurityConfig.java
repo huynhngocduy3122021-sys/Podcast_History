@@ -45,6 +45,8 @@ public class SecurityConfig {
                 authorize
                     .requestMatchers(HttpMethod.GET, "/api/categories")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/podcast-transcripts/*")
+                    .hasAnyRole("CREATOR", "LISTENER")
                     .requestMatchers(
                         "/api/health",
                         "/api/auth/login",

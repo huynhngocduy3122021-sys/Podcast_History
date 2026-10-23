@@ -34,16 +34,18 @@ public class AiModerationService {
     private final AdminSupportService support;
     private final ApplicationEventPublisher events;
     private final PodcastTranscriptRepository transcripts;
+    private final PodcastReviewService podcastReviews;
 
     public AiModerationService(AiModerationResultRepository results, PodcastRepository podcasts,
             GeminiModerationClient gemini, AdminSupportService support, ApplicationEventPublisher events,
-            PodcastTranscriptRepository transcripts) {
+            PodcastTranscriptRepository transcripts, PodcastReviewService podcastReviews) {
         this.results = results;
         this.podcasts = podcasts;
         this.gemini = gemini;
         this.support = support;
         this.events = events;
         this.transcripts = transcripts;
+        this.podcastReviews = podcastReviews;
     }
 
     @Transactional
@@ -138,8 +140,10 @@ public class AiModerationService {
             return;
         }
         try {
-            JsonNode output = gemini.analyze(podcast.getTitle(), podcast.getDescription(),
+            var response = gemini.analyze(podcast.getTitle(), podcast.getDescription(),
                     timedTranscript(transcript));
+            JsonNode output = response.output();
+            result.setModelName(response.modelName());
             String label = allowed(output.path("label").asText(), "SAFE", "UNSAFE", "UNCERTAIN");
             String recommendation = allowed(output.path("recommendation").asText(), "APPROVE", "REJECT", "REVIEW");
             if (label == null || recommendation == null) {
@@ -154,6 +158,10 @@ public class AiModerationService {
             String error = message == null ? exception.getClass().getSimpleName() : message;
             finish(result, "FAILED", "ERROR", "REVIEW", "AI không xử lý được; cần Admin duyệt thủ công.",
                     null, error.substring(0, Math.min(error.length(), 500)));
+        }
+        if ("COMPLETED".equals(result.getStatus()) && "SAFE".equals(result.getOverallLabel())
+                && "APPROVE".equals(result.getRecommendation())) {
+            podcastReviews.autoApprove(result.getModerationResultId());
         }
     }
 
