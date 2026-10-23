@@ -179,6 +179,9 @@ class ListenerPodcast {
     required this.durationSeconds,
     required this.creatorId,
     required this.creatorChannelName,
+    required this.seriesTitle,
+    required this.categoryId,
+    required this.categoryName,
     required this.visibility,
   });
 
@@ -189,6 +192,9 @@ class ListenerPodcast {
   final int durationSeconds;
   final String? creatorId;
   final String creatorChannelName;
+  final String? seriesTitle;
+  final String? categoryId;
+  final String categoryName;
   final String visibility;
 
   factory ListenerPodcast.fromJson(Map<String, dynamic> json) =>
@@ -200,6 +206,9 @@ class ListenerPodcast {
         durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
         creatorId: json['creatorProfileId']?.toString(),
         creatorChannelName: '${json['creatorChannelName'] ?? ''}',
+        seriesTitle: json['seriesTitle']?.toString(),
+        categoryId: json['categoryId']?.toString(),
+        categoryName: '${json['categoryName'] ?? ''}',
         visibility: '${json['visibility'] ?? 'PUBLIC'}',
       );
 }
@@ -261,6 +270,9 @@ class ListenerApi {
 
   Future<ListenerPodcast> podcast(String podcastId) async =>
       ListenerPodcast.fromJson(await _send('GET', '/api/podcasts/$podcastId'));
+
+  Future<Map<String, dynamic>> podcastTranscript(String podcastId) =>
+      _sendMap('GET', '/api/podcasts/$podcastId/transcript');
 
   Future<Map<String, dynamic>> playback(String podcastId) =>
       _sendMap('GET', '/api/podcasts/$podcastId/playback');

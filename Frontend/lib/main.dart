@@ -250,6 +250,10 @@ class Show {
     this.id,
     this.creatorId,
     this.durationSeconds,
+    this.seriesTitle,
+    this.description = '',
+    this.categoryId,
+    this.categoryName = '',
   });
   final String title, channel, period, duration;
   final List<Color> colors;
@@ -257,6 +261,10 @@ class Show {
   final String? id;
   final String? creatorId;
   final int? durationSeconds;
+  final String? seriesTitle;
+  final String description;
+  final String? categoryId;
+  final String categoryName;
 
   Show copyWith({String? duration, int? durationSeconds}) => Show(
     title,
@@ -268,6 +276,10 @@ class Show {
     id: id,
     creatorId: creatorId,
     durationSeconds: durationSeconds ?? this.durationSeconds,
+    categoryId: categoryId,
+    categoryName: categoryName,
+    seriesTitle: seriesTitle,
+    description: description,
   );
 }
 
@@ -340,6 +352,7 @@ class _ShellState extends State<Shell> {
   Duration _latestPosition = Duration.zero;
   bool apiLoading = true;
   bool usingSamplePodcasts = true;
+  List<Map<String, dynamic>> categories = const [];
   String? apiError;
   final commentsByPodcast = <String, List<CommentData>>{};
   final likeCountsByPodcast = <String, int>{};
@@ -454,6 +467,7 @@ class _ShellState extends State<Shell> {
         _optionalList(api.creators()),
       ]);
       final podcasts = results[0] as List<ListenerPodcast>;
+      categories = results[7] as List<Map<String, dynamic>>;
       final creatorList = results[8] as List<Map<String, dynamic>>;
       final creatorIds = creatorList
           .map((item) => item['creatorProfileId']?.toString())
@@ -490,6 +504,10 @@ class _ShellState extends State<Shell> {
             id: podcast.id,
             creatorId: podcast.creatorId,
             durationSeconds: duration,
+            categoryId: podcast.categoryId,
+            categoryName: podcast.categoryName,
+            seriesTitle: podcast.seriesTitle,
+            description: podcast.description,
           );
         }).toList();
         final interactionResponses = await Future.wait(
@@ -809,6 +827,7 @@ class _ShellState extends State<Shell> {
     backgroundColor: Colors.transparent,
     builder: (_) => Player(
       show: show,
+      api: api,
       audioPlayer: _audioPlayer,
       playing: playing,
       initialProgress: progressByShow[show.title] ?? 0,
@@ -876,6 +895,7 @@ class _ShellState extends State<Shell> {
     final pages = [
       Home(
         displayName: widget.displayName,
+        categories: categories,
         onPlay: play,
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
@@ -884,7 +904,12 @@ class _ShellState extends State<Shell> {
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
       ),
-      Discover(api: api, onOpen: openShow, onOpenCreator: _showCreatorProfile),
+      Discover(
+        api: api,
+        categories: categories,
+        onOpen: openShow,
+        onOpenCreator: _showCreatorProfile,
+      ),
       const LivestreamPage(),
       LibraryPage(
         api: api,
@@ -1084,6 +1109,7 @@ class Home extends StatelessWidget {
   const Home({
     super.key,
     required this.displayName,
+    required this.categories,
     required this.onPlay,
     required this.onOpen,
     required this.onSearch,
@@ -1093,6 +1119,7 @@ class Home extends StatelessWidget {
     required this.onProfile,
   });
   final String displayName;
+  final List<Map<String, dynamic>> categories;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
   final VoidCallback onSearch, onWallet, onNotifications, onProfile;
@@ -1207,40 +1234,48 @@ class Home extends StatelessWidget {
         ),
       ),
       SliverToBoxAdapter(
-        child: TimelineFilter(onOpen: onOpen, onPlay: onPlay),
+        child: TopicFilter(
+          categories: categories,
+          onOpen: onOpen,
+          onPlay: onPlay,
+        ),
       ),
       const SliverToBoxAdapter(child: SizedBox(height: 24)),
     ],
   );
 }
 
-class TimelineFilter extends StatefulWidget {
-  const TimelineFilter({super.key, required this.onOpen, required this.onPlay});
+class TopicFilter extends StatefulWidget {
+  const TopicFilter({
+    super.key,
+    required this.categories,
+    required this.onOpen,
+    required this.onPlay,
+  });
+  final List<Map<String, dynamic>> categories;
   final ValueChanged<Show> onOpen;
   final ValueChanged<Show> onPlay;
 
   @override
-  State<TimelineFilter> createState() => _TimelineFilterState();
+  State<TopicFilter> createState() => _TopicFilterState();
 }
 
-class _TimelineFilterState extends State<TimelineFilter> {
-  String selected = '1945 - 1954';
-  static const periods = [
-    'Tất cả',
-    '1858 - 1945',
-    '1945 - 1954',
-    '1954 - 1975',
-    '1975 - 1986',
-    '1986 - nay',
-  ];
+class _TopicFilterState extends State<TopicFilter> {
+  String? selectedCategoryId;
 
   @override
   Widget build(BuildContext context) {
-    final filtered = selected == 'Tất cả'
+    final filtered = selectedCategoryId == null
         ? shows
-        : shows.where((show) => show.period == selected).toList();
+        : shows
+              .where((show) => show.categoryId == selectedCategoryId)
+              .toList();
+    final topicItems = [
+      const <String, dynamic>{'categoryId': null, 'name': 'Tất cả'},
+      ...widget.categories,
+    ];
     return Section(
-      title: 'Theo dòng thời gian',
+      title: 'Theo chủ đề',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1249,14 +1284,18 @@ class _TimelineFilterState extends State<TimelineFilter> {
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: periods.length,
+              itemCount: topicItems.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, index) {
-                final period = periods[index];
+                final category = topicItems[index];
+                final categoryId = category['categoryId']?.toString() ??
+                    category['id']?.toString();
+                final categoryName = category['name']?.toString() ?? '';
                 return ChoiceChip(
-                  label: Text(period),
-                  selected: period == selected,
-                  onSelected: (_) => setState(() => selected = period),
+                  label: Text(categoryName),
+                  selected: categoryId == selectedCategoryId,
+                  onSelected: (_) =>
+                      setState(() => selectedCategoryId = categoryId),
                 );
               },
             ),
@@ -1286,7 +1325,7 @@ class _TimelineFilterState extends State<TimelineFilter> {
           if (filtered.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text('Chưa có podcast trong mốc thời gian này.'),
+              child: Text('Chưa có podcast trong chủ đề này.'),
             ),
         ],
       ),
@@ -1428,10 +1467,12 @@ class Discover extends StatefulWidget {
   const Discover({
     super.key,
     required this.api,
+    required this.categories,
     required this.onOpen,
     required this.onOpenCreator,
   });
   final ListenerApi api;
+  final List<Map<String, dynamic>> categories;
   final ValueChanged<Show> onOpen;
   final ValueChanged<Show> onOpenCreator;
   @override
@@ -1440,6 +1481,7 @@ class Discover extends StatefulWidget {
 
 class _DiscoverState extends State<Discover> {
   String query = '';
+  String? selectedCategoryId;
   final searchController = TextEditingController();
   final searchHistory = <String>['lịch sử Việt Nam', 'Đổi Mới', 'Trường Sơn'];
   Timer? creatorSearchTimer;
@@ -1533,7 +1575,9 @@ class _DiscoverState extends State<Discover> {
         .where(
           (s) => '${s.title} ${s.channel}'.toLowerCase().contains(
             query.toLowerCase(),
-          ),
+          ) &&
+              (selectedCategoryId == null ||
+                  s.categoryId == selectedCategoryId),
         )
         .toList();
     return CustomScrollView(
@@ -1564,6 +1608,35 @@ class _DiscoverState extends State<Discover> {
             ),
           ),
         ),
+        if (widget.categories.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: DropdownButtonFormField<String?>(
+                value: selectedCategoryId,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Chủ đề',
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Tất cả chủ đề'),
+                  ),
+                  ...widget.categories.map(
+                    (category) => DropdownMenuItem<String?>(
+                      value: category['categoryId']?.toString() ??
+                          category['id']?.toString(),
+                      child: Text(category['name']?.toString() ?? ''),
+                    ),
+                  ),
+                ],
+                onChanged: (value) =>
+                    setState(() => selectedCategoryId = value),
+              ),
+            ),
+          ),
         if (query.isEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
@@ -1615,10 +1688,10 @@ class _DiscoverState extends State<Discover> {
           SliverList(
             delegate: SliverChildBuilderDelegate(
               (_, i) => _AudioResultTile(
-                show: shows[i],
-                onOpen: () => widget.onOpen(shows[i]),
+                show: result[i],
+                onOpen: () => widget.onOpen(result[i]),
               ),
-              childCount: shows.length,
+              childCount: result.length,
             ),
           ),
         ] else ...[
@@ -3444,6 +3517,7 @@ class Player extends StatefulWidget {
   const Player({
     super.key,
     required this.show,
+    required this.api,
     required this.audioPlayer,
     required this.displayName,
     required this.playing,
@@ -3465,6 +3539,7 @@ class Player extends StatefulWidget {
     required this.onToggle,
   });
   final Show show;
+  final ListenerApi api;
   final AudioPlayer audioPlayer;
   final String displayName;
   final bool playing;
@@ -3753,6 +3828,9 @@ class _PlayerState extends State<Player> {
     backgroundColor: const Color(0xFF181818),
     builder: (_) => MorePanel(
       show: widget.show,
+      loadTranscript: widget.show.id == null
+          ? null
+          : () => widget.api.podcastTranscript(widget.show.id!),
       onReport: widget.onReport,
       onMembership: widget.onMembership,
       onCreatorProfile: widget.onCreatorProfile,
@@ -4795,11 +4873,13 @@ class MorePanel extends StatelessWidget {
   const MorePanel({
     super.key,
     required this.show,
+    this.loadTranscript,
     required this.onReport,
     required this.onMembership,
     required this.onCreatorProfile,
   });
   final Show show;
+  final Future<Map<String, dynamic>> Function()? loadTranscript;
   final VoidCallback onReport, onMembership, onCreatorProfile;
 
   @override
@@ -4807,6 +4887,30 @@ class MorePanel extends StatelessWidget {
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        ListTile(
+          leading: const Icon(Icons.info_outline, color: Colors.white),
+          title: const Text(
+            'Thông tin podcast',
+            style: TextStyle(color: Colors.white),
+          ),
+          subtitle: const Text(
+            'Series, mô tả, chủ đề và script',
+            style: TextStyle(color: Colors.white60),
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              showDragHandle: true,
+              backgroundColor: const Color(0xFF181818),
+              builder: (_) => PodcastInfoPanel(
+                show: show,
+                loadTranscript: loadTranscript,
+              ),
+            );
+          },
+        ),
         ListTile(
           leading: const Icon(Icons.flag_outlined, color: Colors.white),
           title: const Text(
@@ -4848,6 +4952,148 @@ class MorePanel extends StatelessWidget {
           },
         ),
         const SizedBox(height: 10),
+      ],
+    ),
+  );
+}
+
+class PodcastInfoPanel extends StatefulWidget {
+  const PodcastInfoPanel({
+    super.key,
+    required this.show,
+    this.loadTranscript,
+  });
+  final Show show;
+  final Future<Map<String, dynamic>> Function()? loadTranscript;
+
+  @override
+  State<PodcastInfoPanel> createState() => _PodcastInfoPanelState();
+}
+
+class _PodcastInfoPanelState extends State<PodcastInfoPanel> {
+  late final Future<Map<String, dynamic>>? transcriptFuture =
+      widget.loadTranscript?.call();
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: .72,
+      minChildSize: .35,
+      maxChildSize: .92,
+      builder: (_, controller) => ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+        children: [
+          Text(
+            'Thông tin podcast',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _PodcastInfoRow(
+            icon: Icons.queue_music_outlined,
+            label: 'Series',
+            value: widget.show.seriesTitle?.isNotEmpty == true
+                ? widget.show.seriesTitle!
+                : 'Podcast độc lập',
+          ),
+          _PodcastInfoRow(
+            icon: Icons.short_text,
+            label: 'Mô tả ngắn',
+            value: widget.show.description.isNotEmpty
+                ? widget.show.description
+                : 'Chưa có mô tả.',
+          ),
+          _PodcastInfoRow(
+            icon: Icons.category_outlined,
+            label: 'Chủ đề và thể loại',
+            value: widget.show.categoryName.isNotEmpty
+                ? widget.show.categoryName
+                : 'Chưa xác định',
+          ),
+          const SizedBox(height: 14),
+          const Text(
+            'Script của podcast',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (transcriptFuture == null)
+            const Text(
+              'Chưa có script cho podcast này.',
+              style: TextStyle(color: Colors.white70),
+            )
+          else
+            FutureBuilder<Map<String, dynamic>>(
+              future: transcriptFuture,
+              builder: (_, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 18),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return const Text(
+                    'Script chưa sẵn sàng.',
+                    style: TextStyle(color: Colors.white70),
+                  );
+                }
+                final transcript = snapshot.data?['fullText']?.toString() ?? '';
+                final status = snapshot.data?['status']?.toString() ?? '';
+                return Text(
+                  transcript.isNotEmpty
+                      ? transcript
+                      : (status.isNotEmpty
+                          ? 'Script đang được xử lý ($status).'
+                          : 'Chưa có nội dung script.'),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    height: 1.45,
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _PodcastInfoRow extends StatelessWidget {
+  const _PodcastInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.white70, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.white60)),
+              const SizedBox(height: 3),
+              Text(value, style: const TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
       ],
     ),
   );
