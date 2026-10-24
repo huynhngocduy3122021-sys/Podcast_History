@@ -314,6 +314,16 @@ class ListenerApi {
   Future<Map<String, dynamic>> unlike(String podcastId) =>
       _sendMap('DELETE', '/api/podcasts/$podcastId/like');
 
+  Future<Map<String, dynamic>> commentLikes(String commentId) =>
+      _sendMap('GET', '/api/comments/$commentId/likes');
+
+  Future<Map<String, dynamic>> likeComment(String commentId) =>
+      _sendMap('PUT', '/api/comments/$commentId/like');
+
+  Future<void> unlikeComment(String commentId) async {
+    await _send('DELETE', '/api/comments/$commentId/like');
+  }
+
   Future<List<Map<String, dynamic>>> comments(
     String podcastId, {
     int page = 0,
@@ -356,6 +366,21 @@ class ListenerApi {
 
   Future<void> deleteComment(String commentId) async {
     await _send('DELETE', '/api/comments/$commentId');
+  }
+
+  Future<List<Map<String, dynamic>>> notifications({
+    int page = 0,
+    int size = 20,
+  }) async => _pageItems(
+    await _send(
+      'GET',
+      '/api/me/notifications',
+      queryParameters: {'page': '$page', 'size': '$size'},
+    ),
+  );
+
+  Future<void> markNotificationRead(String notificationId) async {
+    await _send('PUT', '/api/me/notifications/$notificationId/read');
   }
 
   Stream<String> commentStream(String podcastId) async* {

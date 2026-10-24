@@ -370,27 +370,7 @@ class _ShellState extends State<Shell> {
   final likedShowTitles = <String>{shows[0].title};
   final savedShowTitles = <String>{};
   int walletBalance = 350000;
-  final notifications = <AppNotification>[
-    const AppNotification(
-      id: 'new-episode',
-      title: 'Sử Việt kể chuyện đã đăng tập mới',
-      subtitle: '12 phút trước',
-      icon: Icons.mic_none,
-    ),
-    const AppNotification(
-      id: 'membership',
-      title: 'Bạn đã trở thành thành viên',
-      subtitle: 'Hôm qua',
-      icon: Icons.workspace_premium_outlined,
-    ),
-    const AppNotification(
-      id: 'liked-comment',
-      title: 'Lan Anh đã thích bình luận của bạn',
-      subtitle: '2 ngày trước',
-      icon: Icons.favorite_border,
-      read: true,
-    ),
-  ];
+  final notifications = <AppNotification>[];
 
   @override
   void initState() {
@@ -469,10 +449,17 @@ class _ShellState extends State<Shell> {
         _optionalList(api.seriesRequests()),
         _optionalList(api.categories()),
         _optionalList(api.creators()),
+        _optionalList(api.notifications()),
       ]);
       final podcasts = results[0] as List<ListenerPodcast>;
       categories = results[7] as List<Map<String, dynamic>>;
       final creatorList = results[8] as List<Map<String, dynamic>>;
+      notifications
+        ..clear()
+        ..addAll(
+          (results[9] as List<Map<String, dynamic>>)
+              .map(AppNotification.fromJson),
+        );
       final creatorIds = creatorList
           .map((item) => item['creatorProfileId']?.toString())
           .whereType<String>()
@@ -535,15 +522,8 @@ class _ShellState extends State<Shell> {
           commentCountsByPodcast[podcast.id] = interaction.commentCount;
           commentsByPodcast[podcast.id] = interaction.comments
               .map(
-                (comment) => CommentData(
-                  '${comment['displayName'] ?? comment['username'] ?? 'Listener'}',
-                  '${comment['content'] ?? ''}',
-                  comment['timestampSeconds'] == null
-                      ? ''
-                      : _formatDuration(
-                          (comment['timestampSeconds'] as num).toInt(),
-                        ),
-                  id: comment['commentId']?.toString(),
+                (comment) => CommentData.fromJson(
+                  comment,
                   durationSeconds: podcast.durationSeconds,
                 ),
               )
@@ -678,6 +658,26 @@ class _ShellState extends State<Shell> {
     }
     _audioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<CommentData> _toggleCommentLike(CommentData comment) async {
+    final id = comment.id;
+    if (id == null) return comment;
+    if (comment.likedByMe) {
+      await api.unlikeComment(id);
+    } else {
+      await api.likeComment(id);
+    }
+    final likes = await api.commentLikes(id);
+    final updated = comment.copyWith(
+      likeCount: (likes['likeCount'] as num?)?.toInt() ?? comment.likeCount,
+      likedByMe: likes['likedByMe'] == true,
+    );
+    for (final items in commentsByPodcast.values) {
+      final index = items.indexWhere((item) => item.id == id);
+      if (index >= 0) items[index] = updated;
+    }
+    return updated;
   }
 
   void updateLiked(Show show, bool liked) => setState(() {
@@ -887,6 +887,7 @@ class _ShellState extends State<Shell> {
               return comment;
             },
       onLikedChanged: (value) => updateLiked(show, value),
+      onCommentLike: _toggleCommentLike,
       onSavedChanged: (value) => updateSaved(show, value),
       onReport: () => _showReport(show),
       onMembership: () => _showMembership(show),
@@ -1016,6 +1017,7 @@ class _ShellState extends State<Shell> {
           final index = notifications.indexWhere((item) => item.id == id);
           if (index >= 0) {
             notifications[index] = notifications[index].copyWith(read: true);
+            unawaited(api.markNotificationRead(id));
           }
         });
       },
@@ -2499,6 +2501,26 @@ class AppNotification {
   final IconData icon;
   final bool read;
 
+  factory AppNotification.fromJson(Map<String, dynamic> json) {
+    final type = '${json['type'] ?? ''}'.toUpperCase();
+    final createdAt = DateTime.tryParse('${json['createdAt'] ?? ''}')?.toLocal();
+    final message = '${json['message'] ?? ''}'.trim();
+    final time = _notificationTime(createdAt);
+    return AppNotification(
+      id: '${json['notificationId'] ?? ''}',
+      title: '${json['title'] ?? 'Thông báo'}',
+      subtitle: [message, time].where((item) => item.isNotEmpty).join(' • '),
+      icon: type.contains('COMMENT') || type.contains('LIKE')
+          ? Icons.favorite_border
+          : type.contains('MEMBERSHIP')
+              ? Icons.workspace_premium_outlined
+              : type.contains('PODCAST')
+                  ? Icons.mic_none
+                  : Icons.notifications_none,
+      read: json['read'] == true,
+    );
+  }
+
   AppNotification copyWith({bool? read}) => AppNotification(
     id: id,
     title: title,
@@ -2506,6 +2528,16 @@ class AppNotification {
     icon: icon,
     read: read ?? this.read,
   );
+}
+
+String _notificationTime(DateTime? createdAt) {
+  if (createdAt == null) return '';
+  final difference = DateTime.now().difference(createdAt);
+  if (difference.inMinutes < 1) return 'Vừa xong';
+  if (difference.inHours < 1) return '${difference.inMinutes} phút trước';
+  if (difference.inDays < 1) return '${difference.inHours} giờ trước';
+  if (difference.inDays < 7) return '${difference.inDays} ngày trước';
+  return '${createdAt.day.toString().padLeft(2, '0')}/${createdAt.month.toString().padLeft(2, '0')}/${createdAt.year}';
 }
 
 class NotificationPanel extends StatefulWidget {
@@ -3556,6 +3588,7 @@ class Player extends StatefulWidget {
     required this.onSeek,
     this.onComment,
     required this.onLikedChanged,
+    required this.onCommentLike,
     required this.onSavedChanged,
     required this.onReport,
     required this.onMembership,
@@ -3577,6 +3610,7 @@ class Player extends StatefulWidget {
   final ValueChanged<double> onProgressChanged;
   final Future<void> Function(Duration) onSeek;
   final Future<CommentData> Function(String, int)? onComment;
+  final Future<CommentData> Function(CommentData) onCommentLike;
   final ValueChanged<bool> onLikedChanged, onSavedChanged;
   final VoidCallback onReport, onMembership, onCreatorProfile;
   final VoidCallback onToggle;
@@ -3807,8 +3841,22 @@ class _PlayerState extends State<Player> {
     context: context,
     isScrollControlled: true,
     backgroundColor: const Color(0xFF181818),
-    builder: (_) => CommentsPanel(comments: comments, onSubmit: addComment),
+    builder: (_) => CommentsPanel(
+      comments: comments,
+      onSubmit: addComment,
+      onLike: _toggleCommentLike,
+    ),
   );
+
+  Future<CommentData> _toggleCommentLike(CommentData comment) async {
+    final updated = await widget.onCommentLike(comment);
+    if (!mounted) return updated;
+    setState(() {
+      final index = comments.indexWhere((item) => item.id == updated.id);
+      if (index >= 0) comments[index] = updated;
+    });
+    return updated;
+  }
 
   void _showPlaylist() => showModalBottomSheet(
     context: context,
@@ -4115,6 +4163,9 @@ class _PlayerState extends State<Player> {
                 name: comment.name,
                 text: comment.text,
                 time: comment.time,
+                likeCount: comment.likeCount,
+                likedByMe: comment.likedByMe,
+                onLike: () => _toggleCommentLike(comment),
               ),
             ),
           ],
@@ -4244,10 +4295,24 @@ class CommentData {
     this.time, {
     this.id,
     this.durationSeconds = 1920,
+    this.likeCount = 0,
+    this.likedByMe = false,
   });
   final String name, text, time;
   final String? id;
   final int durationSeconds;
+  final int likeCount;
+  final bool likedByMe;
+
+  CommentData copyWith({int? likeCount, bool? likedByMe}) => CommentData(
+    name,
+    text,
+    time,
+    id: id,
+    durationSeconds: durationSeconds,
+    likeCount: likeCount ?? this.likeCount,
+    likedByMe: likedByMe ?? this.likedByMe,
+  );
 
   factory CommentData.fromJson(
     Map<String, dynamic> json, {
@@ -4267,6 +4332,8 @@ class CommentData {
       time,
       id: id,
       durationSeconds: durationSeconds,
+      likeCount: (json['likeCount'] as num?)?.toInt() ?? 0,
+      likedByMe: json['likedByMe'] == true,
     );
   }
 
@@ -4313,9 +4380,11 @@ class CommentsPanel extends StatefulWidget {
     super.key,
     required this.comments,
     required this.onSubmit,
+    required this.onLike,
   });
   final List<CommentData> comments;
   final Future<bool> Function(String) onSubmit;
+  final Future<CommentData> Function(CommentData) onLike;
 
   @override
   State<CommentsPanel> createState() => _CommentsPanelState();
@@ -4378,6 +4447,9 @@ class _CommentsPanelState extends State<CommentsPanel> {
                       name: comment.name,
                       text: comment.text,
                       time: comment.time,
+                      likeCount: comment.likeCount,
+                      likedByMe: comment.likedByMe,
+                      onLike: () => widget.onLike(comment),
                     ),
                   )
                   .toList(),
@@ -5257,8 +5329,14 @@ class Comment extends StatelessWidget {
     required this.name,
     required this.text,
     required this.time,
+    this.likeCount = 0,
+    this.likedByMe = false,
+    this.onLike,
   });
   final String name, text, time;
+  final int likeCount;
+  final bool likedByMe;
+  final Future<CommentData> Function()? onLike;
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -5299,8 +5377,85 @@ class Comment extends StatelessWidget {
           style: TextStyle(color: foreground, fontWeight: FontWeight.w700),
         ),
         subtitle: Text(text, style: TextStyle(color: mutedForeground)),
-        trailing: Icon(Icons.favorite_border, color: mutedForeground),
+        trailing: _CommentLikeButton(
+          likeCount: likeCount,
+          likedByMe: likedByMe,
+          onLike: onLike,
+          color: mutedForeground,
+        ),
       ),
     );
   }
+}
+
+class _CommentLikeButton extends StatefulWidget {
+  const _CommentLikeButton({
+    required this.likeCount,
+    required this.likedByMe,
+    required this.onLike,
+    required this.color,
+  });
+  final int likeCount;
+  final bool likedByMe;
+  final Future<CommentData> Function()? onLike;
+  final Color color;
+
+  @override
+  State<_CommentLikeButton> createState() => _CommentLikeButtonState();
+}
+
+class _CommentLikeButtonState extends State<_CommentLikeButton> {
+  late bool liked = widget.likedByMe;
+  late int count = widget.likeCount;
+  bool pending = false;
+
+  @override
+  void didUpdateWidget(covariant _CommentLikeButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!pending) {
+      liked = widget.likedByMe;
+      count = widget.likeCount;
+    }
+  }
+
+  Future<void> toggle() async {
+    final action = widget.onLike;
+    if (action == null || pending) return;
+    setState(() => pending = true);
+    try {
+      final updated = await action();
+      if (mounted) {
+        setState(() {
+          liked = updated.likedByMe;
+          count = updated.likeCount;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('KhĂ´ng thá»ƒ cáº­p nháº­t like: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => pending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      IconButton(
+        onPressed: pending ? null : toggle,
+        tooltip: liked ? 'Bỏ thích' : 'Thích bình luận',
+        icon: Icon(
+          liked ? Icons.favorite : Icons.favorite_border,
+          color: liked ? Colors.deepOrange : widget.color,
+          size: 20,
+        ),
+      ),
+      if (count > 0)
+        Text('$count', style: TextStyle(color: widget.color, fontSize: 12)),
+    ],
+  );
 }
