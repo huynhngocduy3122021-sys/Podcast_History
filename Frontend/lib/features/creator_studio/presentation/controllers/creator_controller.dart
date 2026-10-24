@@ -534,6 +534,40 @@ class CreatorSeriesNotifier extends Notifier<AsyncValue<List<CreatorSeries>>> {
     await loadSeries();
     return series;
   }
+
+  Future<CreatorSeries?> updateSeries({
+    required String seriesId,
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description = '',
+    String coverUrl = '',
+  }) async {
+    final series = await _repo.updateSeries(
+      seriesId: seriesId,
+      title: title,
+      slug: slug,
+      categoryId: categoryId,
+      description: description,
+      coverUrl: coverUrl,
+    );
+    await loadSeries();
+    return series;
+  }
+
+  Future<bool> deleteSeries(String seriesId) async {
+    final ok = await _repo.deleteSeries(seriesId);
+    await loadSeries();
+    return ok;
+  }
+
+  Future<CreatorSeries?> getSeriesById(String seriesId) async {
+    return _repo.getSeriesById(seriesId);
+  }
+
+  Future<List<CreatorPodcast>> getSeriesPodcasts(String seriesId) async {
+    return _repo.getSeriesPodcasts(seriesId);
+  }
 }
 
 final creatorSeriesProvider =

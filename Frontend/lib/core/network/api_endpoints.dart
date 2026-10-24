@@ -2,7 +2,8 @@ class ApiEndpoints {
   // Base URLs
   static const String defaultBaseUrl =
       'https://bullpen-viewer-overfill.ngrok-free.dev';
-  static const String emulatorBaseUrl = 'http://10.0.2.2:8081';
+  static const String emulatorBaseUrl =
+      'https://bullpen-viewer-overfill.ngrok-free.dev';
 
   // Auth
   static const String login = '/api/auth/login';
@@ -53,10 +54,18 @@ class ApiEndpoints {
   static String submitMilestone(String milestoneId) =>
       '/api/creator/milestones/$milestoneId/submissions';
 
-  // Comments
+  // Comments & Likes
   static String podcastComments(String podcastId) =>
       '/api/podcasts/$podcastId/comments';
+  static String podcastLikes(String podcastId) =>
+      '/api/podcasts/$podcastId/likes';
+  static String podcastLike(String podcastId) =>
+      '/api/podcasts/$podcastId/like';
   static String commentById(String commentId) => '/api/comments/$commentId';
+  static String commentLikes(String commentId) =>
+      '/api/comments/$commentId/likes';
+  static String commentLike(String commentId) =>
+      '/api/comments/$commentId/like';
   static const String creatorCommentsContract = '/api/creator/comments';
 
   // Wallet & Bank (Contract endpoints - skipped or graceful fallback if BE not yet implemented)

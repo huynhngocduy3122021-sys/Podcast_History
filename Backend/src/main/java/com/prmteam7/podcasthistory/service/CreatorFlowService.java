@@ -180,7 +180,11 @@ public class CreatorFlowService {
 
         podcast.setCategory(category);
         applyPodcastWrite(podcast, request);
-        return toPodcastItem(podcastRepository.save(podcast));
+        Podcast saved = podcastRepository.save(podcast);
+        if ("PENDING_REVIEW".equalsIgnoreCase(saved.getStatus())) {
+            aiModeration.enqueue(saved);
+        }
+        return toPodcastItem(saved);
     }
 
     @Transactional
@@ -257,13 +261,24 @@ public class CreatorFlowService {
         Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
         requireEditable(podcast);
         String mediaType = podcast.getMediaType();
+        if ((mediaType == null || mediaType.isBlank()) && podcast.getMediaUrl() != null) {
+            String lower = podcast.getMediaUrl().toLowerCase(Locale.ROOT);
+            if (lower.endsWith(".mp3")) mediaType = "audio/mpeg";
+            else if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) mediaType = "audio/mp4";
+            else if (lower.endsWith(".wav")) mediaType = "audio/wav";
+            else if (lower.endsWith(".aac")) mediaType = "audio/aac";
+            else if (lower.endsWith(".webm")) mediaType = "video/webm";
+            if (mediaType != null) {
+                podcast.setMediaType(mediaType);
+            }
+        }
         boolean hasPlayableMedia = mediaType != null
                 && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"));
         if (podcast.getMediaUrl() == null || podcast.getMediaUrl().isBlank() || !hasPlayableMedia) {
             throw new InvalidFlowRequestException("Hãy upload video hoặc audio cho podcast trước khi gửi duyệt.");
         }
         if (podcast.getDurationSeconds() == null || podcast.getDurationSeconds() <= 0) {
-            throw new InvalidFlowRequestException("Thời lượng podcast phải lớn hơn 0.");
+            podcast.setDurationSeconds(1800);
         }
         podcast.setStatus("PENDING_REVIEW");
         podcast.setPublishedAt(null);
@@ -352,6 +367,10 @@ public class CreatorFlowService {
         if (status.equals("APPROVED") || status.equals("PUBLISHED")) {
             podcast.setStatus("DRAFT");
             podcast.setPublishedAt(null);
+            return;
+        }
+        if (status.equals("PENDING_REVIEW")) {
+            // Cho phép chỉnh sửa khi podcast đang chờ duyệt, giữ nguyên trạng thái PENDING_REVIEW để admin tiếp tục duyệt bản mới nhất
             return;
         }
         if (!status.equals("DRAFT") && !status.equals("REJECTED")) {

@@ -16,6 +16,8 @@ import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 
 class CreatorDashboardScreen extends ConsumerStatefulWidget {
   final Function(int tabIndex)? onNavigateTab;
@@ -43,11 +45,96 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final wallet = walletAsync.value;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Creator Studio'),
         actions: [
+          // Nút Series ở góc trên bên phải
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SeriesManagementScreen()),
+                ),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.surfaceVariantDark : const Color(0xFFF3ECE4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? AppColors.outlineDark : const Color(0xFFDFD4C8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.video_collection_rounded,
+                        size: 15,
+                        color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Series',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Nút Ví tiền ở góc trên bên phải
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const WalletScreen()),
+                ),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.surfaceVariantDark : const Color(0xFFF3ECE4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? AppColors.outlineDark : const Color(0xFFDFD4C8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet_rounded,
+                        size: 15,
+                        color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        wallet != null ? '${(wallet.available / 1000).toStringAsFixed(0)}k đ' : 'Ví tiền',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: 'Hội viên kênh',
             icon: const Icon(Icons.stars_rounded, color: AppColors.secondaryLight),
@@ -55,6 +142,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
               widget.onNavigateTab?.call(4);
             },
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: profileAsync.when(
@@ -137,7 +225,9 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                         value: AppFormatters.formatVND(monthlyRevenue),
                         icon: Icons.account_balance_wallet_rounded,
                         iconColor: AppColors.success,
-                        onTap: () => widget.onNavigateTab?.call(2),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const WalletScreen()),
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
@@ -147,7 +237,9 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                         value: AppFormatters.formatVND(wallet?.pending ?? 0),
                         icon: Icons.hourglass_bottom_rounded,
                         iconColor: AppColors.warning,
-                        onTap: () => widget.onNavigateTab?.call(2),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const WalletScreen()),
+                        ),
                       ),
                     ),
                   ],
@@ -500,28 +592,34 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Tăng trưởng lượt nghe',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-              SegmentedButton<int>(
-                segments: const [
-                  ButtonSegment(value: 0, label: Text('7N', style: TextStyle(fontSize: 11))),
-                  ButtonSegment(value: 1, label: Text('4T', style: TextStyle(fontSize: 11))),
-                  ButtonSegment(value: 2, label: Text('12T', style: TextStyle(fontSize: 11))),
-                ],
-                selected: {_chartPeriodIndex},
-                onSelectionChanged: (set) {
-                  setState(() => _chartPeriodIndex = set.first);
-                },
-                style: SegmentedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
+          SizedBox(
+            width: double.infinity,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                const Text(
+                  'Tăng trưởng lượt nghe',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
                 ),
-              ),
-            ],
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(value: 0, label: Text('7N', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(value: 1, label: Text('4T', style: TextStyle(fontSize: 11))),
+                    ButtonSegment(value: 2, label: Text('12T', style: TextStyle(fontSize: 11))),
+                  ],
+                  selected: {_chartPeriodIndex},
+                  onSelectionChanged: (set) {
+                    setState(() => _chartPeriodIndex = set.first);
+                  },
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
@@ -665,23 +763,30 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundImage: req.listenerAvatar.isNotEmpty
-                                ? NetworkImage(req.listenerAvatar)
-                                : null,
-                            onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
-                            child: const Icon(Icons.person, size: 14),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Text(
-                            req.listenerName,
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                          ),
-                        ],
+                      Expanded(
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundImage: req.listenerAvatar.isNotEmpty
+                                  ? NetworkImage(req.listenerAvatar)
+                                  : null,
+                              onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                              child: const Icon(Icons.person, size: 14),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Flexible(
+                              child: Text(
+                                req.listenerName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: AppSpacing.sm),
                       Text(
                         AppFormatters.formatVND(req.totalBudget),
                         style: AppTypography.tabularNumbers(
@@ -730,18 +835,24 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Tracks vừa xuất bản',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            ),
-            TextButton(
-              onPressed: () => widget.onNavigateTab?.call(0), // Sang tab Podcast
-              child: const Text('Xem tất cả tracks'),
-            ),
-          ],
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              const Text(
+                'Tracks vừa xuất bản',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+              TextButton(
+                onPressed: () => widget.onNavigateTab?.call(0), // Sang tab Podcast
+                child: const Text('Xem tất cả tracks'),
+              ),
+            ],
+          ),
         ),
         if (podcasts.isEmpty)
           Container(
@@ -868,13 +979,14 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 2),
-                              Row(
+                              Wrap(
+                                spacing: AppSpacing.sm,
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   StatusChip(
                                     label: pod.statusDisplay,
                                     type: pod.statusType,
                                   ),
-                                  const SizedBox(width: AppSpacing.sm),
                                   Text(
                                     AppFormatters.formatDuration(pod.duration),
                                     style: TextStyle(
