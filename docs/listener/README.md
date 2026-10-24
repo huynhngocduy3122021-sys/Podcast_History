@@ -50,9 +50,11 @@ Khi phát hết, gửi `completed: true`. Signed `playbackUrl` có thể hết h
 |---|---|---|
 | Số lượt thích | `GET /api/podcasts/{podcastId}/likes` | Không; response `likeCount`, `likedByMe` |
 | Thích/bỏ thích | `PUT` / `DELETE /api/podcasts/{podcastId}/like` | Không body |
-| Danh sách bình luận | `GET /api/podcasts/{podcastId}/comments?page=0&size=20` | Không; response Page |
+| Danh sách bình luận | `GET /api/podcasts/{podcastId}/comments?page=0&size=20` | Không; response Page, mỗi comment có `likeCount` và `likedByMe` |
 | Gửi bình luận | `POST /api/podcasts/{podcastId}/comments` | `content` không rỗng ≤5.000, `timestampSeconds` tùy chọn ≥0 và không quá độ dài tập |
 | Sửa/xóa bình luận của mình | `PUT /api/comments/{commentId}` body `{content}`; `DELETE` cùng URL | PUT giữ nguyên timestamp cũ |
+| Số lượt thích comment | `GET /api/comments/{commentId}/likes` | Không; trả `{commentId, likeCount, likedByMe}` |
+| Thích/bỏ thích comment | `PUT` / `DELETE /api/comments/{commentId}/like` | Không body; trả `{commentId, likeCount, likedByMe}`; gọi lặp không tạo like trùng |
 | Bình luận mới | `GET /api/podcasts/{podcastId}/comments/stream` | SSE, `Accept: text/event-stream`; mất kết nối thì tải GET comments lại |
 | Theo dõi/bỏ theo dõi kênh | `PUT` / `DELETE /api/creators/{creatorId}/follow` | Không body |
 | Kênh theo dõi | `GET /api/me/follows?page=0&size=20` | Không |
@@ -60,6 +62,8 @@ Khi phát hết, gửi `completed: true`. Signed `playbackUrl` có thể hết h
 | Danh sách đã lưu | `GET /api/me/saved-podcasts?page=0&size=20` | Không |
 
 Ví dụ comment tại phút 18: `{"content":"Đoạn này rất rõ","timestampSeconds":1080}`. `timestampSeconds` lấy từ vị trí player lúc nhấn gửi, không phải thời gian đồng hồ. Danh sách đã lưu hiện là một danh sách chung; chưa có nhiều playlist đặt tên.
+
+Like comment chỉ áp dụng cho bình luận còn hiển thị của podcast đã phát hành. Nếu bình luận bị xóa/ẩn hoặc podcast không còn hiển thị, API like trả `404`.
 
 ## 4. Báo cáo, nguồn tham khảo, thông báo
 
@@ -72,6 +76,8 @@ Ví dụ comment tại phút 18: `{"content":"Đoạn này rất rõ","timestamp
 | Tải PDF nguồn | `GET /api/podcasts/{podcastId}/references/{referenceId}/file` | Dùng `downloadUrl`, lấy lại khi link hết hạn |
 | Thông báo | `GET /api/me/notifications?page=0&size=20` | Page thông báo |
 | Đánh dấu đã đọc | `PUT /api/me/notifications/{notificationId}/read` | Không body; `204` |
+
+Khi kênh đang theo dõi có podcast mới được duyệt mà listener có quyền nghe, listener nhận thông báo `NEW_PODCAST`. Khi gói membership đang tắt, cả tập `MEMBERS_ONLY` cũng nghe được theo luồng playback hiện tại. Mỗi phần tử trong `content[]` của API thông báo có `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt` và `payload`. Với `NEW_PODCAST`, `payload` có `podcastId` và `creatorId`; dùng `podcastId` để mở chi tiết. Frontend gọi lại API danh sách để cập nhật thông báo; hiện chưa có luồng push riêng.
 
 ```json
 {"targetType":"PODCAST","targetId":"<podcastId>","reasonCode":"INAPPROPRIATE","description":"Lý do cụ thể"}

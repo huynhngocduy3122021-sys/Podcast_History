@@ -24,7 +24,7 @@ Gọi `POST /api/auth/login` với `Content-Type: application/json`:
 }
 ```
 
-Có thể dùng username hoặc email trong `identifier`. Lấy `accessToken` từ response rồi gửi `Authorization: Bearer <accessToken>` cho các API được bảo vệ. Gọi `GET /api/auth/me` để kiểm tra role trong token. Staff gọi `/api/staff/**`; Admin gọi `/api/admin/**`. Khi nhận `401`, kiểm tra profile backend, database đang kết nối và mật khẩu tài khoản đã tồn tại; khi nhận `403`, kiểm tra role trong token.
+Có thể dùng username hoặc email trong `identifier`. Lấy `accessToken` từ response rồi gửi `Authorization: Bearer <accessToken>` cho các API được bảo vệ. Gọi `GET /api/auth/me` để kiểm tra role trong token. Staff gọi các API dùng chung tại `/api/admin/dashboard`, `/api/admin/podcasts/**`, `/api/admin/reports/**` và `/api/admin/podcast-appeals/**`; các API `/api/admin/**` khác vẫn yêu cầu Admin. Khi nhận `401`, kiểm tra profile backend, database đang kết nối và mật khẩu tài khoản đã tồn tại; khi nhận `403`, kiểm tra role trong token.
 
 Tài khoản `LISTENER` không được seed: tạo qua `POST /api/auth/register`. Muốn thử role `CREATOR`, dùng Listener nộp `POST /api/creator-applications`, Admin duyệt đơn, rồi đăng nhập lại để lấy token có role mới.
 

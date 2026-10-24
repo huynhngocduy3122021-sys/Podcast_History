@@ -86,6 +86,18 @@ Gọi các bước theo thứ tự sau. `podcastId` là ID trả về từ bư�
 
 Tính năng gói Creator và membership listener đang tắt theo cấu hình mặc định. `GET /api/creator/system-plans` có thể trả `[]`; trạng thái gói của Creator là `DISABLED`, đăng ký gói bị chặn. Frontend nên ẩn nút mua/đăng ký khi nhận trạng thái này.
 
+## Thông báo cho Creator
+
+`GET /api/me/notifications?page=0&size=20` trả `Page`; mỗi phần tử có `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt` và `payload`. `PUT /api/me/notifications/{notificationId}/read` đánh dấu đã đọc, không cần body, trả `204`.
+
+| `type` | Khi nào tạo | ID trong `payload` |
+| --- | --- | --- |
+| `NEW_FOLLOWER` | Listener tạo lượt theo dõi mới; gọi PUT lại khi đang theo dõi không tạo thông báo trùng | `creatorId`, `listenerId` |
+| `NEW_COMMENT` | Listener bình luận vào podcast của Creator | `podcastId`, `commentId`, `listenerId` |
+| `NEW_MEMBERSHIP` | Admin xác nhận thanh toán và membership chuyển `ACTIVE` | `creatorId`, `subscriptionId`, `membershipPlanId`, `listenerId` |
+
+`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Frontend tải lại danh sách thông báo để cập nhật, hiện chưa có luồng push riêng.
+
 ## Xử lý lỗi thường gặp
 
 `400` là body/validation, `401` là token hết hạn hoặc sai, `403` là thiếu role `CREATOR` hoặc không sở hữu tài nguyên, `404` là ID không tồn tại, `409` là trạng thái không cho thao tác hoặc tính năng gói đang tắt, `413`/`415` là file quá lớn hoặc sai định dạng.

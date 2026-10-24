@@ -57,10 +57,14 @@ public class SecurityConfig {
                         "/swagger-ui/**",
                         "/v3/api-docs/**")
                     .permitAll()
+                    .requestMatchers(
+                        "/api/admin/dashboard",
+                        "/api/admin/podcasts", "/api/admin/podcasts/**",
+                        "/api/admin/reports", "/api/admin/reports/**",
+                        "/api/admin/podcast-appeals", "/api/admin/podcast-appeals/**")
+                    .hasAnyRole("ADMIN", "STAFF")
                     .requestMatchers("/api/admin/**")
                     .hasRole("ADMIN")
-                    .requestMatchers("/api/staff/**")
-                    .hasRole("STAFF")
                     .requestMatchers("/api/creator/**")
                     .hasRole("CREATOR")
                     .requestMatchers("/api/listener/**")

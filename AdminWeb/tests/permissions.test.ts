@@ -21,7 +21,7 @@ test('ADMIN has all 16 unique destinations', () => {
   assert.equal(paths.length, 16)
   assert.equal(new Set(paths).size, 16)
 })
-test('each role uses its own Backend prefix', () => {
+test('shared moderation routes use the admin prefix for both roles', () => {
   assert.equal(apiPrefix('ADMIN'), '/api/admin')
-  assert.equal(apiPrefix('STAFF'), '/api/staff')
+  assert.equal(apiPrefix('STAFF'), '/api/admin')
 })
