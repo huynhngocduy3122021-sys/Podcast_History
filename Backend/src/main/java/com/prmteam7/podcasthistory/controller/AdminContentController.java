@@ -15,8 +15,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping({"/api/admin", "/api/staff"})
-@Tag(name = "Admin and Staff - reports and appeals")
+@RequestMapping("/api/admin")
+@Tag(name = "Admin - reports and appeals", description = "Admin và Staff cùng xử lý báo cáo, nội dung và khiếu nại")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminContentController {
   private final AdminContentService service;

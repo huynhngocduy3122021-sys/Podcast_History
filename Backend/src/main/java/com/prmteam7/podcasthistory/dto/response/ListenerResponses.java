@@ -61,6 +61,9 @@ public final class ListenerResponses {
     public record LikeSummary(UUID podcastId, long likeCount, boolean likedByMe) {
     }
 
+    public record CommentLikeSummary(UUID commentId, long likeCount, boolean likedByMe) {
+    }
+
     public record CommentItem(
             UUID commentId,
             UUID podcastId,
@@ -75,7 +78,9 @@ public final class ListenerResponses {
             Integer timestampSeconds,
             String status,
             Instant createdAt,
-            Instant updatedAt) {
+            Instant updatedAt,
+            long likeCount,
+            boolean likedByMe) {
     }
 
     public record ReportItem(

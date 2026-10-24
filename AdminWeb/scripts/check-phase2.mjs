@@ -11,7 +11,7 @@ const env = readFileSync(new URL('../.env', import.meta.url), 'utf8')
 const rawBase = env.match(/^\s*VITE_API_BASE_URL\s*=\s*(.+)$/m)?.[1]
 if (!rawBase) throw new Error('Missing VITE_API_BASE_URL')
 const base = rawBase.trim().replace(/^['"]|['"]$/g, '').replace(/\/$/, '')
-const credentials = readFileSync(new URL('../../docs/DEV_ACCOUNTS.md', import.meta.url), 'utf8')
+const credentials = readFileSync(new URL('../../docs/TEST_ACCOUNTS.md', import.meta.url), 'utf8')
 const headers = apiHeaders(base)
 let failures = 0
 

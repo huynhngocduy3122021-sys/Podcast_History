@@ -54,7 +54,8 @@ abstract class CreatorRepository {
   Future<void> deletePodcast(String id);
 
   // Media & Uploads
-  Future<String?> uploadImageFile({
+  Future<CreatorPodcast?> uploadPodcastThumbnailFile({
+    required String podcastId,
     required List<int> fileBytes,
     required String filename,
     String mimeType = 'image/jpeg',

@@ -179,6 +179,9 @@ class ListenerPodcast {
     required this.durationSeconds,
     required this.creatorId,
     required this.creatorChannelName,
+    required this.seriesTitle,
+    required this.categoryId,
+    required this.categoryName,
     required this.visibility,
   });
 
@@ -189,6 +192,9 @@ class ListenerPodcast {
   final int durationSeconds;
   final String? creatorId;
   final String creatorChannelName;
+  final String? seriesTitle;
+  final String? categoryId;
+  final String categoryName;
   final String visibility;
 
   factory ListenerPodcast.fromJson(Map<String, dynamic> json) =>
@@ -200,6 +206,9 @@ class ListenerPodcast {
         durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
         creatorId: json['creatorProfileId']?.toString(),
         creatorChannelName: '${json['creatorChannelName'] ?? ''}',
+        seriesTitle: json['seriesTitle']?.toString(),
+        categoryId: json['categoryId']?.toString(),
+        categoryName: '${json['categoryName'] ?? ''}',
         visibility: '${json['visibility'] ?? 'PUBLIC'}',
       );
 }
@@ -247,14 +256,23 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> categories() async =>
       _list('GET', '/api/categories', authenticated: false);
 
-  Future<List<Map<String, dynamic>>> creators() =>
-      _list('GET', '/api/creators');
+  Future<List<Map<String, dynamic>>> creators({String? query}) =>
+      _list(
+        'GET',
+        '/api/creators',
+        queryParameters: query?.trim().isNotEmpty == true
+            ? {'q': query!.trim()}
+            : null,
+      );
 
   Future<Map<String, dynamic>> creator(String creatorId) =>
       _sendMap('GET', '/api/creators/$creatorId');
 
   Future<ListenerPodcast> podcast(String podcastId) async =>
       ListenerPodcast.fromJson(await _send('GET', '/api/podcasts/$podcastId'));
+
+  Future<Map<String, dynamic>> podcastTranscript(String podcastId) =>
+      _sendMap('GET', '/api/podcast-transcripts/$podcastId');
 
   Future<Map<String, dynamic>> playback(String podcastId) =>
       _sendMap('GET', '/api/podcasts/$podcastId/playback');
@@ -295,6 +313,16 @@ class ListenerApi {
 
   Future<Map<String, dynamic>> unlike(String podcastId) =>
       _sendMap('DELETE', '/api/podcasts/$podcastId/like');
+
+  Future<Map<String, dynamic>> commentLikes(String commentId) =>
+      _sendMap('GET', '/api/comments/$commentId/likes');
+
+  Future<Map<String, dynamic>> likeComment(String commentId) =>
+      _sendMap('PUT', '/api/comments/$commentId/like');
+
+  Future<void> unlikeComment(String commentId) async {
+    await _send('DELETE', '/api/comments/$commentId/like');
+  }
 
   Future<List<Map<String, dynamic>>> comments(
     String podcastId, {
@@ -338,6 +366,21 @@ class ListenerApi {
 
   Future<void> deleteComment(String commentId) async {
     await _send('DELETE', '/api/comments/$commentId');
+  }
+
+  Future<List<Map<String, dynamic>>> notifications({
+    int page = 0,
+    int size = 20,
+  }) async => _pageItems(
+    await _send(
+      'GET',
+      '/api/me/notifications',
+      queryParameters: {'page': '$page', 'size': '$size'},
+    ),
+  );
+
+  Future<void> markNotificationRead(String notificationId) async {
+    await _send('PUT', '/api/me/notifications/$notificationId/read');
   }
 
   Stream<String> commentStream(String podcastId) async* {
@@ -504,8 +547,14 @@ class ListenerApi {
     String method,
     String path, {
     bool authenticated = true,
+    Map<String, String>? queryParameters,
   }) async {
-    final json = await _send(method, path, authenticated: authenticated);
+    final json = await _send(
+      method,
+      path,
+      queryParameters: queryParameters,
+      authenticated: authenticated,
+    );
     if (json is List) {
       return json
           .map((item) => Map<String, dynamic>.from(item as Map))

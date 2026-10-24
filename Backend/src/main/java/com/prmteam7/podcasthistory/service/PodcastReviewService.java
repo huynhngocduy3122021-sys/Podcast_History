@@ -13,6 +13,8 @@ import com.prmteam7.podcasthistory.model.Series;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.ModerationReviewRepository;
 import com.prmteam7.podcasthistory.repository.PodcastRepository;
+import com.prmteam7.podcasthistory.repository.AiModerationResultRepository;
+import com.prmteam7.podcasthistory.repository.PodcastTranscriptRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -28,18 +30,27 @@ public class PodcastReviewService {
   private final ModerationReviewRepository moderationReviewRepository;
   private final AdminSupportService support;
   private final R2PlaybackUrlService playback;
+  private final AiModerationResultRepository aiResults;
+  private final PodcastTranscriptRepository transcripts;
+  private final AudienceNotificationService audienceNotifications;
 
   public PodcastReviewService(
       AppUserRepository appUserRepository,
       PodcastRepository podcastRepository,
       ModerationReviewRepository moderationReviewRepository,
       AdminSupportService support,
-      R2PlaybackUrlService playback) {
+      R2PlaybackUrlService playback,
+      AiModerationResultRepository aiResults,
+      PodcastTranscriptRepository transcripts,
+      AudienceNotificationService audienceNotifications) {
     this.appUserRepository = appUserRepository;
     this.podcastRepository = podcastRepository;
     this.moderationReviewRepository = moderationReviewRepository;
     this.support = support;
     this.playback = playback;
+    this.aiResults = aiResults;
+    this.transcripts = transcripts;
+    this.audienceNotifications = audienceNotifications;
   }
 
   @Transactional(readOnly = true)
@@ -81,7 +92,7 @@ public class PodcastReviewService {
 
   private void supportPreviewMedia(Podcast p) {
     if (p.getMediaUrl() == null || p.getMediaUrl().isBlank())
-      throw new ResourceNotFoundException("Podcast chưa có video.");
+      throw new ResourceNotFoundException("Podcast chưa có media video hoặc audio.");
   }
 
   @Transactional(readOnly = true)
@@ -117,8 +128,8 @@ public class PodcastReviewService {
             r ->
                 new com.prmteam7.podcasthistory.dto.response.AdminResponses.ReviewItem(
                     r.getModerationReviewId(),
-                    r.getReviewerUser().getUserId(),
-                    r.getReviewerUser().getDisplayName(),
+                    r.getReviewerUser() == null ? null : r.getReviewerUser().getUserId(),
+                    r.getReviewerUser() == null ? "AI" : r.getReviewerUser().getDisplayName(),
                     r.getDecision(),
                     r.getNote(),
                     r.getReviewedAt()));
@@ -155,6 +166,43 @@ public class PodcastReviewService {
   }
 
   @Transactional
+  public void autoApprove(UUID moderationResultId) {
+    var result = aiResults.findById(moderationResultId).orElse(null);
+    if (result == null || !"COMPLETED".equals(result.getStatus())
+        || !"SAFE".equals(result.getOverallLabel())
+        || !"APPROVE".equals(result.getRecommendation())) return;
+
+    Podcast podcast = podcastRepository.lockById(result.getPodcast().getPodcastId()).orElse(null);
+    if (podcast == null || !"PENDING_REVIEW".equalsIgnoreCase(podcast.getStatus())
+        || !AiModerationService.hash(podcast).equals(result.getSourceHash())
+        || !java.util.Objects.equals(podcast.getMediaUrl(), result.getMediaKey())) return;
+
+    var transcript = transcripts.findByPodcast_PodcastIdAndMediaKey(
+        podcast.getPodcastId(), podcast.getMediaUrl()).orElse(null);
+    if (transcript == null || !"COMPLETED".equals(transcript.getStatus())
+        || result.getTranscript() == null
+        || !transcript.getTranscriptId().equals(result.getTranscript().getTranscriptId())
+        || !AiModerationService.hashText(transcript.getFullText()).equals(result.getTranscriptHash())) return;
+
+    Instant approvedAt = Instant.now();
+    podcast.setStatus("APPROVED");
+    podcast.setPublishedAt(approvedAt);
+    podcastRepository.save(podcast);
+
+    ModerationReview review = new ModerationReview();
+    review.setPodcast(podcast);
+    review.setModerationResult(result);
+    review.setDecision("APPROVED");
+    review.setNote("AI tự động duyệt: " + result.getReason());
+    review.setReviewedAt(approvedAt);
+    moderationReviewRepository.save(review);
+
+    support.notify(podcast.getProducerProfile().getUser(), "PODCAST_REVIEW",
+        "Kết quả duyệt podcast", podcast.getTitle() + ": APPROVED (AI tự động duyệt)");
+    audienceNotifications.newPodcast(podcast);
+  }
+
+  @Transactional
   public PodcastReviewResult reject(UUID reviewerId, UUID podcastId, String note) {
     if (note == null || note.isBlank()) {
       throw new InvalidFlowRequestException("Vui lòng nhập lý do từ chối podcast.");
@@ -185,6 +233,12 @@ public class PodcastReviewService {
     review.setDecision(decision);
     review.setNote(note == null || note.isBlank() ? null : note.trim());
     review.setReviewedAt(reviewedAt);
+    transcripts.findByPodcast_PodcastIdAndMediaKey(podcastId, podcast.getMediaUrl())
+        .ifPresent(transcript -> aiResults
+            .findFirstByPodcast_PodcastIdAndStatusAndSourceHashAndTranscript_TranscriptIdAndTranscriptHashOrderByCreatedAtDesc(
+                podcastId, "COMPLETED", AiModerationService.hash(podcast), transcript.getTranscriptId(),
+                AiModerationService.hashText(transcript.getFullText()))
+            .ifPresent(review::setModerationResult));
     moderationReviewRepository.save(review);
     support.audit(reviewer, decision, "PODCAST", podcastId, review.getNote());
     support.notify(
@@ -195,6 +249,7 @@ public class PodcastReviewService {
             + ": "
             + decision
             + (review.getNote() == null ? "" : " — " + review.getNote()));
+    if ("APPROVED".equals(decision)) audienceNotifications.newPodcast(podcast);
 
     return new PodcastReviewResult(podcastId, decision, review.getNote(), reviewedAt);
   }

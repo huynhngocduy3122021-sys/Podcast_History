@@ -166,7 +166,8 @@ public final class AdminResponses {
       String message,
       boolean read,
       Instant createdAt,
-      Instant readAt) {}
+      Instant readAt,
+      tools.jackson.databind.JsonNode payload) {}
 
   public record PlanItem(
       UUID planId,

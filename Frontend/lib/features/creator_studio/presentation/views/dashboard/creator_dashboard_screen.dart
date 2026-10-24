@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
+import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
@@ -94,8 +95,10 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                 const SizedBox(height: AppSpacing.lg),
 
                 // Banner gói Free vs Premium
-                _buildPlanLimitBanner(context, profile, isDark),
-                const SizedBox(height: AppSpacing.lg),
+                if (kPackagesEnabled) ...[
+                  _buildPlanLimitBanner(context, profile, isDark),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
 
                 // Lưới chỉ số thống kê (Metrics)
                 Text(
@@ -288,7 +291,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     const SizedBox(height: AppSpacing.xs),
                     Row(
                       children: [
-                        if (profile.isPremium)
+                        if (kPackagesEnabled && profile.isPremium)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                             decoration: BoxDecoration(
@@ -312,7 +315,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                               ],
                             ),
                           )
-                        else
+                        else if (kPackagesEnabled)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                             decoration: BoxDecoration(
@@ -351,53 +354,22 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
           const SizedBox(height: AppSpacing.md),
           Divider(height: 1, color: isDark ? Colors.white24 : AppColors.outlineLight.withValues(alpha: 0.6)),
           const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              _buildHeaderStat('Tracks', '${profile.currentPodcastCount}', isDark),
-              const SizedBox(width: AppSpacing.xl),
-              _buildHeaderStat('Followers', AppFormatters.formatCompactNumber(profile.followersCount), isDark),
-              const Spacer(),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.cloud_upload_rounded, size: 16),
-                label: const Text('Đăng bài mới', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryLight,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  minimumSize: const Size(0, 36),
-                ),
-                onPressed: () => widget.onNavigateTab?.call(0),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.cloud_upload_rounded, size: 16),
+              label: const Text('Đăng bài mới', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryLight,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                minimumSize: const Size(0, 36),
               ),
-            ],
+              onPressed: () => widget.onNavigateTab?.call(0),
+            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHeaderStat(String label, String value, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            color: isDark ? const Color(0xFF94A3B8) : AppColors.onSurfaceMutedLight,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.6,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            color: isDark ? Colors.white : AppColors.onSurfaceLight,
-          ),
-        ),
-      ],
     );
   }
 
@@ -920,7 +892,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                     const SizedBox(height: AppSpacing.sm),
                     // Mini waveform preview kiểu SoundCloud
                     const SoundCloudWaveform(
-                      progress: 0.4,
+                      progress: 0.0,
                       height: 30,
                       showComments: false,
                       isInteractive: false,

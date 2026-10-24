@@ -23,8 +23,8 @@ class CreatorPodcastPlayerSheet extends ConsumerStatefulWidget {
     super.key,
     required this.podcast,
     required this.creatorName,
-    this.initialPlaying = true,
-    this.initialProgress = 0.28,
+    this.initialPlaying = false,
+    this.initialProgress = 0.0,
     this.onPlayToggle,
     this.onEdit,
   });
@@ -33,8 +33,8 @@ class CreatorPodcastPlayerSheet extends ConsumerStatefulWidget {
     required BuildContext context,
     required CreatorPodcast podcast,
     required String creatorName,
-    bool isPlaying = true,
-    double progress = 0.28,
+    bool isPlaying = false,
+    double progress = 0.0,
     VoidCallback? onPlayToggle,
     VoidCallback? onEdit,
   }) {
@@ -73,7 +73,9 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
       final notifier = ref.read(audioPlayerServiceProvider.notifier);
       final current = ref.read(audioPlayerServiceProvider);
       if (current.podcastId != widget.podcast.id) {
-        notifier.play(widget.podcast);
+        if (widget.initialPlaying) {
+          notifier.play(widget.podcast);
+        }
       } else if (!current.isPlaying && widget.initialPlaying) {
         notifier.resume();
       }
@@ -139,10 +141,10 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
     final progress = isCurrent ? audioState.progress : widget.initialProgress;
     final totalDuration = (isCurrent && audioState.duration > Duration.zero)
         ? audioState.duration
-        : pod.duration;
+        : (ref.watch(audioPlayerServiceProvider.notifier).getKnownDuration(pod.id) ?? pod.duration);
     final currentPosition = isCurrent
         ? audioState.position
-        : Duration(seconds: (totalDuration.inSeconds * progress).toInt());
+        : (progress > 0 ? Duration(seconds: (totalDuration.inSeconds * progress).toInt()) : Duration.zero);
     final currentTimestampStr = AppFormatters.formatDuration(currentPosition);
     final totalTimestampStr = AppFormatters.formatDuration(totalDuration);
 

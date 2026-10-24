@@ -1,5 +1,5 @@
 -- Development-only accounts. The profile is installed by DatabaseSeeder.
--- Passwords are BCrypt hashes; plaintext credentials are documented in docs/DEV_ACCOUNTS.md.
+-- Passwords are BCrypt hashes; plaintext development credentials are documented in docs/TEST_ACCOUNTS.md.
 
 INSERT INTO "User" (
     user_id, role_id, username, email, password_hash, display_name,
