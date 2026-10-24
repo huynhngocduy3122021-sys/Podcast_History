@@ -17,6 +17,8 @@ Hướng dẫn này dùng cho tài khoản `LISTENER` và các màn hình khám 
 | Khi 401 do hết hạn | `POST /api/auth/refresh` | `{"refreshToken":"<token hiện tại>"}` | Thay **cả hai** token rồi gọi lại request một lần |
 | Đăng xuất | `POST /api/auth/logout` | `{"refreshToken":"<token hiện tại>"}` | `204` |
 
+Khi `POST /api/auth/login` trả `401`, frontend đọc trường `message`: `Tài khoản không tồn tại.` nếu username/email không có trong database; `Sai mật khẩu.` nếu tài khoản có nhưng mật khẩu không đúng; `Tài khoản của bạn đã bị khóa.` nếu mật khẩu đúng nhưng tài khoản đã bị khóa. Chỉ thông báo lỗi từ request login này; lỗi `401` ở API khác vẫn có thể là token hết hạn.
+
 ```json
 {"username":"listener01","email":"listener@example.com","password":"MatKhau123!","displayName":"Người nghe"}
 ```
