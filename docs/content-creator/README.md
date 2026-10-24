@@ -11,6 +11,8 @@
 
 1. `POST /api/auth/register`: `{ "username": "creator01", "email": "creator@example.com", "password": "password123", "displayName": "Tên hiển thị" }`. `username` dài 3–50, `password` 8–72, `displayName` tối đa 120 ký tự.
 2. `POST /api/auth/login`: `{ "identifier": "creator@example.com", "password": "password123" }`; giữ `accessToken` và `refreshToken`. Hết hạn token: `POST /api/auth/refresh` với `{ "refreshToken": "..." }`.
+
+   Nếu login trả `401`, đọc trường `message`: `Tài khoản không tồn tại.`, `Sai mật khẩu.` hoặc `Tài khoản của bạn đã bị khóa.` tùy trường hợp. Backend kiểm tra mật khẩu trước trạng thái khóa.
 3. `POST /api/creator-applications`: `{ "channelName": "Tên kênh", "introduction": "Giới thiệu", "portfolioUrl": "https://example.com" }`. `channelName` tối đa 150, `introduction` tối đa 5000; `portfolioUrl` tùy chọn, tối đa 2000.
 4. `GET /api/creator-applications/me` để xem trạng thái đơn. Khi được duyệt, lấy token mới có role `CREATOR`.
 

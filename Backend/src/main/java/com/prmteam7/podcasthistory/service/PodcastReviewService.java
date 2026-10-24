@@ -198,7 +198,8 @@ public class PodcastReviewService {
     moderationReviewRepository.save(review);
 
     support.notify(podcast.getProducerProfile().getUser(), "PODCAST_REVIEW",
-        "Kết quả duyệt podcast", podcast.getTitle() + ": APPROVED (AI tự động duyệt)");
+        "Podcast được AI duyệt: " + podcast.getTitle(),
+        podcast.getTitle() + ": APPROVED (AI tự động duyệt)");
     audienceNotifications.newPodcast(podcast);
   }
 
@@ -244,7 +245,9 @@ public class PodcastReviewService {
     support.notify(
         podcast.getProducerProfile().getUser(),
         "PODCAST_REVIEW",
-        "Kết quả duyệt podcast",
+        "APPROVED".equals(decision)
+            ? "Podcast được duyệt: " + podcast.getTitle()
+            : "Podcast bị từ chối: " + podcast.getTitle(),
         podcast.getTitle()
             + ": "
             + decision

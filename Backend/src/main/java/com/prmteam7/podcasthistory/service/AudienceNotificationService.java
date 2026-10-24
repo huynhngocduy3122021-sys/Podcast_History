@@ -45,14 +45,14 @@ public class AudienceNotificationService {
             .existsByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseAndStartAtBeforeAndEndAtAfter(
                 listener.getUserId(), creatorId, "ACTIVE", now, now)) continue;
       }
-      send(listener, "NEW_PODCAST", "Podcast mới từ " + channelName,
+      send(listener, "NEW_PODCAST", channelName + " vừa đăng: " + podcast.getTitle(),
           channelName + " vừa đăng: " + podcast.getTitle(),
           Map.of("podcastId", podcast.getPodcastId(), "creatorId", creatorId));
     }
   }
 
   public void newFollower(AppUser creator, AppUser listener, UUID creatorId) {
-    send(creator, "NEW_FOLLOWER", "Người theo dõi mới",
+    send(creator, "NEW_FOLLOWER", listener.getDisplayName() + " vừa theo dõi kênh của bạn",
         listener.getDisplayName() + " vừa theo dõi kênh của bạn.",
         Map.of("creatorId", creatorId, "listenerId", listener.getUserId()));
   }
@@ -60,7 +60,8 @@ public class AudienceNotificationService {
   public void newComment(Podcast podcast, AppUser listener, UUID commentId) {
     AppUser creator = podcast.getProducerProfile().getUser();
     if (creator.getUserId().equals(listener.getUserId())) return;
-    send(creator, "NEW_COMMENT", "Bình luận mới",
+    send(creator, "NEW_COMMENT",
+        listener.getDisplayName() + " bình luận về: " + podcast.getTitle(),
         listener.getDisplayName() + " vừa bình luận về podcast: " + podcast.getTitle(),
         Map.of("podcastId", podcast.getPodcastId(), "commentId", commentId,
             "listenerId", listener.getUserId()));
@@ -68,7 +69,7 @@ public class AudienceNotificationService {
 
   public void newMembership(AppUser creator, AppUser listener, UUID creatorId,
       UUID subscriptionId, UUID planId) {
-    send(creator, "NEW_MEMBERSHIP", "Thành viên mới",
+    send(creator, "NEW_MEMBERSHIP", listener.getDisplayName() + " đã mua gói thành viên",
         listener.getDisplayName() + " vừa mua gói thành viên của kênh bạn.",
         Map.of("creatorId", creatorId, "subscriptionId", subscriptionId,
             "membershipPlanId", planId, "listenerId", listener.getUserId()));
@@ -80,7 +81,7 @@ public class AudienceNotificationService {
     Notification notification = new Notification();
     notification.setUser(recipient);
     notification.setNotificationType(type);
-    notification.setTitle(title);
+    notification.setTitle(title.length() > 200 ? title.substring(0, 197) + "..." : title);
     notification.setMessage(message);
     notification.setPayload(mapper.valueToTree(payload));
     notification.setIsRead(false);

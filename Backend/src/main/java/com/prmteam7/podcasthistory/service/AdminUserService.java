@@ -88,7 +88,9 @@ public class AdminUserService {
     revoke(u);
     support.audit(
         admin, request.active() ? "UNLOCK_USER" : "LOCK_USER", "USER", id, request.note());
-    support.notify(u, "ACCOUNT_ACCESS", "Trạng thái tài khoản", request.note());
+    support.notify(u, "ACCOUNT_ACCESS",
+        request.active() ? "Tài khoản của bạn đã được mở khóa" : "Tài khoản của bạn đã bị khóa",
+        request.note());
     return item(users.save(u));
   }
 
@@ -120,7 +122,13 @@ public class AdminUserService {
             .orElseThrow(() -> new ResourceNotFoundException("Role không tồn tại.")));
     revoke(u);
     support.audit(admin, "CHANGE_ROLE", "USER", id, request.note());
-    support.notify(u, "ACCOUNT_ROLE", "Vai trò tài khoản", request.note());
+    String roleTitle = switch (request.role()) {
+      case LISTENER -> "Bạn đã được cấp vai trò Listener";
+      case CREATOR -> "Bạn đã được cấp vai trò Content Creator";
+      case STAFF -> "Bạn đã được cấp vai trò Staff";
+      case ADMIN -> "Bạn đã được cấp vai trò Admin";
+    };
+    support.notify(u, "ACCOUNT_ROLE", roleTitle, request.note());
     return item(users.save(u));
   }
 
