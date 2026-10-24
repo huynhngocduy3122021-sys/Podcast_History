@@ -29,6 +29,21 @@ export const podcastSchema = z.object({
 export const podcastsPageSchema = pageSchema(podcastSchema)
 export const podcastDetailSchema = z.object({ podcast: podcastSchema, reviews: z.array(reviewSchema) })
 export const podcastReviewResultSchema = z.object({ podcastId: z.uuid(), status: podcastStatusSchema, note: nullableText, reviewedAt: instant })
+export const podcastTranscriptSchema = z.object({
+  transcriptId: z.uuid(), podcastId: z.uuid(), mediaKey: nullableText,
+  status: z.string().min(1), language: nullableText, modelName: nullableText,
+  fullText: nullableText, segments: z.unknown().nullable(), errorMessage: nullableText,
+  processedAt: instant.nullable(), current: z.boolean(),
+})
+export const aiModerationSchema = z.object({
+  moderationResultId: z.uuid(), podcastId: z.uuid(), transcriptId: z.uuid().nullable(),
+  transcriptHash: nullableText, modelName: nullableText, modelVersion: nullableText,
+  status: z.string().min(1), overallLabel: nullableText, recommendation: nullableText,
+  confidenceScore: z.number().nullable(), reason: nullableText, rawResult: z.unknown().nullable(),
+  sourceHash: nullableText, mediaKey: nullableText, errorMessage: nullableText,
+  processedAt: instant.nullable(), current: z.boolean(),
+})
+export const aiModerationPageSchema = pageSchema(aiModerationSchema)
 export const referenceSchema = z.object({
   referenceId: z.uuid(), podcastId: z.uuid(), referenceType: z.string(), title: z.string(),
   author: nullableText, publisher: nullableText, publishedYear: z.number().int().nullable(),
@@ -67,3 +82,5 @@ export type AppealStatus = z.infer<typeof appealStatusSchema>
 export type ReportAction = z.infer<typeof reportActionSchema>
 export type AppealDecision = z.infer<typeof appealDecisionSchema>
 export type PodcastAction = 'approve' | 'reject' | 'hide' | 'restore' | 'delete'
+export type PodcastTranscript = z.infer<typeof podcastTranscriptSchema>
+export type AiModeration = z.infer<typeof aiModerationSchema>
