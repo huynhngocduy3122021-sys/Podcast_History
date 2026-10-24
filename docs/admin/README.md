@@ -5,6 +5,7 @@ Tài khoản đăng nhập mẫu cho backend local: [TEST_ACCOUNTS.md](../TEST_A
 ## Quy ước
 
 - Các API bên dưới cần Bearer access token có role `ADMIN`; base URL lấy theo môi trường backend (`http://localhost:8081` khi chạy local). JSON gửi `Content-Type: application/json`.
+- Các nhóm dashboard, podcast moderation, reports và podcast appeals tại `/api/admin/...` cũng cho phép role `STAFF`; nhóm người dùng, danh mục, tài chính và gói vẫn chỉ dành cho Admin.
 - API phân trang trả trực tiếp Spring `Page`: dùng `content[]`, `number`, `totalElements`, `totalPages`, với `page` bắt đầu từ `0`. Không giả định response có wrapper `data`.
 - `GET /api/admin/dashboard` cung cấp số liệu tổng quan. ID lấy từ danh sách/chi tiết, không dùng tên hiển thị làm ID.
 

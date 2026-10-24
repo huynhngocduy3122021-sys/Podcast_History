@@ -29,6 +29,7 @@ public class AdminFinanceService {
   private final AppUserRepository users;
   private final ContractRepository contracts;
   private final PackageFeatures packageFeatures;
+  private final AudienceNotificationService audienceNotifications;
 
   public AdminFinanceService(
       AdminSupportService support,
@@ -41,7 +42,8 @@ public class AdminFinanceService {
       SubscriptionRepository subscriptions,
       AppUserRepository users,
       ContractRepository contracts,
-      PackageFeatures packageFeatures) {
+      PackageFeatures packageFeatures,
+      AudienceNotificationService audienceNotifications) {
     this.support = support;
     this.withdrawals = withdrawals;
     this.reviews = reviews;
@@ -53,6 +55,7 @@ public class AdminFinanceService {
     this.users = users;
     this.contracts = contracts;
     this.packageFeatures = packageFeatures;
+    this.audienceNotifications = audienceNotifications;
   }
 
   public Page<WithdrawalItem> withdrawals(UUID actor, String status, int page, int size) {
@@ -290,6 +293,9 @@ public class AdminFinanceService {
         s.setStartAt(now);
         s.setEndAt(now.plus(plan.getDurationDays(), ChronoUnit.DAYS));
         s.setStatus("ACTIVE");
+        audienceNotifications.newMembership(plan.getProducerProfile().getUser(), p.getUser(),
+            plan.getProducerProfile().getProducerProfileId(), s.getSubscriptionId(),
+            plan.getMembershipPlanId());
       } else if (p.getContractStage() != null) {
         var stage = p.getContractStage();
         AdminSupportService.state(stage.getStatus(), "APPROVED", "COMPLETED");

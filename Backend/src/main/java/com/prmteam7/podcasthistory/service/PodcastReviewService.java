@@ -32,6 +32,7 @@ public class PodcastReviewService {
   private final R2PlaybackUrlService playback;
   private final AiModerationResultRepository aiResults;
   private final PodcastTranscriptRepository transcripts;
+  private final AudienceNotificationService audienceNotifications;
 
   public PodcastReviewService(
       AppUserRepository appUserRepository,
@@ -40,7 +41,8 @@ public class PodcastReviewService {
       AdminSupportService support,
       R2PlaybackUrlService playback,
       AiModerationResultRepository aiResults,
-      PodcastTranscriptRepository transcripts) {
+      PodcastTranscriptRepository transcripts,
+      AudienceNotificationService audienceNotifications) {
     this.appUserRepository = appUserRepository;
     this.podcastRepository = podcastRepository;
     this.moderationReviewRepository = moderationReviewRepository;
@@ -48,6 +50,7 @@ public class PodcastReviewService {
     this.playback = playback;
     this.aiResults = aiResults;
     this.transcripts = transcripts;
+    this.audienceNotifications = audienceNotifications;
   }
 
   @Transactional(readOnly = true)
@@ -196,6 +199,7 @@ public class PodcastReviewService {
 
     support.notify(podcast.getProducerProfile().getUser(), "PODCAST_REVIEW",
         "Kết quả duyệt podcast", podcast.getTitle() + ": APPROVED (AI tự động duyệt)");
+    audienceNotifications.newPodcast(podcast);
   }
 
   @Transactional
@@ -245,6 +249,7 @@ public class PodcastReviewService {
             + ": "
             + decision
             + (review.getNote() == null ? "" : " — " + review.getNote()));
+    if ("APPROVED".equals(decision)) audienceNotifications.newPodcast(podcast);
 
     return new PodcastReviewResult(podcastId, decision, review.getNote(), reviewedAt);
   }

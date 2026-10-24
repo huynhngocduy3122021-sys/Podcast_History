@@ -25,8 +25,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping({"/api/admin/podcasts", "/api/staff/podcasts"})
-@Tag(name = "Admin - podcast moderation", description = "Duyệt podcast do Content Creator gửi")
+@RequestMapping("/api/admin/podcasts")
+@Tag(name = "Admin - podcast moderation", description = "Admin và Staff duyệt podcast do Content Creator gửi")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminPodcastReviewController {
 

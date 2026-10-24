@@ -157,7 +157,7 @@ A logged-in Listener submits a channel application through `POST /api/creator-ap
 
 An Admin approves with `POST /api/admin/creator-applications/{applicationId}/approve` (optional `note`) or rejects with `POST /api/admin/creator-applications/{applicationId}/reject` (required `note`). Approval changes `Creator_profile.verification_status` to `APPROVED` and the user's role to `CREATOR`; requests under `/api/creator/**` require that role. The account should refresh its JWT or log in again to receive a token containing the new role.
 
-Development credentials and the startup seeding behavior are documented in [`docs/TEST_ACCOUNTS.md`](../docs/TEST_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role and cannot access `/api/admin/**`.
+Development credentials and the startup seeding behavior are documented in [`docs/TEST_ACCOUNTS.md`](../docs/TEST_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role. Staff may call shared dashboard, podcast moderation, report, and podcast appeal endpoints under `/api/admin/**`; other admin endpoints remain Admin-only.
 
 ```sql
 UPDATE "User"
@@ -190,7 +190,7 @@ Approval creates one `Payment` with status `PENDING` and returns its ID. This pr
 
 Apply `db/migrations/2026-10-13_z_creator_wallet_payout.sql` to an existing database after `db/migrations/2026-10-13_podcast_request_milestones.sql` and before deploying wallet and payout endpoints. The migration adds the held balance, payout-account reference fields, the verified payout-account table, ledger idempotency constraints, and non-negative wallet checks.
 
-All endpoints require a JWT. `/api/creator/**` requires the `CREATOR` role and `/api/admin/**` requires the `ADMIN` role. Wallets are created with `USD` currency on first access; this workflow does not perform currency conversion.
+Protected endpoints require a JWT. `/api/creator/**` requires the `CREATOR` role. Shared dashboard, podcast moderation, report, and podcast appeal endpoints under `/api/admin/**` accept `ADMIN` or `STAFF`; other `/api/admin/**` endpoints require `ADMIN`. Wallets are created with `USD` currency on first access; this workflow does not perform currency conversion.
 
 - `POST /api/creator/wallet/release-funds` — Idempotently transfers wallet earnings for `PAID` payments whose milestone is `APPROVED`. A pending payment from milestone approval is not eligible; a payment provider must first confirm it as paid. Response includes the number and total amount released and the updated balance.
 - `GET /api/creator/wallet/balance` — Returns available, held, and total balance.

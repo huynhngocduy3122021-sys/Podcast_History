@@ -11,6 +11,7 @@ import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestCre
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestUpdate;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CategoryItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentItem;
+import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentLikeSummary;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CreatorItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.FollowItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.LikeSummary;
@@ -30,6 +31,7 @@ import com.prmteam7.podcasthistory.exception.ResourceNotFoundException;
 import com.prmteam7.podcasthistory.model.AppUser;
 import com.prmteam7.podcasthistory.model.Category;
 import com.prmteam7.podcasthistory.model.Comment;
+import com.prmteam7.podcasthistory.model.CommentLike;
 import com.prmteam7.podcasthistory.model.Follow;
 import com.prmteam7.podcasthistory.model.ListeningHistory;
 import com.prmteam7.podcasthistory.model.MembershipPlan;
@@ -44,6 +46,7 @@ import com.prmteam7.podcasthistory.model.Subscription;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.CategoryRepository;
 import com.prmteam7.podcasthistory.repository.CommentRepository;
+import com.prmteam7.podcasthistory.repository.CommentLikeRepository;
 import com.prmteam7.podcasthistory.repository.FollowRepository;
 import com.prmteam7.podcasthistory.repository.ListeningHistoryRepository;
 import com.prmteam7.podcasthistory.repository.MembershipPlanRepository;
@@ -60,6 +63,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -81,6 +89,7 @@ public class ListenerFlowService {
   private final PodcastRepository podcastRepository;
   private final PodcastLikeRepository podcastLikeRepository;
   private final CommentRepository commentRepository;
+  private final CommentLikeRepository commentLikeRepository;
   private final ReportRepository reportRepository;
   private final RequestResponseRepository requestResponseRepository;
   private final FollowRepository followRepository;
@@ -93,6 +102,7 @@ public class ListenerFlowService {
   private final R2PlaybackUrlService playbackUrlService;
   private final CommentRealtimeHub commentRealtimeHub;
   private final PackageFeatures packageFeatures;
+  private final AudienceNotificationService audienceNotifications;
 
   public ListenerFlowService(
       AppUserRepository userRepository,
@@ -101,6 +111,7 @@ public class ListenerFlowService {
       PodcastRepository podcastRepository,
       PodcastLikeRepository podcastLikeRepository,
       CommentRepository commentRepository,
+      CommentLikeRepository commentLikeRepository,
       ReportRepository reportRepository,
       RequestResponseRepository requestResponseRepository,
       FollowRepository followRepository,
@@ -112,13 +123,15 @@ public class ListenerFlowService {
       SeriesRequestRepository seriesRequestRepository,
       R2PlaybackUrlService playbackUrlService,
       CommentRealtimeHub commentRealtimeHub,
-      PackageFeatures packageFeatures) {
+      PackageFeatures packageFeatures,
+      AudienceNotificationService audienceNotifications) {
     this.userRepository = userRepository;
     this.categoryRepository = categoryRepository;
     this.producerProfileRepository = producerProfileRepository;
     this.podcastRepository = podcastRepository;
     this.podcastLikeRepository = podcastLikeRepository;
     this.commentRepository = commentRepository;
+    this.commentLikeRepository = commentLikeRepository;
     this.reportRepository = reportRepository;
     this.requestResponseRepository = requestResponseRepository;
     this.followRepository = followRepository;
@@ -131,6 +144,7 @@ public class ListenerFlowService {
     this.playbackUrlService = playbackUrlService;
     this.commentRealtimeHub = commentRealtimeHub;
     this.packageFeatures = packageFeatures;
+    this.audienceNotifications = audienceNotifications;
   }
 
   @Transactional(readOnly = true)
@@ -275,11 +289,51 @@ public class ListenerFlowService {
   }
 
   @Transactional(readOnly = true)
-  public Page<CommentItem> getComments(UUID podcastId, int page, int size) {
+  public Page<CommentItem> getComments(UUID userId, UUID podcastId, int page, int size) {
     requirePublishedPodcast(podcastId);
-    return commentRepository
-        .findVisibleByPodcastId(podcastId, pageRequest(page, size))
-        .map(this::toCommentItem);
+    Page<Comment> comments = commentRepository.findVisibleByPodcastId(podcastId, pageRequest(page, size));
+    List<UUID> commentIds = comments.getContent().stream().map(Comment::getCommentId).toList();
+    if (commentIds.isEmpty()) return comments.map(comment -> toCommentItem(comment, 0, false));
+
+    Map<UUID, Long> counts = new HashMap<>();
+    for (Object[] row : commentLikeRepository.countByCommentIds(commentIds)) {
+      counts.put((UUID) row[0], ((Number) row[1]).longValue());
+    }
+    Set<UUID> liked = new HashSet<>(commentLikeRepository.likedCommentIds(userId, commentIds));
+    return comments.map(comment -> toCommentItem(comment,
+        counts.getOrDefault(comment.getCommentId(), 0L), liked.contains(comment.getCommentId())));
+  }
+
+  @Transactional(readOnly = true)
+  public CommentLikeSummary getCommentLikeSummary(UUID userId, UUID commentId) {
+    Comment comment = requireComment(commentId);
+    requirePublishedPodcast(comment.getPodcast().getPodcastId());
+    return new CommentLikeSummary(commentId, commentLikeRepository.countByComment_CommentId(commentId),
+        commentLikeRepository.existsByUser_UserIdAndComment_CommentId(userId, commentId));
+  }
+
+  @Transactional
+  public CommentLikeSummary likeComment(UUID userId, UUID commentId) {
+    lockListenerMutation(userId);
+    Comment comment = requireComment(commentId);
+    requirePublishedPodcast(comment.getPodcast().getPodcastId());
+    if (!commentLikeRepository.existsByUser_UserIdAndComment_CommentId(userId, commentId)) {
+      CommentLike like = new CommentLike();
+      like.setUser(requireUser(userId));
+      like.setComment(comment);
+      commentLikeRepository.save(like);
+    }
+    return getCommentLikeSummary(userId, commentId);
+  }
+
+  @Transactional
+  public CommentLikeSummary unlikeComment(UUID userId, UUID commentId) {
+    lockListenerMutation(userId);
+    Comment comment = requireComment(commentId);
+    requirePublishedPodcast(comment.getPodcast().getPodcastId());
+    commentLikeRepository.findByUser_UserIdAndComment_CommentId(userId, commentId)
+        .ifPresent(commentLikeRepository::delete);
+    return getCommentLikeSummary(userId, commentId);
   }
 
   @Transactional
@@ -296,7 +350,8 @@ public class ListenerFlowService {
     comment.setContent(request.content().trim());
     comment.setTimestampSeconds(timestamp);
     comment.setStatus("VISIBLE");
-    CommentItem response = toCommentItem(commentRepository.save(comment));
+    CommentItem response = toCommentItem(commentRepository.save(comment), 0, false);
+    audienceNotifications.newComment(podcast, comment.getUser(), response.commentId());
     publishAfterCommit(podcastId, response);
     return response;
   }
@@ -306,7 +361,9 @@ public class ListenerFlowService {
     Comment comment = requireComment(commentId);
     assertOwner(userId, comment.getUser().getUserId(), "Bạn chỉ được sửa bình luận của mình.");
     comment.setContent(request.content().trim());
-    return toCommentItem(commentRepository.save(comment));
+    commentRepository.save(comment);
+    return toCommentItem(comment, commentLikeRepository.countByComment_CommentId(commentId),
+        commentLikeRepository.existsByUser_UserIdAndComment_CommentId(userId, commentId));
   }
 
   @Transactional
@@ -387,7 +444,9 @@ public class ListenerFlowService {
                   Follow created = new Follow();
                   created.setUser(requireUser(userId));
                   created.setProducerProfile(creator);
-                  return followRepository.save(created);
+                  Follow saved = followRepository.save(created);
+                  audienceNotifications.newFollower(creator.getUser(), saved.getUser(), creatorId);
+                  return saved;
                 });
     return toFollowItem(follow);
   }
@@ -773,7 +832,7 @@ public class ListenerFlowService {
         history.getLastListenedAt());
   }
 
-  private CommentItem toCommentItem(Comment comment) {
+  private CommentItem toCommentItem(Comment comment, long likeCount, boolean likedByMe) {
     AppUser user = comment.getUser();
     return new CommentItem(
         comment.getCommentId(),
@@ -786,7 +845,9 @@ public class ListenerFlowService {
         comment.getTimestampSeconds(),
         comment.getStatus(),
         comment.getCreatedAt(),
-        comment.getUpdatedAt());
+        comment.getUpdatedAt(),
+        likeCount,
+        likedByMe);
   }
 
   private ReportItem toReportItem(Report report) {

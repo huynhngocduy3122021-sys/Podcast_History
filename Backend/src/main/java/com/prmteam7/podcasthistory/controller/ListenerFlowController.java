@@ -30,6 +30,7 @@ import com.prmteam7.podcasthistory.dto.request.ListenerRequests.ReportUpdate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestCreate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestUpdate;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentItem;
+import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentLikeSummary;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CreatorItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.FollowItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.LikeSummary;
@@ -42,9 +43,7 @@ import com.prmteam7.podcasthistory.dto.response.ListenerResponses.ReportItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.SavedPodcastItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.SeriesRequestItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.SubscriptionItem;
-import com.prmteam7.podcasthistory.dto.response.PodcastTranscriptItem;
 import com.prmteam7.podcasthistory.service.ListenerFlowService;
-import com.prmteam7.podcasthistory.service.PodcastTranscriptService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -58,12 +57,9 @@ import jakarta.validation.Valid;
 public class ListenerFlowController {
 
     private final ListenerFlowService listenerFlowService;
-    private final PodcastTranscriptService transcriptService;
 
-    public ListenerFlowController(ListenerFlowService listenerFlowService,
-            PodcastTranscriptService transcriptService) {
+    public ListenerFlowController(ListenerFlowService listenerFlowService) {
         this.listenerFlowService = listenerFlowService;
-        this.transcriptService = transcriptService;
     }
 
     @GetMapping("/podcasts")
@@ -82,14 +78,6 @@ public class ListenerFlowController {
     @Operation(summary = "Xem chi tiết podcast")
     public PodcastItem getPodcast(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID podcastId) {
         return listenerFlowService.getPodcast(userId(jwt), podcastId);
-    }
-
-    @GetMapping("/podcasts/{podcastId}/transcript")
-    @Operation(summary = "Xem script của podcast đã xuất bản")
-    public PodcastTranscriptItem getPodcastTranscript(@AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID podcastId) {
-        listenerFlowService.getPodcast(userId(jwt), podcastId);
-        return transcriptService.currentPublished(podcastId);
     }
 
     @GetMapping("/creators")
@@ -174,10 +162,32 @@ public class ListenerFlowController {
     @GetMapping("/podcasts/{podcastId}/comments")
     @Operation(summary = "Xem bình luận của podcast")
     public Page<CommentItem> getComments(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID podcastId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return listenerFlowService.getComments(podcastId, page, size);
+        return listenerFlowService.getComments(userId(jwt), podcastId, page, size);
+    }
+
+    @GetMapping("/comments/{commentId}/likes")
+    @Operation(summary = "Xem lượt thích của bình luận và trạng thái của người dùng")
+    public CommentLikeSummary getCommentLikes(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID commentId) {
+        return listenerFlowService.getCommentLikeSummary(userId(jwt), commentId);
+    }
+
+    @PutMapping("/comments/{commentId}/like")
+    @Operation(summary = "Thích bình luận; gọi lặp không tạo lượt thích trùng")
+    public CommentLikeSummary likeComment(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID commentId) {
+        return listenerFlowService.likeComment(userId(jwt), commentId);
+    }
+
+    @DeleteMapping("/comments/{commentId}/like")
+    @Operation(summary = "Bỏ thích bình luận; gọi lặp là an toàn")
+    public CommentLikeSummary unlikeComment(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID commentId) {
+        return listenerFlowService.unlikeComment(userId(jwt), commentId);
     }
 
     @PostMapping("/podcasts/{podcastId}/comments")

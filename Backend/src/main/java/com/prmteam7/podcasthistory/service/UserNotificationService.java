@@ -30,7 +30,8 @@ public class UserNotificationService {
                     n.getMessage(),
                     Boolean.TRUE.equals(n.getIsRead()),
                     n.getCreatedAt(),
-                    n.getReadAt()));
+                    n.getReadAt(),
+                    n.getPayload()));
   }
 
   @Transactional
