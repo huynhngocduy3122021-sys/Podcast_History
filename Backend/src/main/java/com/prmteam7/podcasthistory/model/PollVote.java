@@ -9,7 +9,8 @@ import java.util.UUID;
     }, indexes = {
         @Index(name = "idx_poll_vote_poll_id", columnList = "poll_id"),
         @Index(name = "idx_poll_vote_poll_option_id", columnList = "poll_option_id"),
-        @Index(name = "idx_poll_vote_user_id", columnList = "user_id")
+        @Index(name = "idx_poll_vote_user_id", columnList = "user_id"),
+        @Index(name = "idx_poll_vote_poll_created", columnList = "poll_id, created_at DESC, poll_vote_id DESC")
     })
 public class PollVote extends BaseEntity {
     @Id

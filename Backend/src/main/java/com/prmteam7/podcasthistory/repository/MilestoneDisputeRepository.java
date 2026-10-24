@@ -1,0 +1,25 @@
+package com.prmteam7.podcasthistory.repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import com.prmteam7.podcasthistory.model.MilestoneDispute;
+
+public interface MilestoneDisputeRepository extends JpaRepository<MilestoneDispute, UUID> {
+
+    List<MilestoneDispute> findAllByStatusOrderByCreatedAtAsc(String status);
+
+    Optional<MilestoneDispute> findFirstByContractStage_ContractStageIdAndStatus(
+            UUID stageId, String status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select dispute from MilestoneDispute dispute where dispute.milestoneDisputeId = :disputeId")
+    Optional<MilestoneDispute> findByIdForUpdate(@Param("disputeId") UUID disputeId);
+}

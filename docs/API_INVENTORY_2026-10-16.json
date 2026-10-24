@@ -1,0 +1,1062 @@
+{
+  "commit": "9af4456",
+  "date": "2026-10-16",
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/admin/categories",
+      "controller": "AdminCategoryController.java",
+      "line": 39
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/categories/{categoryId}",
+      "controller": "AdminCategoryController.java",
+      "line": 45
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/categories",
+      "controller": "AdminCategoryController.java",
+      "line": 51
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/categories/{categoryId}",
+      "controller": "AdminCategoryController.java",
+      "line": 58
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/categories/{categoryId}",
+      "controller": "AdminCategoryController.java",
+      "line": 66
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/reports",
+      "controller": "AdminContentController.java",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/reports",
+      "controller": "AdminContentController.java",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/reports/{reportId}",
+      "controller": "AdminContentController.java",
+      "line": 38
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/reports/{reportId}",
+      "controller": "AdminContentController.java",
+      "line": 38
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/reports/{reportId}/claim",
+      "controller": "AdminContentController.java",
+      "line": 44
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/reports/{reportId}/claim",
+      "controller": "AdminContentController.java",
+      "line": 44
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/reports/{reportId}/resolve",
+      "controller": "AdminContentController.java",
+      "line": 50
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/reports/{reportId}/resolve",
+      "controller": "AdminContentController.java",
+      "line": 50
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/podcasts/{podcastId}/hide",
+      "controller": "AdminContentController.java",
+      "line": 59
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/podcasts/{podcastId}/hide",
+      "controller": "AdminContentController.java",
+      "line": 59
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/podcasts/{podcastId}",
+      "controller": "AdminContentController.java",
+      "line": 69
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/staff/podcasts/{podcastId}",
+      "controller": "AdminContentController.java",
+      "line": 69
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/podcasts/{podcastId}/restore",
+      "controller": "AdminContentController.java",
+      "line": 79
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/podcasts/{podcastId}/restore",
+      "controller": "AdminContentController.java",
+      "line": 79
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcast-appeals",
+      "controller": "AdminContentController.java",
+      "line": 89
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcast-appeals",
+      "controller": "AdminContentController.java",
+      "line": 89
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcast-appeals/{appealId}",
+      "controller": "AdminContentController.java",
+      "line": 99
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcast-appeals/{appealId}",
+      "controller": "AdminContentController.java",
+      "line": 99
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/podcast-appeals/{appealId}/resolve",
+      "controller": "AdminContentController.java",
+      "line": 105
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/podcast-appeals/{appealId}/resolve",
+      "controller": "AdminContentController.java",
+      "line": 105
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/creator-applications/pending",
+      "controller": "AdminCreatorApplicationController.java",
+      "line": 34
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/creator-applications",
+      "controller": "AdminCreatorApplicationController.java",
+      "line": 40
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/creator-applications/{applicationId}",
+      "controller": "AdminCreatorApplicationController.java",
+      "line": 54
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/creator-applications/{applicationId}/approve",
+      "controller": "AdminCreatorApplicationController.java",
+      "line": 62
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/creator-applications/{applicationId}/reject",
+      "controller": "AdminCreatorApplicationController.java",
+      "line": 72
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/dashboard",
+      "controller": "AdminDashboardController.java",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/dashboard",
+      "controller": "AdminDashboardController.java",
+      "line": 24
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/contracts",
+      "controller": "AdminDisputeController.java",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/contracts/{contractId}",
+      "controller": "AdminDisputeController.java",
+      "line": 38
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/contracts/{contractId}/disputes",
+      "controller": "AdminDisputeController.java",
+      "line": 44
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/disputes",
+      "controller": "AdminDisputeController.java",
+      "line": 54
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/disputes/{disputeId}",
+      "controller": "AdminDisputeController.java",
+      "line": 64
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/disputes/{disputeId}/resolve",
+      "controller": "AdminDisputeController.java",
+      "line": 70
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/withdrawals",
+      "controller": "AdminFinanceController.java",
+      "line": 27
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/withdrawals/{withdrawalId}",
+      "controller": "AdminFinanceController.java",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/withdrawals/{withdrawalId}/reviews",
+      "controller": "AdminFinanceController.java",
+      "line": 44
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/withdrawals/{withdrawalId}/approve",
+      "controller": "AdminFinanceController.java",
+      "line": 54
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/withdrawals/{withdrawalId}/reject",
+      "controller": "AdminFinanceController.java",
+      "line": 63
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/withdrawals/{withdrawalId}/complete",
+      "controller": "AdminFinanceController.java",
+      "line": 72
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/withdrawals/{withdrawalId}/fail",
+      "controller": "AdminFinanceController.java",
+      "line": 81
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/wallets",
+      "controller": "AdminFinanceController.java",
+      "line": 90
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/wallet-transactions",
+      "controller": "AdminFinanceController.java",
+      "line": 99
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/payments",
+      "controller": "AdminFinanceController.java",
+      "line": 110
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/payments/{paymentId}",
+      "controller": "AdminFinanceController.java",
+      "line": 120
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/payments/{paymentId}/reconcile",
+      "controller": "AdminFinanceController.java",
+      "line": 126
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/payments/{paymentId}/refund",
+      "controller": "AdminFinanceController.java",
+      "line": 135
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/membership-plans",
+      "controller": "AdminMembershipPlanController.java",
+      "line": 28
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/membership-plans/{planId}",
+      "controller": "AdminMembershipPlanController.java",
+      "line": 39
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/membership-plans",
+      "controller": "AdminMembershipPlanController.java",
+      "line": 45
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/membership-plans/{planId}",
+      "controller": "AdminMembershipPlanController.java",
+      "line": 53
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/membership-plans/{planId}",
+      "controller": "AdminMembershipPlanController.java",
+      "line": 62
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/milestone-disputes/open",
+      "controller": "AdminMilestoneDisputeController.java",
+      "line": 35
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/milestone-disputes/{disputeId}/resolve",
+      "controller": "AdminMilestoneDisputeController.java",
+      "line": 41
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/{podcastId}/references",
+      "controller": "AdminPodcastReferenceController.java",
+      "line": 27
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/{podcastId}/references",
+      "controller": "AdminPodcastReferenceController.java",
+      "line": 27
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/{podcastId}/references/{referenceId}/file",
+      "controller": "AdminPodcastReferenceController.java",
+      "line": 33
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/{podcastId}/references/{referenceId}/file",
+      "controller": "AdminPodcastReferenceController.java",
+      "line": 33
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/page",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/page",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/{podcastId}",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 45
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/{podcastId}",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 45
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/{podcastId}/preview",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 52
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/{podcastId}/preview",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 52
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/{podcastId}/reviews",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 59
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/{podcastId}/reviews",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 59
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 71
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 71
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/podcasts/pending-review",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 81
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff/podcasts/pending-review",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 81
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/podcasts/{podcastId}/approve",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 87
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/podcasts/{podcastId}/approve",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 87
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/podcasts/{podcastId}/reject",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 97
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/podcasts/{podcastId}/reject",
+      "controller": "AdminPodcastReviewController.java",
+      "line": 97
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users",
+      "controller": "AdminUserController.java",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users/{userId}",
+      "controller": "AdminUserController.java",
+      "line": 41
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/users/{userId}",
+      "controller": "AdminUserController.java",
+      "line": 47
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/users/{userId}/access",
+      "controller": "AdminUserController.java",
+      "line": 56
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/users/{userId}/verification",
+      "controller": "AdminUserController.java",
+      "line": 65
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/users/{userId}/role",
+      "controller": "AdminUserController.java",
+      "line": 74
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/{userId}/revoke-sessions",
+      "controller": "AdminUserController.java",
+      "line": 83
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/staff",
+      "controller": "AdminUserController.java",
+      "line": 90
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/staff",
+      "controller": "AdminUserController.java",
+      "line": 99
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/audit-logs",
+      "controller": "AdminUserController.java",
+      "line": 107
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "controller": "AuthController.java",
+      "line": 40
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "controller": "AuthController.java",
+      "line": 46
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "controller": "AuthController.java",
+      "line": 52
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "controller": "AuthController.java",
+      "line": 59
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "controller": "AuthController.java",
+      "line": 66
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories",
+      "controller": "CategoryController.java",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts/{podcastId}/reviews",
+      "controller": "CreatorAppealController.java",
+      "line": 30
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/podcasts/{podcastId}/appeals",
+      "controller": "CreatorAppealController.java",
+      "line": 40
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts/{podcastId}/appeals",
+      "controller": "CreatorAppealController.java",
+      "line": 50
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator-applications",
+      "controller": "CreatorApplicationController.java",
+      "line": 36
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator-applications/me",
+      "controller": "CreatorApplicationController.java",
+      "line": 45
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/series",
+      "controller": "CreatorFlowController.java",
+      "line": 47
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/series",
+      "controller": "CreatorFlowController.java",
+      "line": 53
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/series/{seriesId}",
+      "controller": "CreatorFlowController.java",
+      "line": 60
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/series/{seriesId}/podcasts",
+      "controller": "CreatorFlowController.java",
+      "line": 66
+    },
+    {
+      "method": "PUT",
+      "path": "/api/creator/series/{seriesId}",
+      "controller": "CreatorFlowController.java",
+      "line": 72
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/creator/series/{seriesId}",
+      "controller": "CreatorFlowController.java",
+      "line": 81
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts",
+      "controller": "CreatorFlowController.java",
+      "line": 87
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/podcasts",
+      "controller": "CreatorFlowController.java",
+      "line": 93
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts/{podcastId}",
+      "controller": "CreatorFlowController.java",
+      "line": 102
+    },
+    {
+      "method": "PUT",
+      "path": "/api/creator/podcasts/{podcastId}",
+      "controller": "CreatorFlowController.java",
+      "line": 109
+    },
+    {
+      "method": "PUT",
+      "path": "/api/creator/podcasts/{podcastId}/series",
+      "controller": "CreatorFlowController.java",
+      "line": 118
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/creator/podcasts/{podcastId}/series",
+      "controller": "CreatorFlowController.java",
+      "line": 127
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/podcasts/{podcastId}/video",
+      "controller": "CreatorFlowController.java",
+      "line": 133
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/podcasts/{podcastId}/submit",
+      "controller": "CreatorFlowController.java",
+      "line": 143
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/creator/podcasts/{podcastId}",
+      "controller": "CreatorFlowController.java",
+      "line": 149
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/milestones/{milestoneId}/submissions",
+      "controller": "CreatorMilestoneController.java",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts/{podcastId}/references",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 31
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 37
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/podcasts/{podcastId}/references",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 44
+    },
+    {
+      "method": "PUT",
+      "path": "/api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 52
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/creator/podcasts/{podcastId}/references/{referenceId}",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 60
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 68
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 76
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/creator/podcasts/{podcastId}/references/{referenceId}/file",
+      "controller": "CreatorPodcastReferenceController.java",
+      "line": 83
+    },
+    {
+      "method": "GET",
+      "path": "/api/creator/requests/incoming",
+      "controller": "CreatorRequestController.java",
+      "line": 37
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/requests/{requestId}/accept",
+      "controller": "CreatorRequestController.java",
+      "line": 43
+    },
+    {
+      "method": "POST",
+      "path": "/api/creator/requests/{requestId}/reject",
+      "controller": "CreatorRequestController.java",
+      "line": 52
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "controller": "HealthController.java",
+      "line": 13
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts",
+      "controller": "ListenerFlowController.java",
+      "line": 64
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}",
+      "controller": "ListenerFlowController.java",
+      "line": 76
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators",
+      "controller": "ListenerFlowController.java",
+      "line": 82
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/{creatorId}",
+      "controller": "ListenerFlowController.java",
+      "line": 88
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}/playback",
+      "controller": "ListenerFlowController.java",
+      "line": 94
+    },
+    {
+      "method": "PUT",
+      "path": "/api/podcasts/{podcastId}/listening-progress",
+      "controller": "ListenerFlowController.java",
+      "line": 102
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/listening-history",
+      "controller": "ListenerFlowController.java",
+      "line": 111
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/listening-history/{podcastId}",
+      "controller": "ListenerFlowController.java",
+      "line": 120
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/listening-history/{podcastId}",
+      "controller": "ListenerFlowController.java",
+      "line": 128
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}/likes",
+      "controller": "ListenerFlowController.java",
+      "line": 136
+    },
+    {
+      "method": "PUT",
+      "path": "/api/podcasts/{podcastId}/like",
+      "controller": "ListenerFlowController.java",
+      "line": 144
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/podcasts/{podcastId}/like",
+      "controller": "ListenerFlowController.java",
+      "line": 152
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}/comments",
+      "controller": "ListenerFlowController.java",
+      "line": 160
+    },
+    {
+      "method": "POST",
+      "path": "/api/podcasts/{podcastId}/comments",
+      "controller": "ListenerFlowController.java",
+      "line": 169
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}/comments/stream",
+      "controller": "ListenerFlowController.java",
+      "line": 180
+    },
+    {
+      "method": "PUT",
+      "path": "/api/comments/{commentId}",
+      "controller": "ListenerFlowController.java",
+      "line": 186
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/comments/{commentId}",
+      "controller": "ListenerFlowController.java",
+      "line": 195
+    },
+    {
+      "method": "POST",
+      "path": "/api/reports",
+      "controller": "ListenerFlowController.java",
+      "line": 203
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/reports",
+      "controller": "ListenerFlowController.java",
+      "line": 212
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/me/reports/{reportId}",
+      "controller": "ListenerFlowController.java",
+      "line": 220
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/reports/{reportId}",
+      "controller": "ListenerFlowController.java",
+      "line": 228
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/follows",
+      "controller": "ListenerFlowController.java",
+      "line": 236
+    },
+    {
+      "method": "PUT",
+      "path": "/api/creators/{creatorId}/follow",
+      "controller": "ListenerFlowController.java",
+      "line": 245
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/creators/{creatorId}/follow",
+      "controller": "ListenerFlowController.java",
+      "line": 253
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/saved-podcasts",
+      "controller": "ListenerFlowController.java",
+      "line": 261
+    },
+    {
+      "method": "PUT",
+      "path": "/api/me/saved-podcasts/{podcastId}",
+      "controller": "ListenerFlowController.java",
+      "line": 270
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/saved-podcasts/{podcastId}",
+      "controller": "ListenerFlowController.java",
+      "line": 278
+    },
+    {
+      "method": "GET",
+      "path": "/api/creators/{creatorId}/membership-plans",
+      "controller": "ListenerFlowController.java",
+      "line": 286
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/subscriptions",
+      "controller": "ListenerFlowController.java",
+      "line": 292
+    },
+    {
+      "method": "POST",
+      "path": "/api/me/subscriptions",
+      "controller": "ListenerFlowController.java",
+      "line": 298
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/subscriptions/{subscriptionId}",
+      "controller": "ListenerFlowController.java",
+      "line": 307
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/series-requests",
+      "controller": "ListenerFlowController.java",
+      "line": 315
+    },
+    {
+      "method": "POST",
+      "path": "/api/creators/{creatorId}/series-requests",
+      "controller": "ListenerFlowController.java",
+      "line": 321
+    },
+    {
+      "method": "PUT",
+      "path": "/api/me/series-requests/{requestId}",
+      "controller": "ListenerFlowController.java",
+      "line": 331
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/me/series-requests/{requestId}",
+      "controller": "ListenerFlowController.java",
+      "line": 340
+    },
+    {
+      "method": "POST",
+      "path": "/api/listener/milestones/{milestoneId}/approve",
+      "controller": "ListenerMilestoneController.java",
+      "line": 34
+    },
+    {
+      "method": "POST",
+      "path": "/api/listener/milestones/{milestoneId}/revision",
+      "controller": "ListenerMilestoneController.java",
+      "line": 42
+    },
+    {
+      "method": "POST",
+      "path": "/api/uploads",
+      "controller": "MediaUploadController.java",
+      "line": 39
+    },
+    {
+      "method": "GET",
+      "path": "/api/milestones/{milestoneId}/submissions",
+      "controller": "MilestoneDisputeController.java",
+      "line": 38
+    },
+    {
+      "method": "POST",
+      "path": "/api/milestones/{milestoneId}/disputes",
+      "controller": "MilestoneDisputeController.java",
+      "line": 46
+    },
+    {
+      "method": "POST",
+      "path": "/api/contracts/{contractId}/disputes",
+      "controller": "MyAdminCaseController.java",
+      "line": 31
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/disputes",
+      "controller": "MyAdminCaseController.java",
+      "line": 41
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/notifications",
+      "controller": "MyAdminCaseController.java",
+      "line": 50
+    },
+    {
+      "method": "PUT",
+      "path": "/api/me/notifications/{notificationId}/read",
+      "controller": "MyAdminCaseController.java",
+      "line": 59
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}/references",
+      "controller": "PodcastReferenceController.java",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "path": "/api/podcasts/{podcastId}/references/{referenceId}/file",
+      "controller": "PodcastReferenceController.java",
+      "line": 32
+    },
+    {
+      "method": "POST",
+      "path": "/api/requests",
+      "controller": "SeriesRequestController.java",
+      "line": 38
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/me",
+      "controller": "SeriesRequestController.java",
+      "line": 47
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/{requestId}/milestones",
+      "controller": "SeriesRequestController.java",
+      "line": 53
+    }
+  ]
+}

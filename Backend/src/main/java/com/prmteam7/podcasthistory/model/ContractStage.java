@@ -9,6 +9,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Entity
@@ -38,6 +39,10 @@ public class ContractStage extends UpdatedEntity {
 
     @Column(name = "status", nullable = false, length = 30)
     private String status;
+
+    @Column(name = "amount", nullable = false, precision = 12, scale = 2,
+            columnDefinition = "numeric(12,2) default 0.00")
+    private BigDecimal amount;
 
     public ContractStage() {
     }
@@ -95,5 +100,13 @@ public class ContractStage extends UpdatedEntity {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
     }
 }
