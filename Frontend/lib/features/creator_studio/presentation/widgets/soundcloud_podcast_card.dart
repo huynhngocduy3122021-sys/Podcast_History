@@ -334,14 +334,17 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                     if (val == 'delete') widget.onDelete?.call();
                   },
                   itemBuilder: (context) => [
-                    if (widget.podcast.status == PodcastStatus.draft && widget.onSubmitReview != null)
-                      const PopupMenuItem(
+                    if ((widget.podcast.status == PodcastStatus.draft || widget.podcast.status == PodcastStatus.rejected) && widget.onSubmitReview != null)
+                      PopupMenuItem(
                         value: 'submit',
                         child: Row(
                           children: [
-                            Icon(Icons.send_rounded, size: 16, color: AppColors.primaryLight),
-                            SizedBox(width: 8),
-                            Text('Chờ Admin duyệt', style: TextStyle(fontWeight: FontWeight.w600)),
+                            const Icon(Icons.send_rounded, size: 16, color: AppColors.primaryLight),
+                            const SizedBox(width: 8),
+                            Text(
+                              widget.podcast.status == PodcastStatus.rejected ? 'Gửi lại Admin duyệt' : 'Chờ Admin duyệt',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
                           ],
                         ),
                       ),

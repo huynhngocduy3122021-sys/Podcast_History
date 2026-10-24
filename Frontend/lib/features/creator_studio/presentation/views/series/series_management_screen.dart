@@ -93,18 +93,21 @@ class _SeriesManagementScreenState
     CreatorSeries s,
     bool isDark,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-        borderRadius: AppSpacing.roundedMd,
-        border: Border.all(
-          color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+    return InkWell(
+      onTap: () => _showSeriesPodcastsSheet(context, s),
+      borderRadius: AppSpacing.roundedMd,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+          borderRadius: AppSpacing.roundedMd,
+          border: Border.all(
+            color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             children: [
               Container(
@@ -153,17 +156,65 @@ class _SeriesManagementScreenState
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariantLight,
+                  color: s.status == 'ARCHIVED'
+                      ? AppColors.error.withValues(alpha: 0.15)
+                      : AppColors.surfaceVariantLight,
                   borderRadius: AppSpacing.roundedPill,
                 ),
                 child: Text(
                   s.status,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.tertiaryLight,
+                    color: s.status == 'ARCHIVED'
+                        ? AppColors.error
+                        : AppColors.tertiaryLight,
                   ),
                 ),
+              ),
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert_rounded, size: 20),
+                onSelected: (action) {
+                  if (action == 'view') {
+                    _showSeriesPodcastsSheet(context, s);
+                  } else if (action == 'edit') {
+                    _showEditSeriesDialog(context, s);
+                  } else if (action == 'archive') {
+                    _confirmDeleteSeries(context, s);
+                  }
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'view',
+                    child: Row(
+                      children: [
+                        Icon(Icons.playlist_play_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text('Xem danh sách tập'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 18),
+                        SizedBox(width: 8),
+                        Text('Chỉnh sửa Series'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'archive',
+                    child: Row(
+                      children: [
+                        Icon(Icons.archive_outlined, size: 18, color: AppColors.error),
+                        SizedBox(width: 8),
+                        Text('Lưu trữ Series', style: TextStyle(color: AppColors.error)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -200,8 +251,9 @@ class _SeriesManagementScreenState
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showCreateSeriesDialog(BuildContext context) {
     final titleCtrl = TextEditingController();
@@ -321,6 +373,323 @@ class _SeriesManagementScreenState
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditSeriesDialog(BuildContext context, CreatorSeries series) {
+    final titleCtrl = TextEditingController(text: series.title);
+    final slugCtrl = TextEditingController(text: series.slug);
+    final descCtrl = TextEditingController(text: series.description);
+    final formKey = GlobalKey<FormState>();
+    String? selectedCategoryId = series.categoryId.isNotEmpty ? series.categoryId : null;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text(
+            'Chỉnh sửa Series Podcast',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppTextField(
+                    label: 'Tiêu đề Series *',
+                    controller: titleCtrl,
+                    hint: 'Ví dụ: Kháng chiến chống Mỹ cứu nước',
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Vui lòng nhập tiêu đề series'
+                        : null,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final categoriesAsync = ref.watch(categoriesProvider);
+                      return categoriesAsync.when(
+                        data: (categories) {
+                          if (categories.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          selectedCategoryId ??= categories.first.id;
+                          return DropdownButtonFormField<String>(
+                            initialValue: selectedCategoryId,
+                            decoration: const InputDecoration(
+                              labelText: 'Danh mục chủ đề *',
+                              isDense: true,
+                              prefixIcon:
+                                  Icon(Icons.category_outlined, size: 20),
+                            ),
+                            items: categories
+                                .map((c) => DropdownMenuItem(
+                                      value: c.id,
+                                      child: Text(c.name),
+                                    ))
+                                .toList(),
+                            onChanged: (val) {
+                              setDialogState(() => selectedCategoryId = val);
+                            },
+                            validator: (v) => (v == null || v.isEmpty)
+                                ? 'Vui lòng chọn danh mục'
+                                : null,
+                          );
+                        },
+                        loading: () => const LinearProgressIndicator(),
+                        error: (err, st) => const SizedBox.shrink(),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Slug (Đường dẫn)',
+                    controller: slugCtrl,
+                    hint: 'Ví dụ: khang-chien-chong-my',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Mô tả tóm tắt Series',
+                    controller: descCtrl,
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Hủy'),
+            ),
+            AppButton(
+              label: 'Lưu thay đổi',
+              width: 130,
+              onPressed: () async {
+                if (formKey.currentState?.validate() == true) {
+                  final title = titleCtrl.text.trim();
+                  final slug = slugCtrl.text.trim().isNotEmpty
+                      ? slugCtrl.text.trim()
+                      : title.toLowerCase().replaceAll(' ', '-');
+
+                  final updated = await ref
+                      .read(creatorSeriesProvider.notifier)
+                      .updateSeries(
+                        seriesId: series.id,
+                        title: title,
+                        slug: slug,
+                        categoryId: selectedCategoryId ?? '',
+                        description: descCtrl.text.trim(),
+                        coverUrl: series.coverUrl,
+                      );
+
+                  if (ctx.mounted) Navigator.of(ctx).pop();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          updated != null
+                              ? 'Đã cập nhật series "$title" thành công!'
+                              : 'Không thể cập nhật series. Vui lòng thử lại.',
+                        ),
+                        backgroundColor: updated != null
+                            ? AppColors.success
+                            : AppColors.error,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteSeries(BuildContext context, CreatorSeries series) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(
+          'Lưu trữ Series',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Bạn có chắc chắn muốn lưu trữ series "${series.title}" không?\n\n'
+          'Các tập podcast thuộc series này sẽ không bị xóa mà trở thành tập đơn lẻ.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          AppButton(
+            label: 'Lưu trữ Series',
+            type: AppButtonType.destructive,
+            width: 140,
+            onPressed: () async {
+              final ok = await ref
+                  .read(creatorSeriesProvider.notifier)
+                  .deleteSeries(series.id);
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      ok
+                          ? 'Đã lưu trữ series "${series.title}" thành công!'
+                          : 'Lỗi lưu trữ series. Vui lòng thử lại.',
+                    ),
+                    backgroundColor: ok ? AppColors.success : AppColors.error,
+                  ),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSeriesPodcastsSheet(BuildContext context, CreatorSeries series) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.35,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (ctx, scrollCtrl) => Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  const Icon(Icons.video_collection_rounded,
+                      color: AppColors.primaryLight),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      series.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              if (series.description.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  series.description,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? AppColors.onSurfaceMutedDark
+                        : AppColors.onSurfaceMutedLight,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              const Text(
+                'Các tập podcast trong Series',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Expanded(
+                child: FutureBuilder<List<CreatorPodcast>>(
+                  future: ref
+                      .read(creatorSeriesProvider.notifier)
+                      .getSeriesPodcasts(series.id),
+                  builder: (ctx, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final podcasts = snapshot.data ?? [];
+                    if (podcasts.isEmpty) {
+                      return const Center(
+                        child: Text(
+                          'Chưa có tập podcast nào được gắn vào series này.',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      controller: scrollCtrl,
+                      itemCount: podcasts.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (ctx, idx) {
+                        final pod = podcasts[idx];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight
+                                  .withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${idx + 1}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.primaryLight,
+                                ),
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            pod.title,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            'Thời lượng: ${AppFormatters.formatDuration(pod.duration)} • ${pod.status.name}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -489,6 +489,8 @@ class StudioComment {
   final bool isPinned;
   final bool isHidden;
   final int likesCount;
+  final bool likedByMe;
+  final String? podcastId;
 
   const StudioComment({
     required this.id,
@@ -501,9 +503,17 @@ class StudioComment {
     this.isPinned = false,
     this.isHidden = false,
     this.likesCount = 0,
+    this.likedByMe = false,
+    this.podcastId,
   });
 
-  StudioComment copyWith({bool? isPinned, bool? isHidden}) {
+  StudioComment copyWith({
+    bool? isPinned,
+    bool? isHidden,
+    int? likesCount,
+    bool? likedByMe,
+    String? podcastId,
+  }) {
     return StudioComment(
       id: id,
       podcastTitle: podcastTitle,
@@ -514,7 +524,9 @@ class StudioComment {
       createdAt: createdAt,
       isPinned: isPinned ?? this.isPinned,
       isHidden: isHidden ?? this.isHidden,
-      likesCount: likesCount,
+      likesCount: likesCount ?? this.likesCount,
+      likedByMe: likedByMe ?? this.likedByMe,
+      podcastId: podcastId ?? this.podcastId,
     );
   }
 }

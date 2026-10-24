@@ -123,6 +123,7 @@ abstract class CreatorRepository {
 
   // Series
   Future<List<CreatorSeries>> getSeries();
+  Future<CreatorSeries?> getSeriesById(String seriesId);
   Future<CreatorSeries?> createSeries({
     required String title,
     required String slug,
@@ -130,6 +131,16 @@ abstract class CreatorRepository {
     String description,
     String coverUrl,
   });
+  Future<CreatorSeries?> updateSeries({
+    required String seriesId,
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description,
+    String coverUrl,
+  });
+  Future<bool> deleteSeries(String seriesId);
+  Future<List<CreatorPodcast>> getSeriesPodcasts(String seriesId);
 
   // Appeals
   Future<void> submitPodcastAppeal({

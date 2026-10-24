@@ -237,7 +237,9 @@ class ApiCreatorRepository implements CreatorRepository {
                 eraTag: mapped.eraTag.isNotEmpty
                     ? mapped.eraTag
                     : existing.eraTag,
-                rejectReason: mapped.rejectReason ?? existing.rejectReason,
+                rejectReason: mapped.status == PodcastStatus.rejected
+                    ? (mapped.rejectReason ?? existing.rejectReason)
+                    : null,
               );
             }
             if (mapped.status == PodcastStatus.rejected &&
@@ -553,6 +555,8 @@ class ApiCreatorRepository implements CreatorRepository {
         podcastId: id,
         seriesId: seriesId,
       );
+    } else {
+      await removePodcastFromSeries(podcastId: id);
     }
 
     if (sources.isNotEmpty) {
@@ -588,14 +592,23 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     if (autoSubmit) {
-      try {
-        updatedPodcast = await submitPodcast(id);
-      } catch (_) {}
+      updatedPodcast = await submitPodcast(id);
     }
 
     final existingIndex = _cachedPodcasts.indexWhere((p) => p.id == id);
-    final fallbackPodcast = existingIndex != -1
-        ? _cachedPodcasts[existingIndex].copyWith(
+    final existingPodcast = existingIndex != -1 ? _cachedPodcasts[existingIndex] : null;
+
+    // Quy tắc: Nếu podcast trước đó đang là PUBLISHED, khi chỉnh sửa nó PHẢI chuyển sang DRAFT.
+    // Nếu đang là PENDING_REVIEW (pendingAdmin), nó vẫn giữ nguyên PENDING_REVIEW.
+    // Nếu đang là DRAFT, nó vẫn giữ nguyên DRAFT.
+    final targetFallbackStatus = existingPodcast != null
+        ? (existingPodcast.status == PodcastStatus.published
+            ? PodcastStatus.draft
+            : existingPodcast.status)
+        : PodcastStatus.draft;
+
+    final fallbackPodcast = existingPodcast != null
+        ? existingPodcast.copyWith(
             title: title,
             description: description,
             eraTag: eraTag,
@@ -606,6 +619,7 @@ class ApiCreatorRepository implements CreatorRepository {
             duration: duration,
             categoryId: effectiveCategoryId,
             seriesId: seriesId,
+            status: targetFallbackStatus,
           )
         : CreatorPodcast(
             id: id,
@@ -621,7 +635,7 @@ class ApiCreatorRepository implements CreatorRepository {
             listensCount: 0,
             likesCount: 0,
             commentsCount: 0,
-            status: PodcastStatus.aiModerating,
+            status: PodcastStatus.draft,
             categoryId: effectiveCategoryId,
             seriesId: seriesId,
           );
@@ -651,7 +665,10 @@ class ApiCreatorRepository implements CreatorRepository {
       headers: const {'ngrok-skip-browser-warning': '1'},
     );
     if (res is Map<String, dynamic>) {
-      final updated = _mapBackendPodcastToModel(res);
+      final updated = _mapBackendPodcastToModel(res).copyWith(
+        status: PodcastStatus.pendingAdmin,
+        rejectReason: null,
+      );
       final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
       if (idx != -1) {
         _cachedPodcasts[idx] = updated;
@@ -749,8 +766,8 @@ class ApiCreatorRepository implements CreatorRepository {
       'image/avif' => 'avif',
       'image/heic' => 'heic',
       'image/heif' => 'heif',
-      'image/jpeg' => 'jpg',
-      _ => throw Exception('Định dạng ảnh bìa chưa được hỗ trợ: $mimeType'),
+      'image/jpeg' || 'image/jpg' => 'jpg',
+      _ => 'jpg',
     };
 
     return _CoverUploadData(
@@ -1450,6 +1467,101 @@ class ApiCreatorRepository implements CreatorRepository {
       }
     } catch (_) {}
     return null;
+  }
+
+  @override
+  Future<CreatorSeries?> getSeriesById(String seriesId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorSeriesById(seriesId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return CreatorSeries.fromJson(res);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<CreatorSeries?> updateSeries({
+    required String seriesId,
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description = '',
+    String coverUrl = '',
+  }) async {
+    String effectiveCategoryId = categoryId;
+    if (effectiveCategoryId.isEmpty ||
+        effectiveCategoryId.startsWith('00000000-0000-0000')) {
+      try {
+        final categoriesRes = await _apiClient.get(ApiEndpoints.categories);
+        if (categoriesRes is List && categoriesRes.isNotEmpty) {
+          final firstCat = categoriesRes.first as Map<String, dynamic>;
+          final realId = (firstCat['categoryId'] ?? firstCat['id'])?.toString();
+          if (realId != null && realId.isNotEmpty) {
+            effectiveCategoryId = realId;
+          }
+        }
+      } catch (_) {}
+    }
+
+    try {
+      final res = await _apiClient.put(
+        ApiEndpoints.creatorSeriesById(seriesId),
+        body: {
+          'categoryId': effectiveCategoryId,
+          'title': title,
+          'slug': slug.isNotEmpty
+              ? slug
+              : title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
+          'description': description.isNotEmpty ? description : null,
+          'coverUrl': coverUrl.isNotEmpty ? coverUrl : null,
+        },
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final updated = CreatorSeries.fromJson(res);
+        final idx = _cachedSeries.indexWhere((s) => s.id == seriesId);
+        if (idx != -1) {
+          _cachedSeries[idx] = updated;
+        }
+        return updated;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<bool> deleteSeries(String seriesId) async {
+    try {
+      await _apiClient.delete(
+        ApiEndpoints.creatorSeriesById(seriesId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      _cachedSeries.removeWhere((s) => s.id == seriesId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<List<CreatorPodcast>> getSeriesPodcasts(String seriesId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorSeriesPodcasts(seriesId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map((json) => _mapBackendPodcastToModel(json))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   @override
