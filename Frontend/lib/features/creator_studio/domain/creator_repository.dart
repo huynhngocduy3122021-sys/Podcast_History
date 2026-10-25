@@ -1,4 +1,5 @@
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/data/models/creator_livestream_model.dart';
 
 abstract class CreatorRepository {
   // Profile & Registration
@@ -109,8 +110,20 @@ abstract class CreatorRepository {
   );
   Future<void> releaseFunds();
 
+  // Likes & History
+  Future<Map<String, dynamic>> getPodcastLikes(String podcastId);
+  Future<Map<String, dynamic>> likePodcast(String podcastId);
+  Future<Map<String, dynamic>> unlikePodcast(String podcastId);
+  Future<void> recordListeningProgress({
+    required String podcastId,
+    required int progressSeconds,
+    bool completed = false,
+  });
+
   // Comments
   Future<List<StudioComment>> getComments();
+  Future<List<StudioComment>> getPodcastComments(String podcastId, {int page = 0, int size = 50});
+  Future<int> getPodcastCommentsCount(String podcastId);
   Future<StudioComment?> addCommentToPodcast({
     required String podcastId,
     required String content,
@@ -120,6 +133,9 @@ abstract class CreatorRepository {
   Future<void> deleteComment(String commentId);
   Future<void> togglePinComment(String id);
   Future<void> toggleHideComment(String id);
+  Future<Map<String, dynamic>> getCommentLikes(String commentId);
+  Future<Map<String, dynamic>> likeComment(String commentId);
+  Future<Map<String, dynamic>> unlikeComment(String commentId);
 
   // Series
   Future<List<CreatorSeries>> getSeries();
@@ -155,4 +171,16 @@ abstract class CreatorRepository {
     String description,
     List<FormQuestion> questions,
   );
+
+  // Livestreams (Agora)
+  Future<List<CreatorLivestreamItem>> getLivestreams();
+  Future<CreatorLivestreamItem> getLivestreamById(String livestreamId);
+  Future<CreatorLivestreamItem> createLivestream({
+    required String title,
+    String? description,
+    DateTime? scheduledAt,
+  });
+  Future<AgoraJoinResponse> startLivestream(String livestreamId);
+  Future<AgoraJoinResponse> renewLivestreamToken(String livestreamId);
+  Future<CreatorLivestreamItem> endLivestream(String livestreamId);
 }

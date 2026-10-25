@@ -54,13 +54,15 @@ class ApiEndpoints {
   static String submitMilestone(String milestoneId) =>
       '/api/creator/milestones/$milestoneId/submissions';
 
-  // Comments & Likes
+  // Comments & Likes & History
   static String podcastComments(String podcastId) =>
       '/api/podcasts/$podcastId/comments';
   static String podcastLikes(String podcastId) =>
       '/api/podcasts/$podcastId/likes';
   static String podcastLike(String podcastId) =>
       '/api/podcasts/$podcastId/like';
+  static String podcastListeningProgress(String podcastId) =>
+      '/api/podcasts/$podcastId/listening-progress';
   static String commentById(String commentId) => '/api/comments/$commentId';
   static String commentLikes(String commentId) =>
       '/api/comments/$commentId/likes';
@@ -88,4 +90,11 @@ class ApiEndpoints {
   static String creatorPollResponses(String id) =>
       '/api/creator/polls/$id/responses';
   static const String creatorUpgradePremium = '/api/creator/upgrade-premium';
+
+  // Creator Livestreams (Agora RTC)
+  static const String creatorLivestreams = '/api/creator/livestreams';
+  static String creatorLivestreamById(String id) => '/api/creator/livestreams/$id';
+  static String creatorLivestreamStart(String id) => '/api/creator/livestreams/$id/start';
+  static String creatorLivestreamToken(String id) => '/api/creator/livestreams/$id/token';
+  static String creatorLivestreamEnd(String id) => '/api/creator/livestreams/$id/end';
 }

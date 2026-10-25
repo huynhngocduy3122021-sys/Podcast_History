@@ -11,6 +11,7 @@ import 'package:podcast_history/core/utils/image_url_helper.dart';
 import 'package:podcast_history/core/widgets/soundcloud_waveform.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/track_comments_sheet.dart';
 
@@ -42,7 +43,6 @@ class SoundCloudPodcastCard extends ConsumerStatefulWidget {
 
 class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
   double _playbackProgress = 0.0;
-  bool _isLiked = false;
   bool _isReposted = false;
   Duration? _probedDuration;
 
@@ -50,6 +50,15 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
   void initState() {
     super.initState();
     _checkOrProbeDuration();
+    if (widget.podcast.status == PodcastStatus.published) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref
+              .read(creatorPodcastsProvider.notifier)
+              .refreshPodcastStats(widget.podcast.id);
+        }
+      });
+    }
   }
 
   @override
@@ -58,6 +67,11 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
     if (oldWidget.podcast.id != widget.podcast.id ||
         oldWidget.podcast.videoUrl != widget.podcast.videoUrl) {
       _checkOrProbeDuration();
+      if (widget.podcast.status == PodcastStatus.published) {
+        ref
+            .read(creatorPodcastsProvider.notifier)
+            .refreshPodcastStats(widget.podcast.id);
+      }
     }
   }
 
@@ -100,23 +114,49 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
     );
   }
 
-  void _openComments({String? highlight, double? progress}) {
-    TrackCommentsSheet.show(
+  void _handleLikeToggle() {
+    if (widget.podcast.status != PodcastStatus.published) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tập podcast chỉ có thể thích hoặc nhận bình luận sau khi đã phát hành.',
+          ),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+    ref.read(creatorPodcastsProvider.notifier).toggleLike(widget.podcast.id);
+  }
+
+  Future<void> _openComments({String? highlight, double? progress, CreatorPodcast? podcast}) async {
+    final effectivePodcast = podcast ?? widget.podcast;
+    await TrackCommentsSheet.show(
       context: context,
-      podcast: widget.podcast,
+      podcast: effectivePodcast,
       currentProgress: progress ?? _playbackProgress,
       onSeek: (newProgress) {
         setState(() => _playbackProgress = newProgress);
       },
       highlightComment: highlight,
     );
+    if (mounted) {
+      ref
+          .read(creatorPodcastsProvider.notifier)
+          .refreshPodcastStats(effectivePodcast.id);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final pod = widget.podcast;
+    final podcasts = ref.watch(creatorPodcastsProvider).value;
+    final pod = podcasts?.cast<CreatorPodcast?>().firstWhere(
+          (p) => p?.id == widget.podcast.id,
+          orElse: () => null,
+        ) ??
+        widget.podcast;
     final audioState = ref.watch(audioPlayerServiceProvider);
     final isCurrent = audioState.podcastId == pod.id;
     final isPlaying = isCurrent ? audioState.isPlaying : false;
@@ -408,21 +448,31 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
             child: Row(
               children: [
                 IconButton(
-                  tooltip: 'Thích',
+                  tooltip: pod.likedByMe ? 'Bỏ thích' : 'Thích podcast',
                   visualDensity: VisualDensity.compact,
                   icon: Icon(
-                    _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    pod.likedByMe
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
                     size: 18,
-                    color: _isLiked ? AppColors.primaryLight : (isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight),
+                    color: pod.likedByMe
+                        ? AppColors.primaryLight
+                        : (isDark
+                            ? AppColors.onSurfaceMutedDark
+                            : AppColors.onSurfaceMutedLight),
                   ),
-                  onPressed: () => setState(() => _isLiked = !_isLiked),
+                  onPressed: _handleLikeToggle,
                 ),
                 Text(
-                  AppFormatters.formatCompactNumber(pod.likesCount + (_isLiked ? 1 : 0)),
+                  AppFormatters.formatCompactNumber(pod.likesCount),
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                    color: pod.likedByMe
+                        ? AppColors.primaryLight
+                        : (isDark
+                            ? AppColors.onSurfaceMutedDark
+                            : AppColors.onSurfaceMutedLight),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -445,7 +495,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                 const SizedBox(width: AppSpacing.sm),
 
                 InkWell(
-                  onTap: () => _openComments(),
+                  onTap: () => _openComments(podcast: pod),
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
