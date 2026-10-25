@@ -88,6 +88,11 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());
   }
 
+  @ExceptionHandler(AgoraNotConfiguredException.class)
+  ResponseEntity<ApiError> handleAgoraNotConfigured(AgoraNotConfiguredException exception) {
+    return error(HttpStatus.SERVICE_UNAVAILABLE, exception.getMessage());
+  }
+
   @ExceptionHandler(R2UploadException.class)
   ResponseEntity<ApiError> handleR2Upload(R2UploadException exception) {
     return error(HttpStatus.BAD_GATEWAY, exception.getMessage());

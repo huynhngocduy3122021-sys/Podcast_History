@@ -67,6 +67,8 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                     .requestMatchers("/api/creator/**")
                     .hasRole("CREATOR")
+                    .requestMatchers("/api/livestreams/**")
+                    .hasRole("LISTENER")
                     .requestMatchers("/api/listener/**")
                     .hasRole("LISTENER")
                     .requestMatchers("/api/creator-applications/**")
