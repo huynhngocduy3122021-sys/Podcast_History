@@ -11,11 +11,8 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping({
-  "/api/admin/podcasts/{podcastId}/references",
-  "/api/staff/podcasts/{podcastId}/references"
-})
-@Tag(name = "Admin - podcast sources")
+@RequestMapping("/api/admin/podcasts/{podcastId}/references")
+@Tag(name = "Admin - podcast sources", description = "Admin và Staff xem nguồn tham khảo của podcast")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminPodcastReferenceController {
   private final PodcastReferenceService service;

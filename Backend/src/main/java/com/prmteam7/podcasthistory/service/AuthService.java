@@ -105,11 +105,13 @@ public class AuthService {
     AppUser user =
         appUserRepository
             .findByIdentifier(request.identifier().trim())
-            .filter(
-                candidate ->
-                    passwordEncoder.matches(request.password(), candidate.getPasswordHash()))
-            .filter(candidate -> Boolean.TRUE.equals(candidate.getIsActive()))
-            .orElseThrow(InvalidCredentialsException::new);
+            .orElseThrow(() -> new InvalidCredentialsException("Tài khoản không tồn tại."));
+    if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+      throw new InvalidCredentialsException("Sai mật khẩu. Vui lòng thử lại.");
+    }
+    if (!Boolean.TRUE.equals(user.getIsActive())) {
+      throw new InvalidCredentialsException("Tài khoản của bạn đã bị khóa.");
+    }
 
     Instant now = Instant.now();
     user.setLastLoginAt(now);

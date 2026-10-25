@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RefreshCw, ExternalLink, Download, Eye, Check, X, EyeOff, RotateCcw, Trash2 } from 'lucide-react'
@@ -6,6 +6,7 @@ import { useAuth } from '../auth'
 import { api, errorMessage, session } from '../lib/client'
 import { extractApiError } from '../lib/api-error'
 import { createModerationApi } from '../lib/moderation-api'
+import { aiModerationSignature, aiStatusLabel, currentAiModeration, shouldNotifyAiModeration } from '../lib/ai-moderation-events'
 import { appealCacheKeys, canHandleReport, canModeratePodcast, canResolveAppeal, isPodcastReportTarget, linkExpired, moderationSuccessMessages, podcastActionLabels, podcastStatusLabels, reportActionLabels, reportActions, reportStatusLabels, reportCacheKeys, targetLabels, appealStatusLabels, sameModerator } from '../lib/moderation-rules'
 import type { AppealDecision, PodcastAction, ReportAction } from '../lib/moderation-contracts'
 import type { Role } from '../lib/permissions'
@@ -46,13 +47,92 @@ function PodcastAction({ podcastId, action, status, role, onDone }: { podcastId:
   return <NoteDialog fieldId={`podcast-${podcastId}-${action}-note`} schema={optional ? optionalModerationNoteSchema : moderationNoteSchema} title={`${podcastActionLabels[action]}?`} description={action === 'approve' ? 'Podcast sẽ chuyển sang trạng thái Đã duyệt và chưa được xuất bản.' : `Xác nhận ${podcastActionLabels[action].toLowerCase()}.`} confirmLabel={`Xác nhận ${podcastActionLabels[action].toLowerCase()}`} destructive={action === 'reject' || action === 'hide' || action === 'delete'} onOpenChange={open => { initiatingModerator.current = open ? currentModerator() : null }} onConfirm={note => mutation.mutateAsync(note)}>{<Button variant={action === 'approve' ? 'default' : 'outline'} disabled={mutation.isPending || !canModeratePodcast(role, status, action)}>{action === 'approve' ? <Check className="size-4" /> : action === 'reject' ? <X className="size-4" /> : action === 'hide' ? <EyeOff className="size-4" /> : action === 'restore' ? <RotateCcw className="size-4" /> : <Trash2 className="size-4" />}{podcastActionLabels[action]}</Button>}</NoteDialog>
 }
 
-function PodcastDetail({ id, role, onClose }: { id: string; role: string | undefined; onClose: () => void }) {
+function AiModerationPollingMonitor({ backend, podcasts, enabled }: { backend: ReturnType<typeof createModerationApi>; podcasts: { podcastId: string; title: string }[]; enabled: boolean }) {
+  const notify = useFeedback()
+  const seen = useRef(new Map<string, string>())
+  const [state, setState] = useState<'idle' | 'connected' | 'retrying'>('idle')
+  useEffect(() => {
+    if (!enabled || podcasts.length === 0) { setState('idle'); return }
+    let stopped = false
+    let checking = false
+    const check = async () => {
+      if (checking || stopped) return
+      checking = true
+      const results = await Promise.allSettled(podcasts.map(async podcast => ({ podcast, page: await backend.aiModeration(podcast.podcastId, 0, 1) })))
+      if (!stopped) {
+        let failed = false
+        for (const result of results) {
+          if (result.status === 'rejected') { failed = true; continue }
+          const item = currentAiModeration(result.value.page.content)
+          if (!item) continue
+          const signature = aiModerationSignature(item)
+          const previous = seen.current.get(result.value.podcast.podcastId)
+          if (previous && previous !== signature && shouldNotifyAiModeration(result.value.podcast.podcastId, signature)) {
+            notify(`AI của “${result.value.podcast.title}” cập nhật: ${aiStatusLabel(item.status)}.`)
+          }
+          seen.current.set(result.value.podcast.podcastId, signature)
+        }
+        setState(failed ? 'retrying' : 'connected')
+      }
+      checking = false
+    }
+    void check()
+    const timer = window.setInterval(() => { void check() }, 10000)
+    return () => { stopped = true; window.clearInterval(timer) }
+  }, [backend, enabled, notify, podcasts])
+  if (!enabled) return null
+  return <p className="mt-2 text-xs text-muted-foreground" role="status">{state === 'retrying' ? 'Không lấy được trạng thái AI, sẽ tự thử lại sau 10 giây.' : state === 'connected' ? 'Đang theo dõi trạng thái AI nền (polling 10 giây).' : 'Đang khởi tạo theo dõi trạng thái AI…'}</p>
+}
+
+function AiModerationPanel({ id, role, userId, onRefresh }: { id: string; role: string | undefined; userId: string | undefined; onRefresh: () => Promise<void> }) {
+  const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role])
+  const notify = useFeedback()
+  const transcript = useQuery({
+    queryKey: ['moderation-transcript', userId, id],
+    queryFn: ({ signal }) => backend.transcript(id, signal),
+    enabled: !!userId,
+    refetchInterval: query => ['PENDING', 'PROCESSING'].includes(query.state.data?.status ?? '') ? 5000 : false,
+  })
+  const ai = useQuery({
+    queryKey: ['moderation-ai', userId, id],
+    queryFn: ({ signal }) => backend.aiModeration(id, 0, 20, signal),
+    enabled: !!userId,
+    refetchInterval: query => ['PENDING', 'PROCESSING'].includes(currentAiModeration(query.state.data?.content)?.status ?? '') ? 5000 : false,
+  })
+  const currentAi = currentAiModeration(ai.data?.content)
+  const previousAi = useRef<string | null>(null)
+  useEffect(() => {
+    if (!currentAi) return
+    const signature = aiModerationSignature(currentAi)
+    if (previousAi.current && previousAi.current !== signature && shouldNotifyAiModeration(id, signature)) {
+      notify(`Kết quả AI của podcast đã cập nhật: ${aiStatusLabel(currentAi.status)}.`)
+    }
+    previousAi.current = signature
+  }, [currentAi, id, notify])
+  const retryTranscript = useMutation({
+    mutationFn: () => backend.retryTranscript(id),
+    onSuccess: async () => { notify('Đã yêu cầu chạy lại transcript. Kết quả sẽ được cập nhật khi xử lý nền hoàn tất.'); await transcript.refetch(); await onRefresh() },
+    onError: error => notify(errorMessage(error), 'error'),
+  })
+  const retryAi = useMutation({
+    mutationFn: () => backend.retryAiModeration(id),
+    onSuccess: async () => { notify('Đã yêu cầu chạy lại duyệt AI. Kết quả sẽ được cập nhật khi xử lý nền hoàn tất.'); await ai.refetch(); await onRefresh() },
+    onError: error => notify(errorMessage(error), 'error'),
+  })
+  return <div className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="eyebrow">Duyệt AI</p><h3 className="font-semibold">Transcript và kết quả phân tích</h3></div><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={retryTranscript.isPending || ['PENDING', 'PROCESSING'].includes(transcript.data?.status ?? '')} onClick={() => { void retryTranscript.mutateAsync() }}>Chạy lại transcript</Button><Button variant="outline" disabled={retryAi.isPending || ['PENDING', 'PROCESSING'].includes(currentAi?.status ?? '')} onClick={() => { void retryAi.mutateAsync() }}>Chạy lại AI</Button></div></div>
+    {transcript.isPending ? <LoadingState message="Đang tải trạng thái transcript…" /> : transcript.isError ? <ErrorState message={errorMessage(transcript.error)} onRetry={() => { void transcript.refetch() }} /> : transcript.data && <div className="rounded-lg border border-border bg-surface p-3 text-sm"><div className="flex flex-wrap gap-3"><span className="badge">Transcript: {transcript.data.status}</span>{transcript.data.language && <span className="text-muted-foreground">Ngôn ngữ: {transcript.data.language}</span>}{transcript.data.processedAt && <span className="text-muted-foreground">Cập nhật: {date(transcript.data.processedAt)}</span>}</div>{transcript.data.errorMessage && <p className="mt-2 text-destructive">{transcript.data.errorMessage}</p>}{transcript.data.fullText && <details className="mt-3"><summary className="cursor-pointer font-semibold">Xem transcript</summary><p className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{transcript.data.fullText}</p></details>}</div>}
+    {ai.isPending ? <LoadingState message="Đang tải kết quả AI…" /> : ai.isError ? <ErrorState message={errorMessage(ai.error)} onRetry={() => { void ai.refetch() }} /> : !currentAi ? <EmptyState title="Chưa có kết quả AI" message="AI sẽ chạy sau khi transcript hoàn tất." /> : <div className="rounded-lg border border-border bg-surface p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><span className="badge">{aiStatusLabel(currentAi.status)}</span>{currentAi.overallLabel && <span className="badge">Nhãn: {currentAi.overallLabel}</span>}{currentAi.recommendation && <span className="badge">Khuyến nghị: {currentAi.recommendation}</span>}{currentAi.current && <span className="text-xs text-muted-foreground">Phiên bản hiện tại</span>}</div>{currentAi.reason && <p className="mt-3 whitespace-pre-wrap leading-6"><b>Lý do:</b> {currentAi.reason}</p>}{currentAi.errorMessage && <p className="mt-3 whitespace-pre-wrap text-destructive"><b>Lỗi:</b> {currentAi.errorMessage}</p>}{currentAi.confidenceScore !== null && <p className="mt-2 text-xs text-muted-foreground">Độ tin cậy: {(currentAi.confidenceScore * 100).toFixed(1)}%</p>}</div>}
+  </div>
+}
+
+function PodcastDetailContent({ id, role, onClose }: { id: string; role: string | undefined; onClose: () => void }) {
   const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role]); const client = useQueryClient(); const notify = useFeedback(); const { user } = useAuth(); const [preview, setPreview] = useState<{ url: string; expiresAt: string } | null>(null); const [historyPage, setHistoryPage] = useState(0)
   const detail = useQuery({ queryKey: ['moderation-podcast', user?.id, id], queryFn: ({ signal }) => backend.podcast(id, signal), enabled: !!user })
   const references = useQuery({ queryKey: ['moderation-references', user?.id, id], queryFn: ({ signal }) => backend.references(id, signal), enabled: !!detail.data })
   const history = useQuery({ queryKey: ['moderation-reviews', user?.id, id, historyPage], queryFn: ({ signal }) => backend.reviews(id, historyPage, 20, signal), enabled: !!detail.data })
   const getPreview = async () => { try { const value = await backend.preview(id); setPreview({ url: value.videoUrl, expiresAt: value.expiresAt }) } catch (error) { notify(errorMessage(error), 'error') } }
-  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: ['moderation-podcasts', user?.id] }), client.invalidateQueries({ queryKey: ['dashboard', user?.id] }), detail.refetch(), references.refetch(), history.refetch()]) }
+  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: ['moderation-podcasts', user?.id] }), client.invalidateQueries({ queryKey: ['dashboard', user?.id] }), client.invalidateQueries({ queryKey: ['moderation-transcript', user?.id, id] }), client.invalidateQueries({ queryKey: ['moderation-ai', user?.id, id] }), detail.refetch(), references.refetch(), history.refetch()]) }
   if (detail.isPending) return <section className="panel mt-6"><LoadingState /></section>
   if (detail.isError || !detail.data) return <section className="panel mt-6"><ErrorState message={errorMessage(detail.error)} onRetry={() => { void detail.refetch() }} /></section>
   const podcast = detail.data.podcast
@@ -150,3 +230,10 @@ function AppealDetail({ id, role, onClose }: { id: string; role: string | undefi
 }
 
 export function AppealsPage() { const { user } = useAuth(); const role = user?.role; const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role]); const [filter, setFilter] = useState({ status: 'PENDING', page: 0 }); const [selected, setSelected] = useState<string | null>(null); const query = useQuery({ queryKey: key('moderation-appeals', user?.id, filter.status, filter.page), enabled: !!user, queryFn: ({ signal }) => backend.appeals(filter.status, filter.page, 20, signal) }); return <><Header title="Khiếu nại podcast" description="Xem lý do và quyết định khiếu nại theo trạng thái hiện tại." refresh={() => { void query.refetch() }} loading={query.isFetching} /><section className="panel"><div className="panel-heading"><h2 className="font-semibold">Danh sách khiếu nại</h2><select aria-label="Lọc trạng thái khiếu nại" className="field w-auto" value={filter.status} onChange={event => { setFilter({ status: event.target.value, page: 0 }); setSelected(null) }}><option value="">Tất cả trạng thái</option>{Object.entries(appealStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>{query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data.content.length ? <><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Podcast</th><th>Người gửi</th><th>Trạng thái</th><th>Ngày gửi</th><th /></tr></thead><tbody>{query.data.content.map(item => <Fragment key={item.appealId}><tr><td className="font-mono text-xs">{item.podcastId}</td><td className="font-mono text-xs">{item.applicantId}</td><td><span className="badge">{appealStatusLabels[item.status]}</span></td><td>{date(item.createdAt)}</td><td><Button variant="outline" onClick={() => setSelected(item.appealId)}>Chi tiết</Button></td></tr>{selected === item.appealId && <tr><td colSpan={5} className="p-0"><AppealDetail id={selected} role={role} onClose={() => setSelected(null)} /></td></tr>}</Fragment>)}</tbody></table></div><Pagination page={query.data} pending={query.isFetching} onPageChange={page => setFilter(current => ({ ...current, page }))} /></> : <EmptyState title="Không có khiếu nại" message="Không có khiếu nại phù hợp với bộ lọc." />}</section></> }
+function PodcastDetail({ id, role, onClose }: { id: string; role: string | undefined; onClose: () => void }) {
+  const { user } = useAuth()
+  const client = useQueryClient()
+  const backend = useMemo(() => createModerationApi(api, role === 'ADMIN' ? 'ADMIN' : 'STAFF'), [role])
+  const refresh = async () => { await Promise.all([client.invalidateQueries({ queryKey: ['moderation-podcasts', user?.id] }), client.invalidateQueries({ queryKey: ['moderation-podcast', user?.id, id] })]) }
+  return <><PodcastDetailContent id={id} role={role} onClose={onClose} /><AiModerationPollingMonitor backend={backend} podcasts={[{ podcastId: id, title: id }]} enabled={!!user} /><AiModerationPanel id={id} role={role} userId={user?.id} onRefresh={refresh} /></>
+}

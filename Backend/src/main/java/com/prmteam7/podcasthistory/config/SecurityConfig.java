@@ -45,6 +45,8 @@ public class SecurityConfig {
                 authorize
                     .requestMatchers(HttpMethod.GET, "/api/categories")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/podcast-transcripts/*")
+                    .hasAnyRole("CREATOR", "LISTENER")
                     .requestMatchers(
                         "/api/health",
                         "/api/auth/login",
@@ -55,12 +57,18 @@ public class SecurityConfig {
                         "/swagger-ui/**",
                         "/v3/api-docs/**")
                     .permitAll()
+                    .requestMatchers(
+                        "/api/admin/dashboard",
+                        "/api/admin/podcasts", "/api/admin/podcasts/**",
+                        "/api/admin/reports", "/api/admin/reports/**",
+                        "/api/admin/podcast-appeals", "/api/admin/podcast-appeals/**")
+                    .hasAnyRole("ADMIN", "STAFF")
                     .requestMatchers("/api/admin/**")
                     .hasRole("ADMIN")
-                    .requestMatchers("/api/staff/**")
-                    .hasRole("STAFF")
                     .requestMatchers("/api/creator/**")
                     .hasRole("CREATOR")
+                    .requestMatchers("/api/livestreams/**")
+                    .hasRole("LISTENER")
                     .requestMatchers("/api/listener/**")
                     .hasRole("LISTENER")
                     .requestMatchers("/api/creator-applications/**")

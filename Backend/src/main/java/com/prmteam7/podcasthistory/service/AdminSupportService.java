@@ -54,7 +54,7 @@ public class AdminSupportService {
     Notification n = new Notification();
     n.setUser(user);
     n.setNotificationType(type);
-    n.setTitle(title);
+    n.setTitle(title.length() > 200 ? title.substring(0, 197) + "..." : title);
     n.setMessage(message);
     n.setIsRead(false);
     notifications.save(n);

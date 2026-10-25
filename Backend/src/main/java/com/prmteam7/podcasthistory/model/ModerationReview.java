@@ -28,8 +28,8 @@ public class ModerationReview extends BaseEntity {
     @JoinColumn(name = "podcast_id", nullable = true)
     private Podcast podcast;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "reviewer_user_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "reviewer_user_id", nullable = true)
     private AppUser reviewerUser;
 
     @Column(name = "decision", nullable = false, length = 30)

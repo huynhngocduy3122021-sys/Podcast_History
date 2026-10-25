@@ -5,8 +5,8 @@ export function isRole(value: unknown): value is Role {
 export function canAccess(role: unknown, adminOnly = false): boolean {
   return isRole(role) && (!adminOnly || role === 'ADMIN')
 }
-export function apiPrefix(role: Role) {
-  return role === 'ADMIN' ? '/api/admin' : '/api/staff'
+export function apiPrefix(_role: Role) {
+  return '/api/admin'
 }
 
 export const sections = [

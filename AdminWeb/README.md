@@ -39,7 +39,7 @@ Kiểm tra hiện tại thấy `AdminWeb/.env` có các biến R2, gồm `R2_ACC
 
 Khi dùng ngrok, đặt `VITE_API_BASE_URL` trong **`AdminWeb/.env`**, ví dụ `https://ten-tunnel.ngrok-free.dev` (không thêm `/api`). Sau khi sửa `.env`, dừng và chạy lại `npm run dev`; bản production cần build lại vì Vite đưa biến môi trường vào bundle. Cả Axios client xác thực và client nghiệp vụ tự thêm `ngrok-skip-browser-warning` cho domain ngrok để tránh trang cảnh báo HTML. Các biến R2 chỉ dùng cho Backend, không cấu hình địa chỉ API của AdminWeb.
 
-Để kiểm tra Backend hiện tại, chạy `npm run check:api` khi được phép gọi môi trường đó. Script đọc URL từ `AdminWeb/.env` và tài khoản dev từ `docs/DEV_ACCOUNTS.md`, kiểm tra health, CORS, login/me/Dashboard, các API chỉ đọc nội dung, quyền sai prefix, refresh và logout. Script tạo phiên thử và thu hồi refresh token trong bước cleanup; không in token/mật khẩu hoặc dữ liệu người dùng. Không thực hiện thao tác duyệt, thanh toán hay sửa dữ liệu nghiệp vụ.
+Để kiểm tra Backend hiện tại, chạy `npm run check:api` khi được phép gọi môi trường đó. Script đọc URL từ `AdminWeb/.env` và tài khoản dev từ `docs/TEST_ACCOUNTS.md`, kiểm tra health, CORS, login/me/Dashboard, các API chỉ đọc nội dung, quyền truy cập, refresh và logout. Script tạo phiên thử và thu hồi refresh token trong bước cleanup; không in token/mật khẩu hoặc dữ liệu người dùng. Không thực hiện thao tác duyệt, thanh toán hay sửa dữ liệu nghiệp vụ.
 
 ## Hợp đồng đã xác minh
 
@@ -52,7 +52,7 @@ Nguồn chính: [ADMIN_STAFF_API.md](../docs/ADMIN_STAFF_API.md), đối chiếu
 | POST | `/api/auth/logout` | `{refreshToken}` → 204, thu hồi token family |
 | GET | `/api/auth/me` | Bearer → `{userId, username, email, role}` |
 | GET | `/api/admin/dashboard` | ADMIN → `Dashboard` |
-| GET | `/api/staff/dashboard` | STAFF → cùng `Dashboard` |
+| GET | `/api/admin/dashboard` | STAFF → cùng `Dashboard` |
 | GET | `/api/me/notifications?page=0&size=5` | Thông báo cá nhân trong dropdown, khi mở |
 | GET | `/api/admin/creator-applications?status=PENDING&page=0&size=20` | `Page<CreatorApplicationResponse>`, chỉ số trang bắt đầu từ 0; bỏ status để lấy tất cả |
 | GET | `/api/admin/creator-applications/{applicationId}` | Chi tiết hồ sơ |
@@ -75,7 +75,7 @@ Nguồn chính: [ADMIN_STAFF_API.md](../docs/ADMIN_STAFF_API.md), đối chiếu
 
 ## Quyền và trạng thái phiên
 
-- Backend là nguồn chuẩn: `SecurityConfig` yêu cầu ADMIN cho `/api/admin/**`, STAFF cho `/api/staff/**`. `AccountJwtValidator` kiểm tra user active, role hiện tại, token_version và token_type mỗi request.
+- Backend là nguồn chuẩn: `SecurityConfig` cho phép ADMIN và STAFF gọi các nhóm dùng chung `/api/admin/dashboard`, `/api/admin/podcasts/**`, `/api/admin/reports/**`, `/api/admin/podcast-appeals/**`; các `/api/admin/**` khác chỉ ADMIN. `AccountJwtValidator` kiểm tra user active, role hiện tại, token_version và token_type mỗi request.
 - ADMIN thấy đủ 16 mục. STAFF chỉ thấy Dashboard, Podcast Moderation, Reports, Appeals và thông báo cá nhân. Gõ trực tiếp URL riêng ADMIN bị route guard chặn. 403 không refresh và được hiển thị rõ.
 - Client không tự suy quyền qua JWT decode. Sau login/refresh đều gọi `/api/auth/me` trước khi công bố user.
 - Access token chỉ lưu trong memory. Refresh token lưu `sessionStorage` theo tab để giữ phiên qua reload; nếu storage bị chặn thì dùng memory. Không lưu mật khẩu, không có “remember me”. Storage này có thể bị đọc bởi JavaScript cùng origin; không render HTML từ API, không ghi token vào log. Backend hiện trả token trong JSON, chưa có HttpOnly-cookie contract.
@@ -122,7 +122,7 @@ npm run check:phase2
 npm run check:phase2 -- --category-mutations
 ```
 
-Script đọc tài khoản dev từ `docs/DEV_ACCOUNTS.md`, không hardcode/in credentials hoặc tokens; logout trong cleanup. Mặc định chỉ đọc danh sách/chi tiết và kiểm tra các request không hợp lệ/ID không tồn tại (400/404), STAFF bị chặn (403). Cờ mutation kiểm tra create 201, trùng tên/slug 409, update/activate/deactivate 200, inactive vẫn có trong list. **Backend xóa mềm: một Category QA được giữ lại với active=false sau mỗi lượt có cờ này.** Không chạy trên dữ liệu production. Script không duyệt/từ chối hồ sơ Creator hiện hữu; cần hai hồ sơ PENDING thử được người vận hành cho phép để kiểm tra success và race 409.
+Script đọc tài khoản dev từ `docs/TEST_ACCOUNTS.md`, không hardcode/in credentials hoặc tokens; logout trong cleanup. Mặc định chỉ đọc danh sách/chi tiết và kiểm tra các request không hợp lệ/ID không tồn tại (400/404), STAFF bị chặn (403) ở API chỉ dành cho Admin. Cờ mutation kiểm tra create 201, trùng tên/slug 409, update/activate/deactivate 200, inactive vẫn có trong list. **Backend xóa mềm: một Category QA được giữ lại với active=false sau mỗi lượt có cờ này.** Không chạy trên dữ liệu production. Script không duyệt/từ chối hồ sơ Creator hiện hữu; cần hai hồ sơ PENDING thử được người vận hành cho phép để kiểm tra success và race 409.
 
 Kết quả Phase 2: unit test **25/25** đạt; typecheck, lint, build đạt sau khi sửa các lỗi phát hiện. Build cần chạy ngoài sandbox vì esbuild bị `spawn EPERM`; vẫn có cảnh báo bundle trên 500 kB và annotation từ Zod. Backend thật xác nhận Category create/edit/reactivate/deactivate, trùng tên/slug 409; Creator list/detail/filter, invalid note 400, missing ID 404; STAFF 403. Script lúc đầu không xử lý body 403 rỗng, đã sửa và smoke check mặc định chạy lại có **0 lỗi**. Category QA đã ngừng hoạt động. Chưa xác minh Creator approve/reject success trên hồ sơ PENDING được phép thao tác, và chưa QA browser vì không có browser được kết nối.
 

@@ -4,7 +4,8 @@ import { apiPrefix, type Role } from './permissions.ts'
 import {
   appealsPageSchema, appealSchema, moderationNoteSchema, optionalModerationNoteSchema, podcastDetailSchema,
   podcastReviewResultSchema, podcastsPageSchema, previewSchema, referenceFileSchema, referenceSchema, reviewsPageSchema,
-  reportsPageSchema, reportSchema, resolveAppealSchema, resolveReportSchema,
+  reportsPageSchema, reportSchema, resolveAppealSchema, resolveReportSchema, podcastTranscriptSchema, aiModerationPageSchema,
+  aiModerationSchema,
 } from './moderation-contracts.ts'
 import type { AppealDecision, PodcastAction, ReportAction } from './moderation-contracts.ts'
 
@@ -28,6 +29,18 @@ export function createModerationApi(client: Pick<AxiosInstance, 'get' | 'post' |
     },
     async references(id: string, signal?: AbortSignal) {
       return referenceSchema.array().parse((await client.get(`${podcasts}/${encodeURIComponent(id)}/references`, { signal })).data)
+    },
+    async transcript(id: string, signal?: AbortSignal) {
+      return podcastTranscriptSchema.parse((await client.get(`${podcasts}/${encodeURIComponent(id)}/transcript`, { signal })).data)
+    },
+    async retryTranscript(id: string) {
+      return podcastTranscriptSchema.parse((await client.post(`${podcasts}/${encodeURIComponent(id)}/transcript`)).data)
+    },
+    async aiModeration(id: string, page = 0, size = 20, signal?: AbortSignal) {
+      return aiModerationPageSchema.parse((await client.get(`${podcasts}/${encodeURIComponent(id)}/ai-moderation`, { params: { page, size }, signal })).data)
+    },
+    async retryAiModeration(id: string) {
+      return aiModerationSchema.parse((await client.post(`${podcasts}/${encodeURIComponent(id)}/ai-moderation`)).data)
     },
     async referenceFile(id: string, referenceId: string) {
       return referenceFileSchema.parse((await client.get(`${podcasts}/${encodeURIComponent(id)}/references/${encodeURIComponent(referenceId)}/file`)).data)
