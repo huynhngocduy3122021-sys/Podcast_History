@@ -2735,32 +2735,9 @@ class LivestreamPage extends StatelessWidget {
   final ListenerApi api;
 
   @override
-  Widget build(BuildContext context) => PageFrame(
-    title: 'Livestream',
-    children: [
-      ListenerLivestreamScreen(api: api),
-      if (const bool.fromEnvironment('show_legacy_livestream_placeholder'))
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.live_tv, size: 42),
-                const SizedBox(height: 12),
-                Text(
-                  'Livestream sắp ra mắt',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Các buổi phát trực tiếp lịch sử và giao lưu với Creator sẽ xuất hiện tại đây.',
-                ),
-              ],
-            ),
-          ),
-        ),
-    ],
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Livestream')),
+    body: ListenerLivestreamScreen(api: api),
   );
 }
 
