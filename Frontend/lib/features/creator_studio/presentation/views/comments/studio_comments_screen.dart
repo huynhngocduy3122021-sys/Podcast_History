@@ -161,32 +161,74 @@ class StudioCommentsScreen extends ConsumerWidget {
             children: [
               TextButton.icon(
                 icon: Icon(
+                  c.likedByMe
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  size: 16,
+                  color: c.likedByMe
+                      ? AppColors.primaryLight
+                      : (isDark
+                          ? AppColors.onSurfaceMutedDark
+                          : AppColors.onSurfaceMutedLight),
+                ),
+                label: Text(
+                  '${c.likesCount}',
+                  style: TextStyle(
+                    color: c.likedByMe
+                        ? AppColors.primaryLight
+                        : (isDark
+                            ? AppColors.onSurfaceMutedDark
+                            : AppColors.onSurfaceMutedLight),
+                  ),
+                ),
+                onPressed: () => ref
+                    .read(creatorCommentsProvider.notifier)
+                    .toggleCommentLike(c.id),
+              ),
+              TextButton.icon(
+                icon: Icon(
                   c.isPinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
                   size: 16,
                   color: AppColors.secondaryLight,
                 ),
                 label: Text(c.isPinned ? 'Bỏ ghim' : 'Ghim'),
-                onPressed: () => ref.read(creatorCommentsProvider.notifier).togglePin(c.id),
+                onPressed: () =>
+                    ref.read(creatorCommentsProvider.notifier).togglePin(c.id),
               ),
               TextButton.icon(
                 icon: Icon(
-                  c.isHidden ? Icons.visibility_rounded : Icons.visibility_off_outlined,
+                  c.isHidden
+                      ? Icons.visibility_rounded
+                      : Icons.visibility_off_outlined,
                   size: 16,
-                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                  color: isDark
+                      ? AppColors.onSurfaceMutedDark
+                      : AppColors.onSurfaceMutedLight,
                 ),
                 label: Text(c.isHidden ? 'Hiện' : 'Ẩn'),
-                onPressed: () => ref.read(creatorCommentsProvider.notifier).toggleHide(c.id),
+                onPressed: () =>
+                    ref.read(creatorCommentsProvider.notifier).toggleHide(c.id),
               ),
               TextButton.icon(
-                icon: const Icon(Icons.reply_rounded, size: 16, color: AppColors.primaryLight),
+                icon: const Icon(
+                  Icons.reply_rounded,
+                  size: 16,
+                  color: AppColors.primaryLight,
+                ),
                 label: const Text('Trả lời'),
-                onPressed: () => _showReplyDialog(context, c),
+                onPressed: () => _showReplyDialog(context, ref, c),
               ),
               TextButton.icon(
-                icon: const Icon(Icons.delete_outline_rounded, size: 16, color: AppColors.error),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  size: 16,
+                  color: AppColors.error,
+                ),
                 label: const Text('Xóa', style: TextStyle(color: AppColors.error)),
                 onPressed: () async {
-                  await ref.read(creatorCommentsProvider.notifier).deleteComment(c.id);
+                  await ref
+                      .read(creatorCommentsProvider.notifier)
+                      .deleteComment(c.id);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Đã xóa bình luận!')),
@@ -201,16 +243,29 @@ class StudioCommentsScreen extends ConsumerWidget {
     );
   }
 
-  void _showReplyDialog(BuildContext context, StudioComment c) {
+  void _showReplyDialog(
+    BuildContext context,
+    WidgetRef ref,
+    StudioComment c,
+  ) {
     final replyCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Trả lời ${c.authorName}', style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          'Trả lời ${c.authorName}',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Nội dung: "${c.content}"', style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMutedLight)),
+            Text(
+              'Nội dung: "${c.content}"',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.onSurfaceMutedLight,
+              ),
+            ),
             const SizedBox(height: AppSpacing.md),
             TextField(
               controller: replyCtrl,
@@ -222,15 +277,38 @@ class StudioCommentsScreen extends ConsumerWidget {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Hủy')),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
           AppButton(
             label: 'Gửi trả lời',
             width: 120,
-            onPressed: () {
+            onPressed: () async {
+              final text = replyCtrl.text.trim();
+              if (text.isEmpty) return;
               Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Đã gửi phản hồi thành công!')),
-              );
+              if (c.podcastId != null && c.podcastId!.isNotEmpty) {
+                final profile = ref.read(creatorProfileProvider).value;
+                await ref.read(creatorCommentsProvider.notifier).addComment(
+                  StudioComment(
+                    id: 'cmt_${DateTime.now().millisecondsSinceEpoch}',
+                    podcastTitle: c.podcastTitle,
+                    podcastId: c.podcastId,
+                    authorName: profile?.name ?? 'Creator',
+                    authorAvatar: profile?.avatarUrl ?? '',
+                    content: text,
+                    timestampSeconds: c.timestampSeconds,
+                    createdAt: DateTime.now(),
+                  ),
+                  podcastId: c.podcastId,
+                );
+              }
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Đã gửi phản hồi thành công!')),
+                );
+              }
             },
           ),
         ],

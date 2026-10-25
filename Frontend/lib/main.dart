@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -154,12 +155,22 @@ class _AppState extends State<VietCastApp> {
       darkTheme: AppTheme.darkTheme,
       builder: (context, child) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        return ColoredBox(
-          color: isDark ? const Color(0xFF121212) : const Color(0xFFEFE8DE),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: child ?? const SizedBox.shrink(),
+        final mediaQuery = MediaQuery.of(context);
+        final safeInsets = EdgeInsets.only(
+          left: math.max(0.0, mediaQuery.viewInsets.left),
+          top: math.max(0.0, mediaQuery.viewInsets.top),
+          right: math.max(0.0, mediaQuery.viewInsets.right),
+          bottom: math.max(0.0, mediaQuery.viewInsets.bottom),
+        );
+        return MediaQuery(
+          data: mediaQuery.copyWith(viewInsets: safeInsets),
+          child: ColoredBox(
+            color: isDark ? const Color(0xFF121212) : const Color(0xFFEFE8DE),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         );

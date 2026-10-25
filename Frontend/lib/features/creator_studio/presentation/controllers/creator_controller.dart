@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/data/models/creator_livestream_model.dart';
 import 'package:podcast_history/features/creator_studio/data/repositories/api_creator_repository.dart';
 import 'package:podcast_history/features/creator_studio/domain/creator_repository.dart';
 
@@ -237,6 +238,121 @@ class CreatorPodcastsNotifier
     ref.read(creatorProfileProvider.notifier).loadProfile();
     ref.invalidate(creatorDashboardProvider);
   }
+
+  void updatePodcastStats({
+    required String podcastId,
+    int? likesCount,
+    bool? likedByMe,
+    int? commentsCount,
+    int? listensCount,
+  }) {
+    final currentList = state.value;
+    if (currentList == null) return;
+    final index = currentList.indexWhere((p) => p.id == podcastId);
+    if (index == -1) return;
+    final updatedList = List<CreatorPodcast>.from(currentList);
+    updatedList[index] = updatedList[index].copyWith(
+      likesCount: likesCount ?? updatedList[index].likesCount,
+      likedByMe: likedByMe ?? updatedList[index].likedByMe,
+      commentsCount: commentsCount ?? updatedList[index].commentsCount,
+      listensCount: listensCount ?? updatedList[index].listensCount,
+    );
+    state = AsyncValue.data(updatedList);
+  }
+
+  Future<void> refreshPodcastStats(String podcastId) async {
+    try {
+      final currentList = state.value ?? [];
+      final currentPod = currentList.cast<CreatorPodcast?>().firstWhere(
+        (p) => p?.id == podcastId,
+        orElse: () => null,
+      );
+
+      final isPublished = currentPod == null || currentPod.status == PodcastStatus.published;
+      final likesRes = isPublished
+          ? await _repo.getPodcastLikes(podcastId)
+          : {'likeCount': 0, 'likedByMe': false};
+      final cmtCount = isPublished
+          ? await _repo.getPodcastCommentsCount(podcastId)
+          : 0;
+      final likeCount = (likesRes['likeCount'] as num?)?.toInt();
+      final likedByMe = likesRes['likedByMe'] as bool?;
+
+      // Đồng bộ lượt nghe từ Dashboard Metrics
+      int? listens;
+      try {
+        final dash = await _repo.getDashboard(period: '7d');
+        if (dash.metrics.views > 0) {
+          listens = dash.metrics.views;
+        }
+      } catch (_) {}
+
+      updatePodcastStats(
+        podcastId: podcastId,
+        likesCount: likeCount,
+        likedByMe: likedByMe,
+        commentsCount: cmtCount,
+        listensCount: listens,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> toggleLike(String podcastId) async {
+    final currentList = state.value;
+    if (currentList == null) return;
+    final index = currentList.indexWhere((p) => p.id == podcastId);
+    if (index == -1) return;
+    final currentPod = currentList[index];
+    final wasLiked = currentPod.likedByMe;
+    final newLiked = !wasLiked;
+    final newCount = newLiked
+        ? currentPod.likesCount + 1
+        : (currentPod.likesCount > 0 ? currentPod.likesCount - 1 : 0);
+
+    // Optimistic update
+    final updatedList = List<CreatorPodcast>.from(currentList);
+    updatedList[index] = currentPod.copyWith(
+      likedByMe: newLiked,
+      likesCount: newCount,
+    );
+    state = AsyncValue.data(updatedList);
+
+    try {
+      if (newLiked) {
+        final res = await _repo.likePodcast(podcastId);
+        final serverCount = (res['likeCount'] as num?)?.toInt() ?? newCount;
+        final latest = List<CreatorPodcast>.from(state.value ?? updatedList);
+        final idx = latest.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          latest[idx] = latest[idx].copyWith(
+            likedByMe: true,
+            likesCount: serverCount,
+          );
+          state = AsyncValue.data(latest);
+        }
+      } else {
+        final res = await _repo.unlikePodcast(podcastId);
+        final serverCount = (res['likeCount'] as num?)?.toInt() ?? newCount;
+        final latest = List<CreatorPodcast>.from(state.value ?? updatedList);
+        final idx = latest.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          latest[idx] = latest[idx].copyWith(
+            likedByMe: false,
+            likesCount: serverCount,
+          );
+          state = AsyncValue.data(latest);
+        }
+      }
+    } catch (_) {
+      // Revert if error
+      final revertList = List<CreatorPodcast>.from(state.value ?? updatedList);
+      final idx = revertList.indexWhere((p) => p.id == podcastId);
+      if (idx != -1) {
+        revertList[idx] = currentPod;
+        state = AsyncValue.data(revertList);
+      }
+    }
+  }
 }
 
 final creatorPodcastsProvider =
@@ -468,22 +584,106 @@ class CreatorCommentsNotifier
   }
 
   Future<void> deleteComment(String id) async {
-    await _repo.deleteComment(id);
+    try {
+      await _repo.deleteComment(id);
+      final current = state.value ?? [];
+      state = AsyncValue.data(current.where((c) => c.id != id).toList());
+    } catch (_) {}
     await loadComments();
   }
 
-  Future<void> addComment(StudioComment comment, {String? podcastId}) async {
-    final current = state.value ?? [];
-    state = AsyncValue.data([comment, ...current]);
-    if (podcastId != null) {
-      await _repo.addCommentToPodcast(
-        podcastId: podcastId,
+  Future<void> toggleCommentLike(String id) async {
+    final current = state.value;
+    if (current == null) return;
+    final index = current.indexWhere((c) => c.id == id);
+    if (index == -1) return;
+    final target = current[index];
+    final wasLiked = target.likedByMe;
+    final newLiked = !wasLiked;
+    final newCount = newLiked
+        ? target.likesCount + 1
+        : (target.likesCount > 0 ? target.likesCount - 1 : 0);
+
+    // Optimistic update
+    final updated = List<StudioComment>.from(current);
+    updated[index] = target.copyWith(
+      likedByMe: newLiked,
+      likesCount: newCount,
+    );
+    state = AsyncValue.data(updated);
+
+    try {
+      if (newLiked) {
+        final res = await _repo.likeComment(id);
+        final serverCount = (res['likeCount'] as num?)?.toInt() ?? newCount;
+        final list = List<StudioComment>.from(state.value ?? updated);
+        final idx = list.indexWhere((c) => c.id == id);
+        if (idx != -1) {
+          list[idx] = list[idx].copyWith(
+            likedByMe: true,
+            likesCount: serverCount,
+          );
+          state = AsyncValue.data(list);
+        }
+      } else {
+        final res = await _repo.unlikeComment(id);
+        final serverCount = (res['likeCount'] as num?)?.toInt() ?? newCount;
+        final list = List<StudioComment>.from(state.value ?? updated);
+        final idx = list.indexWhere((c) => c.id == id);
+        if (idx != -1) {
+          list[idx] = list[idx].copyWith(
+            likedByMe: false,
+            likesCount: serverCount,
+          );
+          state = AsyncValue.data(list);
+        }
+      }
+    } catch (_) {
+      final revertList = List<StudioComment>.from(state.value ?? updated);
+      final idx = revertList.indexWhere((c) => c.id == id);
+      if (idx != -1) {
+        revertList[idx] = target;
+        state = AsyncValue.data(revertList);
+      }
+    }
+  }
+
+  Future<StudioComment?> addComment(
+    StudioComment comment, {
+    String? podcastId,
+  }) async {
+    final targetPodcastId = podcastId ?? comment.podcastId;
+    if (targetPodcastId != null && targetPodcastId.isNotEmpty) {
+      final created = await _repo.addCommentToPodcast(
+        podcastId: targetPodcastId,
         content: comment.content,
         timestampSeconds: comment.timestampSeconds,
         podcastTitle: comment.podcastTitle,
       );
-      await loadComments();
+      if (created != null) {
+        final current = state.value ?? [];
+        state = AsyncValue.data([created, ...current]);
+        // Update comments count in creatorPodcastsProvider
+        final podcasts = ref.read(creatorPodcastsProvider).value;
+        if (podcasts != null) {
+          final pod = podcasts.cast<CreatorPodcast?>().firstWhere(
+            (p) => p?.id == targetPodcastId,
+            orElse: () => null,
+          );
+          if (pod != null) {
+            ref.read(creatorPodcastsProvider.notifier).updatePodcastStats(
+              podcastId: targetPodcastId,
+              commentsCount: pod.commentsCount + 1,
+            );
+          }
+        }
+        return created;
+      }
     }
+
+    final current = state.value ?? [];
+    state = AsyncValue.data([comment, ...current]);
+    return comment;
   }
 }
 
@@ -614,3 +814,66 @@ final creatorFormsProvider =
     NotifierProvider<CreatorFormsNotifier, AsyncValue<List<InteractiveForm>>>(
       CreatorFormsNotifier.new,
     );
+
+// Livestreams (Agora RTC)
+class CreatorLivestreamsNotifier
+    extends Notifier<AsyncValue<List<CreatorLivestreamItem>>> {
+  @override
+  AsyncValue<List<CreatorLivestreamItem>> build() {
+    Future.microtask(() => loadLivestreams());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadLivestreams() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+    try {
+      state = const AsyncValue.loading();
+      final list = await _repo.getLivestreams();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<CreatorLivestreamItem> createLivestream({
+    required String title,
+    String? description,
+    DateTime? scheduledAt,
+  }) async {
+    final item = await _repo.createLivestream(
+      title: title,
+      description: description,
+      scheduledAt: scheduledAt,
+    );
+    await loadLivestreams();
+    return item;
+  }
+
+  Future<AgoraJoinResponse> startLivestream(String livestreamId) async {
+    final res = await _repo.startLivestream(livestreamId);
+    await loadLivestreams();
+    return res;
+  }
+
+  Future<AgoraJoinResponse> renewToken(String livestreamId) async {
+    return _repo.renewLivestreamToken(livestreamId);
+  }
+
+  Future<CreatorLivestreamItem> endLivestream(String livestreamId) async {
+    final res = await _repo.endLivestream(livestreamId);
+    await loadLivestreams();
+    return res;
+  }
+}
+
+final creatorLivestreamsProvider =
+    NotifierProvider<CreatorLivestreamsNotifier, AsyncValue<List<CreatorLivestreamItem>>>(
+      CreatorLivestreamsNotifier.new,
+    );
+
