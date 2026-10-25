@@ -256,14 +256,34 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> categories() async =>
       _list('GET', '/api/categories', authenticated: false);
 
-  Future<List<Map<String, dynamic>>> creators({String? query}) =>
-      _list(
-        'GET',
-        '/api/creators',
-        queryParameters: query?.trim().isNotEmpty == true
-            ? {'q': query!.trim()}
-            : null,
+  Future<List<ListenerLivestream>> liveLivestreams({
+    int page = 0,
+    int size = 20,
+  }) async => _pageItems(
+    await _send(
+      'GET',
+      '/api/livestreams',
+      queryParameters: {'page': '$page', 'size': '$size'},
+    ),
+  ).map(ListenerLivestream.fromJson).toList(growable: false);
+
+  Future<ListenerLivestream> livestream(String livestreamId) async =>
+      ListenerLivestream.fromJson(
+        await _send('GET', '/api/livestreams/$livestreamId'),
       );
+
+  Future<ListenerAgoraJoin> joinLivestream(String livestreamId) async =>
+      ListenerAgoraJoin.fromJson(
+        await _send('POST', '/api/livestreams/$livestreamId/join'),
+      );
+
+  Future<List<Map<String, dynamic>>> creators({String? query}) => _list(
+    'GET',
+    '/api/creators',
+    queryParameters: query?.trim().isNotEmpty == true
+        ? {'q': query!.trim()}
+        : null,
+  );
 
   Future<Map<String, dynamic>> creator(String creatorId) =>
       _sendMap('GET', '/api/creators/$creatorId');
@@ -437,10 +457,7 @@ class ListenerApi {
   }) => _sendMap(
     'PATCH',
     '/api/me/reports/$reportId',
-    body: {
-      'reasonCode': reasonCode,
-      'description': ?description,
-    },
+    body: {'reasonCode': reasonCode, 'description': ?description},
   );
 
   Future<void> deleteReport(String reportId) async {
@@ -633,4 +650,71 @@ class ListenerApi {
       return 'Yeu cau that bai (${response.statusCode}).';
     }
   }
+}
+
+class ListenerLivestream {
+  const ListenerLivestream({
+    required this.livestreamId,
+    required this.creatorId,
+    required this.creatorChannelName,
+    required this.title,
+    this.description,
+    required this.status,
+    this.startedAt,
+  });
+
+  final String livestreamId;
+  final String creatorId;
+  final String creatorChannelName;
+  final String title;
+  final String? description;
+  final String status;
+  final DateTime? startedAt;
+
+  factory ListenerLivestream.fromJson(Map<String, dynamic> json) =>
+      ListenerLivestream(
+        livestreamId: '${json['livestreamId'] ?? ''}',
+        creatorId: '${json['creatorId'] ?? ''}',
+        creatorChannelName:
+            '${json['creatorChannelName'] ?? 'Content Creator'}',
+        title: '${json['title'] ?? 'Livestream'}',
+        description: json['description']?.toString(),
+        status: '${json['status'] ?? 'LIVE'}',
+        startedAt: json['startedAt'] == null
+            ? null
+            : DateTime.tryParse(json['startedAt'].toString()),
+      );
+}
+
+class ListenerAgoraJoin {
+  const ListenerAgoraJoin({
+    required this.livestreamId,
+    required this.appId,
+    required this.channelName,
+    required this.userAccount,
+    required this.role,
+    required this.token,
+    this.expiresAt,
+  });
+
+  final String livestreamId;
+  final String appId;
+  final String channelName;
+  final String userAccount;
+  final String role;
+  final String token;
+  final DateTime? expiresAt;
+
+  factory ListenerAgoraJoin.fromJson(Map<String, dynamic> json) =>
+      ListenerAgoraJoin(
+        livestreamId: '${json['livestreamId'] ?? ''}',
+        appId: '${json['appId'] ?? ''}',
+        channelName: '${json['channelName'] ?? ''}',
+        userAccount: '${json['userAccount'] ?? ''}',
+        role: '${json['role'] ?? 'audience'}',
+        token: '${json['token'] ?? ''}',
+        expiresAt: json['expiresAt'] == null
+            ? null
+            : DateTime.tryParse(json['expiresAt'].toString()),
+      );
 }
