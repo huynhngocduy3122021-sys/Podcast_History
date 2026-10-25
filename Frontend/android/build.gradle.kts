@@ -1,3 +1,7 @@
+// Agora's Android plugin reads this project property; its default (31) is too old
+// for the AndroidX libraries resolved by the current Flutter toolchain.
+extra["compileSdkVersion"] = 35
+
 allprojects {
     repositories {
         google()
