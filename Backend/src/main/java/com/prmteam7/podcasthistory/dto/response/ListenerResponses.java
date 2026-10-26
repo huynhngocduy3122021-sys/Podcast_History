@@ -135,6 +135,8 @@ public final class ListenerResponses {
     public record MembershipCheckoutItem(
             UUID subscriptionId,
             UUID paymentId,
+            String paymentCode,
+            String qrImageUrl,
             BigDecimal amount,
             String currency,
             String subscriptionStatus,
