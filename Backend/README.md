@@ -11,8 +11,14 @@ Admin handles users, roles and finance. Podcast moderation uses Whisper transcri
 
 The additive schema migration is `db/migrations/2026-10-13_admin_operations.sql`.
 With the current `ddl-auto=update`, restarting applies entity schema additions.
-Builds do not update a running backend process. Local CORS is enabled; configure
-`APP_CORS_ALLOWED_ORIGINS` for a deployed frontend. Locking users or changing their
+Builds do not update a running backend process. By default, CORS allows `localhost`,
+`127.0.0.1`, and private LAN IPs (`10.*`, `172.16-31.*`, `192.168.*`) on any port.
+Set `APP_CORS_ALLOWED_ORIGINS` in `Backend/.env` to replace that list with comma-separated
+origins for a deployed frontend, then restart the backend. For example:
+`APP_CORS_ALLOWED_ORIGINS=http://localhost:[*],https://frontend.example.com`.
+Browsers require HTTPS or `localhost` to access camera and microphone; serving the
+frontend at `http://<LAN-IP>:<port>` allows API calls but not camera/microphone capture.
+Locking users or changing their
 roles revokes old sessions using `User.token_version`.
 
 ## Package layout
