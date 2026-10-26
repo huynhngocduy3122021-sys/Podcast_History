@@ -55,8 +55,6 @@ public class SecurityConfig {
                         "/swagger-ui/**",
                         "/v3/api-docs/**")
                     .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/payments/sepay/webhook")
-                    .permitAll()
                     .requestMatchers("/api/admin/**")
                     .hasRole("ADMIN")
                     .requestMatchers("/api/staff/**")
