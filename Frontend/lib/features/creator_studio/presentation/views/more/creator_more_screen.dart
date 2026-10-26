@@ -8,6 +8,7 @@ import 'package:podcast_history/features/creator_studio/presentation/views/premi
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/premium_upgrade_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 
 class CreatorMoreScreen extends ConsumerWidget {
   final VoidCallback? onTheme;
@@ -53,6 +54,23 @@ class CreatorMoreScreen extends ConsumerWidget {
                 subtitle: 'Tạo form thu thập ý kiến người nghe (Studio Premium)',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const FormBuilderScreen()),
+                ),
+              ),
+            ],
+            isDark,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+
+          _buildMenuSection(
+            'Tài chính & Thu nhập',
+            [
+              _MenuItem(
+                icon: Icons.account_balance_wallet_rounded,
+                iconColor: AppColors.success,
+                title: 'Ví Creator & Rút tiền',
+                subtitle: 'Quản lý số dư khả dụng, tài khoản ngân hàng và lịch sử thanh toán',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const WalletScreen()),
                 ),
               ),
             ],

@@ -31,7 +31,7 @@ const cors = await request('OPTIONS', '/api/auth/login', undefined, undefined, 2
 console.log(`CORS allowed origin: ${cors.response.headers.get('access-control-allow-origin') || '(missing)'}`)
 if (cors.response.headers.get('access-control-allow-origin') !== 'http://localhost:5173') failures++
 
-const credentials = readFileSync(new URL('../../docs/DEV_ACCOUNTS.md', import.meta.url), 'utf8')
+const credentials = readFileSync(new URL('../../docs/TEST_ACCOUNTS.md', import.meta.url), 'utf8')
 for (const [role, name] of [['ADMIN', 'ph_admin'], ['STAFF', 'ph_staff01']]) {
   const row = credentials.split(/\r?\n/).find(row => row.includes(`\`${name}\``))
   if (!row) throw new Error(`Missing documented ${role} account`)
@@ -47,14 +47,14 @@ for (const [role, name] of [['ADMIN', 'ph_admin'], ['STAFF', 'ph_staff01']]) {
     if (pair.user.role !== role) throw new Error(`Unexpected ${role} account role`)
     const me = await request('GET', '/api/auth/me', undefined, pair.accessToken)
     if (me.ok && meSchema.parse(await me.response.json()).role !== role) throw new Error('Unexpected /me role')
-    const prefix = role === 'ADMIN' ? '/api/admin' : '/api/staff'
+    const prefix = '/api/admin'
     const dashboard = await request('GET', `${prefix}/dashboard`, undefined, pair.accessToken)
     if (dashboard.ok) dashboardSchema.parse(await dashboard.response.json())
     for (const path of ['/podcasts/page?size=1', '/reports?size=1', '/podcast-appeals?size=1']) {
       await request('GET', `${prefix}${path}`, undefined, pair.accessToken)
     }
     await request('GET', '/api/me/notifications?size=1', undefined, pair.accessToken)
-    await request('GET', role === 'ADMIN' ? '/api/staff/dashboard' : '/api/admin/dashboard', undefined, pair.accessToken, 403)
+    if (role === 'STAFF') await request('GET', '/api/admin/users?size=1', undefined, pair.accessToken, 403)
     const refreshed = await request('POST', '/api/auth/refresh', { refreshToken: pair.refreshToken })
     if (refreshed.ok) {
       const rotated = await refreshed.response.json()

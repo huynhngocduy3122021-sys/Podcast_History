@@ -5,7 +5,20 @@ import 'package:uuid/uuid.dart';
 import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/core/network/api_endpoints.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/creator_studio/data/models/creator_livestream_model.dart';
 import 'package:podcast_history/features/creator_studio/domain/creator_repository.dart';
+
+class _CoverUploadData {
+  const _CoverUploadData({
+    required this.bytes,
+    required this.filename,
+    required this.mimeType,
+  });
+
+  final List<int> bytes;
+  final String filename;
+  final String mimeType;
+}
 
 class ApiCreatorRepository implements CreatorRepository {
   final ApiClient _apiClient;
@@ -225,7 +238,15 @@ class ApiCreatorRepository implements CreatorRepository {
                 eraTag: mapped.eraTag.isNotEmpty
                     ? mapped.eraTag
                     : existing.eraTag,
-                rejectReason: mapped.rejectReason ?? existing.rejectReason,
+                listensCount: existing.listensCount > 0
+                    ? existing.listensCount
+                    : mapped.listensCount,
+                likesCount: existing.likesCount,
+                likedByMe: existing.likedByMe,
+                commentsCount: existing.commentsCount,
+                rejectReason: mapped.status == PodcastStatus.rejected
+                    ? (mapped.rejectReason ?? existing.rejectReason)
+                    : null,
               );
             }
             if (mapped.status == PodcastStatus.rejected &&
@@ -266,9 +287,79 @@ class ApiCreatorRepository implements CreatorRepository {
                 }
               } catch (_) {}
             }
+            if (mapped.status == PodcastStatus.published) {
+              try {
+                final likeRes = await _apiClient.get(
+                  ApiEndpoints.podcastLikes(mapped.id),
+                  headers: const {'ngrok-skip-browser-warning': '1'},
+                );
+                if (likeRes is Map<String, dynamic>) {
+                  final likeCount =
+                      (likeRes['likeCount'] as num?)?.toInt() ?? 0;
+                  final likedByMe = likeRes['likedByMe'] == true;
+                  mapped = mapped.copyWith(
+                    likesCount: likeCount,
+                    likedByMe: likedByMe,
+                  );
+                }
+              } catch (_) {}
+
+              try {
+                final cmtRes = await _apiClient.get(
+                  '${ApiEndpoints.podcastComments(mapped.id)}?page=0&size=1',
+                  headers: const {'ngrok-skip-browser-warning': '1'},
+                );
+                if (cmtRes is Map<String, dynamic> &&
+                    cmtRes['totalElements'] is num) {
+                  mapped = mapped.copyWith(
+                    commentsCount: (cmtRes['totalElements'] as num).toInt(),
+                  );
+                }
+              } catch (_) {}
+            }
             list.add(mapped);
           }
         }
+
+        // Fetch dashboard metrics to synchronize creator's total listens with podcasts
+        int totalCreatorListens = 0;
+        try {
+          final dashRes = await _apiClient.get(
+            ApiEndpoints.creatorDashboard(period: '7d'),
+            headers: const {'ngrok-skip-browser-warning': '1'},
+          );
+          if (dashRes is Map<String, dynamic> &&
+              dashRes['metrics'] is Map<String, dynamic>) {
+            final m = dashRes['metrics'] as Map<String, dynamic>;
+            totalCreatorListens = (m['totalListens'] as num?)?.toInt() ??
+                (m['views'] as num?)?.toInt() ??
+                0;
+          }
+        } catch (_) {}
+
+        if (totalCreatorListens > 0) {
+          final publishedIndices = <int>[];
+          for (int i = 0; i < list.length; i++) {
+            if (list[i].status == PodcastStatus.published) {
+              publishedIndices.add(i);
+            }
+          }
+
+          if (publishedIndices.length == 1) {
+            final idx = publishedIndices.first;
+            list[idx] = list[idx].copyWith(listensCount: totalCreatorListens);
+          } else if (publishedIndices.length > 1) {
+            final totalCurrent = publishedIndices.fold<int>(
+              0,
+              (sum, i) => sum + list[i].listensCount,
+            );
+            if (totalCurrent == 0) {
+              final idx = publishedIndices.first;
+              list[idx] = list[idx].copyWith(listensCount: totalCreatorListens);
+            }
+          }
+        }
+
         _cachedPodcasts.clear();
         _cachedPodcasts.addAll(list);
       }
@@ -291,7 +382,17 @@ class ApiCreatorRepository implements CreatorRepository {
         final mapped = _mapBackendPodcastToModel(res);
         final idx = _cachedPodcasts.indexWhere((p) => p.id == id);
         if (idx != -1) {
-          _cachedPodcasts[idx] = mapped;
+          final existing = _cachedPodcasts[idx];
+          final resolved = mapped.copyWith(
+            likesCount: existing.likesCount,
+            likedByMe: existing.likedByMe,
+            commentsCount: existing.commentsCount,
+            listensCount: existing.listensCount > 0
+                ? existing.listensCount
+                : mapped.listensCount,
+          );
+          _cachedPodcasts[idx] = resolved;
+          return resolved;
         } else {
           _cachedPodcasts.add(mapped);
         }
@@ -339,30 +440,11 @@ class ApiCreatorRepository implements CreatorRepository {
       throw Exception('Vui lòng chọn danh mục hợp lệ');
     }
 
-    // 2. Upload cover if data URL
-    String? effectiveCoverUrl;
-    if (coverUrl.isNotEmpty) {
-      if (coverUrl.startsWith('data:image')) {
-        try {
-          final mime = coverUrl.split(';').first.replaceFirst('data:', '');
-          final base64Part = coverUrl.split(',').last;
-          final bytes = base64Decode(base64Part);
-          final ext = mime.contains('png')
-              ? 'png'
-              : (mime.contains('webp') ? 'webp' : 'jpg');
-          final uploadedUrl = await uploadImageFile(
-            fileBytes: bytes,
-            filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
-            mimeType: mime,
-          );
-          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-            effectiveCoverUrl = uploadedUrl;
-          }
-        } catch (_) {}
-      } else if (!coverUrl.startsWith('data:')) {
-        effectiveCoverUrl = coverUrl;
-      }
-    }
+    // Create the draft first so the uploaded cover can be linked to its podcast.
+    final coverUpload = _prepareCoverUpload(coverUrl);
+    final effectiveCoverUrl = coverUpload == null
+        ? _externalCoverUrl(coverUrl)
+        : null;
 
     final durationSecs = duration.inSeconds > 0 ? duration.inSeconds : 1800;
 
@@ -393,6 +475,19 @@ class ApiCreatorRepository implements CreatorRepository {
     var createdPodcast = _mapBackendPodcastToModel(res);
     final createdPodcastId = createdPodcast.id;
 
+    if (coverUpload != null) {
+      final withCover = await uploadPodcastThumbnailFile(
+        podcastId: createdPodcastId,
+        fileBytes: coverUpload.bytes,
+        filename: coverUpload.filename,
+        mimeType: coverUpload.mimeType,
+      );
+      if (withCover == null) {
+        throw Exception('Upload ảnh bìa thất bại; podcast vẫn được lưu ở dạng nháp.');
+      }
+      createdPodcast = withCover;
+    }
+
     // 4. Assign series if selected: PUT /api/creator/podcasts/{id}/series
     if (seriesId != null && seriesId.isNotEmpty) {
       await assignPodcastToSeries(
@@ -403,20 +498,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
     // 5. Upload media file (video or audio) if bytes provided: POST /api/creator/podcasts/{id}/video
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final nameLower = audioFileName.toLowerCase();
-      String mimeType = 'video/mp4';
-      if (nameLower.endsWith('.mp3')) {
-        mimeType = 'audio/mpeg';
-      } else if (nameLower.endsWith('.m4a')) {
-        mimeType = 'audio/mp4';
-      } else if (nameLower.endsWith('.wav')) {
-        mimeType = 'audio/wav';
-      } else if (nameLower.endsWith('.aac')) {
-        mimeType = 'audio/aac';
-      } else if (nameLower.endsWith('.webm')) {
-        mimeType = 'video/webm';
-      } else if (nameLower.endsWith('.mov')) {
-        mimeType = 'video/quicktime';
+      final mimeType = _podcastMediaTypeForFilename(audioFileName);
+      if (mimeType == null) {
+        throw Exception('Định dạng media podcast chưa được hỗ trợ.');
       }
 
       final uploaded = await uploadPodcastVideoFile(
@@ -508,28 +592,22 @@ class ApiCreatorRepository implements CreatorRepository {
 
     effectiveCategoryId ??= '00000000-0000-0000-0000-000000000001';
 
-    String? effectiveCoverUrl;
-    if (coverUrl.isNotEmpty) {
-      if (coverUrl.startsWith('data:image')) {
-        try {
-          final mime = coverUrl.split(';').first.replaceFirst('data:', '');
-          final base64Part = coverUrl.split(',').last;
-          final bytes = base64Decode(base64Part);
-          final ext = mime.contains('png')
-              ? 'png'
-              : (mime.contains('webp') ? 'webp' : 'jpg');
-          final uploadedUrl = await uploadImageFile(
-            fileBytes: bytes,
-            filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$ext',
-            mimeType: mime,
-          );
-          if (uploadedUrl != null && uploadedUrl.isNotEmpty) {
-            effectiveCoverUrl = uploadedUrl;
-          }
-        } catch (_) {}
-      } else if (!coverUrl.startsWith('data:')) {
-        effectiveCoverUrl = coverUrl;
+    final coverUpload = _prepareCoverUpload(coverUrl);
+    String? effectiveCoverUrl = coverUpload == null
+        ? _externalCoverUrl(coverUrl)
+        : null;
+
+    if (coverUpload != null) {
+      final withCover = await uploadPodcastThumbnailFile(
+        podcastId: id,
+        fileBytes: coverUpload.bytes,
+        filename: coverUpload.filename,
+        mimeType: coverUpload.mimeType,
+      );
+      if (withCover == null || withCover.coverUrl.isEmpty) {
+        throw Exception('Upload ảnh bìa thất bại; podcast chưa được cập nhật.');
       }
+      effectiveCoverUrl = withCover.coverUrl;
     }
 
     CreatorPodcast? updatedPodcast;
@@ -564,6 +642,8 @@ class ApiCreatorRepository implements CreatorRepository {
         podcastId: id,
         seriesId: seriesId,
       );
+    } else {
+      await removePodcastFromSeries(podcastId: id);
     }
 
     if (sources.isNotEmpty) {
@@ -582,20 +662,9 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     if (audioFileName != null && mediaBytes != null && mediaBytes.isNotEmpty) {
-      final nameLower = audioFileName.toLowerCase();
-      String mimeType = 'video/mp4';
-      if (nameLower.endsWith('.mp3')) {
-        mimeType = 'audio/mpeg';
-      } else if (nameLower.endsWith('.m4a')) {
-        mimeType = 'audio/mp4';
-      } else if (nameLower.endsWith('.wav')) {
-        mimeType = 'audio/wav';
-      } else if (nameLower.endsWith('.aac')) {
-        mimeType = 'audio/aac';
-      } else if (nameLower.endsWith('.webm')) {
-        mimeType = 'video/webm';
-      } else if (nameLower.endsWith('.mov')) {
-        mimeType = 'video/quicktime';
+      final mimeType = _podcastMediaTypeForFilename(audioFileName);
+      if (mimeType == null) {
+        throw Exception('Định dạng media podcast chưa được hỗ trợ.');
       }
 
       final uploaded = await uploadPodcastVideoFile(
@@ -610,14 +679,23 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     if (autoSubmit) {
-      try {
-        updatedPodcast = await submitPodcast(id);
-      } catch (_) {}
+      updatedPodcast = await submitPodcast(id);
     }
 
     final existingIndex = _cachedPodcasts.indexWhere((p) => p.id == id);
-    final fallbackPodcast = existingIndex != -1
-        ? _cachedPodcasts[existingIndex].copyWith(
+    final existingPodcast = existingIndex != -1 ? _cachedPodcasts[existingIndex] : null;
+
+    // Quy tắc: Nếu podcast trước đó đang là PUBLISHED, khi chỉnh sửa nó PHẢI chuyển sang DRAFT.
+    // Nếu đang là PENDING_REVIEW (pendingAdmin), nó vẫn giữ nguyên PENDING_REVIEW.
+    // Nếu đang là DRAFT, nó vẫn giữ nguyên DRAFT.
+    final targetFallbackStatus = existingPodcast != null
+        ? (existingPodcast.status == PodcastStatus.published
+            ? PodcastStatus.draft
+            : existingPodcast.status)
+        : PodcastStatus.draft;
+
+    final fallbackPodcast = existingPodcast != null
+        ? existingPodcast.copyWith(
             title: title,
             description: description,
             eraTag: eraTag,
@@ -628,6 +706,7 @@ class ApiCreatorRepository implements CreatorRepository {
             duration: duration,
             categoryId: effectiveCategoryId,
             seriesId: seriesId,
+            status: targetFallbackStatus,
           )
         : CreatorPodcast(
             id: id,
@@ -643,7 +722,7 @@ class ApiCreatorRepository implements CreatorRepository {
             listensCount: 0,
             likesCount: 0,
             commentsCount: 0,
-            status: PodcastStatus.aiModerating,
+            status: PodcastStatus.draft,
             categoryId: effectiveCategoryId,
             seriesId: seriesId,
           );
@@ -673,7 +752,10 @@ class ApiCreatorRepository implements CreatorRepository {
       headers: const {'ngrok-skip-browser-warning': '1'},
     );
     if (res is Map<String, dynamic>) {
-      final updated = _mapBackendPodcastToModel(res);
+      final updated = _mapBackendPodcastToModel(res).copyWith(
+        status: PodcastStatus.pendingAdmin,
+        rejectReason: null,
+      );
       final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
       if (idx != -1) {
         _cachedPodcasts[idx] = updated;
@@ -707,28 +789,85 @@ class ApiCreatorRepository implements CreatorRepository {
   // ==========================================
 
   @override
-  Future<String?> uploadImageFile({
+  Future<CreatorPodcast?> uploadPodcastThumbnailFile({
+    required String podcastId,
     required List<int> fileBytes,
     required String filename,
     String mimeType = 'image/jpeg',
   }) async {
-    try {
-      final res = await _apiClient.uploadMultipart(
-        ApiEndpoints.uploads,
-        fileFieldName: 'file',
-        filename: filename,
-        fileBytes: fileBytes,
-        mimeType: mimeType,
-        headers: const {'ngrok-skip-browser-warning': '1'},
+    final res = await _apiClient.uploadMultipart(
+      ApiEndpoints.creatorPodcastThumbnail(podcastId),
+      fileFieldName: 'file',
+      filename: filename,
+      fileBytes: fileBytes,
+      mimeType: mimeType,
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
+    if (res is! Map<String, dynamic>) {
+      return null;
+    }
+
+    final mapped = _mapBackendPodcastToModel(res);
+    final index = _cachedPodcasts.indexWhere((podcast) => podcast.id == podcastId);
+    if (index == -1) {
+      _cachedPodcasts.add(mapped);
+    } else {
+      _cachedPodcasts[index] = mapped.copyWith(
+        audioFileName: _cachedPodcasts[index].audioFileName,
+        sources: _cachedPodcasts[index].sources,
+        eraTag: _cachedPodcasts[index].eraTag,
       );
-      if (res is Map<String, dynamic>) {
-        final url = res['publicUrl'] ?? res['url'] ?? res['objectKey'];
-        if (url != null) {
-          return url.toString();
-        }
-      }
-    } catch (_) {}
-    return null;
+    }
+    return mapped;
+  }
+
+  _CoverUploadData? _prepareCoverUpload(String coverUrl) {
+    final value = coverUrl.trim();
+    if (value.isEmpty) return null;
+    if (!value.startsWith('data:')) {
+      return null;
+    }
+    if (!value.startsWith('data:image/')) {
+      throw Exception('Ảnh bìa phải là data URL image hợp lệ.');
+    }
+
+    final commaIndex = value.indexOf(',');
+    final semicolonIndex = value.indexOf(';');
+    if (commaIndex <= semicolonIndex || semicolonIndex < 5) {
+      throw Exception('Dữ liệu ảnh bìa không hợp lệ.');
+    }
+
+    final mimeType = value.substring(5, semicolonIndex).toLowerCase();
+    if (mimeType == 'image/svg+xml') {
+      throw Exception('Không hỗ trợ SVG làm ảnh bìa.');
+    }
+    final bytes = base64Decode(value.substring(commaIndex + 1));
+    if (bytes.isEmpty) {
+      throw Exception('Ảnh bìa rỗng.');
+    }
+
+    final extension = switch (mimeType) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      'image/gif' => 'gif',
+      'image/avif' => 'avif',
+      'image/heic' => 'heic',
+      'image/heif' => 'heif',
+      'image/jpeg' || 'image/jpg' => 'jpg',
+      _ => 'jpg',
+    };
+
+    return _CoverUploadData(
+      bytes: bytes,
+      filename: 'cover_${DateTime.now().millisecondsSinceEpoch}.$extension',
+      mimeType: mimeType,
+    );
+  }
+
+  String? _externalCoverUrl(String coverUrl) {
+    final value = coverUrl.trim();
+    if (value.isEmpty || value.startsWith('data:')) return null;
+    return value;
   }
 
   @override
@@ -789,6 +928,27 @@ class ApiCreatorRepository implements CreatorRepository {
       }
       rethrow;
     }
+  }
+
+  String? _podcastMediaTypeForFilename(String filename) {
+    final extension = filename.toLowerCase().split('.').last;
+    return switch (extension) {
+      'mp4' => 'video/mp4',
+      'mov' => 'video/quicktime',
+      'm4v' => 'video/x-m4v',
+      'webm' => 'video/webm',
+      'mkv' => 'video/x-matroska',
+      '3gp' => 'video/3gpp',
+      'avi' => 'video/x-msvideo',
+      'mp3' => 'audio/mpeg',
+      'm4a' => 'audio/mp4',
+      'aac' => 'audio/aac',
+      'wav' => 'audio/wav',
+      'ogg' || 'oga' => 'audio/ogg',
+      'opus' => 'audio/opus',
+      'flac' => 'audio/flac',
+      _ => null,
+    };
   }
 
   @override
@@ -1215,6 +1375,128 @@ class ApiCreatorRepository implements CreatorRepository {
   // ==========================================
   // 6. COMMENTS MANAGEMENT
   // ==========================================
+  // LIKES & COMMENTS API IMPLEMENTATION
+  // ==========================================
+
+  @override
+  Future<Map<String, dynamic>> getPodcastLikes(String podcastId) async {
+    final cached = _cachedPodcasts.cast<CreatorPodcast?>().firstWhere(
+      (p) => p?.id == podcastId,
+      orElse: () => null,
+    );
+    if (cached != null && cached.status != PodcastStatus.published) {
+      return {'podcastId': podcastId, 'likeCount': 0, 'likedByMe': false};
+    }
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.podcastLikes(podcastId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final count = (res['likeCount'] as num?)?.toInt() ?? 0;
+        final likedByMe = res['likedByMe'] == true;
+        // Update cache
+        final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+            likesCount: count,
+            likedByMe: likedByMe,
+          );
+        }
+        return res;
+      }
+    } catch (_) {}
+    return {'podcastId': podcastId, 'likeCount': 0, 'likedByMe': false};
+  }
+
+  @override
+  Future<Map<String, dynamic>> likePodcast(String podcastId) async {
+    try {
+      final res = await _apiClient.put(
+        ApiEndpoints.podcastLike(podcastId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final count = (res['likeCount'] as num?)?.toInt();
+        final likedByMe = res['likedByMe'] == true;
+        final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          final resolvedCount = count ?? (_cachedPodcasts[idx].likesCount + 1);
+          _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+            likesCount: resolvedCount,
+            likedByMe: likedByMe,
+          );
+        }
+        return res;
+      }
+    } catch (_) {}
+    final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+    final fallbackCount = idx != -1 ? _cachedPodcasts[idx].likesCount + 1 : 1;
+    if (idx != -1) {
+      _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+        likesCount: fallbackCount,
+        likedByMe: true,
+      );
+    }
+    return {'podcastId': podcastId, 'likeCount': fallbackCount, 'likedByMe': true};
+  }
+
+  @override
+  Future<Map<String, dynamic>> unlikePodcast(String podcastId) async {
+    try {
+      final res = await _apiClient.delete(
+        ApiEndpoints.podcastLike(podcastId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final count = (res['likeCount'] as num?)?.toInt();
+        final likedByMe = res['likedByMe'] == true;
+        final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          final resolvedCount = count ??
+              (_cachedPodcasts[idx].likesCount > 0
+                  ? _cachedPodcasts[idx].likesCount - 1
+                  : 0);
+          _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+            likesCount: resolvedCount,
+            likedByMe: likedByMe,
+          );
+        }
+        return res;
+      }
+    } catch (_) {}
+    final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+    final fallbackCount = idx != -1
+        ? (_cachedPodcasts[idx].likesCount > 0
+            ? _cachedPodcasts[idx].likesCount - 1
+            : 0)
+        : 0;
+    if (idx != -1) {
+      _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+        likesCount: fallbackCount,
+        likedByMe: false,
+      );
+    }
+    return {'podcastId': podcastId, 'likeCount': fallbackCount, 'likedByMe': false};
+  }
+
+  @override
+  Future<void> recordListeningProgress({
+    required String podcastId,
+    required int progressSeconds,
+    bool completed = false,
+  }) async {
+    try {
+      await _apiClient.put(
+        ApiEndpoints.podcastListeningProgress(podcastId),
+        body: {
+          'progressSeconds': progressSeconds,
+          'completed': completed,
+        },
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+    } catch (_) {}
+  }
 
   @override
   Future<List<StudioComment>> getComments() async {
@@ -1226,29 +1508,25 @@ class ApiCreatorRepository implements CreatorRepository {
       final podcasts = _cachedPodcasts.isNotEmpty
           ? _cachedPodcasts
           : await getPodcasts();
-      for (final pod in podcasts.take(5)) {
+      // Fetch latest comments only from published podcasts
+      final publishedPods = podcasts
+          .where((p) => p.status == PodcastStatus.published)
+          .take(10);
+      for (final pod in publishedPods) {
         try {
           final commentsRes = await _apiClient.get(
             ApiEndpoints.podcastComments(pod.id),
+            headers: const {'ngrok-skip-browser-warning': '1'},
           );
           if (commentsRes is Map<String, dynamic> &&
               commentsRes['content'] is List) {
             for (final item in commentsRes['content'] as List) {
               if (item is Map<String, dynamic>) {
                 allComments.add(
-                  StudioComment(
-                    id: item['commentId']?.toString() ?? _uuid.v4(),
-                    podcastTitle: pod.title,
-                    authorName: item['username']?.toString() ?? 'Thính giả',
-                    authorAvatar: item['avatarUrl']?.toString() ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-                    content: item['content']?.toString() ?? '',
-                    timestampSeconds:
-                        (item['timestampSeconds'] as num?)?.toInt() ?? 0,
-                    createdAt:
-                        DateTime.tryParse(
-                          item['createdAt']?.toString() ?? '',
-                        ) ??
-                        DateTime.now(),
+                  StudioComment.fromJson(
+                    item,
+                    fallbackPodcastTitle: pod.title,
+                    fallbackPodcastId: pod.id,
                   ),
                 );
               }
@@ -1256,11 +1534,82 @@ class ApiCreatorRepository implements CreatorRepository {
           }
         } catch (_) {}
       }
-      _cachedComments.clear();
-      _cachedComments.addAll(allComments);
+      if (allComments.isNotEmpty) {
+        _cachedComments.clear();
+        _cachedComments.addAll(allComments);
+      }
     } catch (_) {}
 
     return List.unmodifiable(_cachedComments);
+  }
+
+  @override
+  Future<List<StudioComment>> getPodcastComments(
+    String podcastId, {
+    int page = 0,
+    int size = 50,
+  }) async {
+    final cached = _cachedPodcasts.cast<CreatorPodcast?>().firstWhere(
+      (p) => p?.id == podcastId,
+      orElse: () => null,
+    );
+    if (cached != null && cached.status != PodcastStatus.published) {
+      return const [];
+    }
+    try {
+      final res = await _apiClient.get(
+        '${ApiEndpoints.podcastComments(podcastId)}?page=$page&size=$size',
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic> && res['content'] is List) {
+        final List<StudioComment> comments = [];
+        final pod = _cachedPodcasts.cast<CreatorPodcast?>().firstWhere(
+          (p) => p?.id == podcastId,
+          orElse: () => null,
+        );
+        for (final item in res['content'] as List) {
+          if (item is Map<String, dynamic>) {
+            comments.add(
+              StudioComment.fromJson(
+                item,
+                fallbackPodcastTitle: pod?.title ?? 'Podcast',
+                fallbackPodcastId: podcastId,
+              ),
+            );
+          }
+        }
+        return comments;
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  @override
+  Future<int> getPodcastCommentsCount(String podcastId) async {
+    final cached = _cachedPodcasts.cast<CreatorPodcast?>().firstWhere(
+      (p) => p?.id == podcastId,
+      orElse: () => null,
+    );
+    if (cached != null && cached.status != PodcastStatus.published) {
+      return 0;
+    }
+    try {
+      final res = await _apiClient.get(
+        '${ApiEndpoints.podcastComments(podcastId)}?page=0&size=1',
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic> && res['totalElements'] is num) {
+        final count = (res['totalElements'] as num).toInt();
+        final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+            commentsCount: count,
+          );
+        }
+        return count;
+      }
+    } catch (_) {}
+    return 0;
   }
 
   @override
@@ -1270,27 +1619,41 @@ class ApiCreatorRepository implements CreatorRepository {
     int? timestampSeconds,
     String? podcastTitle,
   }) async {
+    final cached = _cachedPodcasts.cast<CreatorPodcast?>().firstWhere(
+      (p) => p?.id == podcastId,
+      orElse: () => null,
+    );
+    if (cached != null && cached.status != PodcastStatus.published) {
+      throw Exception('Tập podcast chỉ có thể nhận bình luận sau khi đã được xuất bản.');
+    }
     try {
+      final body = <String, dynamic>{
+        'content': content,
+      };
+      if (timestampSeconds != null && timestampSeconds >= 0) {
+        body['timestampSeconds'] = timestampSeconds;
+      }
+
       final res = await _apiClient.post(
         ApiEndpoints.podcastComments(podcastId),
-        body: {'content': content, 'timestampSeconds': timestampSeconds},
+        body: body,
+        headers: const {'ngrok-skip-browser-warning': '1'},
       );
       if (res is Map<String, dynamic>) {
-        final comment = StudioComment(
-          id: res['commentId']?.toString() ?? _uuid.v4(),
-          podcastTitle: podcastTitle ?? _cachedProfile.name,
-          authorName: res['username']?.toString() ?? _cachedProfile.name,
-          authorAvatar:
-              res['avatarUrl']?.toString() ?? _cachedProfile.avatarUrl,
-          content: res['content']?.toString() ?? content,
-          timestampSeconds:
-              (res['timestampSeconds'] as num?)?.toInt() ??
-              (timestampSeconds ?? 0),
-          createdAt:
-              DateTime.tryParse(res['createdAt']?.toString() ?? '') ??
-              DateTime.now(),
+        final comment = StudioComment.fromJson(
+          res,
+          fallbackPodcastTitle: podcastTitle ?? _cachedProfile.name,
+          fallbackPodcastId: podcastId,
         );
         _cachedComments.insert(0, comment);
+
+        // Update cached podcast comments count
+        final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
+        if (idx != -1) {
+          _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
+            commentsCount: _cachedPodcasts[idx].commentsCount + 1,
+          );
+        }
         return comment;
       }
     } catch (_) {}
@@ -1301,7 +1664,10 @@ class ApiCreatorRepository implements CreatorRepository {
   @override
   Future<void> deleteComment(String commentId) async {
     try {
-      await _apiClient.delete(ApiEndpoints.commentById(commentId));
+      await _apiClient.delete(
+        ApiEndpoints.commentById(commentId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
     } catch (_) {}
     _cachedComments.removeWhere((c) => c.id == commentId);
   }
@@ -1324,6 +1690,89 @@ class ApiCreatorRepository implements CreatorRepository {
         isHidden: !_cachedComments[index].isHidden,
       );
     }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getCommentLikes(String commentId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.commentLikes(commentId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return res;
+      }
+    } catch (_) {}
+    return {'commentId': commentId, 'likeCount': 0, 'likedByMe': false};
+  }
+
+  @override
+  Future<Map<String, dynamic>> likeComment(String commentId) async {
+    try {
+      final res = await _apiClient.put(
+        ApiEndpoints.commentLike(commentId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final count = (res['likeCount'] as num?)?.toInt();
+        final likedByMe = res['likedByMe'] == true;
+        final idx = _cachedComments.indexWhere((c) => c.id == commentId);
+        if (idx != -1) {
+          _cachedComments[idx] = _cachedComments[idx].copyWith(
+            likesCount: count ?? (_cachedComments[idx].likesCount + 1),
+            likedByMe: likedByMe,
+          );
+        }
+        return res;
+      }
+    } catch (_) {}
+    final idx = _cachedComments.indexWhere((c) => c.id == commentId);
+    final fallbackCount = idx != -1 ? _cachedComments[idx].likesCount + 1 : 1;
+    if (idx != -1) {
+      _cachedComments[idx] = _cachedComments[idx].copyWith(
+        likesCount: fallbackCount,
+        likedByMe: true,
+      );
+    }
+    return {'commentId': commentId, 'likeCount': fallbackCount, 'likedByMe': true};
+  }
+
+  @override
+  Future<Map<String, dynamic>> unlikeComment(String commentId) async {
+    try {
+      final res = await _apiClient.delete(
+        ApiEndpoints.commentLike(commentId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final count = (res['likeCount'] as num?)?.toInt();
+        final likedByMe = res['likedByMe'] == true;
+        final idx = _cachedComments.indexWhere((c) => c.id == commentId);
+        if (idx != -1) {
+          _cachedComments[idx] = _cachedComments[idx].copyWith(
+            likesCount: count ??
+                (_cachedComments[idx].likesCount > 0
+                    ? _cachedComments[idx].likesCount - 1
+                    : 0),
+            likedByMe: likedByMe,
+          );
+        }
+        return res;
+      }
+    } catch (_) {}
+    final idx = _cachedComments.indexWhere((c) => c.id == commentId);
+    final fallbackCount = idx != -1
+        ? (_cachedComments[idx].likesCount > 0
+            ? _cachedComments[idx].likesCount - 1
+            : 0)
+        : 0;
+    if (idx != -1) {
+      _cachedComments[idx] = _cachedComments[idx].copyWith(
+        likesCount: fallbackCount,
+        likedByMe: false,
+      );
+    }
+    return {'commentId': commentId, 'likeCount': fallbackCount, 'likedByMe': false};
   }
 
   // ==========================================
@@ -1394,6 +1843,101 @@ class ApiCreatorRepository implements CreatorRepository {
       }
     } catch (_) {}
     return null;
+  }
+
+  @override
+  Future<CreatorSeries?> getSeriesById(String seriesId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorSeriesById(seriesId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return CreatorSeries.fromJson(res);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<CreatorSeries?> updateSeries({
+    required String seriesId,
+    required String title,
+    required String slug,
+    required String categoryId,
+    String description = '',
+    String coverUrl = '',
+  }) async {
+    String effectiveCategoryId = categoryId;
+    if (effectiveCategoryId.isEmpty ||
+        effectiveCategoryId.startsWith('00000000-0000-0000')) {
+      try {
+        final categoriesRes = await _apiClient.get(ApiEndpoints.categories);
+        if (categoriesRes is List && categoriesRes.isNotEmpty) {
+          final firstCat = categoriesRes.first as Map<String, dynamic>;
+          final realId = (firstCat['categoryId'] ?? firstCat['id'])?.toString();
+          if (realId != null && realId.isNotEmpty) {
+            effectiveCategoryId = realId;
+          }
+        }
+      } catch (_) {}
+    }
+
+    try {
+      final res = await _apiClient.put(
+        ApiEndpoints.creatorSeriesById(seriesId),
+        body: {
+          'categoryId': effectiveCategoryId,
+          'title': title,
+          'slug': slug.isNotEmpty
+              ? slug
+              : title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
+          'description': description.isNotEmpty ? description : null,
+          'coverUrl': coverUrl.isNotEmpty ? coverUrl : null,
+        },
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        final updated = CreatorSeries.fromJson(res);
+        final idx = _cachedSeries.indexWhere((s) => s.id == seriesId);
+        if (idx != -1) {
+          _cachedSeries[idx] = updated;
+        }
+        return updated;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<bool> deleteSeries(String seriesId) async {
+    try {
+      await _apiClient.delete(
+        ApiEndpoints.creatorSeriesById(seriesId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      _cachedSeries.removeWhere((s) => s.id == seriesId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<List<CreatorPodcast>> getSeriesPodcasts(String seriesId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorSeriesPodcasts(seriesId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map((json) => _mapBackendPodcastToModel(json))
+            .toList();
+      }
+    } catch (_) {}
+    return [];
   }
 
   @override
@@ -1603,9 +2147,16 @@ class ApiCreatorRepository implements CreatorRepository {
       eraTag: json['categoryName'] as String? ?? '',
       sources: '',
       isExclusive: isExclusive,
-      listensCount: 0,
-      likesCount: 0,
-      commentsCount: 0,
+      listensCount: (json['listenCount'] as num?)?.toInt() ??
+          (json['listensCount'] as num?)?.toInt() ??
+          0,
+      likesCount: (json['likeCount'] as num?)?.toInt() ??
+          (json['likesCount'] as num?)?.toInt() ??
+          0,
+      likedByMe: json['likedByMe'] == true,
+      commentsCount: (json['commentCount'] as num?)?.toInt() ??
+          (json['commentsCount'] as num?)?.toInt() ??
+          0,
       status: status,
       categoryId: json['categoryId']?.toString(),
       seriesId: json['seriesId']?.toString(),
@@ -1696,5 +2247,78 @@ class ApiCreatorRepository implements CreatorRepository {
       status: status,
       createdAt: createdAt,
     );
+  }
+
+  // Livestreams (Agora RTC)
+  @override
+  Future<List<CreatorLivestreamItem>> getLivestreams() async {
+    try {
+      final res = await _apiClient.get(ApiEndpoints.creatorLivestreams);
+      if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map((e) => CreatorLivestreamItem.fromJson(e))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
+  Future<CreatorLivestreamItem> getLivestreamById(String livestreamId) async {
+    final res = await _apiClient.get(ApiEndpoints.creatorLivestreamById(livestreamId));
+    if (res is Map<String, dynamic>) {
+      return CreatorLivestreamItem.fromJson(res);
+    }
+    throw Exception('Phản hồi không hợp lệ từ máy chủ');
+  }
+
+  @override
+  Future<CreatorLivestreamItem> createLivestream({
+    required String title,
+    String? description,
+    DateTime? scheduledAt,
+  }) async {
+    final body = <String, dynamic>{
+      'title': title.trim(),
+      'description': (description != null && description.trim().isNotEmpty)
+          ? description.trim()
+          : null,
+      'scheduledAt': scheduledAt?.toUtc().toIso8601String(),
+    };
+    final res = await _apiClient.post(ApiEndpoints.creatorLivestreams, body: body);
+    if (res is Map<String, dynamic>) {
+      return CreatorLivestreamItem.fromJson(res);
+    }
+    throw Exception('Không thể tạo buổi livestream');
+  }
+
+  @override
+  Future<AgoraJoinResponse> startLivestream(String livestreamId) async {
+    final res = await _apiClient.post(ApiEndpoints.creatorLivestreamStart(livestreamId));
+    if (res is Map<String, dynamic>) {
+      return AgoraJoinResponse.fromJson(res);
+    }
+    throw Exception('Không thể bắt đầu phát trực tiếp');
+  }
+
+  @override
+  Future<AgoraJoinResponse> renewLivestreamToken(String livestreamId) async {
+    final res = await _apiClient.post(ApiEndpoints.creatorLivestreamToken(livestreamId));
+    if (res is Map<String, dynamic>) {
+      return AgoraJoinResponse.fromJson(res);
+    }
+    throw Exception('Không thể gia hạn token');
+  }
+
+  @override
+  Future<CreatorLivestreamItem> endLivestream(String livestreamId) async {
+    final res = await _apiClient.post(ApiEndpoints.creatorLivestreamEnd(livestreamId));
+    if (res is Map<String, dynamic>) {
+      return CreatorLivestreamItem.fromJson(res);
+    }
+    throw Exception('Không thể kết thúc livestream');
   }
 }

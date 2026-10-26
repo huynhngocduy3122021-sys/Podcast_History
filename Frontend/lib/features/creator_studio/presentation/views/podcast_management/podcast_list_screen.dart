@@ -12,6 +12,8 @@ import 'package:podcast_history/features/creator_studio/data/models/creator_mode
 import 'package:podcast_history/features/creator_studio/presentation/views/upload/upload_podcast_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/soundcloud_podcast_card.dart';
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 
 class PodcastListScreen extends ConsumerStatefulWidget {
   const PodcastListScreen({super.key});
@@ -61,6 +63,102 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản lý Podcast'),
+        actions: [
+          // Nút Series ở góc trên bên phải
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SeriesManagementScreen()),
+                ),
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.surfaceVariantDark : const Color(0xFFF3ECE4),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark ? AppColors.outlineDark : const Color(0xFFDFD4C8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.video_collection_rounded,
+                        size: 15,
+                        color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Series',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Nút Ví tiền ở góc trên bên phải cạnh Series
+          Consumer(
+            builder: (context, ref, _) {
+              final wallet = ref.watch(walletProvider).value;
+              final balanceStr = wallet != null
+                  ? '${(wallet.available / 1000).toStringAsFixed(0)}k đ'
+                  : 'Ví tiền';
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const WalletScreen()),
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.surfaceVariantDark : const Color(0xFFF3ECE4),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark ? AppColors.outlineDark : const Color(0xFFDFD4C8),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_rounded,
+                            size: 15,
+                            color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            balanceStr,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -114,9 +212,11 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
   }) {
     final list = filter == null
         ? all
-        : (includePending
-            ? all.where((p) => p.status == PodcastStatus.draft || p.status == PodcastStatus.pendingAdmin).toList()
-            : all.where((p) => p.status == filter).toList());
+        : (filter == PodcastStatus.pendingAdmin
+            ? all.where((p) => p.status == PodcastStatus.pendingAdmin || p.status == PodcastStatus.aiModerating).toList()
+            : (includePending
+                ? all.where((p) => p.status == PodcastStatus.draft || p.status == PodcastStatus.pendingAdmin).toList()
+                : all.where((p) => p.status == filter).toList()));
 
     return RefreshIndicator(
       onRefresh: () => ref.read(creatorPodcastsProvider.notifier).loadPodcasts(),
@@ -180,14 +280,22 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
       }
 
       await ref.read(creatorPodcastsProvider.notifier).submitPodcast(pod.id);
+      await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã gửi tập "${pod.title}" đến Admin để kiểm duyệt!'),
+            content: Text(
+              pod.status == PodcastStatus.rejected
+                  ? 'Đã gửi lại tập "${pod.title}" đến Admin để kiểm duyệt thành công!'
+                  : 'Đã gửi tập "${pod.title}" đến Admin để kiểm duyệt!',
+            ),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 3),
           ),
         );
+        if (_tabController.index != 0) {
+          _tabController.animateTo(2);
+        }
       }
     } catch (e) {
       final errStr = e.toString();
@@ -401,13 +509,22 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                       type: AppButtonType.secondary,
                       onPressed: isUploading
                           ? null
-                          : () {
+                          : () async {
                               Navigator.of(ctx).pop();
-                              Navigator.of(context).push(
+                              final res = await Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => UploadPodcastScreen(editingPodcast: pod),
+                                  builder: (_) => UploadPodcastScreen(
+                                    editingPodcast: pod,
+                                    isResubmit: pod.status == PodcastStatus.rejected,
+                                  ),
                                 ),
                               );
+                              await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+                              if (res == 'resubmitted' || res == 'submitted') {
+                                if (_tabController.index != 0) {
+          _tabController.animateTo(2);
+        }
+                              }
                             },
                     ),
                   ),
@@ -436,15 +553,31 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
           onPlayToggle: () {
             ref.read(audioPlayerServiceProvider.notifier).togglePlay(pod);
           },
-          onEdit: () {
-            Navigator.of(context).push(
+          onEdit: () async {
+            final currentTab = _tabController.index;
+            final res = await Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => UploadPodcastScreen(editingPodcast: pod),
+                builder: (_) => UploadPodcastScreen(
+                  editingPodcast: pod,
+                  isResubmit: pod.status == PodcastStatus.rejected,
+                ),
               ),
             );
+            await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+
+            // Nếu đang ở Tab "Tất cả" (index 0): Luôn giữ nguyên Tab 0
+            if (currentTab == 0) {
+              _tabController.animateTo(0);
+            } else if (res == 'published_to_draft') {
+              // Podcast đã đăng chỉnh sửa -> chuyển qua mục Nháp (Tab 3)
+              _tabController.animateTo(3);
+            } else if (res == 'resubmitted' || res == 'submitted') {
+              // Bị từ chối hoặc gửi duyệt -> chuyển sang mục Chờ Admin duyệt (Tab 2)
+              _tabController.animateTo(2);
+            }
           },
           onDelete: () => _confirmDelete(pod),
-          onSubmitReview: pod.status == PodcastStatus.draft
+          onSubmitReview: (pod.status == PodcastStatus.draft || pod.status == PodcastStatus.rejected)
               ? () => _submitToAdminReview(pod)
               : null,
         ),
@@ -585,13 +718,21 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                         label: 'Sửa & Gửi lại',
                         height: 32,
                         type: AppButtonType.destructive,
-                        onPressed: () {
-                          Navigator.of(context).push(
+                        onPressed: () async {
+                          final res = await Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  UploadPodcastScreen(editingPodcast: pod),
+                              builder: (_) => UploadPodcastScreen(
+                                editingPodcast: pod,
+                                isResubmit: true,
+                              ),
                             ),
                           );
+                          await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+                          if (res == 'resubmitted' || res == 'submitted') {
+                            if (_tabController.index != 0) {
+          _tabController.animateTo(2);
+        }
+                          }
                         },
                       ),
                     ),

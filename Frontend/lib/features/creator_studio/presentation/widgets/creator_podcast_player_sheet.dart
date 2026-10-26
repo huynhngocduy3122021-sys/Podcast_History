@@ -62,13 +62,11 @@ class CreatorPodcastPlayerSheet extends ConsumerStatefulWidget {
 }
 
 class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayerSheet> {
-  late bool _isLiked;
   final TextEditingController _commentController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _isLiked = false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final notifier = ref.read(audioPlayerServiceProvider.notifier);
       final current = ref.read(audioPlayerServiceProvider);
@@ -78,6 +76,11 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
         }
       } else if (!current.isPlaying && widget.initialPlaying) {
         notifier.resume();
+      }
+      if (widget.podcast.status == PodcastStatus.published) {
+        ref
+            .read(creatorPodcastsProvider.notifier)
+            .refreshPodcastStats(widget.podcast.id);
       }
     });
   }
@@ -112,6 +115,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
     final newComment = StudioComment(
       id: 'cmt_${DateTime.now().millisecondsSinceEpoch}',
       podcastTitle: widget.podcast.title,
+      podcastId: widget.podcast.id,
       authorName: profile?.name ?? widget.creatorName,
       authorAvatar: profile?.avatarUrl ?? '',
       content: text,
@@ -119,7 +123,10 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
       createdAt: DateTime.now(),
     );
 
-    ref.read(creatorCommentsProvider.notifier).addComment(newComment);
+    ref.read(creatorCommentsProvider.notifier).addComment(
+      newComment,
+      podcastId: widget.podcast.id,
+    );
 
     _commentController.clear();
     FocusScope.of(context).unfocus();
@@ -134,7 +141,12 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
 
   @override
   Widget build(BuildContext context) {
-    final pod = widget.podcast;
+    final podcasts = ref.watch(creatorPodcastsProvider).value;
+    final pod = podcasts?.cast<CreatorPodcast?>().firstWhere(
+          (p) => p?.id == widget.podcast.id,
+          orElse: () => null,
+        ) ??
+        widget.podcast;
     final audioState = ref.watch(audioPlayerServiceProvider);
     final isCurrent = audioState.podcastId == pod.id;
     final isPlaying = isCurrent && audioState.isPlaying;
@@ -501,10 +513,27 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _PlayerAction(
-                    icon: _isLiked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    label: '${pod.likesCount + (_isLiked ? 1 : 0)}',
-                    active: _isLiked,
-                    onTap: () => setState(() => _isLiked = !_isLiked),
+                    icon: pod.likedByMe
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    label: '${pod.likesCount}',
+                    active: pod.likedByMe,
+                    onTap: () {
+                      if (pod.status != PodcastStatus.published) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Podcast chỉ có thể thích sau khi đã phát hành.',
+                            ),
+                            backgroundColor: AppColors.warning,
+                          ),
+                        );
+                        return;
+                      }
+                      ref
+                          .read(creatorPodcastsProvider.notifier)
+                          .toggleLike(pod.id);
+                    },
                   ),
                   _PlayerAction(
                     icon: Icons.chat_bubble_outline_rounded,

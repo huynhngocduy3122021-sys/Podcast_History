@@ -40,6 +40,9 @@ public class CreatorFlowService {
     private final PodcastRepository podcastRepository;
     private final MediaUploadService mediaUploadService;
     private final R2PlaybackUrlService playbackUrlService;
+    private final CreatorSystemPlanService creatorSystemPlans;
+    private final AiModerationService aiModeration;
+    private final PodcastTranscriptService transcriptService;
 
     public CreatorFlowService(
             AppUserRepository appUserRepository,
@@ -48,7 +51,10 @@ public class CreatorFlowService {
             SeriesRepository seriesRepository,
             PodcastRepository podcastRepository,
             MediaUploadService mediaUploadService,
-            R2PlaybackUrlService playbackUrlService) {
+            R2PlaybackUrlService playbackUrlService,
+            CreatorSystemPlanService creatorSystemPlans,
+            AiModerationService aiModeration,
+            PodcastTranscriptService transcriptService) {
         this.appUserRepository = appUserRepository;
         this.producerProfileRepository = producerProfileRepository;
         this.categoryRepository = categoryRepository;
@@ -56,6 +62,9 @@ public class CreatorFlowService {
         this.podcastRepository = podcastRepository;
         this.mediaUploadService = mediaUploadService;
         this.playbackUrlService = playbackUrlService;
+        this.creatorSystemPlans = creatorSystemPlans;
+        this.aiModeration = aiModeration;
+        this.transcriptService = transcriptService;
     }
 
     @Transactional(readOnly = true)
@@ -171,7 +180,11 @@ public class CreatorFlowService {
 
         podcast.setCategory(category);
         applyPodcastWrite(podcast, request);
-        return toPodcastItem(podcastRepository.save(podcast));
+        Podcast saved = podcastRepository.save(podcast);
+        if ("PENDING_REVIEW".equalsIgnoreCase(saved.getStatus())) {
+            aiModeration.enqueue(saved);
+        }
+        return toPodcastItem(saved);
     }
 
     @Transactional
@@ -205,6 +218,8 @@ public class CreatorFlowService {
         requireEditable(podcast);
 
         String previousKey = podcast.getMediaUrl();
+        if (previousKey == null || previousKey.isBlank())
+            creatorSystemPlans.assertCanUpload(profile.getProducerProfileId());
         MediaUploadResponse media = mediaUploadService.uploadPodcastVideo(file, userId, podcastId);
         org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
             new org.springframework.transaction.support.TransactionSynchronization() {
@@ -215,14 +230,29 @@ public class CreatorFlowService {
                         mediaUploadService.deletePodcastVideo(key, userId, podcastId);
                     } catch (RuntimeException failure) {
                         org.slf4j.LoggerFactory.getLogger(CreatorFlowService.class)
-                            .warn("Không thể dọn video R2 của podcast {}", podcastId, failure);
+                            .warn("Không thể dọn media R2 của podcast {}", podcastId, failure);
                     }
                 }
             });
         podcast.setMediaUrl(media.objectKey());
         podcast.setMediaType(media.contentType());
         podcastRepository.save(podcast);
+        transcriptService.enqueue(podcast); // dùng để tạo transcript cho podcast,sẽ dùng Whisper để tạo transcript
         return new PodcastVideoItem(podcastId, podcast.getTitle(), podcast.getStatus(), media);
+    }
+
+    @Transactional
+    public PodcastItem uploadPodcastThumbnail(UUID userId, UUID podcastId, MultipartFile file) {
+        ProducerProfile profile = approvedCreator(userId);
+        Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
+        requireEditable(podcast);
+
+        MediaUploadResponse media = mediaUploadService.uploadPodcastThumbnail(file, userId, podcastId);
+        String thumbnailUrl = media.publicUrl() == null || media.publicUrl().isBlank()
+                ? media.objectKey()
+                : media.publicUrl();
+        podcast.setThumbnailUrl(thumbnailUrl);
+        return toPodcastItem(podcastRepository.save(podcast));
     }
 
     @Transactional
@@ -230,16 +260,31 @@ public class CreatorFlowService {
         ProducerProfile profile = approvedCreator(userId);
         Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
         requireEditable(podcast);
-        if (podcast.getMediaUrl() == null || podcast.getMediaUrl().isBlank()
-                || podcast.getMediaType() == null || !podcast.getMediaType().startsWith("video/")) {
-            throw new InvalidFlowRequestException("Hãy upload video cho podcast trước khi gửi duyệt.");
+        String mediaType = podcast.getMediaType();
+        if ((mediaType == null || mediaType.isBlank()) && podcast.getMediaUrl() != null) {
+            String lower = podcast.getMediaUrl().toLowerCase(Locale.ROOT);
+            if (lower.endsWith(".mp3")) mediaType = "audio/mpeg";
+            else if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) mediaType = "audio/mp4";
+            else if (lower.endsWith(".wav")) mediaType = "audio/wav";
+            else if (lower.endsWith(".aac")) mediaType = "audio/aac";
+            else if (lower.endsWith(".webm")) mediaType = "video/webm";
+            if (mediaType != null) {
+                podcast.setMediaType(mediaType);
+            }
+        }
+        boolean hasPlayableMedia = mediaType != null
+                && (mediaType.startsWith("video/") || mediaType.startsWith("audio/"));
+        if (podcast.getMediaUrl() == null || podcast.getMediaUrl().isBlank() || !hasPlayableMedia) {
+            throw new InvalidFlowRequestException("Hãy upload video hoặc audio cho podcast trước khi gửi duyệt.");
         }
         if (podcast.getDurationSeconds() == null || podcast.getDurationSeconds() <= 0) {
-            throw new InvalidFlowRequestException("Thời lượng podcast phải lớn hơn 0.");
+            podcast.setDurationSeconds(1800);
         }
         podcast.setStatus("PENDING_REVIEW");
         podcast.setPublishedAt(null);
-        return toPodcastItem(podcastRepository.save(podcast));
+        podcastRepository.save(podcast);
+        aiModeration.enqueue(podcast);
+        return toPodcastItem(podcast);
     }
 
     @Transactional
@@ -322,6 +367,10 @@ public class CreatorFlowService {
         if (status.equals("APPROVED") || status.equals("PUBLISHED")) {
             podcast.setStatus("DRAFT");
             podcast.setPublishedAt(null);
+            return;
+        }
+        if (status.equals("PENDING_REVIEW")) {
+            // Cho phép chỉnh sửa khi podcast đang chờ duyệt, giữ nguyên trạng thái PENDING_REVIEW để admin tiếp tục duyệt bản mới nhất
             return;
         }
         if (!status.equals("DRAFT") && !status.equals("REJECTED")) {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/dashboard/creator_dashboard_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/livestream/creator_livestream_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/more/creator_more_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/podcast_management/podcast_list_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/requests/request_list_screen.dart';
-import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 
 class CreatorMainShell extends StatefulWidget {
   final VoidCallback? onTheme;
@@ -31,7 +31,7 @@ class _CreatorMainShellState extends State<CreatorMainShell> {
     final screens = [
       const PodcastListScreen(),
       const RequestListScreen(),
-      const WalletScreen(),
+      const CreatorLivestreamScreen(),
       CreatorDashboardScreen(onNavigateTab: _navigateToTab),
       CreatorMoreScreen(onTheme: widget.onTheme, onLogout: widget.onLogout),
     ];
@@ -61,9 +61,9 @@ class _CreatorMainShellState extends State<CreatorMainShell> {
             label: 'Đơn đặt',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            activeIcon: Icon(Icons.account_balance_wallet_rounded),
-            label: 'Ví tiền',
+            icon: Icon(Icons.live_tv_outlined),
+            activeIcon: Icon(Icons.live_tv_rounded),
+            label: 'Livestream',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),

@@ -15,22 +15,32 @@ import 'package:podcast_history/core/utils/image_url_helper.dart';
 
 class UploadPodcastScreen extends ConsumerStatefulWidget {
   final CreatorPodcast? editingPodcast;
+  final bool isResubmit;
 
-  const UploadPodcastScreen({super.key, this.editingPodcast});
+  const UploadPodcastScreen({
+    super.key,
+    this.editingPodcast,
+    this.isResubmit = false,
+  });
 
   @override
   ConsumerState<UploadPodcastScreen> createState() => _UploadPodcastScreenState();
 }
 
 class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
+  bool get _isResubmitting =>
+      widget.isResubmit || (widget.editingPodcast?.status == PodcastStatus.rejected);
+
   int _currentStep = 0;
   final _step2FormKey = GlobalKey<FormState>();
   final _step3FormKey = GlobalKey<FormState>();
+  static const String _otherSeriesKey = '__other__';
 
   // Form Fields
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _sourcesController;
+  late TextEditingController _customSeriesController;
   String? _selectedCategoryId;
   String _selectedEra = 'Lịch sử';
   bool _isExclusive = false;
@@ -68,13 +78,15 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     _titleController = TextEditingController(text: edit?.title ?? '');
     _descController = TextEditingController(text: edit?.description ?? '');
     _sourcesController = TextEditingController(text: edit?.sources ?? '');
+    _customSeriesController = TextEditingController();
     if (edit != null) {
       _selectedCategoryId = edit.categoryId;
       _selectedSeriesId = edit.seriesId;
       _selectedEra = edit.eraTag;
       _isExclusive = edit.isExclusive;
-      _selectedCoverUrl = edit.coverUrl;
-      _audioFileName = edit.audioFileName;
+      _selectedCoverUrl = edit.coverUrl.isNotEmpty ? edit.coverUrl : _selectedCoverUrl;
+      _audioFileName = edit.audioFileName ??
+          (edit.videoUrl != null || edit.mediaType != null ? 'audio.mp3' : null);
       _uploadProgress = 1.0;
     }
   }
@@ -84,6 +96,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     _titleController.dispose();
     _descController.dispose();
     _sourcesController.dispose();
+    _customSeriesController.dispose();
     super.dispose();
   }
 
@@ -188,18 +201,40 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       if (file != null) {
         final bytes = await file.readAsBytes();
         if (bytes.isNotEmpty) {
-          final base64Str = base64Encode(bytes);
           final ext = file.extension?.toLowerCase() ?? 'jpeg';
           final mime = ext == 'png' ? 'image/png' : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
+          final base64Str = base64Encode(bytes);
           final dataUrl = 'data:$mime;base64,$base64Str';
+
           setState(() {
-            _selectedCoverUrl = dataUrl;
             _coverImageBytes = bytes;
+            _selectedCoverUrl = dataUrl;
           });
+
+          // Nếu đang chỉnh sửa podcast đã có trên server, gọi API upload ảnh bìa ngay lập tức: POST /api/creator/podcasts/{id}/thumbnail
+          if (widget.editingPodcast != null) {
+            try {
+              final repo = ref.read(creatorRepositoryProvider);
+              final uploaded = await repo.uploadPodcastThumbnailFile(
+                podcastId: widget.editingPodcast!.id,
+                fileBytes: bytes,
+                filename: file.name.isNotEmpty ? file.name : 'cover.$ext',
+                mimeType: mime,
+              );
+              if (uploaded != null && uploaded.coverUrl.isNotEmpty) {
+                setState(() {
+                  _selectedCoverUrl = uploaded.coverUrl;
+                });
+              }
+            } catch (err) {
+              debugPrint('Lỗi upload thumbnail lên server: $err');
+            }
+          }
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Đã tải ảnh bìa từ máy lên thành công!'),
+                content: Text('Đã tải ảnh bìa lên thành công!'),
                 backgroundColor: AppColors.success,
                 duration: Duration(seconds: 2),
               ),
@@ -229,11 +264,12 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     );
 
     if (selectedUrl != null && selectedUrl.trim().isNotEmpty) {
+      final trimmed = selectedUrl.trim();
       setState(() {
-        _selectedCoverUrl = selectedUrl.trim();
-        if (_selectedCoverUrl.startsWith('data:image')) {
+        _selectedCoverUrl = trimmed;
+        if (trimmed.startsWith('data:image')) {
           try {
-            final base64Part = _selectedCoverUrl.split(',').last;
+            final base64Part = trimmed.split(',').last;
             _coverImageBytes = base64Decode(base64Part);
           } catch (_) {
             _coverImageBytes = null;
@@ -242,6 +278,27 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           _coverImageBytes = null;
         }
       });
+
+      // Nếu đang chỉnh sửa podcast và vừa chọn ảnh máy tính, gọi API upload ngay
+      if (widget.editingPodcast != null && _coverImageBytes != null) {
+        try {
+          final repo = ref.read(creatorRepositoryProvider);
+          final uploaded = await repo.uploadPodcastThumbnailFile(
+            podcastId: widget.editingPodcast!.id,
+            fileBytes: _coverImageBytes!,
+            filename: 'cover.jpg',
+            mimeType: trimmed.startsWith('data:image/png') ? 'image/png' : 'image/jpeg',
+          );
+          if (uploaded != null && uploaded.coverUrl.isNotEmpty) {
+            setState(() {
+              _selectedCoverUrl = uploaded.coverUrl;
+            });
+          }
+        } catch (err) {
+          debugPrint('Lỗi upload thumbnail lên server: $err');
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -254,7 +311,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     }
   }
 
-  Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit({bool submitForReview = false}) async {
     final effectiveMedia = _audioFileName;
 
     if (effectiveMedia == null || effectiveMedia.isEmpty) {
@@ -339,7 +396,37 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     try {
       final repo = ref.read(creatorRepositoryProvider);
 
+      // Xử lý tạo Series mới nếu chọn "Khác"
+      String? effectiveSeriesId = _selectedSeriesId;
+      if (_selectedSeriesId == _otherSeriesKey) {
+        final customSeriesName = _customSeriesController.text.trim();
+        if (customSeriesName.isNotEmpty) {
+          final slug = customSeriesName
+              .toLowerCase()
+              .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+              .replaceAll(RegExp(r'^-|-$'), '');
+          try {
+            final createdSeries = await ref.read(creatorSeriesProvider.notifier).createSeries(
+              title: customSeriesName,
+              slug: slug.isNotEmpty ? slug : 'series-${DateTime.now().millisecondsSinceEpoch}',
+              categoryId: _selectedCategoryId ?? '00000000-0000-0000-0000-000000000001',
+              description: 'Tuyển tập $customSeriesName',
+            );
+            if (createdSeries != null) {
+              effectiveSeriesId = createdSeries.id;
+              _selectedSeriesId = createdSeries.id;
+            }
+          } catch (err) {
+            debugPrint('Lỗi tạo series mới: $err');
+          }
+        } else {
+          effectiveSeriesId = null;
+        }
+      }
+
       if (widget.editingPodcast != null) {
+        final bool shouldSubmit = submitForReview || _isResubmitting;
+
         final resultPodcast =
             await ref.read(creatorPodcastsProvider.notifier).updatePodcast(
                   id: widget.editingPodcast!.id,
@@ -347,7 +434,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                   description: _descController.text.trim(),
                   eraTag: _selectedEra,
                   categoryId: _selectedCategoryId,
-                  seriesId: _selectedSeriesId,
+                  seriesId: effectiveSeriesId,
                   sources: _sourcesController.text.trim(),
                   isExclusive: _isExclusive,
                   coverUrl: _selectedCoverUrl,
@@ -364,6 +451,25 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           ref.read(audioPlayerServiceProvider.notifier).setKnownDuration(resultPodcast.id, _detectedDuration!);
         }
 
+        // Upload Thumbnail (POST /api/creator/podcasts/{id}/thumbnail) nếu có ảnh bìa mới được chọn từ thiết bị
+        if (_coverImageBytes != null && _coverImageBytes!.isNotEmpty) {
+          try {
+            final ext = _selectedCoverUrl.startsWith('data:image/png') ? 'png' : 'jpg';
+            final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+            final withThumb = await repo.uploadPodcastThumbnailFile(
+              podcastId: resultPodcast.id,
+              fileBytes: _coverImageBytes!,
+              filename: 'cover.$ext',
+              mimeType: mime,
+            );
+            if (withThumb != null && withThumb.coverUrl.isNotEmpty) {
+              _selectedCoverUrl = withThumb.coverUrl;
+            }
+          } catch (thumbErr) {
+            debugPrint('Lỗi upload ảnh bìa: $thumbErr');
+          }
+        }
+
         // Upload PDF Reference if selected
         if (_pdfFileBytes != null && _selectedPdfFileName != null) {
           await repo.uploadPdfReferenceFile(
@@ -377,14 +483,42 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           ref.read(audioPlayerServiceProvider.notifier).cacheBytes(resultPodcast.id, _pickedMediaBytes!);
         }
 
+        if (shouldSubmit) {
+          await ref.read(creatorPodcastsProvider.notifier).submitPodcast(resultPodcast.id);
+        }
+
+        await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
+
         if (mounted) {
+          final wasPublished = widget.editingPodcast?.status == PodcastStatus.published;
+          final wasPending = widget.editingPodcast?.status == PodcastStatus.pendingAdmin;
+          final wasDraft = widget.editingPodcast?.status == PodcastStatus.draft;
+
+          String message = 'Cập nhật podcast thành công!';
+          String popResult = 'updated';
+
+          if (shouldSubmit) {
+            message = 'Đã gửi lại tập "${resultPodcast.title}" cho Admin duyệt thành công!';
+            popResult = 'resubmitted';
+          } else if (wasPublished) {
+            message = 'Tập podcast đã được chuyển về mục Bản nháp. Hãy bấm "Chờ Admin duyệt" để gửi Admin kiểm duyệt lại.';
+            popResult = 'published_to_draft';
+          } else if (wasPending) {
+            message = 'Đã cập nhật tập "${resultPodcast.title}" (vẫn ở mục Chờ Admin duyệt)!';
+            popResult = 'pending_updated';
+          } else if (wasDraft) {
+            message = 'Đã cập nhật Bản nháp "${resultPodcast.title}" thành công!';
+            popResult = 'draft_updated';
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Cập nhật podcast thành công!'),
+            SnackBar(
+              content: Text(message),
               backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 4),
             ),
           );
-          Navigator.of(context).pop();
+          Navigator.of(context).pop(popResult);
         }
       } else {
         // Step 4: POST /api/creator/podcasts (Draft)
@@ -408,11 +542,30 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           ref.read(audioPlayerServiceProvider.notifier).setKnownDuration(podcastId, _detectedDuration!);
         }
 
+        // Step 4.5: POST /api/creator/podcasts/{id}/thumbnail (Upload ảnh bìa nếu chọn từ thiết bị)
+        if (_coverImageBytes != null && _coverImageBytes!.isNotEmpty) {
+          try {
+            final ext = _selectedCoverUrl.startsWith('data:image/png') ? 'png' : 'jpg';
+            final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+            final withThumb = await repo.uploadPodcastThumbnailFile(
+              podcastId: podcastId,
+              fileBytes: _coverImageBytes!,
+              filename: 'cover.$ext',
+              mimeType: mime,
+            );
+            if (withThumb != null && withThumb.coverUrl.isNotEmpty) {
+              _selectedCoverUrl = withThumb.coverUrl;
+            }
+          } catch (thumbErr) {
+            debugPrint('Lỗi upload ảnh bìa: $thumbErr');
+          }
+        }
+
         // Step 5: PUT /api/creator/podcasts/{id}/series (Optional)
-        if (_selectedSeriesId != null && _selectedSeriesId!.isNotEmpty) {
+        if (effectiveSeriesId != null && effectiveSeriesId.isNotEmpty) {
           await repo.assignPodcastToSeries(
             podcastId: podcastId,
-            seriesId: _selectedSeriesId!,
+            seriesId: effectiveSeriesId,
           );
         }
 
@@ -505,123 +658,181 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.editingPodcast != null ? 'Sửa Podcast' : 'Đăng Podcast mới'),
+        title: Text(
+          _isResubmitting
+              ? 'Sửa & Gửi lại Podcast'
+              : (widget.editingPodcast != null ? 'Sửa Podcast' : 'Đăng Podcast mới'),
+        ),
         actions: [
           if (widget.editingPodcast != null)
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: TextButton.icon(
-                onPressed: _isSubmitting ? null : _handleSubmit,
-                icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
-                label: const Text('Lưu'),
+                onPressed: _isSubmitting ? null : () => _handleSubmit(submitForReview: _isResubmitting),
+                icon: Icon(
+                  _isResubmitting ? Icons.send_rounded : Icons.check_circle_outline_rounded,
+                  size: 18,
+                ),
+                label: Text(_isResubmitting ? 'Gửi duyệt' : 'Lưu'),
               ),
             ),
         ],
       ),
       body: isLimitReached && widget.editingPodcast == null
           ? _buildLimitReachedView(isDark)
-          : Stepper(
-              currentStep: _currentStep,
-              onStepTapped: (step) {
-                if (step < _currentStep) {
-                  setState(() => _currentStep = step);
-                }
-              },
-              onStepContinue: () {
-                if (_currentStep == 0) {
-                  final hasMedia = _audioFileName != null && _audioFileName!.isNotEmpty;
-                  if (!hasMedia) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                    return;
-                  }
-                  setState(() => _currentStep++);
-                } else if (_currentStep == 1) {
-                  final isValid = _step2FormKey.currentState?.validate() ?? false;
-                  final title = _titleController.text.trim();
-                  final desc = _descController.text.trim();
-                  if (!isValid || title.isEmpty || desc.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Vui lòng nhập đầy đủ tiêu đề và mô tả tập podcast'),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                    return;
-                  }
-                  if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Vui lòng chọn danh mục chủ đề'),
-                        backgroundColor: AppColors.error,
-                      ),
-                    );
-                    return;
-                  }
-                  setState(() => _currentStep++);
-                } else {
-                  _handleSubmit();
-                }
-              },
-              onStepCancel: () {
-                if (_currentStep > 0) {
-                  setState(() => _currentStep--);
-                } else {
-                  Navigator.of(context).pop();
-                }
-              },
-              controlsBuilder: (context, details) {
-                return Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.lg),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: AppButton(
-                          label: _currentStep == 2
-                              ? (widget.editingPodcast != null ? 'Lưu thay đổi' : 'Lưu vào Bản nháp')
-                              : 'Tiếp tục',
-                          isLoading: _isSubmitting,
-                          onPressed: details.onStepContinue,
-                        ),
-                      ),
-                      if (_currentStep > 0) ...[
-                        const SizedBox(width: AppSpacing.md),
+          : Column(
+              children: [
+                if (widget.editingPodcast?.status == PodcastStatus.rejected &&
+                    widget.editingPodcast?.rejectReason != null &&
+                    widget.editingPodcast!.rejectReason!.isNotEmpty)
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, 0),
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorContainer,
+                      borderRadius: AppSpacing.roundedSm,
+                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, size: 20, color: AppColors.error),
+                        const SizedBox(width: AppSpacing.sm),
                         Expanded(
-                          child: AppButton(
-                            label: 'Quay lại',
-                            type: AppButtonType.secondary,
-                            onPressed: details.onStepCancel,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Lý do từ chối kiểm duyệt của Admin:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.error,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.editingPodcast!.rejectReason!,
+                                style: const TextStyle(fontSize: 13, color: AppColors.error),
+                              ),
+                            ],
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                Expanded(
+                  child: Stepper(
+                    currentStep: _currentStep,
+                    onStepTapped: (step) {
+                      if (widget.editingPodcast != null || step < _currentStep) {
+                        setState(() => _currentStep = step);
+                      }
+                    },
+                    onStepContinue: () {
+                      if (_currentStep == 0) {
+                        final hasMedia = _audioFileName != null && _audioFileName!.isNotEmpty;
+                        if (!hasMedia) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() => _currentStep++);
+                      } else if (_currentStep == 1) {
+                        final isValid = _step2FormKey.currentState?.validate() ?? false;
+                        final title = _titleController.text.trim();
+                        final desc = _descController.text.trim();
+                        if (!isValid || title.isEmpty || desc.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Vui lòng nhập đầy đủ tiêu đề và mô tả tập podcast'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+                        if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Vui lòng chọn danh mục chủ đề'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+                        setState(() => _currentStep++);
+                      } else {
+                        _handleSubmit(submitForReview: _isResubmitting);
+                      }
+                    },
+                    onStepCancel: () {
+                      if (_currentStep > 0) {
+                        setState(() => _currentStep--);
+                      } else {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                    controlsBuilder: (context, details) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.lg),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: AppButton(
+                                label: _currentStep == 2
+                                    ? (_isResubmitting
+                                        ? 'Lưu & Gửi Admin duyệt'
+                                        : (widget.editingPodcast != null ? 'Lưu thay đổi' : 'Lưu vào Bản nháp'))
+                                    : 'Tiếp tục',
+                                icon: (_currentStep == 2 && _isResubmitting)
+                                    ? const Icon(Icons.send_rounded, size: 16)
+                                    : null,
+                                isLoading: _isSubmitting,
+                                onPressed: details.onStepContinue,
+                              ),
+                            ),
+                            if (_currentStep > 0) ...[
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: AppButton(
+                                  label: 'Quay lại',
+                                  type: AppButtonType.secondary,
+                                  onPressed: details.onStepCancel,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                    steps: [
+                      Step(
+                        title: const Text('Tệp âm thanh & Ảnh bìa'),
+                        isActive: _currentStep >= 0,
+                        state: (_audioFileName != null && _audioFileName!.isNotEmpty)
+                            ? StepState.complete
+                            : StepState.indexed,
+                        content: _buildStep1(isDark),
+                      ),
+                      Step(
+                        title: const Text('Thông tin nội dung'),
+                        isActive: _currentStep >= 1,
+                        state: _titleController.text.isNotEmpty ? StepState.complete : StepState.indexed,
+                        content: _buildStep2(isDark),
+                      ),
+                      Step(
+                        title: const Text('Tư liệu & Chế độ phát'),
+                        isActive: _currentStep >= 2,
+                        state: _sourcesController.text.isNotEmpty ? StepState.complete : StepState.indexed,
+                        content: _buildStep3(isDark),
+                      ),
                     ],
                   ),
-                );
-              },
-              steps: [
-                Step(
-                  title: const Text('Tệp âm thanh & Ảnh bìa'),
-                  isActive: _currentStep >= 0,
-                  state: (_audioFileName != null && _audioFileName!.isNotEmpty)
-                      ? StepState.complete
-                      : StepState.indexed,
-                  content: _buildStep1(isDark),
-                ),
-                Step(
-                  title: const Text('Thông tin nội dung'),
-                  isActive: _currentStep >= 1,
-                  state: _titleController.text.isNotEmpty ? StepState.complete : StepState.indexed,
-                  content: _buildStep2(isDark),
-                ),
-                Step(
-                  title: const Text('Tư liệu & Chế độ phát'),
-                  isActive: _currentStep >= 2,
-                  state: _sourcesController.text.isNotEmpty ? StepState.complete : StepState.indexed,
-                  content: _buildStep3(isDark),
                 ),
               ],
             ),
@@ -1006,23 +1217,77 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             builder: (context, ref, _) {
               final seriesList =
                   ref.watch(creatorSeriesProvider).value ?? [];
-              return DropdownButtonFormField<String?>(
-                initialValue: _selectedSeriesId,
-                decoration: const InputDecoration(
-                  hintText: 'Chọn Series liên quan (tùy chọn)',
-                  isDense: true,
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Không thuộc Series nào (Tập đơn lẻ)'),
+              final hasSelectedInList = _selectedSeriesId == null ||
+                  _selectedSeriesId == _otherSeriesKey ||
+                  seriesList.any((s) => s.id == _selectedSeriesId);
+              final dropdownValue = hasSelectedInList ? _selectedSeriesId : null;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  DropdownButtonFormField<String?>(
+                    initialValue: dropdownValue,
+                    decoration: const InputDecoration(
+                      hintText: 'Chọn Series liên quan (tùy chọn)',
+                      isDense: true,
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Không thuộc Series nào (Tập đơn lẻ)'),
+                      ),
+                      ...seriesList.map((s) => DropdownMenuItem<String?>(
+                            value: s.id,
+                            child: Text(s.title),
+                          )),
+                      DropdownMenuItem<String?>(
+                        value: _otherSeriesKey,
+                        child: Row(
+                          children: const [
+                            Icon(Icons.add_circle_outline_rounded,
+                                size: 18, color: AppColors.primaryLight),
+                            SizedBox(width: 8),
+                            Text(
+                              '+ Khác (Nhập tên Series mới...)',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onChanged: (val) => setState(() => _selectedSeriesId = val),
                   ),
-                  ...seriesList.map((s) => DropdownMenuItem<String?>(
-                        value: s.id,
-                        child: Text(s.title),
-                      )),
+                  if (_selectedSeriesId == _otherSeriesKey) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    AppTextField(
+                      label: 'Tên Series mới *',
+                      hint: 'Nhập tên tuyển tập / series mới cho podcast này...',
+                      controller: _customSeriesController,
+                      prefixIcon: const Icon(Icons.playlist_add_rounded, size: 20),
+                      validator: (v) {
+                        if (_selectedSeriesId == _otherSeriesKey &&
+                            (v == null || v.trim().isEmpty)) {
+                          return 'Vui lòng nhập tên series mới';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '💡 Series mới sẽ tự động được tạo và liên kết với tập podcast này khi lưu.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? AppColors.onSurfaceMutedDark
+                            : AppColors.onSurfaceMutedLight,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                 ],
-                onChanged: (val) => setState(() => _selectedSeriesId = val),
               );
             },
           ),

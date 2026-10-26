@@ -4,10 +4,10 @@ REST API for the Flutter application, built with Java 17, Maven, Spring Boot 4.1
 
 ## Admin and Staff operations
 
-See [Admin/Staff API guide](../docs/ADMIN_STAFF_API.md) for dashboard, user access,
+See the [Admin API guide](../docs/admin/README.md) and [Staff API guide](../docs/staff/README.md) for dashboard, user access,
 reports, moderation preview/history, appeals, contract disputes, membership plans,
 manual payment reconciliation/refunds and withdrawal review. Staff handles content;
-Admin handles users, roles and finance. AI moderation is deferred.
+Admin handles users, roles and finance. Podcast moderation uses Whisper transcripts and Gemini; a `SAFE` + `APPROVE` result automatically approves the podcast, while other outcomes stay in the Admin review queue.
 
 The additive schema migration is `db/migrations/2026-10-13_admin_operations.sql`.
 With the current `ddl-auto=update`, restarting applies entity schema additions.
@@ -48,7 +48,38 @@ $env:DB_PASSWORD = '<your PostgreSQL password>'
 mvn spring-boot:run
 ```
 
-The backend maps the latest ERD plus a supporting refresh-token table. Creator applications use `Creator_profile.verification_status`; there is no separate creator-application table. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds system roles and, in the default local `dev` profile, the shared development accounts described in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md).
+The backend maps the latest ERD plus a supporting refresh-token table. Creator applications use `Creator_profile.verification_status`; there is no separate creator-application table. Membership benefits are described in `Membership_Plan.description`. Wallet income records use `Wallet_Transaction` linked to the source `Payment`; `Payment_method` remains the payment channel recorded for that payment. Tables removed from the model are dropped by an explicit SQL migration; Hibernate `ddl-auto=update` does not drop tables or data. The application seeds system roles and, in the default local `dev` profile, the shared development accounts described in [`docs/TEST_ACCOUNTS.md`](../docs/TEST_ACCOUNTS.md).
+
+## Gói CC đăng ký với hệ thống
+
+Gói hệ thống dành cho Creator tách biệt với `/api/admin/membership-plans` (gói listener theo từng kênh). Gói hệ thống dùng chung cho tất cả CC và không có `creatorId` trong request tạo gói. Admin quản lý tại `/api/admin/creator-system-plans`: `GET` danh sách, `GET /{planId}`, `POST`, `PUT /{planId}`, `DELETE /{planId}`. DELETE ngừng bán gói (`INACTIVE`) để giữ lịch sử đăng ký; gói Free mặc định không thể xóa. PUT có thể kích hoạt lại gói.
+
+Lần đầu chạy, hệ thống tạo Free (0đ, tối đa 3 podcast có video/audio) và Plus (50.000 VND/30 ngày, đăng không giới hạn, có quyền livestream). Admin tự quản lý danh sách `benefits` của từng gói; giá trị mặc định chỉ là dữ liệu khởi tạo. Ví dụ request tạo/sửa Plus:
+
+```json
+{
+  "code": "PLUS",
+  "name": "Plus",
+  "description": "Gói CC trả phí",
+  "price": 50000,
+  "currency": "VND",
+  "durationDays": 30,
+  "status": "ACTIVE",
+  "benefits": [
+    { "key": "UPLOAD_LIMIT", "value": "unlimited", "description": "Đăng podcast không giới hạn" },
+    { "key": "LIVESTREAM", "value": "true", "description": "Quyền livestream khi tính năng ra mắt" },
+    { "key": "PRIORITY_SUPPORT", "value": "true", "description": "Ưu tiên hỗ trợ" }
+  ]
+}
+```
+
+`UPLOAD_LIMIT` nhận số nguyên không âm hoặc `unlimited`; thiếu key này nghĩa là không được upload. `LIVESTREAM` nhận `true` hoặc `false`. Hai quyền này được API hiểu; các key khác được lưu và trả về cho client, cần triển khai chức năng tương ứng mới có hiệu lực. Livestream hiện chỉ là quyền trong gói, chưa có API phát trực tiếp. Giá trị quyền lợi của lượt Plus đã mua được giữ đến khi gói hết hạn; sửa gói chỉ ảnh hưởng lượt mua sau. Sửa Free có hiệu lực ngay.
+
+Danh mục key/value đang hỗ trợ và cách backend áp dụng: [`docs/CREATOR_SYSTEM_PLAN_BENEFIT_KEYS.md`](../docs/CREATOR_SYSTEM_PLAN_BENEFIT_KEYS.md).
+
+CC dùng `GET /api/creator/system-plans` để xem gói, `GET /api/creator/system-plans/me` để xem quyền và lượt đăng còn lại, `POST /api/creator/system-plans/{planId}/subscribe` để giả lập thanh toán thành công và kích hoạt gói trả phí. Gói Free là mặc định, không cần đăng ký. Mỗi CC chỉ có một lượt đăng ký trả phí còn hiệu lực; sau khi hết hạn có thể mua tiếp. Upload video/audio lần đầu cho một podcast được tính là một lượt; thay file của podcast đó không tính thêm. Số lượt đã đăng không đặt lại khi Plus hết hạn. Thanh toán chỉ là mô phỏng, không thu tiền thật.
+
+Với `ddl-auto=update`, Hibernate tạo bảng mới khi khởi động. Nếu dùng `ddl-auto=validate`, áp dụng `db/migrations/2026-10-19_creator_system_plans.sql` trước khi chạy API.
 
 The server listens on `http://localhost:8081`. Check that it is running at:
 
@@ -66,9 +97,9 @@ It returns:
 
 Create an R2 bucket and an R2 API token with Object Read & Write permission for that bucket. Fill `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME` in `Backend/.env`. The endpoint format is `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`; R2 uses region `auto`. Spring Boot loads `.env` when started from either the repository root or the `Backend` directory. `Backend/.env` is ignored by Git; `.env.example` lists the variables. Restart the backend after changing the file.
 
-`POST /api/uploads` accepts authenticated `multipart/form-data` with the file field named `file`. It accepts image, video, and audio media and returns the bucket and `objectKey`; store the key in the podcast or profile record. `publicUrl` is returned when `R2_PUBLIC_BASE_URL` points to the bucket's enabled R2.dev URL or custom domain, and is `null` while the bucket is private. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
+Create a draft podcast first, then upload its cover through `POST /api/creator/podcasts/{podcastId}/thumbnail` with authenticated `multipart/form-data` and the file field named `file`. The response is the updated podcast with `thumbnailUrl`. Set `R2_PUBLIC_BASE_URL` to the bucket's enabled R2.dev URL or custom domain so clients can display the uploaded cover. The upload limit defaults to 100 MB and can be changed with `MEDIA_UPLOAD_MAX_FILE_SIZE`.
 
-To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its video with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. An Admin reviews the queue at `GET /api/admin/podcasts/pending-review` and approves or rejects it. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series. Images can still be uploaded through `POST /api/uploads`.
+To use the Creator video flow in Swagger, log in with an approved Creator account and authorize with its `accessToken`. Create a draft podcast with `POST /api/creator/podcasts` using a `categoryId` and without a series. Upload its cover with `POST /api/creator/podcasts/{podcastId}/thumbnail` and its video or audio with `POST /api/creator/podcasts/{podcastId}/video`, then submit it with `POST /api/creator/podcasts/{podcastId}/submit`. Gemini automatically approves podcasts when its completed result is `SAFE` with recommendation `APPROVE`; an Admin reviews remaining cases at `GET /api/admin/podcasts/pending-review`. The Creator can later assign an existing podcast to a series with `PUT /api/creator/podcasts/{podcastId}/series` and body `{"seriesId":"<UUID>"}`; `DELETE` on the same route removes it from the series.
 
 For Flutter on an Android emulator, use `http://10.0.2.2:8081` as the API base URL. For Flutter on a physical device, use the computer's LAN IP address and ensure both devices are on the same network.
 
@@ -78,7 +109,7 @@ All `/api` routes below require `Authorization: Bearer <accessToken>`, except he
 
 | Feature | Routes |
 |---|---|
-| Explore | `GET /api/podcasts?q=&categoryId=&creatorId=&seriesId=&page=0&size=20`, `GET /api/podcasts/{podcastId}`, `GET /api/categories`, `GET /api/creators`, `GET /api/creators/{creatorId}` |
+| Explore | `GET /api/podcasts?q=&categoryId=&creatorId=&seriesId=&page=0&size=20`, `GET /api/podcasts/{podcastId}`, `GET /api/categories`, `GET /api/creators?q=channelName`, `GET /api/creators/{creatorId}` |
 | Playback/history | `GET /api/podcasts/{podcastId}/playback`; `PUT /api/podcasts/{podcastId}/listening-progress`; `GET /api/me/listening-history`; `GET/DELETE /api/me/listening-history/{podcastId}` |
 | Likes | `GET /api/podcasts/{podcastId}/likes`; `PUT/DELETE /api/podcasts/{podcastId}/like` |
 | Comments | `GET/POST /api/podcasts/{podcastId}/comments`; `GET /api/podcasts/{podcastId}/comments/stream` (SSE); `PUT/DELETE /api/comments/{commentId}` |
@@ -87,6 +118,8 @@ All `/api` routes below require `Authorization: Bearer <accessToken>`, except he
 | Saved podcasts | `GET /api/me/saved-podcasts`; `PUT/DELETE /api/me/saved-podcasts/{podcastId}` |
 | Membership | `GET /api/creators/{creatorId}/membership-plans`; `GET/POST /api/me/subscriptions`; `DELETE /api/me/subscriptions/{subscriptionId}` |
 | Creator requests | `GET /api/me/series-requests`; `POST /api/creators/{creatorId}/series-requests`; `PUT/DELETE /api/me/series-requests/{requestId}` |
+
+Search channels with `GET /api/creators?q=history`. The optional `q` matches part of `channelName` without case sensitivity and returns approved Creator channels sorted by name. Omitting `q` keeps the full list response. Each item includes `creatorProfileId`, `channelName`, `description`, `avatarUrl`, and `websiteUrl`; use `creatorProfileId` with `GET /api/podcasts?creatorId=<UUID>` to list that channel's published podcasts.
 
 Membership checkout currently creates a `PENDING` subscription and payment record. It does not grant access or mark payment successful; connect a payment provider and verify its signed callback before enabling membership. Listener series requests start with a zero request fee; any paid custom-production contract belongs to Flow 4. The `is_exclusive` column defaults to `false` and is added by Hibernate `ddl-auto=update` or `db/migrations/2026-10-12_add_podcast_exclusive.sql`. For exclusive media, store the R2 object key in `Podcast.media_url` and keep the R2 bucket private; playback responses use a five-minute signed URL.
 
@@ -124,7 +157,7 @@ A logged-in Listener submits a channel application through `POST /api/creator-ap
 
 An Admin approves with `POST /api/admin/creator-applications/{applicationId}/approve` (optional `note`) or rejects with `POST /api/admin/creator-applications/{applicationId}/reject` (required `note`). Approval changes `Creator_profile.verification_status` to `APPROVED` and the user's role to `CREATOR`; requests under `/api/creator/**` require that role. The account should refresh its JWT or log in again to receive a token containing the new role.
 
-Development credentials and the startup seeding behavior are documented in [`docs/DEV_ACCOUNTS.md`](../docs/DEV_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role and cannot access `/api/admin/**`.
+Development credentials and the startup seeding behavior are documented in [`docs/TEST_ACCOUNTS.md`](../docs/TEST_ACCOUNTS.md). The seeded staff accounts use the distinct `STAFF` role. Staff may call shared dashboard, podcast moderation, report, and podcast appeal endpoints under `/api/admin/**`; other admin endpoints remain Admin-only.
 
 ```sql
 UPDATE "User"
@@ -157,7 +190,7 @@ Approval creates one `Payment` with status `PENDING` and returns its ID. This pr
 
 Apply `db/migrations/2026-10-13_z_creator_wallet_payout.sql` to an existing database after `db/migrations/2026-10-13_podcast_request_milestones.sql` and before deploying wallet and payout endpoints. The migration adds the held balance, payout-account reference fields, the verified payout-account table, ledger idempotency constraints, and non-negative wallet checks.
 
-All endpoints require a JWT. `/api/creator/**` requires the `CREATOR` role and `/api/admin/**` requires the `ADMIN` role. Wallets are created with `USD` currency on first access; this workflow does not perform currency conversion.
+Protected endpoints require a JWT. `/api/creator/**` requires the `CREATOR` role. Shared dashboard, podcast moderation, report, and podcast appeal endpoints under `/api/admin/**` accept `ADMIN` or `STAFF`; other `/api/admin/**` endpoints require `ADMIN`. Wallets are created with `USD` currency on first access; this workflow does not perform currency conversion.
 
 - `POST /api/creator/wallet/release-funds` — Idempotently transfers wallet earnings for `PAID` payments whose milestone is `APPROVED`. A pending payment from milestone approval is not eligible; a payment provider must first confirm it as paid. Response includes the number and total amount released and the updated balance.
 - `GET /api/creator/wallet/balance` — Returns available, held, and total balance.

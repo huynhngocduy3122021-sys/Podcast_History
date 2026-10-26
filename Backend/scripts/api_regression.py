@@ -180,8 +180,7 @@ class Regression:
         return pid
     def publish(self, pid, reviewer="admin_test"):
         self.post(f"/api/creator/podcasts/{pid}/submit", "creator_test")
-        prefix = "/api/staff" if reviewer.startswith("staff") else "/api/admin"
-        self.post(f"{prefix}/podcasts/{pid}/approve", reviewer, NOTE)
+        self.post(f"/api/admin/podcasts/{pid}/approve", reviewer, NOTE)
     def setup(self):
         spec = self.get("/v3/api-docs", None)
         self.routes = [(method.upper(), path) for path, methods in spec["paths"].items() for method in methods if method in {"get","post","put","patch","delete"}]
@@ -235,14 +234,14 @@ class Regression:
         rp = f"/api/creator/podcasts/{pid}/references/{rid}"
         self.call("PUT", rp, "creator_test", {"referenceType":"PDF","title":"Updated source"})
         self.post(rp+"/file", "creator_test", upload=("source.pdf","application/pdf",PDF))
-        for prefix, actor in [('admin','admin_test'),('staff','staff_test')]:
-            self.get(f'/api/{prefix}/podcasts/{pid}/references/{rid}/file', actor)
+        for actor in ['admin_test','staff_test']:
+            self.get(f'/api/admin/podcasts/{pid}/references/{rid}/file', actor)
         self.get(rp, "creator_test")
         self.get(rp+"/file", "creator_test")
         self.get(rp+"/file", "creator_other", expected=404)
         self.publish(pid, "staff_test")
         self.get(f"/api/admin/podcasts/{pid}/preview", "admin_test")
-        self.get(f"/api/staff/podcasts/{pid}/preview", "staff_test")
+        self.get(f"/api/admin/podcasts/{pid}/preview", "staff_test")
         self.post(f"/api/admin/podcasts/{pid}/approve", "admin_test", NOTE, expected=409)
         playback = self.get(f"/api/podcasts/{pid}/playback", "listener_test")
         self.check("X-Amz-Signature" in playback["playbackUrl"], "Private R2 playback is signed")
@@ -289,9 +288,9 @@ class Regression:
         self.ids["reportId"]=report["reportId"]
         self.call("PATCH",f"/api/me/reports/{report['reportId']}","listener_test",{"reasonCode":"SPAM","description":"Please check"})
         self.get("/api/me/reports", "listener_test")
-        self.post(f"/api/staff/reports/{report['reportId']}/claim", "staff_test")
-        self.post(f"/api/staff/reports/{report['reportId']}/resolve", "staff_other", {"action":"DISMISS",**NOTE},expected=409)
-        self.post(f"/api/staff/reports/{report['reportId']}/resolve", "staff_test", {"action":"DISMISS",**NOTE})
+        self.post(f"/api/admin/reports/{report['reportId']}/claim", "staff_test")
+        self.post(f"/api/admin/reports/{report['reportId']}/resolve", "staff_other", {"action":"DISMISS",**NOTE},expected=409)
+        self.post(f"/api/admin/reports/{report['reportId']}/resolve", "staff_test", {"action":"DISMISS",**NOTE})
         self.call("DELETE",f"/api/me/reports/{report['reportId']}","listener_test",expected=409)
         withdrawn=self.post("/api/reports","listener_test",{"targetType":"PODCAST","targetId":pid,"reasonCode":"SPAM"},expected=201)
         self.call("DELETE",f"/api/me/reports/{withdrawn['reportId']}","listener_test",expected=204)
@@ -342,7 +341,7 @@ class Regression:
         print("Membership reconciliation, cancellation and refund passed",flush=True)
     def moderation(self):
         pid=self.ids['podcastId']
-        self.post(f"/api/staff/podcasts/{pid}/hide","staff_test",NOTE,expected=204)
+        self.post(f"/api/admin/podcasts/{pid}/hide","staff_test",NOTE,expected=204)
         self.get(f"/api/podcasts/{pid}/playback","listener_test",expected=404)
         appeal=self.post(f"/api/creator/podcasts/{pid}/appeals","creator_test",NOTE,expected=201)
         self.ids['appealId']=appeal['appealId']
@@ -350,8 +349,8 @@ class Regression:
         self.post(f"/api/admin/podcast-appeals/{appeal['appealId']}/resolve","admin_test",{"decision":"REJECT",**NOTE})
         appeal=self.post(f"/api/creator/podcasts/{pid}/appeals","creator_test",NOTE,expected=201)
         self.ids['appealId']=appeal['appealId']
-        self.post(f"/api/staff/podcast-appeals/{appeal['appealId']}/resolve","staff_test",{"decision":"ACCEPT",**NOTE})
-        self.post(f"/api/staff/podcasts/{pid}/reject","staff_test",NOTE)
+        self.post(f"/api/admin/podcast-appeals/{appeal['appealId']}/resolve","staff_test",{"decision":"ACCEPT",**NOTE})
+        self.post(f"/api/admin/podcasts/{pid}/reject","staff_test",NOTE)
         self.post(f"/api/creator/podcasts/{pid}/submit","creator_test")
         self.post(f"/api/admin/podcasts/{pid}/approve","admin_test",NOTE)
         self.post(f"/api/admin/podcasts/{pid}/hide","admin_test",NOTE,expected=204)
@@ -476,15 +475,18 @@ class Regression:
             route=method+' '+template;path=self.template_path(template)
             if route not in public:
                 self.call(method,path,None,{} if method in {'POST','PUT','PATCH','DELETE'} else None,expected=401,label='anonymous: '+route)
-            if template.startswith(('/api/admin/','/api/staff/','/api/creator/')):
+            if template.startswith(('/api/admin/','/api/creator/')):
                 self.call(method,path,'listener_test',{} if method in {'POST','PUT','PATCH','DELETE'} else None,expected=403,label='wrong-role: '+route)
-            if template.startswith('/api/admin/'):
+            shared = template == '/api/admin/dashboard' or template.startswith(('/api/admin/podcasts', '/api/admin/reports', '/api/admin/podcast-appeals'))
+            if template.startswith('/api/admin/') and not shared:
                 self.call(method,path,'staff_test',{} if method in {'POST','PUT','PATCH','DELETE'} else None,expected=403,label='staff cannot administer: '+route)
             if method=='GET' and not template.endswith('/comments/stream'):
-                actor='admin_test' if template.startswith('/api/admin/') else 'staff_test' if template.startswith('/api/staff/') else 'creator_test' if template.startswith('/api/creator/') else 'listener_test'
+                actor='admin_test' if template.startswith('/api/admin/') else 'creator_test' if template.startswith('/api/creator/') else 'listener_test'
                 # Sources were intentionally deleted earlier; fetching missing detail/file should be 404.
                 expected=[200,404] if '/references' in template or template.endswith('/listening-history/{podcastId}') or template == '/api/creator-applications/me' else 200
                 self.get(path,actor,expected=expected,label='read-catalog: '+route)
+                if shared:
+                    self.get(path,'staff_test',expected=expected,label='staff shared: '+route)
         _,headers=self.call('OPTIONS','/api/podcasts',headers={'Origin':'http://localhost:5173','Access-Control-Request-Method':'GET','Access-Control-Request-Headers':'authorization'})
         self.check(headers.get('Access-Control-Allow-Origin')=='http://localhost:5173','Allowed frontend CORS preflight')
         self.get('/api/podcasts/not-a-uuid','listener_test',expected=400)
@@ -495,10 +497,10 @@ class Regression:
     def cleanup_api(self):
         # Remaining mutation routes, on isolated disposable records only.
         pid=self.ids['privateId']
-        self.call('DELETE',f'/api/staff/podcasts/{pid}','staff_test',NOTE,expected=204)
+        self.call('DELETE',f'/api/admin/podcasts/{pid}','staff_test',NOTE,expected=204)
         pid=self.ids['podcastId']
-        self.post(f'/api/staff/podcasts/{pid}/hide','staff_test',NOTE,expected=204)
-        self.post(f'/api/staff/podcasts/{pid}/restore','staff_test',NOTE,expected=204)
+        self.post(f'/api/admin/podcasts/{pid}/hide','staff_test',NOTE,expected=204)
+        self.post(f'/api/admin/podcasts/{pid}/restore','staff_test',NOTE,expected=204)
         self.call('DELETE',f'/api/admin/podcasts/{pid}','admin_test',NOTE,expected=204)
         self.call('DELETE',f'/api/creator/podcasts/{pid}','creator_test')
         self.call('DELETE',f"/api/creator/series/{self.ids['seriesId']}",'creator_test')

@@ -119,6 +119,7 @@ class CreatorPodcast {
   final int listensCount;
   final int likesCount;
   final int commentsCount;
+  final bool likedByMe;
   final PodcastStatus status;
   final String? rejectReason;
   final double? aiModerationScore; // 0.0 -> 1.0
@@ -142,6 +143,7 @@ class CreatorPodcast {
     required this.listensCount,
     required this.likesCount,
     required this.commentsCount,
+    this.likedByMe = false,
     required this.status,
     this.rejectReason,
     this.aiModerationScore,
@@ -166,6 +168,7 @@ class CreatorPodcast {
     int? listensCount,
     int? likesCount,
     int? commentsCount,
+    bool? likedByMe,
     PodcastStatus? status,
     String? rejectReason,
     double? aiModerationScore,
@@ -189,6 +192,7 @@ class CreatorPodcast {
       listensCount: listensCount ?? this.listensCount,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
+      likedByMe: likedByMe ?? this.likedByMe,
       status: status ?? this.status,
       rejectReason: rejectReason ?? this.rejectReason,
       aiModerationScore: aiModerationScore ?? this.aiModerationScore,
@@ -489,6 +493,8 @@ class StudioComment {
   final bool isPinned;
   final bool isHidden;
   final int likesCount;
+  final bool likedByMe;
+  final String? podcastId;
 
   const StudioComment({
     required this.id,
@@ -501,20 +507,66 @@ class StudioComment {
     this.isPinned = false,
     this.isHidden = false,
     this.likesCount = 0,
+    this.likedByMe = false,
+    this.podcastId,
   });
 
-  StudioComment copyWith({bool? isPinned, bool? isHidden}) {
+  StudioComment copyWith({
+    String? id,
+    String? podcastTitle,
+    String? authorName,
+    String? authorAvatar,
+    String? content,
+    int? timestampSeconds,
+    DateTime? createdAt,
+    bool? isPinned,
+    bool? isHidden,
+    int? likesCount,
+    bool? likedByMe,
+    String? podcastId,
+  }) {
     return StudioComment(
-      id: id,
-      podcastTitle: podcastTitle,
-      authorName: authorName,
-      authorAvatar: authorAvatar,
-      content: content,
-      timestampSeconds: timestampSeconds,
-      createdAt: createdAt,
+      id: id ?? this.id,
+      podcastTitle: podcastTitle ?? this.podcastTitle,
+      authorName: authorName ?? this.authorName,
+      authorAvatar: authorAvatar ?? this.authorAvatar,
+      content: content ?? this.content,
+      timestampSeconds: timestampSeconds ?? this.timestampSeconds,
+      createdAt: createdAt ?? this.createdAt,
       isPinned: isPinned ?? this.isPinned,
       isHidden: isHidden ?? this.isHidden,
-      likesCount: likesCount,
+      likesCount: likesCount ?? this.likesCount,
+      likedByMe: likedByMe ?? this.likedByMe,
+      podcastId: podcastId ?? this.podcastId,
+    );
+  }
+
+  factory StudioComment.fromJson(
+    Map<String, dynamic> json, {
+    String? fallbackPodcastTitle,
+    String? fallbackPodcastId,
+  }) {
+    final statusStr = json['status']?.toString().toUpperCase() ?? '';
+    return StudioComment(
+      id: json['commentId']?.toString() ?? json['id']?.toString() ?? '',
+      podcastTitle: json['podcastTitle']?.toString() ?? fallbackPodcastTitle ?? 'Podcast',
+      podcastId: json['podcastId']?.toString() ?? fallbackPodcastId,
+      authorName: json['displayName']?.toString() ??
+          json['username']?.toString() ??
+          json['authorName']?.toString() ??
+          'Thính giả',
+      authorAvatar: json['avatarUrl']?.toString() ??
+          json['authorAvatar']?.toString() ??
+          '',
+      content: json['content']?.toString() ?? '',
+      timestampSeconds: (json['timestampSeconds'] as num?)?.toInt() ?? 0,
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      isPinned: json['isPinned'] == true,
+      isHidden: statusStr == 'HIDDEN' || json['isHidden'] == true,
+      likesCount: (json['likeCount'] as num?)?.toInt() ??
+          (json['likesCount'] as num?)?.toInt() ??
+          0,
+      likedByMe: json['likedByMe'] == true,
     );
   }
 }

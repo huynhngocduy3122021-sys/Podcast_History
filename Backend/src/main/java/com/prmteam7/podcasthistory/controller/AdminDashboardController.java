@@ -11,8 +11,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping({"/api/admin/dashboard", "/api/staff/dashboard"})
-@Tag(name = "Admin and Staff - dashboard")
+@RequestMapping("/api/admin/dashboard")
+@Tag(name = "Admin - dashboard", description = "Admin và Staff cùng xem dashboard")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminDashboardController {
   private final AdminDashboardService service;

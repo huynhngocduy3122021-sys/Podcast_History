@@ -30,6 +30,7 @@ import com.prmteam7.podcasthistory.dto.request.ListenerRequests.ReportUpdate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestCreate;
 import com.prmteam7.podcasthistory.dto.request.ListenerRequests.SeriesRequestUpdate;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentItem;
+import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentLikeSummary;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CreatorItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.FollowItem;
 import com.prmteam7.podcasthistory.dto.response.ListenerResponses.LikeSummary;
@@ -160,10 +161,32 @@ public class ListenerFlowController {
     @GetMapping("/podcasts/{podcastId}/comments")
     @Operation(summary = "Xem bình luận của podcast")
     public Page<CommentItem> getComments(
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID podcastId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return listenerFlowService.getComments(podcastId, page, size);
+        return listenerFlowService.getComments(userId(jwt), podcastId, page, size);
+    }
+
+    @GetMapping("/comments/{commentId}/likes")
+    @Operation(summary = "Xem lượt thích của bình luận và trạng thái của người dùng")
+    public CommentLikeSummary getCommentLikes(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID commentId) {
+        return listenerFlowService.getCommentLikeSummary(userId(jwt), commentId);
+    }
+
+    @PutMapping("/comments/{commentId}/like")
+    @Operation(summary = "Thích bình luận; gọi lặp không tạo lượt thích trùng")
+    public CommentLikeSummary likeComment(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID commentId) {
+        return listenerFlowService.likeComment(userId(jwt), commentId);
+    }
+
+    @DeleteMapping("/comments/{commentId}/like")
+    @Operation(summary = "Bỏ thích bình luận; gọi lặp là an toàn")
+    public CommentLikeSummary unlikeComment(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID commentId) {
+        return listenerFlowService.unlikeComment(userId(jwt), commentId);
     }
 
     @PostMapping("/podcasts/{podcastId}/comments")
