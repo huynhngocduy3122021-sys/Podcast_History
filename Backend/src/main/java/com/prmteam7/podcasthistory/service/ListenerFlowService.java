@@ -99,6 +99,7 @@ public class ListenerFlowService {
   private final SubscriptionRepository subscriptionRepository;
   private final PaymentRepository paymentRepository;
   private final SeriesRequestRepository seriesRequestRepository;
+  private final SepayService sepayService;
   private final R2PlaybackUrlService playbackUrlService;
   private final CommentRealtimeHub commentRealtimeHub;
   private final PackageFeatures packageFeatures;
@@ -121,6 +122,7 @@ public class ListenerFlowService {
       SubscriptionRepository subscriptionRepository,
       PaymentRepository paymentRepository,
       SeriesRequestRepository seriesRequestRepository,
+      SepayService sepayService,
       R2PlaybackUrlService playbackUrlService,
       CommentRealtimeHub commentRealtimeHub,
       PackageFeatures packageFeatures,
@@ -141,6 +143,7 @@ public class ListenerFlowService {
     this.subscriptionRepository = subscriptionRepository;
     this.paymentRepository = paymentRepository;
     this.seriesRequestRepository = seriesRequestRepository;
+    this.sepayService = sepayService;
     this.playbackUrlService = playbackUrlService;
     this.commentRealtimeHub = commentRealtimeHub;
     this.packageFeatures = packageFeatures;
@@ -558,10 +561,16 @@ public class ListenerFlowService {
     payment.setAmount(plan.getPrice());
     payment.setCurrency(plan.getCurrency());
     payment.setStatus("PENDING");
+    payment.setProvider("SEPAY");
+    String paymentCode = sepayService.generatePaymentCode();
+    payment.setPaymentCode(paymentCode);
+    String qrImageUrl = sepayService.createQrImageUrl(payment.getAmount(), paymentCode);
     payment = paymentRepository.save(payment);
     return new MembershipCheckoutItem(
         subscription.getSubscriptionId(),
         payment.getPaymentId(),
+        payment.getPaymentCode(),
+        qrImageUrl,
         payment.getAmount(),
         payment.getCurrency(),
         subscription.getStatus(),
