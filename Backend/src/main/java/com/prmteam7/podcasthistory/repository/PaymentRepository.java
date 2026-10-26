@@ -58,6 +58,8 @@ public interface PaymentRepository
 
   boolean existsByProviderTransactionId(String reference);
 
+  Optional<Payment> findByProviderTransactionId(String providerTransactionId);
+
   boolean existsByRefundReference(String reference);
 
   @org.springframework.data.jpa.repository.Query(
