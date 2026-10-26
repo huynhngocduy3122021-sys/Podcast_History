@@ -182,6 +182,7 @@ class _ListenerLivestreamViewerPageState
   RtcEngine? _engine;
   VideoViewController? _videoController;
   int? _remoteUid;
+  bool _hasVideoFrame = false;
   bool _loading = true;
   String? _error;
   ListenerAgoraJoin? _join;
@@ -214,6 +215,7 @@ class _ListenerLivestreamViewerPageState
             if (!mounted) return;
             setState(() {
               _remoteUid = uid;
+              _hasVideoFrame = false;
               _videoController = VideoViewController.remote(
                 rtcEngine: engine,
                 canvas: VideoCanvas(uid: uid),
@@ -222,7 +224,24 @@ class _ListenerLivestreamViewerPageState
             });
           },
           onUserOffline: (_, uid, _) {
-            if (mounted && _remoteUid == uid) setState(() => _remoteUid = null);
+            if (mounted && _remoteUid == uid) {
+              setState(() {
+                _remoteUid = null;
+                _hasVideoFrame = false;
+              });
+            }
+          },
+          onFirstRemoteVideoFrame: (_, uid, _, _, _) {
+            if (mounted && _remoteUid == uid) {
+              setState(() => _hasVideoFrame = true);
+            }
+          },
+          onRemoteVideoStateChanged: (_, uid, state, _, _) {
+            if (mounted && _remoteUid == uid &&
+                (state == RemoteVideoState.remoteVideoStateStopped ||
+                    state == RemoteVideoState.remoteVideoStateFailed)) {
+              setState(() => _hasVideoFrame = false);
+            }
           },
           onTokenPrivilegeWillExpire: (_, _) async {
             try {
@@ -301,7 +320,20 @@ class _ListenerLivestreamViewerPageState
                     ),
                   )
                 : _remoteUid != null && _videoController != null
-                ? AgoraVideoView(controller: _videoController!)
+                ? Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      AgoraVideoView(controller: _videoController!),
+                      Center(
+                        child: _hasVideoFrame
+                            ? const SizedBox.shrink()
+                            : const Text(
+                                'Creator đang phát âm thanh, chưa có hình ảnh.',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                      ),
+                    ],
+                  )
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -310,7 +342,7 @@ class _ListenerLivestreamViewerPageState
                       Text(
                         _loading
                             ? 'Đang kết nối tới livestream…'
-                            : 'Creator chưa bật camera hoặc đã rời phòng.',
+                            : 'Đang chờ Creator vào phòng phát.',
                         style: const TextStyle(color: Colors.white),
                       ),
                     ],
@@ -346,7 +378,7 @@ class _StateCard extends StatelessWidget {
           Icon(icon, size: 42),
           const SizedBox(height: 12),
           Text(message, textAlign: TextAlign.center),
-          if (action != null) action!,
+          ?action,
         ],
       ),
     ),

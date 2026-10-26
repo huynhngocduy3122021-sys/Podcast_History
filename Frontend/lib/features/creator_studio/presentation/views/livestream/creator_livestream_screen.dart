@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:podcast_history/core/network/api_client.dart' show ApiException;
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
@@ -33,6 +34,7 @@ class _CreatorLivestreamScreenState
   bool _isLoading = false;
   bool _isMuted = false;
   bool _isVideoDisabled = false;
+  bool _cameraUnavailable = false;
   bool _isSwitchingCamera = false;
   String _connectionStatus = 'Sẵn sàng';
 
@@ -77,6 +79,8 @@ class _CreatorLivestreamScreenState
 
   Future<bool> _requestPermissions() async {
     if (kIsWeb) {
+      _isVideoDisabled = false;
+      _cameraUnavailable = false;
       return true;
     }
     final statuses = await [
@@ -87,14 +91,16 @@ class _CreatorLivestreamScreenState
     final cameraGranted = statuses[Permission.camera]?.isGranted ?? false;
     final micGranted = statuses[Permission.microphone]?.isGranted ?? false;
 
-    if (!cameraGranted || !micGranted) {
+    if (!micGranted) {
       if (mounted) {
         _showErrorSnackBar(
-          'Vui lòng cấp quyền truy cập Camera và Microphone để phát livestream.',
+          'Vui lòng cấp quyền Microphone để phát livestream.',
         );
       }
       return false;
     }
+    _isVideoDisabled = !cameraGranted;
+    _cameraUnavailable = !cameraGranted;
     return true;
   }
 
@@ -146,13 +152,27 @@ class _CreatorLivestreamScreenState
       await _engine!.setClientRole(
         role: ClientRoleType.clientRoleBroadcaster,
       );
-      await _engine!.enableVideo();
-      await _engine!.startPreview();
-
-      _videoViewController = VideoViewController(
-        rtcEngine: _engine!,
-        canvas: const VideoCanvas(uid: 0),
-      );
+      await _engine!.enableAudio();
+      if (!_isVideoDisabled) {
+        try {
+          await _engine!.enableVideo();
+          await _engine!.startPreview();
+          _videoViewController = VideoViewController(
+            rtcEngine: _engine!,
+            canvas: const VideoCanvas(uid: 0),
+          );
+        } catch (cameraError) {
+          debugPrint('Không thể mở camera, tiếp tục phát audio: $cameraError');
+          _isVideoDisabled = true;
+          _cameraUnavailable = true;
+          try {
+            await _engine!.disableVideo();
+          } catch (_) {}
+          if (mounted) {
+            _showErrorSnackBar('Không mở được camera. Livestream sẽ phát âm thanh.');
+          }
+        }
+      }
 
       setState(() {
         _isEngineReady = true;
@@ -251,10 +271,10 @@ class _CreatorLivestreamScreenState
         token: join.token,
         channelId: join.channelName,
         userAccount: join.userAccount,
-        options: const ChannelMediaOptions(
+        options: ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-          publishCameraTrack: true,
+          publishCameraTrack: !_isVideoDisabled,
           publishMicrophoneTrack: true,
         ),
       );
@@ -300,10 +320,10 @@ class _CreatorLivestreamScreenState
         token: join.token,
         channelId: join.channelName,
         userAccount: join.userAccount,
-        options: const ChannelMediaOptions(
+        options: ChannelMediaOptions(
           clientRoleType: ClientRoleType.clientRoleBroadcaster,
           channelProfile: ChannelProfileType.channelProfileLiveBroadcasting,
-          publishCameraTrack: true,
+          publishCameraTrack: !_isVideoDisabled,
           publishMicrophoneTrack: true,
         ),
       );
@@ -481,9 +501,47 @@ class _CreatorLivestreamScreenState
 
   Future<void> _toggleVideo() async {
     if (_engine == null) return;
+    if (_isVideoDisabled && _videoViewController == null) {
+      if (!kIsWeb && !(await Permission.camera.request()).isGranted) {
+        _showErrorSnackBar('Cần cấp quyền Camera để bật hình ảnh.');
+        return;
+      }
+      VideoViewController? controller;
+      try {
+        await _engine!.enableVideo();
+        await _engine!.startPreview();
+        controller = VideoViewController(
+          rtcEngine: _engine!,
+          canvas: const VideoCanvas(uid: 0),
+        );
+        await _engine!.updateChannelMediaOptions(
+          const ChannelMediaOptions(publishCameraTrack: true),
+        );
+        if (!mounted) {
+          await controller.dispose();
+          return;
+        }
+        setState(() {
+          _videoViewController = controller;
+          _isVideoDisabled = false;
+          _cameraUnavailable = false;
+        });
+      } catch (error) {
+        await controller?.dispose();
+        debugPrint('Không thể bật camera: $error');
+        try {
+          await _engine!.disableVideo();
+        } catch (_) {}
+        if (mounted) _showErrorSnackBar('Không mở được camera: $error');
+      }
+      return;
+    }
     final nextState = !_isVideoDisabled;
     await _engine!.muteLocalVideoStream(nextState);
-    setState(() => _isVideoDisabled = nextState);
+    setState(() {
+      _isVideoDisabled = nextState;
+      _cameraUnavailable = false;
+    });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -496,6 +554,10 @@ class _CreatorLivestreamScreenState
 
   Future<void> _switchCamera() async {
     if (_engine == null || _isSwitchingCamera) return;
+    if (_cameraUnavailable) {
+      _showErrorSnackBar('Chưa có camera để chuyển.');
+      return;
+    }
     _isSwitchingCamera = true;
     try {
       await _engine!.switchCamera();
@@ -543,8 +605,11 @@ class _CreatorLivestreamScreenState
   }
 
   void _handleApiError(dynamic error, String defaultPrefix) {
-    final errStr = error.toString();
-    if (errStr.contains('503') || errStr.toLowerCase().contains('agora')) {
+    final agoraConfigMissing = error is ApiException &&
+        error.statusCode == 503 &&
+        (error.message.contains('AGORA_APP_ID') ||
+            error.message.contains('Agora chưa được cấu hình'));
+    if (agoraConfigMissing) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -727,7 +792,11 @@ class _CreatorLivestreamScreenState
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      _isVideoDisabled ? 'Camera đang tắt' : 'Đang kết nối tín hiệu...',
+                      _cameraUnavailable
+                          ? 'Không có camera - đang phát âm thanh'
+                          : _isVideoDisabled
+                              ? 'Camera đang tắt'
+                              : 'Đang kết nối tín hiệu...',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
