@@ -143,15 +143,14 @@ public class SecurityConfig {
 
   @Bean
   org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
-      @Value(
-              "${APP_CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}")
-          String origins) {
+      @Value("${APP_CORS_ALLOWED_ORIGINS:}") String origins) {
     var config = new org.springframework.web.cors.CorsConfiguration();
-    config.setAllowedOriginPatterns(
-        java.util.Arrays.stream(origins.split(","))
+    var allowedOrigins = origins.isBlank() ? defaultCorsOrigins()
+        : java.util.Arrays.stream(origins.split(","))
             .map(String::trim)
             .filter(x -> !x.isBlank())
-            .toList());
+            .toList();
+    config.setAllowedOriginPatterns(allowedOrigins);
     config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(
         java.util.List.of("Authorization", "Content-Type", "Accept", "ngrok-skip-browser-warning"));
@@ -160,5 +159,18 @@ public class SecurityConfig {
     var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/api/**", config);
     return source;
+  }
+
+  private static java.util.List<String> defaultCorsOrigins() {
+    var origins = new java.util.ArrayList<>(java.util.List.of(
+        "http://localhost:[*]", "http://127.0.0.1:[*]",
+        "https://localhost:[*]", "https://127.0.0.1:[*]",
+        "http://10.*:[*]", "http://192.168.*:[*]",
+        "https://10.*:[*]", "https://192.168.*:[*]"));
+    for (int subnet = 16; subnet <= 31; subnet++) {
+      origins.add("http://172." + subnet + ".*:[*]");
+      origins.add("https://172." + subnet + ".*:[*]");
+    }
+    return origins;
   }
 }

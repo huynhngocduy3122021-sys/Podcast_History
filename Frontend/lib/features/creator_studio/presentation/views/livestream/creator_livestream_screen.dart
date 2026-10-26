@@ -418,9 +418,16 @@ class _CreatorLivestreamScreenState
           .endLivestream(idToEnd);
     } catch (e) {
       debugPrint('Error calling /end endpoint: $e');
-    } finally {
-      if (idToEnd == _activeLivestreamId) {
-        await _disposeAgoraEngine();
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _handleApiError(e, 'Không thể kết thúc livestream trên máy chủ');
+      }
+      return;
+    }
+
+    if (idToEnd == _activeLivestreamId) {
+      await _disposeAgoraEngine();
+      if (mounted) {
         setState(() {
           _isLive = false;
           _isLoading = false;
@@ -428,19 +435,19 @@ class _CreatorLivestreamScreenState
           _activeChannelName = null;
           _activeTitle = null;
         });
-      } else {
-        setState(() => _isLoading = false);
-        ref.read(creatorLivestreamsProvider.notifier).loadLivestreams();
       }
+    } else {
+      if (mounted) setState(() => _isLoading = false);
+      ref.read(creatorLivestreamsProvider.notifier).loadLivestreams();
+    }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã kết thúc buổi Livestream.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã kết thúc buổi Livestream.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
     }
   }
 
