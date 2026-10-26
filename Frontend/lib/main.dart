@@ -13,6 +13,7 @@ import 'core/utils/image_url_helper.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
+import 'features/livestream/listener_livestream_screen.dart';
 
 import 'api_service.dart';
 
@@ -119,33 +120,32 @@ class _AppState extends State<VietCastApp> {
       creatorRefreshTokenProvider.overrideWithValue(
         account?.session.refreshToken,
       ),
-      creatorSessionRefreshCallbackProvider.overrideWithValue(
-        (newAccessToken, newRefreshToken) {
-          final current = account;
-          if (current != null) {
-            _saveSession(
-              Account(
-                email: current.email,
-                name: current.name,
-                role: current.role,
-                session: AuthSession(
-                  user: current.session.user,
-                  accessToken: newAccessToken,
-                  refreshToken: newRefreshToken,
-                  tokenType: current.session.tokenType,
-                  expiresIn: current.session.expiresIn,
-                  refreshExpiresIn: current.session.refreshExpiresIn,
-                ),
+      creatorSessionRefreshCallbackProvider.overrideWithValue((
+        newAccessToken,
+        newRefreshToken,
+      ) {
+        final current = account;
+        if (current != null) {
+          _saveSession(
+            Account(
+              email: current.email,
+              name: current.name,
+              role: current.role,
+              session: AuthSession(
+                user: current.session.user,
+                accessToken: newAccessToken,
+                refreshToken: newRefreshToken,
+                tokenType: current.session.tokenType,
+                expiresIn: current.session.expiresIn,
+                refreshExpiresIn: current.session.refreshExpiresIn,
               ),
-            );
-          }
-        },
-      ),
-      creatorSessionExpiredCallbackProvider.overrideWithValue(
-        () {
-          logout();
-        },
-      ),
+            ),
+          );
+        }
+      }),
+      creatorSessionExpiredCallbackProvider.overrideWithValue(() {
+        logout();
+      }),
     ],
     child: MaterialApp(
       title: 'VietCast',
@@ -176,9 +176,7 @@ class _AppState extends State<VietCastApp> {
         );
       },
       home: account == null
-          ? AuthPage(
-              onAuthenticated: (value) => _saveSession(value),
-            )
+          ? AuthPage(onAuthenticated: (value) => _saveSession(value))
           : switch (account!.role) {
               UserRole.listener => Shell(
                 session: account!.session,
@@ -280,7 +278,11 @@ class Show {
   final String categoryName;
   final String? thumbnailUrl;
 
-  Show copyWith({String? duration, int? durationSeconds, String? thumbnailUrl}) => Show(
+  Show copyWith({
+    String? duration,
+    int? durationSeconds,
+    String? thumbnailUrl,
+  }) => Show(
     title,
     channel,
     period,
@@ -387,7 +389,9 @@ class _ShellState extends State<Shell> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
-    _audioDurationSubscription = _audioPlayer.onDurationChanged.listen((duration) {
+    _audioDurationSubscription = _audioPlayer.onDurationChanged.listen((
+      duration,
+    ) {
       final show = current;
       if (!mounted || show == null || duration.inSeconds <= 0) return;
       final updated = show.copyWith(
@@ -400,7 +404,9 @@ class _ShellState extends State<Shell> {
         if (index >= 0) shows[index] = updated;
       });
     });
-    _audioPositionSubscription = _audioPlayer.onPositionChanged.listen((position) {
+    _audioPositionSubscription = _audioPlayer.onPositionChanged.listen((
+      position,
+    ) {
       final show = current;
       if (!mounted || show == null) return;
       _latestPosition = position;
@@ -468,8 +474,9 @@ class _ShellState extends State<Shell> {
       notifications
         ..clear()
         ..addAll(
-          (results[9] as List<Map<String, dynamic>>)
-              .map(AppNotification.fromJson),
+          (results[9] as List<Map<String, dynamic>>).map(
+            AppNotification.fromJson,
+          ),
         );
       final creatorIds = creatorList
           .map((item) => item['creatorProfileId']?.toString())
@@ -594,7 +601,9 @@ class _ShellState extends State<Shell> {
       if (mounted) {
         setState(() => playing = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Podcast này chưa có audio trên máy chủ.')),
+          const SnackBar(
+            content: Text('Podcast này chưa có audio trên máy chủ.'),
+          ),
         );
       }
       return;
@@ -618,9 +627,9 @@ class _ShellState extends State<Shell> {
     } catch (error) {
       if (!mounted || request != _playRequest) return;
       setState(() => playing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể phát audio: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không thể phát audio: $error')));
     }
   }
 
@@ -660,11 +669,7 @@ class _ShellState extends State<Shell> {
     if (show?.id != null) {
       final seconds = _latestPosition.inSeconds;
       unawaited(
-        api.saveProgress(
-          show!.id!,
-          progressSeconds: seconds,
-          completed: false,
-        ),
+        api.saveProgress(show!.id!, progressSeconds: seconds, completed: false),
       );
     }
     _audioPlayer.dispose();
@@ -699,8 +704,9 @@ class _ShellState extends State<Shell> {
     }
     if (show.id != null) {
       final currentCount = likeCountsByPodcast[show.id!] ?? 0;
-      likeCountsByPodcast[show.id!] =
-          (currentCount + (liked ? 1 : -1)).clamp(0, 1 << 31).toInt();
+      likeCountsByPodcast[show.id!] = (currentCount + (liked ? 1 : -1))
+          .clamp(0, 1 << 31)
+          .toInt();
       unawaited(liked ? api.like(show.id!) : api.unlike(show.id!));
     }
   });
@@ -801,7 +807,9 @@ class _ShellState extends State<Shell> {
                 } catch (_) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Không thể tạo phiên thanh toán.')),
+                    const SnackBar(
+                      content: Text('Không thể tạo phiên thanh toán.'),
+                    ),
                   );
                 }
               },
@@ -927,7 +935,7 @@ class _ShellState extends State<Shell> {
         onOpen: openShow,
         onOpenCreator: _showCreatorProfile,
       ),
-      const LivestreamPage(),
+      LivestreamPage(api: api),
       LibraryPage(
         api: api,
         likedTitles: likedShowTitles,
@@ -1285,9 +1293,7 @@ class _TopicFilterState extends State<TopicFilter> {
   Widget build(BuildContext context) {
     final filtered = selectedCategoryId == null
         ? shows
-        : shows
-              .where((show) => show.categoryId == selectedCategoryId)
-              .toList();
+        : shows.where((show) => show.categoryId == selectedCategoryId).toList();
     final topicItems = [
       const <String, dynamic>{'categoryId': null, 'name': 'Tất cả'},
       ...widget.categories,
@@ -1306,7 +1312,8 @@ class _TopicFilterState extends State<TopicFilter> {
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, index) {
                 final category = topicItems[index];
-                final categoryId = category['categoryId']?.toString() ??
+                final categoryId =
+                    category['categoryId']?.toString() ??
                     category['id']?.toString();
                 final categoryName = category['name']?.toString() ?? '';
                 return ChoiceChip(
@@ -1491,10 +1498,7 @@ class Art extends StatelessWidget {
         const Positioned(
           top: 8,
           right: 8,
-          child: Chip(
-            label: Text('MEM'),
-            visualDensity: VisualDensity.compact,
-          ),
+          child: Chip(label: Text('MEM'), visualDensity: VisualDensity.compact),
         ),
     ],
   );
@@ -1610,9 +1614,10 @@ class _DiscoverState extends State<Discover> {
   Widget build(BuildContext context) {
     final result = shows
         .where(
-          (s) => '${s.title} ${s.channel}'.toLowerCase().contains(
-            query.toLowerCase(),
-          ) &&
+          (s) =>
+              '${s.title} ${s.channel}'.toLowerCase().contains(
+                query.toLowerCase(),
+              ) &&
               (selectedCategoryId == null ||
                   s.categoryId == selectedCategoryId),
         )
@@ -1663,7 +1668,8 @@ class _DiscoverState extends State<Discover> {
                   ),
                   ...widget.categories.map(
                     (category) => DropdownMenuItem<String?>(
-                      value: category['categoryId']?.toString() ??
+                      value:
+                          category['categoryId']?.toString() ??
                           category['id']?.toString(),
                       child: Text(category['name']?.toString() ?? ''),
                     ),
@@ -1752,7 +1758,9 @@ class _DiscoverState extends State<Discover> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(creatorSearchError ?? 'Không tìm thấy kênh phù hợp.'),
+                child: Text(
+                  creatorSearchError ?? 'Không tìm thấy kênh phù hợp.',
+                ),
               ),
             )
           else
@@ -1760,23 +1768,24 @@ class _DiscoverState extends State<Discover> {
               delegate: SliverChildBuilderDelegate((_, i) {
                 final creator = creatorResults[i];
                 final creatorId = creator['creatorProfileId']?.toString();
-                final name = creator['channelName']?.toString() ?? 'Content Creator';
+                final name =
+                    creator['channelName']?.toString() ?? 'Content Creator';
                 return Card(
                   margin: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                   child: ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.person_outline),
+                    ),
                     title: Text(name),
                     subtitle: Text(creator['description']?.toString() ?? ''),
                     onTap: creatorId == null
                         ? null
-                        : () => widget.onOpenCreator(Show(
-                              name,
-                              name,
-                              'Creator',
-                              '',
-                              const [Color(0xFF254A50), Color(0xFF93B4A4)],
-                              creatorId: creatorId,
-                            )),
+                        : () => widget.onOpenCreator(
+                            Show(name, name, 'Creator', '', const [
+                              Color(0xFF254A50),
+                              Color(0xFF93B4A4),
+                            ], creatorId: creatorId),
+                          ),
                   ),
                 );
               }, childCount: creatorResults.length),
@@ -2514,7 +2523,8 @@ class AppNotification {
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     final type = '${json['type'] ?? ''}'.toUpperCase();
-    final createdAt = DateTime.tryParse('${json['createdAt'] ?? ''}')?.toLocal();
+    final createdAt = DateTime.tryParse('${json['createdAt'] ?? ''}')
+        ?.toLocal();
     final message = '${json['message'] ?? ''}'.trim();
     final time = _notificationTime(createdAt);
     return AppNotification(
@@ -2524,10 +2534,10 @@ class AppNotification {
       icon: type.contains('COMMENT') || type.contains('LIKE')
           ? Icons.favorite_border
           : type.contains('MEMBERSHIP')
-              ? Icons.workspace_premium_outlined
-              : type.contains('PODCAST')
-                  ? Icons.mic_none
-                  : Icons.notifications_none,
+          ? Icons.workspace_premium_outlined
+          : type.contains('PODCAST')
+          ? Icons.mic_none
+          : Icons.notifications_none,
       read: json['read'] == true,
     );
   }
@@ -2720,33 +2730,14 @@ class _NotificationPanelState extends State<NotificationPanel> {
 }
 
 class LivestreamPage extends StatelessWidget {
-  const LivestreamPage({super.key});
+  const LivestreamPage({super.key, required this.api});
+
+  final ListenerApi api;
 
   @override
-  Widget build(BuildContext context) => PageFrame(
-    title: 'Livestream',
-    children: [
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.live_tv, size: 42),
-              const SizedBox(height: 12),
-              Text(
-                'Livestream sắp ra mắt',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Các buổi phát trực tiếp lịch sử và giao lưu với Creator sẽ xuất hiện tại đây.',
-              ),
-            ],
-          ),
-        ),
-      ),
-    ],
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Livestream')),
+    body: ListenerLivestreamScreen(api: api),
   );
 }
 
@@ -3268,7 +3259,7 @@ class UploadSheet extends StatelessWidget {
         const SizedBox(height: 12),
         const TextField(
           maxLines: 3,
-        decoration: InputDecoration(labelText: 'Mô tả'),
+          decoration: InputDecoration(labelText: 'Mô tả'),
         ),
         const SizedBox(height: 12),
         OutlinedButton.icon(
@@ -3651,21 +3642,27 @@ class _PlayerState extends State<Player> {
   @override
   void initState() {
     super.initState();
-    _positionSubscription = widget.audioPlayer.onPositionChanged.listen((value) {
+    _positionSubscription = widget.audioPlayer.onPositionChanged.listen((
+      value,
+    ) {
       if (!mounted) return;
       setState(() {
         position = value;
         progress = _progressFor(value, duration);
       });
     });
-    _durationSubscription = widget.audioPlayer.onDurationChanged.listen((value) {
+    _durationSubscription = widget.audioPlayer.onDurationChanged.listen((
+      value,
+    ) {
       if (!mounted) return;
       setState(() {
         duration = value;
         progress = _progressFor(position, value);
       });
     });
-    _playerStateSubscription = widget.audioPlayer.onPlayerStateChanged.listen((value) {
+    _playerStateSubscription = widget.audioPlayer.onPlayerStateChanged.listen((
+      value,
+    ) {
       if (!mounted) return;
       setState(() => playing = value == PlayerState.playing);
     });
@@ -3803,9 +3800,8 @@ class _PlayerState extends State<Player> {
         .fold<int>(0, (total, part) => total * 60 + (int.tryParse(part) ?? 0));
   }
 
-  Duration get _effectiveDuration => duration > Duration.zero
-      ? duration
-      : Duration(seconds: _durationSeconds);
+  Duration get _effectiveDuration =>
+      duration > Duration.zero ? duration : Duration(seconds: _durationSeconds);
 
   double get _currentProgress {
     if (duration > Duration.zero) {
@@ -3838,8 +3834,9 @@ class _PlayerState extends State<Player> {
           (comment) =>
               comment.time.isNotEmpty &&
               (comment.positionForDuration(_effectiveDuration.inSeconds) -
-                      _currentProgress)
-                  .abs() <= .04,
+                          _currentProgress)
+                      .abs() <=
+                  .04,
         )
         .toList();
     if (nearby.isEmpty) return null;
@@ -4051,11 +4048,12 @@ class _PlayerState extends State<Player> {
                   ),
                   if (timelineComment != null)
                     Positioned(
-                    left: (constraints.maxWidth *
-                            timelineComment!.positionForDuration(
-                              _effectiveDuration.inSeconds,
-                            ))
-                        .clamp(4.0, constraints.maxWidth - 210),
+                      left:
+                          (constraints.maxWidth *
+                                  timelineComment!.positionForDuration(
+                                    _effectiveDuration.inSeconds,
+                                  ))
+                              .clamp(4.0, constraints.maxWidth - 210),
                       top: 4,
                       child: CommentMarker(comment: timelineComment!),
                     ),
@@ -4513,10 +4511,7 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
             widget.onChanged(next);
           },
           activeColor: Colors.deepOrange,
-          title: const Text(
-            'Nghe sau',
-            style: TextStyle(color: Colors.white),
-          ),
+          title: const Text('Nghe sau', style: TextStyle(color: Colors.white)),
           subtitle: const Text(
             'Lưu để quay lại sau',
             style: TextStyle(color: Colors.white60),
@@ -4776,9 +4771,9 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không thể gửi yêu cầu: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không thể gửi yêu cầu: $error')));
     }
   }
 
@@ -4873,32 +4868,29 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
             ),
           ),
           const SizedBox(height: 8),
-          if (kPackagesEnabled) SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: widget.show.creatorId == null
-                  ? null
-                  : widget.onMembership,
-              icon: const Icon(Icons.workspace_premium_outlined),
-              label: const Text('Đăng ký thành viên'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white54),
+          if (kPackagesEnabled)
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: widget.show.creatorId == null
+                    ? null
+                    : widget.onMembership,
+                icon: const Icon(Icons.workspace_premium_outlined),
+                label: const Text('Đăng ký thành viên'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white54),
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: loadingFollow || !isMember
-                  ? null
-                  : _showRequestDialog,
+              onPressed: loadingFollow || !isMember ? null : _showRequestDialog,
               icon: const Icon(Icons.record_voice_over_outlined),
               label: Text(
-                isMember
-                    ? 'Yêu cầu audio'
-                    : 'Yêu cầu audio (cần thành viên)',
+                isMember ? 'Yêu cầu audio' : 'Yêu cầu audio (cần thành viên)',
               ),
             ),
           ),
@@ -4966,7 +4958,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
               style: TextStyle(color: Colors.white),
             ),
             subtitle: const Text(
-            'Playlist công khai',
+              'Playlist công khai',
               style: TextStyle(color: Colors.white60),
             ),
           ),
@@ -5011,10 +5003,8 @@ class MorePanel extends StatelessWidget {
               isScrollControlled: true,
               showDragHandle: true,
               backgroundColor: const Color(0xFF181818),
-              builder: (_) => PodcastInfoPanel(
-                show: show,
-                loadTranscript: loadTranscript,
-              ),
+              builder: (_) =>
+                  PodcastInfoPanel(show: show, loadTranscript: loadTranscript),
             );
           },
         ),
@@ -5029,20 +5019,21 @@ class MorePanel extends StatelessWidget {
             onReport();
           },
         ),
-        if (kPackagesEnabled) ListTile(
-          leading: const Icon(
-            Icons.workspace_premium_outlined,
-            color: Colors.white,
+        if (kPackagesEnabled)
+          ListTile(
+            leading: const Icon(
+              Icons.workspace_premium_outlined,
+              color: Colors.white,
+            ),
+            title: const Text(
+              'Đăng ký thành viên',
+              style: TextStyle(color: Colors.white),
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              onMembership();
+            },
           ),
-          title: const Text(
-            'Đăng ký thành viên',
-            style: TextStyle(color: Colors.white),
-          ),
-          onTap: () {
-            Navigator.pop(context);
-            onMembership();
-          },
-        ),
         ListTile(
           leading: const Icon(Icons.person_outline, color: Colors.white),
           title: const Text(
@@ -5065,11 +5056,7 @@ class MorePanel extends StatelessWidget {
 }
 
 class PodcastInfoPanel extends StatefulWidget {
-  const PodcastInfoPanel({
-    super.key,
-    required this.show,
-    this.loadTranscript,
-  });
+  const PodcastInfoPanel({super.key, required this.show, this.loadTranscript});
   final Show show;
   final Future<Map<String, dynamic>> Function()? loadTranscript;
 
@@ -5078,8 +5065,9 @@ class PodcastInfoPanel extends StatefulWidget {
 }
 
 class _PodcastInfoPanelState extends State<PodcastInfoPanel> {
-  late final Future<Map<String, dynamic>>? transcriptFuture =
-      widget.loadTranscript?.call();
+  late final Future<Map<String, dynamic>>? transcriptFuture = widget
+      .loadTranscript
+      ?.call();
   bool _isTranscriptExpanded = false;
 
   @override
@@ -5095,10 +5083,8 @@ class _PodcastInfoPanelState extends State<PodcastInfoPanel> {
         children: [
           Text(
             'Thông tin podcast',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 16),
           _PodcastInfoRow(
@@ -5159,11 +5145,11 @@ class _PodcastInfoPanelState extends State<PodcastInfoPanel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                  transcript.isNotEmpty
-                      ? transcript
-                      : (status.isNotEmpty
-                          ? 'Script đang được xử lý ($status).'
-                          : 'Chưa có nội dung script.'),
+                      transcript.isNotEmpty
+                          ? transcript
+                          : (status.isNotEmpty
+                                ? 'Script đang được xử lý ($status).'
+                                : 'Chưa có nội dung script.'),
                       maxLines: _isTranscriptExpanded ? null : 5,
                       overflow: _isTranscriptExpanded
                           ? TextOverflow.visible
