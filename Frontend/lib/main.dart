@@ -795,15 +795,29 @@ class _ShellState extends State<Shell> {
               onPressed: () async {
                 Navigator.pop(context);
                 try {
-                  final checkout = await api.checkout(planId);
+                  final checkout = await api.checkout(
+                    planId,
+                    paymentMethod: 'SEPAY',
+                  );
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Checkout ${checkout['subscriptionStatus'] ?? 'PENDING'} - chua xac nhan thanh toan.',
-                      ),
+                  final paid = await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => PaymentDialog(
+                      api: api,
+                      checkout: checkout,
+                      planName: planName,
                     ),
                   );
+                  if (paid == true && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Thanh toán thành công. Membership đã được kích hoạt.',
+                        ),
+                      ),
+                    );
+                  }
                 } catch (_) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1052,6 +1066,141 @@ class _ShellState extends State<Shell> {
     ),
   );
   void openPlayer() => _showPlayer(current!);
+}
+
+class PaymentDialog extends StatefulWidget {
+  const PaymentDialog({
+    super.key,
+    required this.api,
+    required this.checkout,
+    required this.planName,
+  });
+
+  final ListenerApi api;
+  final Map<String, dynamic> checkout;
+  final String planName;
+
+  @override
+  State<PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class _PaymentDialogState extends State<PaymentDialog> {
+  Timer? _pollTimer;
+  late Map<String, dynamic> _payment;
+  String? _error;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _payment = Map<String, dynamic>.from(widget.checkout);
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _checkPayment();
+    });
+  }
+
+  String? get _paymentId => _payment['paymentId']?.toString();
+  String get _status =>
+      '${_payment['paymentStatus'] ?? _payment['status'] ?? 'PENDING'}'
+          .toUpperCase();
+
+  Future<void> _checkPayment() async {
+    final paymentId = _paymentId;
+    if (_checking || paymentId == null || paymentId.isEmpty || !mounted) return;
+    _checking = true;
+    try {
+      final latest = await widget.api.paymentStatus(paymentId);
+      if (!mounted) return;
+      setState(() {
+        _payment = {..._payment, ...latest};
+        _error = null;
+      });
+      if (_status == 'PAID' &&
+          '${_payment['subscriptionStatus'] ?? ''}'.toUpperCase() == 'ACTIVE') {
+        _pollTimer?.cancel();
+        Navigator.of(context).pop(true);
+      } else if (_status == 'EXPIRED' || _status == 'CANCELLED') {
+        _pollTimer?.cancel();
+      } else {
+        // Keep polling while the payment is still pending.
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Chưa kiểm tra được trạng thái thanh toán.');
+      }
+    } finally {
+      _checking = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final qrUrl = _payment['qrImageUrl']?.toString();
+    final paymentCode = _payment['paymentCode']?.toString();
+    final amount = _payment['amount']?.toString() ?? '';
+    final terminal = _status == 'EXPIRED' || _status == 'CANCELLED';
+    return AlertDialog(
+      title: Text('Thanh toán $_status'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.planName,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (qrUrl != null && qrUrl.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Image.network(
+                qrUrl,
+                width: 220,
+                height: 220,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.qr_code_2, size: 160),
+              ),
+            ],
+            if (amount.isNotEmpty) Text('Số tiền: $amount VND'),
+            if (paymentCode != null && paymentCode.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SelectableText('Nội dung chuyển khoản: $paymentCode'),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              terminal
+                  ? 'Phiên thanh toán đã kết thúc. Vui lòng tạo giao dịch mới.'
+                  : 'Quét QR và chờ hệ thống xác nhận. Màn hình tự kiểm tra mỗi 4 giây.',
+              textAlign: TextAlign.center,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(terminal ? 'Đóng' : 'Để sau'),
+        ),
+        if (!terminal)
+          FilledButton(
+            onPressed: _checking ? null : _checkPayment,
+            child: const Text('Kiểm tra ngay'),
+          ),
+      ],
+    );
+  }
 }
 
 class CreatorShell extends StatelessWidget {

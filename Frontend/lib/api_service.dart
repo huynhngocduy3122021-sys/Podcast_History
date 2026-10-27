@@ -512,11 +512,20 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> subscriptions() =>
       _list('GET', '/api/me/subscriptions');
 
-  Future<Map<String, dynamic>> checkout(String membershipPlanId) => _sendMap(
+  Future<Map<String, dynamic>> checkout(
+    String membershipPlanId, {
+    String paymentMethod = 'SEPAY',
+  }) => _sendMap(
     'POST',
     '/api/me/subscriptions',
-    body: {'membershipPlanId': membershipPlanId},
+    body: {
+      'membershipPlanId': membershipPlanId,
+      'paymentMethod': paymentMethod,
+    },
   );
+
+  Future<Map<String, dynamic>> paymentStatus(String paymentId) =>
+      _sendMap('GET', '/api/me/payments/$paymentId');
 
   Future<void> cancelSubscription(String subscriptionId) async {
     await _send('DELETE', '/api/me/subscriptions/$subscriptionId');
