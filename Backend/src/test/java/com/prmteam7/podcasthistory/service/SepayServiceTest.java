@@ -13,10 +13,20 @@ import com.prmteam7.podcasthistory.config.SepayProperties;
 import com.prmteam7.podcasthistory.dto.request.SepayWebhookRequest;
 import com.prmteam7.podcasthistory.dto.response.SepayWebhookResponse;
 import com.prmteam7.podcasthistory.model.MembershipPlan;
+import com.prmteam7.podcasthistory.model.AppUser;
+import com.prmteam7.podcasthistory.model.CheckoutPayment;
+import com.prmteam7.podcasthistory.model.CreatorSystemPlan;
+import com.prmteam7.podcasthistory.model.CreatorSystemSubscription;
+import com.prmteam7.podcasthistory.model.UserWallet;
 import com.prmteam7.podcasthistory.model.Payment;
 import com.prmteam7.podcasthistory.model.Subscription;
 import com.prmteam7.podcasthistory.repository.PaymentRepository;
 import com.prmteam7.podcasthistory.repository.SubscriptionRepository;
+import com.prmteam7.podcasthistory.repository.CheckoutPaymentRepository;
+import com.prmteam7.podcasthistory.repository.CreatorSystemSubscriptionRepository;
+import com.prmteam7.podcasthistory.repository.UserWalletRepository;
+import com.prmteam7.podcasthistory.repository.WalletTransactionRepository;
+import com.prmteam7.podcasthistory.repository.PaymentMethodRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
@@ -37,6 +47,11 @@ class SepayServiceTest {
 
   @Mock private PaymentRepository paymentRepository;
   @Mock private SubscriptionRepository subscriptionRepository;
+  @Mock private CheckoutPaymentRepository checkoutRepository;
+  @Mock private CreatorSystemSubscriptionRepository creatorSubscriptions;
+  @Mock private UserWalletRepository wallets;
+  @Mock private WalletTransactionRepository walletTransactions;
+  @Mock private PaymentMethodRepository paymentMethods;
 
   private SepayService sepayService;
 
@@ -44,7 +59,8 @@ class SepayServiceTest {
   void setUp() {
     SepayProperties properties = new SepayProperties();
     properties.setWebhookApiKey(API_KEY);
-    sepayService = new SepayService(paymentRepository, subscriptionRepository, properties);
+    sepayService = new SepayService(paymentRepository, subscriptionRepository,
+        checkoutRepository, creatorSubscriptions, wallets, walletTransactions, paymentMethods, properties);
   }
 
   @Test
@@ -54,7 +70,7 @@ class SepayServiceTest {
 
     assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     assertFalse(response.getBody().success());
-    verifyNoInteractions(paymentRepository, subscriptionRepository);
+    verifyNoInteractions(paymentRepository, subscriptionRepository, checkoutRepository, wallets, walletTransactions);
   }
 
   @Test
@@ -178,6 +194,83 @@ class SepayServiceTest {
     assertTrue(response.getBody().success());
     assertEquals("PAID", payment.getStatus());
     assertEquals("ACTIVE", payment.getSubscription().getStatus());
+  }
+
+  @Test
+  void creditsWalletExactlyOnceWhenTopUpWebhookMatches() {
+    CheckoutPayment checkout = pendingCheckout("WALLET_TOPUP", Instant.now().minusSeconds(60));
+    AppUser listener = new AppUser();
+    listener.setUserId(UUID.randomUUID());
+    checkout.setUser(listener);
+    UserWallet wallet = new UserWallet();
+    wallet.setBalance(new BigDecimal("10000"));
+    wallet.setHeldBalance(BigDecimal.ZERO);
+    wallet.setCurrency("VND");
+    wallet.setStatus("ACTIVE");
+    when(checkoutRepository.lockByPaymentCode(PAYMENT_CODE)).thenReturn(Optional.of(checkout));
+    when(wallets.findByUserIdForUpdate(listener.getUserId())).thenReturn(Optional.of(wallet));
+
+    sepayService.processWebhook(API_KEY_HEADER, webhook(PAYMENT_CODE, "50000"));
+    sepayService.processWebhook(API_KEY_HEADER, webhook(PAYMENT_CODE, "50000"));
+
+    assertEquals("PAID", checkout.getStatus());
+    assertEquals(new BigDecimal("60000"), wallet.getBalance());
+    verify(walletTransactions, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void doesNotCreditWalletWhenTopUpAmountDiffers() {
+    CheckoutPayment checkout = pendingCheckout("WALLET_TOPUP", Instant.now().minusSeconds(60));
+    when(checkoutRepository.lockByPaymentCode(PAYMENT_CODE)).thenReturn(Optional.of(checkout));
+
+    sepayService.processWebhook(API_KEY_HEADER, webhook(PAYMENT_CODE, "49999"));
+
+    assertEquals("PENDING", checkout.getStatus());
+    verifyNoInteractions(wallets, walletTransactions);
+  }
+
+  @Test
+  void activatesCreatorPlanOnlyAfterMatchingWebhook() {
+    CheckoutPayment checkout = pendingCheckout("CREATOR_PLAN", Instant.now().minusSeconds(60));
+    CreatorSystemPlan plan = new CreatorSystemPlan();
+    plan.setDurationDays(30);
+    CreatorSystemSubscription subscription = new CreatorSystemSubscription();
+    subscription.setSubscriptionId(UUID.randomUUID());
+    subscription.setPlan(plan);
+    subscription.setPaymentStatus("PENDING");
+    checkout.setCreatorSubscription(subscription);
+    when(checkoutRepository.lockByPaymentCode(PAYMENT_CODE)).thenReturn(Optional.of(checkout));
+    when(creatorSubscriptions.findById(subscription.getSubscriptionId())).thenReturn(Optional.of(subscription));
+
+    sepayService.processWebhook(API_KEY_HEADER, webhook(PAYMENT_CODE, "50000"));
+
+    assertEquals("PAID", checkout.getStatus());
+    assertEquals("SUCCEEDED", subscription.getPaymentStatus());
+    assertEquals(checkout.getPaidAt(), subscription.getStartAt());
+    assertEquals(checkout.getPaidAt().plusSeconds(30L * 24 * 60 * 60), subscription.getEndAt());
+  }
+
+  @Test
+  void expiresUnpaidTopUpWithoutCreditingWallet() {
+    CheckoutPayment checkout = pendingCheckout("WALLET_TOPUP", Instant.now().minusSeconds(40 * 60));
+    when(checkoutRepository.lockByPaymentCode(PAYMENT_CODE)).thenReturn(Optional.of(checkout));
+
+    sepayService.processWebhook(API_KEY_HEADER, webhook(PAYMENT_CODE, "50000"));
+
+    assertEquals("EXPIRED", checkout.getStatus());
+    verifyNoInteractions(wallets, walletTransactions);
+  }
+
+  private CheckoutPayment pendingCheckout(String purpose, Instant createdAt) {
+    CheckoutPayment checkout = new CheckoutPayment();
+    checkout.setCheckoutId(UUID.randomUUID());
+    checkout.setPurpose(purpose);
+    checkout.setAmount(new BigDecimal("50000"));
+    checkout.setCurrency("VND");
+    checkout.setPaymentCode(PAYMENT_CODE);
+    checkout.setStatus("PENDING");
+    checkout.setCreatedAt(createdAt);
+    return checkout;
   }
 
   private static final String API_KEY_HEADER = "Apikey " + API_KEY;

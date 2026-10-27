@@ -352,6 +352,8 @@ public class AdminFinanceService {
   public PaymentItem refund(UUID actor, UUID id, RefundPayment body) {
     AppUser admin = support.actor(actor, true);
     Payment p = lockPayment(id);
+    if ("WALLET".equalsIgnoreCase(p.getProvider()))
+      throw new ResourceConflictException("Hoàn tiền membership qua ví cần nghiệp vụ hoàn số dư riêng.");
     AdminSupportService.state(p.getStatus(), "PAID", "SUCCESS", "COMPLETED");
     if (payments.existsByRefundReference(body.refundReference().trim()))
       throw new ResourceConflictException("Mã hoàn tiền đã được ghi nhận.");
