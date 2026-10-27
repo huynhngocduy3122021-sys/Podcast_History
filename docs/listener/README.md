@@ -125,7 +125,7 @@ Người tham gia hợp đồng còn có `POST /api/contracts/{contractId}/dispu
 
 ## 7. Gói thành viên và lỗi thường gặp
 
-Gói membership mặc định tắt (`MEMBERSHIPS_ENABLED=false`). `GET /api/creators/{creatorId}/membership-plans` trả `[]`; `POST /api/me/subscriptions` body `{membershipPlanId}` bị từ chối. `GET /api/me/subscriptions` vẫn xem lịch sử. Với cấu hình tắt, backend bỏ kiểm tra membership khi playback tập độc quyền. Frontend nên ẩn màn hình mua gói. Khi bật lại, checkout chỉ tạo payment/subscription `PENDING`; cần Admin đối soát mới thành `ACTIVE`.
+Gói membership mặc định bật (`MEMBERSHIPS_ENABLED=true`). `GET /api/creators/{creatorId}/membership-plans` trả các gói đang hoạt động; `POST /api/me/subscriptions` body `{membershipPlanId}` tạo payment/subscription `PENDING`. Membership chỉ chuyển `ACTIVE` sau khi SePay xác nhận thanh toán hoặc Admin đối soát. Có thể đặt `MEMBERSHIPS_ENABLED=false` để tắt tính năng.
 
 | HTTP | Cách xử lý |
 |---:|---|

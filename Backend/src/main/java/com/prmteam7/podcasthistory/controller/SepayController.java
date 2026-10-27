@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.controller;
 
 import com.prmteam7.podcasthistory.dto.request.SepayWebhookRequest;
 import com.prmteam7.podcasthistory.dto.response.PaymentStatusItem;
+import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
 import com.prmteam7.podcasthistory.dto.response.SepayWebhookResponse;
 import com.prmteam7.podcasthistory.service.SepayService;
 import java.util.UUID;
@@ -30,6 +31,12 @@ public class SepayController {
   public PaymentStatusItem getPaymentStatus(
       @AuthenticationPrincipal Jwt jwt, @PathVariable UUID paymentId) {
     return sepayService.getPaymentStatus(userId(jwt), paymentId);
+  }
+
+  @GetMapping("/me/checkouts/{checkoutId}")
+  public CheckoutPaymentView getCheckoutStatus(@AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID checkoutId) {
+    return sepayService.getCheckoutStatus(userId(jwt), checkoutId);
   }
 
   @PostMapping("/webhooks/sepay")

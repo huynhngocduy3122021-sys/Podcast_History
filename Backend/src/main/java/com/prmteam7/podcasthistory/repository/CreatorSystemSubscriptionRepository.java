@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CreatorSystemSubscriptionRepository extends JpaRepository<CreatorSystemSubscription, UUID> {
+  boolean existsByProducerProfile_ProducerProfileIdAndPaymentStatus(UUID creatorId, String status);
   Optional<CreatorSystemSubscription>
       findTopByProducerProfile_ProducerProfileIdAndPaymentStatusAndStartAtLessThanEqualAndEndAtAfterOrderByEndAtDesc(
           UUID creatorId, String paymentStatus, Instant now, Instant endNow);

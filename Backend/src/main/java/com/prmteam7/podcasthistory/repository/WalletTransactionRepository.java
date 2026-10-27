@@ -12,6 +12,7 @@ public interface WalletTransactionRepository
         extends JpaRepository<WalletTransaction, UUID>, JpaSpecificationExecutor<WalletTransaction> {
 
     boolean existsByPayment_PaymentIdAndTransactionType(UUID paymentId, String transactionType);
+    boolean existsByReferenceCode(String referenceCode);
 
     boolean existsByPayment_PaymentIdAndStatus(UUID paymentId, String status);
 

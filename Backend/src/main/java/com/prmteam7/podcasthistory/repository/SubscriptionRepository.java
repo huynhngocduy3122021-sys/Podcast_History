@@ -36,4 +36,8 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
 
   boolean existsByUser_UserIdAndMembershipPlan_MembershipPlanIdAndStatusIgnoreCase(
       UUID userId, UUID planId, String status);
+  Optional<Subscription> findFirstByUser_UserIdAndMembershipPlan_MembershipPlanIdAndStatusIgnoreCaseOrderByCreatedAtDesc(
+      UUID userId, UUID planId, String status);
+  Optional<Subscription> findFirstByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByCreatedAtDesc(
+      UUID userId, UUID creatorId, String status);
 }
