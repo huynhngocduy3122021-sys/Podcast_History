@@ -1,5 +1,7 @@
 # Content Creator — hướng dẫn tích hợp API
 
+Chat trong livestream dùng Agora Signaling, không lưu tin nhắn ở backend: xem [AGORA_LIVE_CHAT.md](AGORA_LIVE_CHAT.md).
+
 ## Quy ước chung
 
 - Base URL lấy theo môi trường backend đang chạy (local thường là `http://localhost:8081`; Android Emulator dùng `http://10.0.2.2:8081`). Không hardcode URL ngrok.

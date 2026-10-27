@@ -32,3 +32,7 @@ Các API này cần JWT role `LISTENER`, tài khoản hoạt động.
 3. `POST /api/livestreams/{livestreamId}/join` (không có body) trả `appId`, `channelName`, `userAccount`, `role: audience`, `token`, `expiresAt`. Listener vào Agora SDK bằng các trường này và chỉ subscribe. Gọi lại API để lấy token mới khi gần hết hạn.
 
 Backend không phát video qua HTTP và không lưu bản ghi. Token audience không được cấp sau khi phiên đã `ENDED`; token đã cấp trước đó còn hiệu lực tới `expiresAt` theo Agora. Nếu cần ngắt tức thì người xem hoặc xác nhận host đã vào kênh, phải bổ sung cơ chế Agora tương ứng.
+
+## Chat trong livestream
+
+Bật **Signaling** trong cùng Agora project. Creator gọi `POST /api/creator/livestreams/{livestreamId}/chat-token`, Listener gọi `POST /api/livestreams/{livestreamId}/chat-token` khi phiên đang `LIVE`. Response gồm `appId`, `channelName`, `userId`, `displayName`, `token`, `expiresAt`; đây là **RTM token**, tách với RTC token của `/start` và `/join`. Frontend login/subscribe/publish trực tiếp qua Agora Signaling. Backend không lưu tin nhắn. Xem `docs/content-creator/AGORA_LIVE_CHAT.md`.

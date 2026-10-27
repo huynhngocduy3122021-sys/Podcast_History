@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:podcast_history/features/livestream/chat_credentials.dart';
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -275,6 +276,11 @@ class ListenerApi {
   Future<ListenerAgoraJoin> joinLivestream(String livestreamId) async =>
       ListenerAgoraJoin.fromJson(
         await _send('POST', '/api/livestreams/$livestreamId/join'),
+      );
+
+  Future<ChatCredentials> livestreamChatToken(String livestreamId) async =>
+      ChatCredentials.fromJson(
+        await _send('POST', '/api/livestreams/$livestreamId/chat-token'),
       );
 
   Future<List<Map<String, dynamic>>> creators({String? query}) => _list(

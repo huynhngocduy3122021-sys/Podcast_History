@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.controller;
 
 import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.AgoraJoin;
+import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.ChatJoin;
 import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.Item;
 import com.prmteam7.podcasthistory.service.LivestreamService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,5 +45,11 @@ public class LivestreamController {
   @Operation(summary = "Listener lấy Agora token quyền audience")
   public AgoraJoin join(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID livestreamId) {
     return service.join(UUID.fromString(jwt.getClaimAsString("user_id")), livestreamId);
+  }
+
+  @PostMapping("/{livestreamId}/chat-token")
+  @Operation(summary = "Listener lấy Agora Signaling token để chat trong livestream")
+  public ChatJoin chatToken(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID livestreamId) {
+    return service.listenerChatToken(UUID.fromString(jwt.getClaimAsString("user_id")), livestreamId);
   }
 }

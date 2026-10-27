@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:podcast_history/api_service.dart';
+import 'package:podcast_history/features/livestream/livestream_chat_panel.dart';
 
 class ListenerLivestreamScreen extends StatefulWidget {
   const ListenerLivestreamScreen({super.key, required this.api});
@@ -57,9 +58,7 @@ class ListenerLivestreamFeedPage extends StatefulWidget {
 class _ListenerLivestreamFeedPageState extends State<ListenerLivestreamFeedPage> {
   late final PageController _pageController; late int _index;
   RtcEngine? _engine; VideoViewController? _videoController; int? _remoteUid;
-  bool _loading = true; String? _error; ListenerAgoraJoin? _join;
-  final _commentController = TextEditingController();
-  final List<_LiveComment> _comments = [_LiveComment('Minh Anh', 'Nội dung rất thú vị ạ!'), _LiveComment('Lịch sử Việt', 'Cảm ơn Creator đã chia sẻ.'), _LiveComment('Tuấn', 'Xin chào mọi người 👋')];
+  bool _loading = true; String? _error;
 
   @override
   void initState() { super.initState(); _index = widget.initialIndex.clamp(0, widget.livestreams.length - 1); _pageController = PageController(initialPage: _index); _joinLivestream(); }
@@ -78,13 +77,13 @@ class _ListenerLivestreamFeedPageState extends State<ListenerLivestreamFeedPage>
       ));
       await engine.setClientRole(role: ClientRoleType.clientRoleAudience); await engine.enableVideo();
       await engine.joinChannelWithUserAccount(token: join.token, channelId: join.channelName, userAccount: join.userAccount, options: const ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleAudience, channelProfile: ChannelProfileType.channelProfileLiveBroadcasting, publishCameraTrack: false, publishMicrophoneTrack: false, autoSubscribeAudio: true, autoSubscribeVideo: true));
-      _engine = engine; _join = join;
+      _engine = engine;
     } catch (e) { if (mounted) setState(() { _loading = false; _error = e.toString(); }); }
   }
 
   Future<void> _leave() async { final controller = _videoController; _videoController = null; if (controller != null) await controller.dispose(); final engine = _engine; _engine = null; if (engine != null) { await engine.leaveChannel(); await engine.release(); } }
-  Future<void> _changeLivestream(int index) async { if (index == _index) return; await _leave(); if (!mounted) return; setState(() { _index = index; _loading = true; _error = null; _remoteUid = null; _join = null; }); await _joinLivestream(); }
-  @override void dispose() { _pageController.dispose(); _commentController.dispose(); unawaited(_leave()); super.dispose(); }
+  Future<void> _changeLivestream(int index) async { if (index == _index) return; await _leave(); if (!mounted) return; setState(() { _index = index; _loading = true; _error = null; _remoteUid = null; }); await _joinLivestream(); }
+  @override void dispose() { _pageController.dispose(); unawaited(_leave()); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => Scaffold(backgroundColor: Colors.black, body: PageView.builder(controller: _pageController, scrollDirection: Axis.vertical, itemCount: widget.livestreams.length, onPageChanged: _changeLivestream, itemBuilder: (_, i) => _buildLivePage(widget.livestreams[i])));
@@ -99,17 +98,40 @@ class _ListenerLivestreamFeedPageState extends State<ListenerLivestreamFeedPage>
       SafeArea(child: Column(children: [
         Row(children: [IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back, color: Colors.white)), Expanded(child: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800))), const SizedBox(width: 48)]),
         const Spacer(),
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(18, 0, 10, 24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('@${item.creatorChannelName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)), const SizedBox(height: 8), Text(item.description ?? 'Đang giao lưu trực tiếp cùng thính giả.', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, height: 1.35))]))), Padding(padding: const EdgeInsets.only(right: 12, bottom: 18), child: Column(children: [_LiveAction(icon: Icons.chat_bubble, label: '${_comments.length}', onTap: _showComments), const SizedBox(height: 16), _LiveAction(icon: Icons.card_giftcard, label: 'Donate', onTap: _showDonateSheet, accent: true)]))]),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(18, 0, 10, 24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('@${item.creatorChannelName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)), const SizedBox(height: 8), Text(item.description ?? 'Đang giao lưu trực tiếp cùng thính giả.', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, height: 1.35))]))), Padding(padding: const EdgeInsets.only(right: 12, bottom: 18), child: Column(children: [_LiveAction(icon: Icons.chat_bubble, label: 'Chat', onTap: () => _showComments(item)), const SizedBox(height: 16), _LiveAction(icon: Icons.card_giftcard, label: 'Donate', onTap: _showDonateSheet, accent: true)]))]),
       ])),
     ]);
   }
 
-  void _sendComment() { final text = _commentController.text.trim(); if (text.isEmpty) return; setState(() { _comments.add(_LiveComment('Bạn', text)); _commentController.clear(); }); }
-  void _showComments() => showModalBottomSheet<void>(context: context, isScrollControlled: true, backgroundColor: const Color(0xfff8f4ee), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (context) => DraggableScrollableSheet(expand: false, initialChildSize: .58, maxChildSize: .9, builder: (_, scroll) => Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 12), child: Column(children: [Container(width: 42, height: 4, decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(4))), const SizedBox(height: 12), const Text('Bình luận', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), const SizedBox(height: 8), Expanded(child: ListView.builder(controller: scroll, itemCount: _comments.length, itemBuilder: (_, i) => ListTile(leading: CircleAvatar(child: Text(_comments[i].name.substring(0, 1))), title: Text(_comments[i].name, style: const TextStyle(fontWeight: FontWeight.w700)), subtitle: Text(_comments[i].text)))), Row(children: [Expanded(child: TextField(controller: _commentController, textInputAction: TextInputAction.send, onSubmitted: (_) { _sendComment(); Navigator.pop(context); }, decoration: const InputDecoration(hintText: 'Viết bình luận…', filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(24)), borderSide: BorderSide.none)))), IconButton(onPressed: () { _sendComment(); Navigator.pop(context); }, icon: const Icon(Icons.send))])]))) );
+  void _showComments(ListenerLivestream item) => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: const Color(0xff191919),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.of(context).viewInsets.bottom + 12,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * .58,
+          child: LivestreamChatPanel(
+            key: ValueKey('listener-chat-${item.livestreamId}'),
+            loadCredentials: () =>
+                widget.api.livestreamChatToken(item.livestreamId),
+          ),
+        ),
+      ),
+    ),
+  );
   void _showDonateSheet() => showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xff211b19), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (context) => SafeArea(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Ủng hộ Creator', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)), const SizedBox(height: 6), const Text('Chọn một mức quà để gửi lời cảm ơn.', style: TextStyle(color: Colors.white70)), const SizedBox(height: 18), Wrap(spacing: 10, children: [10000, 20000, 50000, 100000].map((amount) => OutlinedButton(onPressed: () { Navigator.pop(context); ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('Đã chọn ủng hộ ${amount ~/ 1000}K (chờ tích hợp thanh toán).'))); }, style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white38)), child: Text('${amount ~/ 1000}K'))).toList())]))));
 }
 
-class _LiveComment { const _LiveComment(this.name, this.text); final String name; final String text; }
 class _LiveAction extends StatelessWidget { const _LiveAction({required this.icon, required this.label, required this.onTap, this.accent = false}); final IconData icon; final String label; final VoidCallback onTap; final bool accent; @override Widget build(BuildContext context) => GestureDetector(onTap: onTap, child: Column(children: [CircleAvatar(radius: 24, backgroundColor: accent ? Colors.redAccent : Colors.black54, child: Icon(icon, color: Colors.white)), const SizedBox(height: 4), Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700))])); }
 class _LiveGradient extends StatelessWidget { const _LiveGradient(); @override Widget build(BuildContext context) => IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.black54, Colors.transparent, Colors.black87], stops: const [.0, .42, 1.0])))); }
 class _StateCard extends StatelessWidget { const _StateCard({required this.icon, required this.message, this.action}); final IconData icon; final String message; final Widget? action; @override Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(28), child: Column(children: [Icon(icon, size: 42), const SizedBox(height: 12), Text(message, textAlign: TextAlign.center), ?action]))); }
