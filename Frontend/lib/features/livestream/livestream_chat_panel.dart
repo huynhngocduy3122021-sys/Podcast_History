@@ -2,13 +2,19 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_client.dart';
 import 'chat_credentials.dart';
 
 class LivestreamChatPanel extends StatefulWidget {
-  const LivestreamChatPanel({super.key, required this.loadCredentials});
+  const LivestreamChatPanel({
+    super.key,
+    required this.livestreamId,
+    required this.loadCredentials,
+  });
 
+  final String livestreamId;
   final Future<ChatCredentials> Function() loadCredentials;
 
   @override
@@ -20,6 +26,20 @@ class _ChatMessage {
   final String sender;
   final String text;
   final bool mine;
+
+  Map<String, dynamic> toJson() => {
+        'sender': sender,
+        'text': text,
+        'mine': mine,
+      };
+
+  static _ChatMessage? fromJson(dynamic value) {
+    if (value is! Map) return null;
+    final sender = '${value['sender'] ?? ''}'.trim();
+    final text = '${value['text'] ?? ''}'.trim();
+    if (sender.isEmpty || text.isEmpty || text.length > 300) return null;
+    return _ChatMessage(sender, text, value['mine'] == true);
+  }
 }
 
 class _LivestreamChatPanelState extends State<LivestreamChatPanel> {
@@ -32,10 +52,47 @@ class _LivestreamChatPanelState extends State<LivestreamChatPanel> {
   bool _sending = false;
   String? _error;
 
+  String get _historyKey => 'livestream_chat_history_${widget.livestreamId}';
+
   @override
   void initState() {
     super.initState();
-    _connect();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _loadHistory();
+    if (mounted) await _connect();
+  }
+
+  Future<void> _loadHistory() async {
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getStringList(_historyKey) ?? const [];
+    if (!mounted) return;
+    final history = raw
+        .map((entry) {
+          try {
+            return _ChatMessage.fromJson(jsonDecode(entry));
+          } catch (_) {
+            return null;
+          }
+        })
+        .whereType<_ChatMessage>()
+        .toList();
+    final start = history.length > 100 ? history.length - 100 : 0;
+    setState(() {
+      _messages
+        ..clear()
+        ..addAll(history.sublist(start));
+    });
+  }
+
+  Future<void> _saveHistory() async {
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(
+      _historyKey,
+      _messages.map((message) => jsonEncode(message.toJson())).toList(),
+    );
   }
 
   Future<void> _connect() async {
@@ -107,6 +164,7 @@ class _LivestreamChatPanelState extends State<LivestreamChatPanel> {
   void _addMessage(_ChatMessage message) {
     _messages.add(message);
     if (_messages.length > 100) _messages.removeAt(0);
+    unawaited(_saveHistory());
   }
 
   Future<void> _send() async {

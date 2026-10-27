@@ -59,6 +59,9 @@ class _ListenerLivestreamFeedPageState extends State<ListenerLivestreamFeedPage>
   late final PageController _pageController; late int _index;
   RtcEngine? _engine; VideoViewController? _videoController; int? _remoteUid;
   bool _loading = true; String? _error;
+  bool _chatOpen = false;
+  bool _chatSessionEnded = false;
+  Timer? _statusTimer;
 
   @override
   void initState() { super.initState(); _index = widget.initialIndex.clamp(0, widget.livestreams.length - 1); _pageController = PageController(initialPage: _index); _joinLivestream(); }
@@ -78,12 +81,33 @@ class _ListenerLivestreamFeedPageState extends State<ListenerLivestreamFeedPage>
       await engine.setClientRole(role: ClientRoleType.clientRoleAudience); await engine.enableVideo();
       await engine.joinChannelWithUserAccount(token: join.token, channelId: join.channelName, userAccount: join.userAccount, options: const ChannelMediaOptions(clientRoleType: ClientRoleType.clientRoleAudience, channelProfile: ChannelProfileType.channelProfileLiveBroadcasting, publishCameraTrack: false, publishMicrophoneTrack: false, autoSubscribeAudio: true, autoSubscribeVideo: true));
       _engine = engine;
+      _statusTimer?.cancel();
+      _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkLivestreamStatus(item.livestreamId));
     } catch (e) { if (mounted) setState(() { _loading = false; _error = e.toString(); }); }
   }
 
+  Future<void> _checkLivestreamStatus(String livestreamId) async {
+    try {
+      final detail = await widget.api.livestream(livestreamId);
+      if (!mounted || detail.status.toUpperCase() == 'LIVE') return;
+      _statusTimer?.cancel();
+      await _leave();
+      if (mounted) {
+        setState(() {
+          _chatOpen = false;
+          _chatSessionEnded = true;
+          _error = 'Livestream đã kết thúc.';
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      // Keep the current chat session when a temporary status check fails.
+    }
+  }
+
   Future<void> _leave() async { final controller = _videoController; _videoController = null; if (controller != null) await controller.dispose(); final engine = _engine; _engine = null; if (engine != null) { await engine.leaveChannel(); await engine.release(); } }
-  Future<void> _changeLivestream(int index) async { if (index == _index) return; await _leave(); if (!mounted) return; setState(() { _index = index; _loading = true; _error = null; _remoteUid = null; }); await _joinLivestream(); }
-  @override void dispose() { _pageController.dispose(); unawaited(_leave()); super.dispose(); }
+  Future<void> _changeLivestream(int index) async { if (index == _index) return; _statusTimer?.cancel(); await _leave(); if (!mounted) return; setState(() { _index = index; _loading = true; _error = null; _remoteUid = null; _chatOpen = false; _chatSessionEnded = false; }); await _joinLivestream(); }
+  @override void dispose() { _statusTimer?.cancel(); _pageController.dispose(); unawaited(_leave()); super.dispose(); }
 
   @override
   Widget build(BuildContext context) => Scaffold(backgroundColor: Colors.black, body: PageView.builder(controller: _pageController, scrollDirection: Axis.vertical, itemCount: widget.livestreams.length, onPageChanged: _changeLivestream, itemBuilder: (_, i) => _buildLivePage(widget.livestreams[i])));
@@ -100,35 +124,60 @@ class _ListenerLivestreamFeedPageState extends State<ListenerLivestreamFeedPage>
         const Spacer(),
         Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Expanded(child: Padding(padding: const EdgeInsets.fromLTRB(18, 0, 10, 24), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('@${item.creatorChannelName}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17)), const SizedBox(height: 8), Text(item.description ?? 'Đang giao lưu trực tiếp cùng thính giả.', maxLines: 3, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, height: 1.35))]))), Padding(padding: const EdgeInsets.only(right: 12, bottom: 18), child: Column(children: [_LiveAction(icon: Icons.chat_bubble, label: 'Chat', onTap: () => _showComments(item)), const SizedBox(height: 16), _LiveAction(icon: Icons.card_giftcard, label: 'Donate', onTap: _showDonateSheet, accent: true)]))]),
       ])),
+      if (current && _chatOpen)
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => setState(() => _chatOpen = false),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      if (current && !_chatSessionEnded)
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 12,
+          height: MediaQuery.sizeOf(context).height * .58,
+          child: Offstage(
+            offstage: !_chatOpen,
+            child: SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                decoration: const BoxDecoration(
+                  color: Color(0xff191919),
+                  borderRadius: BorderRadius.all(Radius.circular(24)),
+                ),
+                child: Column(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: 'Đóng chat',
+                        onPressed: () => setState(() => _chatOpen = false),
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                      ),
+                    ),
+                    Expanded(
+                      child: LivestreamChatPanel(
+                        key: ValueKey('listener-chat-${item.livestreamId}'),
+                        livestreamId: item.livestreamId,
+                        loadCredentials: () => widget.api.livestreamChatToken(item.livestreamId),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
     ]);
   }
 
-  void _showComments(ListenerLivestream item) => showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: const Color(0xff191919),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.of(context).viewInsets.bottom + 12,
-        ),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height * .58,
-          child: LivestreamChatPanel(
-            key: ValueKey('listener-chat-${item.livestreamId}'),
-            loadCredentials: () =>
-                widget.api.livestreamChatToken(item.livestreamId),
-          ),
-        ),
-      ),
-    ),
-  );
+  void _showComments(ListenerLivestream item) {
+    if (item.livestreamId != widget.livestreams[_index].livestreamId || _chatSessionEnded) return;
+    setState(() => _chatOpen = true);
+  }
   void _showDonateSheet() => showModalBottomSheet<void>(context: context, backgroundColor: const Color(0xff211b19), shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))), builder: (context) => SafeArea(child: Padding(padding: const EdgeInsets.all(20), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Ủng hộ Creator', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)), const SizedBox(height: 6), const Text('Chọn một mức quà để gửi lời cảm ơn.', style: TextStyle(color: Colors.white70)), const SizedBox(height: 18), Wrap(spacing: 10, children: [10000, 20000, 50000, 100000].map((amount) => OutlinedButton(onPressed: () { Navigator.pop(context); ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('Đã chọn ủng hộ ${amount ~/ 1000}K (chờ tích hợp thanh toán).'))); }, style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white38)), child: Text('${amount ~/ 1000}K'))).toList())]))));
 }
 

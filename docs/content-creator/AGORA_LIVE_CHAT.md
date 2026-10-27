@@ -1,6 +1,6 @@
 # Chat trực tiếp trong livestream qua Agora Signaling
 
-Chat dùng **Agora Signaling (RTM) 2.x**. Backend chỉ xác thực quyền xem/phát và cấp token. Tin nhắn được publish/subscribe trực tiếp qua Agora, **không lưu vào database của ứng dụng**; người vào sau không có lịch sử chat trước đó.
+Chat dùng **Agora Signaling (RTM) 2.x**. Backend chỉ xác thực quyền xem/phát và cấp token. Tin nhắn được publish/subscribe trực tiếp qua Agora, **không lưu vào database của ứng dụng**; người vào sau vẫn không có lịch sử chat của những người khác. Ứng dụng lưu cục bộ tối đa 100 tin nhắn theo từng livestream, nên đóng/mở lại khung chat hoặc vào lại màn hình vẫn giữ được lịch sử đã nhận trên thiết bị đó.
 
 ## Cấu hình
 

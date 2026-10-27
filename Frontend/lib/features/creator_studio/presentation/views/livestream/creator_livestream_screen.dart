@@ -951,6 +951,7 @@ class _CreatorLivestreamScreenState
               height: 210,
               child: LivestreamChatPanel(
                 key: ValueKey('chat-$_activeLivestreamId'),
+                livestreamId: _activeLivestreamId!,
                 loadCredentials: () async {
                   final result = await ref
                       .read(apiClientProvider)
