@@ -4868,30 +4868,29 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
             ),
           ),
           const SizedBox(height: 8),
-          if (kPackagesEnabled)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: widget.show.creatorId == null
-                    ? null
-                    : widget.onMembership,
-                icon: const Icon(Icons.workspace_premium_outlined),
-                label: const Text('Đăng ký thành viên'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white54),
-                ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.show.creatorId == null
+                  ? null
+                  : widget.onMembership,
+              icon: const Icon(Icons.workspace_premium_outlined),
+              label: const Text('Đăng ký gói thành viên'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
               ),
             ),
+          ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: loadingFollow || !isMember ? null : _showRequestDialog,
+              onPressed: loadingFollow || widget.show.creatorId == null
+                  ? null
+                  : _showRequestDialog,
               icon: const Icon(Icons.record_voice_over_outlined),
-              label: Text(
-                isMember ? 'Yêu cầu audio' : 'Yêu cầu audio (cần thành viên)',
-              ),
+              label: const Text('Gửi yêu cầu'),
             ),
           ),
           const SizedBox(height: 24),
