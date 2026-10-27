@@ -27,4 +27,13 @@ public final class LivestreamResponses {
       String role,
       String token,
       Instant expiresAt) {}
+
+  public record ChatJoin(
+      UUID livestreamId,
+      String appId,
+      String channelName,
+      String userId,
+      String displayName,
+      String token,
+      Instant expiresAt) {}
 }

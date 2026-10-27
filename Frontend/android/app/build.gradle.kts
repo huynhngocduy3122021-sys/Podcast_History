@@ -4,11 +4,22 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+dependencies {
+    // Agora RTC needs symbols absent from the libaosl.so bundled with Agora RTM.
+    implementation("io.agora.infra:aosl:1.3.5")
+}
+
 android {
     namespace = "com.example.podcast_history"
     compileSdk = flutter.compileSdkVersion
     // ndkVersion = flutter.ndkVersion
     ndkVersion = "30.0.16248370"
+
+    packaging {
+        jniLibs {
+            pickFirsts += setOf("lib/**/libaosl.so")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

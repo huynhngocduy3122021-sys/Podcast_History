@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ import 'package:podcast_history/features/creator_studio/data/models/creator_live
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
+import 'package:podcast_history/features/livestream/chat_credentials.dart';
+import 'package:podcast_history/features/livestream/livestream_chat_panel.dart';
 
 class CreatorLivestreamScreen extends ConsumerStatefulWidget {
   const CreatorLivestreamScreen({super.key});
@@ -52,8 +55,7 @@ class _CreatorLivestreamScreenState
     text: 'Giao lưu Lịch sử & Kể chuyện cùng Thính giả',
   );
   final _descController = TextEditingController(
-    text:
-        'Cùng thảo luận về các sự kiện hào hùng, giải đáp thắc mắc và chia sẻ góc nhìn lịch sử mới mẻ.',
+    text: 'Cùng thảo luận về các sự kiện hào hùng, giải đáp thắc mắc và chia sẻ góc nhìn lịch sử mới mẻ.',
   );
   bool _isScheduled = false;
   DateTime? _scheduledDateTime;
@@ -83,19 +85,14 @@ class _CreatorLivestreamScreenState
       _cameraUnavailable = false;
       return true;
     }
-    final statuses = await [
-      Permission.camera,
-      Permission.microphone,
-    ].request();
+    final statuses = await [Permission.camera, Permission.microphone].request();
 
     final cameraGranted = statuses[Permission.camera]?.isGranted ?? false;
     final micGranted = statuses[Permission.microphone]?.isGranted ?? false;
 
     if (!micGranted) {
       if (mounted) {
-        _showErrorSnackBar(
-          'Vui lòng cấp quyền Microphone để phát livestream.',
-        );
+        _showErrorSnackBar('Vui lòng cấp quyền Microphone để phát livestream.');
       }
       return false;
     }
@@ -138,8 +135,8 @@ class _CreatorLivestreamScreenState
           },
           onTokenPrivilegeWillExpire:
               (RtcConnection connection, String token) async {
-            _renewHostToken();
-          },
+                _renewHostToken();
+              },
           onError: (ErrorCodeType err, String msg) {
             debugPrint('[Agora Error] $err: $msg');
             if (mounted) {
@@ -149,9 +146,7 @@ class _CreatorLivestreamScreenState
         ),
       );
 
-      await _engine!.setClientRole(
-        role: ClientRoleType.clientRoleBroadcaster,
-      );
+      await _engine!.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
       await _engine!.enableAudio();
       if (!_isVideoDisabled) {
         try {
@@ -169,7 +164,9 @@ class _CreatorLivestreamScreenState
             await _engine!.disableVideo();
           } catch (_) {}
           if (mounted) {
-            _showErrorSnackBar('Không mở được camera. Livestream sẽ phát âm thanh.');
+            _showErrorSnackBar(
+              'Không mở được camera. Livestream sẽ phát âm thanh.',
+            );
           }
         }
       }
@@ -287,7 +284,9 @@ class _CreatorLivestreamScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Đang phát trực tiếp! Thính giả đã có thể tham gia nghe.'),
+            content: Text(
+              'Đang phát trực tiếp! Thính giả đã có thể tham gia nghe.',
+            ),
             backgroundColor: AppColors.success,
           ),
         );
@@ -604,15 +603,13 @@ class _CreatorLivestreamScreenState
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.error,
-      ),
+      SnackBar(content: Text(message), backgroundColor: AppColors.error),
     );
   }
 
   void _handleApiError(dynamic error, String defaultPrefix) {
-    final agoraConfigMissing = error is ApiException &&
+    final agoraConfigMissing =
+        error is ApiException &&
         error.statusCode == 503 &&
         (error.message.contains('AGORA_APP_ID') ||
             error.message.contains('Agora chưa được cấu hình'));
@@ -620,8 +617,11 @@ class _CreatorLivestreamScreenState
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.warning_amber_rounded,
-              color: AppColors.error, size: 40),
+          icon: const Icon(
+            Icons.warning_amber_rounded,
+            color: AppColors.error,
+            size: 40,
+          ),
           title: const Text('Agora chưa được cấu hình'),
           content: const Text(
             'Máy chủ Backend chưa được điền AGORA_APP_ID và AGORA_APP_CERTIFICATE trong file Backend/.env.\n\nVui lòng cấu hình trên server để sử dụng tính năng Livestream theo tài liệu AGORA_SETUP.md.',
@@ -649,9 +649,7 @@ class _CreatorLivestreamScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isLive ? 'Đang phát sóng trực tiếp' : 'Livestream Studio',
-        ),
+        title: Text(_isLive ? 'Đang phát sóng trực tiếp' : 'Livestream Studio'),
         actions: [
           // Nút Series
           Padding(
@@ -666,8 +664,10 @@ class _CreatorLivestreamScreenState
                 ),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark
                         ? AppColors.surfaceVariantDark
@@ -712,13 +712,15 @@ class _CreatorLivestreamScreenState
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const WalletScreen()),
-                ),
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const WalletScreen())),
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: isDark
                         ? AppColors.surfaceVariantDark
@@ -777,7 +779,9 @@ class _CreatorLivestreamScreenState
         fit: StackFit.expand,
         children: [
           // 1. Agora Local Video Feed
-          if (_videoViewController != null && _isEngineReady && !_isVideoDisabled)
+          if (_videoViewController != null &&
+              _isEngineReady &&
+              !_isVideoDisabled)
             AgoraVideoView(controller: _videoViewController!)
           else
             Container(
@@ -802,8 +806,8 @@ class _CreatorLivestreamScreenState
                       _cameraUnavailable
                           ? 'Không có camera - đang phát âm thanh'
                           : _isVideoDisabled
-                              ? 'Camera đang tắt'
-                              : 'Đang kết nối tín hiệu...',
+                          ? 'Camera đang tắt'
+                          : 'Đang kết nối tín hiệu...',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -812,7 +816,9 @@ class _CreatorLivestreamScreenState
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _isMuted ? 'Micro đang tắt' : 'Âm thanh vẫn đang phát trực tiếp',
+                      _isMuted
+                          ? 'Micro đang tắt'
+                          : 'Âm thanh vẫn đang phát trực tiếp',
                       style: TextStyle(
                         color: _isMuted ? AppColors.error : Colors.white60,
                         fontSize: 13,
@@ -844,7 +850,9 @@ class _CreatorLivestreamScreenState
                       // Badge LIVE
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.error,
                           borderRadius: BorderRadius.circular(6),
@@ -877,7 +885,9 @@ class _CreatorLivestreamScreenState
                       // Duration Timer
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white12,
                           borderRadius: BorderRadius.circular(6),
@@ -885,8 +895,11 @@ class _CreatorLivestreamScreenState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.timer_outlined,
-                                color: Colors.white, size: 13),
+                            const Icon(
+                              Icons.timer_outlined,
+                              color: Colors.white,
+                              size: 13,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               _formatDuration(_liveSeconds),
@@ -930,6 +943,27 @@ class _CreatorLivestreamScreenState
           ),
 
           // 3. Bottom Controls Toolbar
+          if (_activeLivestreamId != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 125,
+              height: 210,
+              child: LivestreamChatPanel(
+                key: ValueKey('chat-$_activeLivestreamId'),
+                loadCredentials: () async {
+                  final result = await ref
+                      .read(apiClientProvider)
+                      .post(
+                        '/api/creator/livestreams/$_activeLivestreamId/chat-token',
+                      );
+                  return ChatCredentials.fromJson(
+                    result as Map<String, dynamic>,
+                  );
+                },
+              ),
+            ),
+
           Positioned(
             bottom: 24,
             left: 20,
@@ -1027,10 +1061,7 @@ class _CreatorLivestreamScreenState
           child: Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(
-              color: bg,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
             child: Icon(icon, color: fg, size: 22),
           ),
         ),
@@ -1056,8 +1087,11 @@ class _CreatorLivestreamScreenState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.cloud_off_rounded,
-                  size: 48, color: AppColors.error),
+              const Icon(
+                Icons.cloud_off_rounded,
+                size: 48,
+                color: AppColors.error,
+              ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Không thể tải dữ liệu Livestream: $e',
@@ -1078,9 +1112,9 @@ class _CreatorLivestreamScreenState
       data: (items) {
         // Kiểm tra xem kênh có phiên nào đang LIVE hay không
         final activeLive = items.cast<CreatorLivestreamItem?>().firstWhere(
-              (it) => it?.isLive == true,
-              orElse: () => null,
-            );
+          (it) => it?.isLive == true,
+          orElse: () => null,
+        );
 
         return Stack(
           children: [
@@ -1126,7 +1160,9 @@ class _CreatorLivestreamScreenState
   // --- CARD: ACTIVE LIVE ALERT ---
 
   Widget _buildActiveLiveAlertBanner(
-      CreatorLivestreamItem liveItem, bool isDark) {
+    CreatorLivestreamItem liveItem,
+    bool isDark,
+  ) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -1143,8 +1179,7 @@ class _CreatorLivestreamScreenState
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.error,
                   borderRadius: BorderRadius.circular(4),
@@ -1188,10 +1223,7 @@ class _CreatorLivestreamScreenState
           const SizedBox(height: AppSpacing.sm),
           Text(
             liveItem.title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           Text(
@@ -1343,8 +1375,10 @@ class _CreatorLivestreamScreenState
                 icon: const Icon(Icons.save_outlined, size: 18),
                 label: const Text('Lưu nháp'),
                 style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -1375,8 +1409,7 @@ class _CreatorLivestreamScreenState
         children: [
           Row(
             children: const [
-              Icon(Icons.shield_outlined,
-                  size: 18, color: AppColors.info),
+              Icon(Icons.shield_outlined, size: 18, color: AppColors.info),
               SizedBox(width: 8),
               Text(
                 'Cơ chế kết nối Agora RTC (Real-Time)',
@@ -1405,7 +1438,9 @@ class _CreatorLivestreamScreenState
   // --- SECTION: LIVESTREAM LIST (MINE) ---
 
   Widget _buildLivestreamListSection(
-      List<CreatorLivestreamItem> items, bool isDark) {
+    List<CreatorLivestreamItem> items,
+    bool isDark,
+  ) {
     // Filter
     final filteredItems = items.where((item) {
       if (_selectedFilter == 'DRAFT') return item.isDraft;
@@ -1479,7 +1514,9 @@ class _CreatorLivestreamScreenState
             ),
           )
         else
-          ...filteredItems.map((item) => _buildLivestreamItemCard(item, isDark)),
+          ...filteredItems.map(
+            (item) => _buildLivestreamItemCard(item, isDark),
+          ),
       ],
     );
   }

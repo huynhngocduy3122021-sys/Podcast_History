@@ -2,6 +2,8 @@
 
 Hướng dẫn này dùng cho tài khoản `LISTENER` và các màn hình khám phá, nghe, tương tác, poll, yêu cầu podcast. Contract đối chiếu với controller/DTO backend hiện tại. `creatorId` trong URL là `creatorProfileId` của kênh, không phải `userId`.
 
+Chat livestream: sau `POST /api/livestreams/{livestreamId}/join`, gọi `POST /api/livestreams/{livestreamId}/chat-token` (không có body) để nhận token Agora Signaling. Tin nhắn đi trực tiếp qua Agora và không lưu trong database; xem [hướng dẫn chat live](../content-creator/AGORA_LIVE_CHAT.md).
+
 ## 1. Kết nối và phiên đăng nhập
 
 - Base URL local: `http://localhost:8081`; Android emulator: `http://10.0.2.2:8081`. Máy khác dùng URL HTTPS ngrok đang chạy, không lưu cố định hostname cũ.
