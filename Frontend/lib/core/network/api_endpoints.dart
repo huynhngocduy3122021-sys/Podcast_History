@@ -90,6 +90,14 @@ class ApiEndpoints {
   static String creatorPollResponses(String id) =>
       '/api/creator/polls/$id/responses';
   static const String creatorUpgradePremium = '/api/creator/upgrade-premium';
+  static const String creatorSystemPlans = '/api/creator/system-plans';
+  static const String creatorSystemPlansMe = '/api/creator/system-plans/me';
+  static const String creatorPendingCheckout =
+      '/api/creator/system-plans/me/pending-checkout';
+  static String creatorSystemPlanSubscribe(String planId) =>
+      '/api/creator/system-plans/$planId/subscribe';
+  static String meCheckout(String checkoutId) =>
+      '/api/me/checkouts/$checkoutId';
 
   // Creator Livestreams (Agora RTC)
   static const String creatorLivestreams = '/api/creator/livestreams';
@@ -97,4 +105,18 @@ class ApiEndpoints {
   static String creatorLivestreamStart(String id) => '/api/creator/livestreams/$id/start';
   static String creatorLivestreamToken(String id) => '/api/creator/livestreams/$id/token';
   static String creatorLivestreamEnd(String id) => '/api/creator/livestreams/$id/end';
+
+  // Creator Channel Membership Plans
+  static const String creatorMembershipPlans = '/api/creator/membership-plans';
+  static const String creatorMembershipTemplates =
+      '/api/creator/membership-plans/templates';
+  static String selectMembershipTemplate(String code) =>
+      '/api/creator/membership-plans/templates/$code/select';
+  static String updateMembershipPlanPrice(String planId) =>
+      '/api/creator/membership-plans/$planId/price';
+
+  // Notifications
+  static const String notifications = '/api/me/notifications';
+  static String markNotificationRead(String id) =>
+      '/api/me/notifications/$id/read';
 }

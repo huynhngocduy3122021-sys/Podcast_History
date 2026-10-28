@@ -96,6 +96,13 @@ public class AdminFinanceController {
     return service.wallets(id(jwt), page, size);
   }
 
+  @GetMapping("/wallets/{walletId}")
+  @Operation(summary = "Xem chi tiết ví và thông tin chủ ví")
+  public WalletItem wallet(
+      @AuthenticationPrincipal Jwt jwt, @PathVariable UUID walletId) {
+    return service.wallet(id(jwt), walletId);
+  }
+
   @GetMapping("/wallet-transactions")
   @Operation(summary = "Xem giao dịch ví; lọc walletId/status")
   public Page<TransactionItem> transactions(

@@ -13,12 +13,15 @@ public class AdminSupportService {
   private final AppUserRepository users;
   private final AdminAuditRepository audits;
   private final NotificationRepository notifications;
+  private final NotificationRealtimePublisher realtime;
 
   public AdminSupportService(
-      AppUserRepository users, AdminAuditRepository audits, NotificationRepository notifications) {
+      AppUserRepository users, AdminAuditRepository audits, NotificationRepository notifications,
+      NotificationRealtimePublisher realtime) {
     this.users = users;
     this.audits = audits;
     this.notifications = notifications;
+    this.realtime = realtime;
   }
 
   public AppUser actor(UUID id, boolean adminOnly) {
@@ -57,7 +60,7 @@ public class AdminSupportService {
     n.setTitle(title.length() > 200 ? title.substring(0, 197) + "..." : title);
     n.setMessage(message);
     n.setIsRead(false);
-    notifications.save(n);
+    realtime.publish(notifications.save(n));
   }
 
   public static Pageable page(int page, int size) {

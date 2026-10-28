@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.request.LivestreamRequests.Create;
 import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.AgoraJoin;
+import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.ChatJoin;
 import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.Item;
 import com.prmteam7.podcasthistory.exception.ResourceConflictException;
 import com.prmteam7.podcasthistory.exception.ResourceForbiddenException;
@@ -26,13 +27,15 @@ public class LivestreamService {
   private final ProducerProfileRepository creators;
   private final AppUserRepository users;
   private final AgoraRtcTokenService agora;
+  private final AgoraChatTokenService chat;
 
   public LivestreamService(LivestreamRepository livestreams, ProducerProfileRepository creators,
-      AppUserRepository users, AgoraRtcTokenService agora) {
+      AppUserRepository users, AgoraRtcTokenService agora, AgoraChatTokenService chat) {
     this.livestreams = livestreams;
     this.creators = creators;
     this.users = users;
     this.agora = agora;
+    this.chat = chat;
   }
 
   @Transactional
@@ -90,6 +93,13 @@ public class LivestreamService {
     return agora.issue(live, userId, true);
   }
 
+  @Transactional(readOnly = true)
+  public ChatJoin hostChatToken(UUID userId, UUID livestreamId) {
+    Livestream live = owned(userId, livestreamId);
+    requireLive(live);
+    return chat.issue(live, live.getUser());
+  }
+
   @Transactional
   public Item end(UUID userId, UUID livestreamId) {
     ProducerProfile creator = approvedCreator(userId, true);
@@ -115,13 +125,24 @@ public class LivestreamService {
 
   @Transactional(readOnly = true)
   public AgoraJoin join(UUID userId, UUID livestreamId) {
+    AppUser listener = activeListener(userId);
+    return agora.issue(visibleLive(livestreamId), userId, false);
+  }
+
+  @Transactional(readOnly = true)
+  public ChatJoin listenerChatToken(UUID userId, UUID livestreamId) {
+    AppUser listener = activeListener(userId);
+    return chat.issue(visibleLive(livestreamId), listener);
+  }
+
+  private AppUser activeListener(UUID userId) {
     AppUser listener = users.findByUserId(userId)
         .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
         .orElseThrow(() -> new ResourceForbiddenException("Tài khoản không hoạt động."));
     if (!"LISTENER".equals(listener.getRole().getRoleCode())) {
       throw new ResourceForbiddenException("Chỉ Listener được tham gia với quyền người xem.");
     }
-    return agora.issue(visibleLive(livestreamId), userId, false);
+    return listener;
   }
 
   private ProducerProfile approvedCreator(UUID userId, boolean lock) {

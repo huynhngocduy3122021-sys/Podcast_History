@@ -76,12 +76,66 @@ class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
     await _repo.upgradeToPremium();
     await loadProfile();
   }
+
+  void setPremiumStatus(bool isPremium) {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncValue.data(current.copyWith(isPremium: isPremium));
+    }
+  }
 }
 
 final creatorProfileProvider =
     NotifierProvider<CreatorProfileNotifier, AsyncValue<CreatorProfile>>(
       CreatorProfileNotifier.new,
     );
+
+// Creator System Plans Provider
+final creatorSystemPlansProvider =
+    FutureProvider<List<CreatorSystemPlan>>((ref) async {
+  final token = ref.watch(creatorAccessTokenProvider);
+  if (token == null || token.isEmpty) {
+    return const [];
+  }
+  final repo = ref.watch(creatorRepositoryProvider);
+  return repo.getSystemPlans();
+});
+
+// Creator Subscription Controller & Provider
+class CreatorSubscriptionNotifier
+    extends Notifier<AsyncValue<CreatorSystemSubscription?>> {
+  @override
+  AsyncValue<CreatorSystemSubscription?> build() {
+    Future.microtask(() => loadSubscription());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadSubscription() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data(null);
+      return;
+    }
+    try {
+      state = const AsyncValue.loading();
+      final sub = await _repo.getMySystemSubscription();
+      state = AsyncValue.data(sub);
+      if (sub != null && sub.isActive) {
+        ref.read(creatorProfileProvider.notifier).setPremiumStatus(true);
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+}
+
+final creatorSubscriptionProvider = NotifierProvider<
+    CreatorSubscriptionNotifier,
+    AsyncValue<CreatorSystemSubscription?>>(
+  CreatorSubscriptionNotifier.new,
+);
 
 // Categories Controller
 class CreatorCategoriesNotifier
@@ -876,4 +930,109 @@ final creatorLivestreamsProvider =
     NotifierProvider<CreatorLivestreamsNotifier, AsyncValue<List<CreatorLivestreamItem>>>(
       CreatorLivestreamsNotifier.new,
     );
+
+// Channel Membership Plans
+class CreatorChannelPlansNotifier
+    extends Notifier<AsyncValue<List<CreatorChannelPlan>>> {
+  @override
+  AsyncValue<List<CreatorChannelPlan>> build() {
+    Future.microtask(loadPlans);
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadPlans() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+    try {
+      state = const AsyncValue.loading();
+      final list = await _repo.getMyChannelMembershipPlans();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<CreatorChannelPlan> selectTemplate(String templateCode) async {
+    final plan = await _repo.selectMembershipTemplate(templateCode);
+    await loadPlans();
+    return plan;
+  }
+
+  Future<CreatorChannelPlan> updatePrice(String planId, double price) async {
+    final plan = await _repo.updateMembershipPlanPrice(planId, price);
+    await loadPlans();
+    return plan;
+  }
+}
+
+final creatorChannelPlansProvider = NotifierProvider<
+    CreatorChannelPlansNotifier, AsyncValue<List<CreatorChannelPlan>>>(
+  CreatorChannelPlansNotifier.new,
+);
+
+final creatorPlanTemplatesProvider =
+    FutureProvider<List<CreatorPlanTemplate>>((ref) async {
+  final repo = ref.watch(creatorRepositoryProvider);
+  return repo.getMembershipPlanTemplates();
+});
+
+// Studio Notifications
+class CreatorNotificationsNotifier
+    extends Notifier<AsyncValue<List<CreatorStudioNotification>>> {
+  @override
+  AsyncValue<List<CreatorStudioNotification>> build() {
+    Future.microtask(loadNotifications);
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadNotifications() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data([]);
+      return;
+    }
+    try {
+      final list = await _repo.getNotifications();
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<void> markAsRead(String id) async {
+    final current = state.value ?? [];
+    state = AsyncValue.data([
+      for (final n in current)
+        if (n.id == id) n.copyWith(read: true) else n,
+    ]);
+    await _repo.markNotificationAsRead(id);
+  }
+
+  Future<void> markAllAsRead() async {
+    final current = state.value ?? [];
+    state = AsyncValue.data([
+      for (final n in current) n.copyWith(read: true),
+    ]);
+    for (final n in current.where((item) => !item.read)) {
+      await _repo.markNotificationAsRead(n.id);
+    }
+  }
+}
+
+final creatorNotificationsProvider = NotifierProvider<
+    CreatorNotificationsNotifier, AsyncValue<List<CreatorStudioNotification>>>(
+  CreatorNotificationsNotifier.new,
+);
+
+final unreadCreatorNotificationsCountProvider = Provider<int>((ref) {
+  final notifs = ref.watch(creatorNotificationsProvider).value ?? [];
+  return notifs.where((n) => !n.read).length;
+});
 

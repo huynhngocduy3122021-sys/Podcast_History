@@ -1,5 +1,7 @@
 # Content Creator — hướng dẫn tích hợp API
 
+Chat trong livestream dùng Agora Signaling, không lưu tin nhắn ở backend: xem [AGORA_LIVE_CHAT.md](AGORA_LIVE_CHAT.md).
+
 ## Quy ước chung
 
 - Base URL lấy theo môi trường backend đang chạy (local thường là `http://localhost:8081`; Android Emulator dùng `http://10.0.2.2:8081`). Không hardcode URL ngrok.
@@ -84,9 +86,21 @@ Gọi các bước theo thứ tự sau. `podcastId` là ID trả về từ bư�
 4. Khi listener chấp nhận sản phẩm và Admin đối soát thanh toán thành `PAID`, gọi `POST /api/creator/wallet/release-funds` (không body). `GET /api/creator/wallet/balance` trả `availableBalance`, `heldBalance`, `pendingRelease`, `currency`; số dư được tính theo thanh toán và phương thức thanh toán, không tự cộng khi chỉ có yêu cầu.
 5. `GET /api/creator/wallet/payout-accounts` để chọn tài khoản nhận tiền do Admin cấp. `POST /api/creator/wallet/withdrawals` với `{ "amount": 100000, "payoutAccountId": "UUID" }`; amount phải dương và không vượt số dư khả dụng. `GET /api/creator/wallet/withdrawals` để theo dõi; tiền được giữ ngay khi tạo yêu cầu và Admin xử lý kết quả qua luồng payout.
 
-## 6. Tình trạng gói
+## 6. Quản lý gói hội viên & gói Creator
 
-Tính năng gói Creator và membership listener đang tắt theo cấu hình mặc định. `GET /api/creator/system-plans` có thể trả `[]`; trạng thái gói của Creator là `DISABLED`, đăng ký gói bị chặn. Frontend nên ẩn nút mua/đăng ký khi nhận trạng thái này.
+### 6.1 Gói hội viên kênh (Channel Membership Plans)
+Creator quản lý gói hội viên cho khán giả của kênh mình:
+1. `GET /api/creator/membership-plans/templates`: Lấy danh sách 3 gói mẫu (25K, 50K, 75K VND).
+2. `PUT /api/creator/membership-plans/templates/{templateCode}/select`: Chọn một mẫu gói. Backend chỉ để duy nhất 1 gói `ACTIVE`, các gói còn lại là `INACTIVE`.
+3. `PUT /api/creator/membership-plans/{planId}/price`: Điều chỉnh giá bán của gói đang active với body `{"price": 30000}`.
+4. `GET /api/creator/membership-plans`: Xem danh sách tất cả các gói thuộc kênh của mình và trạng thái hoạt động.
+
+### 6.2 Gói hệ thống cho Creator (Creator System Plans)
+Gói hệ thống hỗ trợ nâng cấp tài khoản Creator để mở quyền livestream qua Agora và không giới hạn lượt tải lên:
+- `GET /api/creator/system-plans`: Xem các gói hệ thống khả dụng (như gói PLUS).
+- `POST /api/creator/system-plans/{planId}/subscribe`: Tạo mã QR SePay để thanh toán gói hệ thống.
+- `DELETE /api/creator/system-plans/me/pending-checkout`: Hủy đơn thanh toán chờ cũ nếu bị xung đột `409 Conflict`.
+- `GET /api/creator/system-plans/me`: Xem quyền lợi và thời hạn gói hệ thống hiện tại.
 
 ## Thông báo cho Creator
 

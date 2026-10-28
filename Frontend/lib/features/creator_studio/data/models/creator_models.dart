@@ -782,3 +782,334 @@ class CreatorDashboardData {
   }
 }
 
+// --- CREATOR SYSTEM PLANS & SUBSCRIPTIONS ---
+
+class CreatorSystemBenefit {
+  final String key;
+  final String value;
+  final String description;
+
+  const CreatorSystemBenefit({
+    required this.key,
+    required this.value,
+    required this.description,
+  });
+
+  factory CreatorSystemBenefit.fromJson(Map<String, dynamic> json) {
+    return CreatorSystemBenefit(
+      key: json['key'] as String? ?? '',
+      value: json['value'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'key': key,
+    'value': value,
+    'description': description,
+  };
+}
+
+class CreatorSystemPlan {
+  final String planId;
+  final String code;
+  final String name;
+  final String description;
+  final double price;
+  final String currency;
+  final int? durationDays;
+  final String status;
+  final List<CreatorSystemBenefit> benefits;
+
+  const CreatorSystemPlan({
+    required this.planId,
+    required this.code,
+    required this.name,
+    required this.description,
+    required this.price,
+    required this.currency,
+    this.durationDays,
+    required this.status,
+    required this.benefits,
+  });
+
+  bool get isPaid => price > 0;
+  bool get isActive => status.toUpperCase() == 'ACTIVE';
+
+  factory CreatorSystemPlan.fromJson(Map<String, dynamic> json) {
+    final rawBenefits = json['benefits'] as List? ?? [];
+    return CreatorSystemPlan(
+      planId: json['planId']?.toString() ?? '',
+      code: json['code'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency'] as String? ?? 'VND',
+      durationDays: (json['durationDays'] as num?)?.toInt(),
+      status: json['status'] as String? ?? 'ACTIVE',
+      benefits: rawBenefits
+          .whereType<Map<String, dynamic>>()
+          .map(CreatorSystemBenefit.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class CreatorSystemSubscription {
+  final String? planCode;
+  final String? planId;
+  final String? planName;
+  final DateTime? startAt;
+  final DateTime? endAt;
+  final int? uploadLimit;
+  final int uploadsUsed;
+  final int? uploadsRemaining;
+  final bool canLivestream;
+  final String? subscriptionId;
+  final double? lastPaymentAmount;
+  final String? lastPaymentStatus;
+  final String? lastPaymentReference;
+  final List<CreatorSystemBenefit> benefits;
+
+  const CreatorSystemSubscription({
+    this.planCode,
+    this.planId,
+    this.planName,
+    this.startAt,
+    this.endAt,
+    this.uploadLimit,
+    this.uploadsUsed = 0,
+    this.uploadsRemaining,
+    this.canLivestream = false,
+    this.subscriptionId,
+    this.lastPaymentAmount,
+    this.lastPaymentStatus,
+    this.lastPaymentReference,
+    this.benefits = const [],
+  });
+
+  bool get isPaidPlan =>
+      planCode != null &&
+      planCode!.toUpperCase() != 'FREE' &&
+      planCode!.toUpperCase() != 'DISABLED';
+
+  bool get isActive {
+    if (!isPaidPlan) return false;
+    if (endAt == null) return true;
+    return endAt!.isAfter(DateTime.now());
+  }
+
+  bool get isPendingPayment => lastPaymentStatus?.toUpperCase() == 'PENDING';
+
+  factory CreatorSystemSubscription.fromJson(Map<String, dynamic> json) {
+    final rawBenefits = json['benefits'] as List? ?? [];
+    return CreatorSystemSubscription(
+      planCode: json['planCode'] as String?,
+      planId: json['planId']?.toString(),
+      planName: json['planName'] as String?,
+      startAt: json['startAt'] != null
+          ? DateTime.tryParse(json['startAt'].toString())
+          : null,
+      endAt: json['endAt'] != null
+          ? DateTime.tryParse(json['endAt'].toString())
+          : null,
+      uploadLimit: (json['uploadLimit'] as num?)?.toInt(),
+      uploadsUsed: (json['uploadsUsed'] as num?)?.toInt() ?? 0,
+      uploadsRemaining: (json['uploadsRemaining'] as num?)?.toInt(),
+      canLivestream: json['canLivestream'] as bool? ?? false,
+      subscriptionId: json['subscriptionId']?.toString(),
+      lastPaymentAmount: (json['lastPaymentAmount'] as num?)?.toDouble(),
+      lastPaymentStatus: json['lastPaymentStatus'] as String?,
+      lastPaymentReference: json['lastPaymentReference'] as String?,
+      benefits: rawBenefits
+          .whereType<Map<String, dynamic>>()
+          .map(CreatorSystemBenefit.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class CreatorCheckoutPayment {
+  final String checkoutId;
+  final String? creatorSubscriptionId;
+  final String purpose;
+  final String paymentCode;
+  final String qrImageUrl;
+  final double amount;
+  final String currency;
+  final String status;
+  final DateTime? paidAt;
+  final DateTime? expiresAt;
+
+  const CreatorCheckoutPayment({
+    required this.checkoutId,
+    this.creatorSubscriptionId,
+    required this.purpose,
+    required this.paymentCode,
+    required this.qrImageUrl,
+    required this.amount,
+    required this.currency,
+    required this.status,
+    this.paidAt,
+    this.expiresAt,
+  });
+
+  bool get isPaid => status.toUpperCase() == 'PAID';
+  bool get isExpired => status.toUpperCase() == 'EXPIRED';
+  bool get isPending => status.toUpperCase() == 'PENDING';
+
+  factory CreatorCheckoutPayment.fromJson(Map<String, dynamic> json) {
+    return CreatorCheckoutPayment(
+      checkoutId: json['checkoutId']?.toString() ?? '',
+      creatorSubscriptionId: json['creatorSubscriptionId']?.toString(),
+      purpose: json['purpose'] as String? ?? '',
+      paymentCode: json['paymentCode'] as String? ?? '',
+      qrImageUrl: json['qrImageUrl'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency'] as String? ?? 'VND',
+      status: json['status'] as String? ?? 'PENDING',
+      paidAt: json['paidAt'] != null
+          ? DateTime.tryParse(json['paidAt'].toString())
+          : null,
+      expiresAt: json['expiresAt'] != null
+          ? DateTime.tryParse(json['expiresAt'].toString())
+          : null,
+    );
+  }
+}
+
+class CreatorChannelPlan {
+  final String planId;
+  final String creatorId;
+  final String templateCode;
+  final String name;
+  final String description;
+  final double price;
+  final String currency;
+  final int durationDays;
+  final String status;
+
+  const CreatorChannelPlan({
+    required this.planId,
+    required this.creatorId,
+    required this.templateCode,
+    required this.name,
+    required this.description,
+    required this.price,
+    required this.currency,
+    required this.durationDays,
+    required this.status,
+  });
+
+  bool get isActive => status.toUpperCase() == 'ACTIVE';
+
+  factory CreatorChannelPlan.fromJson(Map<String, dynamic> json) {
+    return CreatorChannelPlan(
+      planId: json['planId']?.toString() ?? '',
+      creatorId: json['creatorId']?.toString() ?? '',
+      templateCode: json['templateCode']?.toString() ?? '',
+      name: json['name'] as String? ?? 'Gói Hội viên Kênh',
+      description: json['description'] as String? ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency'] as String? ?? 'VND',
+      durationDays: (json['durationDays'] as num?)?.toInt() ?? 30,
+      status: json['status'] as String? ?? 'ACTIVE',
+    );
+  }
+}
+
+class CreatorPlanTemplate {
+  final String code;
+  final String name;
+  final double suggestedPrice;
+  final String currency;
+  final int durationDays;
+  final String benefit;
+
+  const CreatorPlanTemplate({
+    required this.code,
+    required this.name,
+    required this.suggestedPrice,
+    required this.currency,
+    required this.durationDays,
+    required this.benefit,
+  });
+
+  factory CreatorPlanTemplate.fromJson(Map<String, dynamic> json) {
+    String parsedBenefit = '';
+    if (json['benefit'] != null) {
+      parsedBenefit = json['benefit'].toString();
+    } else if (json['benefits'] is List) {
+      parsedBenefit = (json['benefits'] as List)
+          .map((b) => b is Map ? (b['description'] ?? b['name'] ?? '').toString() : b.toString())
+          .where((s) => s.isNotEmpty)
+          .join(' • ');
+    }
+
+    return CreatorPlanTemplate(
+      code: json['code']?.toString() ?? json['templateCode']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      suggestedPrice: (json['suggestedPrice'] as num?)?.toDouble() ??
+          (json['price'] as num?)?.toDouble() ??
+          0.0,
+      currency: json['currency'] as String? ?? 'VND',
+      durationDays: (json['durationDays'] as num?)?.toInt() ?? 30,
+      benefit: parsedBenefit,
+    );
+  }
+}
+
+class CreatorStudioNotification {
+  final String id;
+  final String type;
+  final String title;
+  final String message;
+  final bool read;
+  final DateTime? createdAt;
+  final DateTime? readAt;
+  final Map<String, dynamic>? payload;
+
+  const CreatorStudioNotification({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.message,
+    this.read = false,
+    this.createdAt,
+    this.readAt,
+    this.payload,
+  });
+
+  CreatorStudioNotification copyWith({bool? read}) {
+    return CreatorStudioNotification(
+      id: id,
+      type: type,
+      title: title,
+      message: message,
+      read: read ?? this.read,
+      createdAt: createdAt,
+      readAt: readAt,
+      payload: payload,
+    );
+  }
+
+  factory CreatorStudioNotification.fromJson(Map<String, dynamic> json) {
+    return CreatorStudioNotification(
+      id: json['notificationId']?.toString() ?? json['id']?.toString() ?? '',
+      type: json['notificationType']?.toString() ?? json['type']?.toString() ?? 'SYSTEM',
+      title: json['title'] as String? ?? 'Thông báo Studio',
+      message: json['message'] as String? ?? '',
+      read: json['read'] == true || json['isRead'] == true,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())?.toLocal()
+          : null,
+      readAt: json['readAt'] != null
+          ? DateTime.tryParse(json['readAt'].toString())?.toLocal()
+          : null,
+      payload: json['payload'] is Map<String, dynamic>
+          ? json['payload'] as Map<String, dynamic>
+          : null,
+    );
+  }
+}
+

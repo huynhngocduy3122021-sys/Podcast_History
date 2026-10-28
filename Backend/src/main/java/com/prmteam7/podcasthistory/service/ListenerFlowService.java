@@ -99,6 +99,8 @@ public class ListenerFlowService {
   private final SubscriptionRepository subscriptionRepository;
   private final PaymentRepository paymentRepository;
   private final SeriesRequestRepository seriesRequestRepository;
+  private final SepayService sepayService;
+  private final ListenerWalletService listenerWalletService;
   private final R2PlaybackUrlService playbackUrlService;
   private final CommentRealtimeHub commentRealtimeHub;
   private final PackageFeatures packageFeatures;
@@ -121,6 +123,8 @@ public class ListenerFlowService {
       SubscriptionRepository subscriptionRepository,
       PaymentRepository paymentRepository,
       SeriesRequestRepository seriesRequestRepository,
+      SepayService sepayService,
+      ListenerWalletService listenerWalletService,
       R2PlaybackUrlService playbackUrlService,
       CommentRealtimeHub commentRealtimeHub,
       PackageFeatures packageFeatures,
@@ -141,6 +145,8 @@ public class ListenerFlowService {
     this.subscriptionRepository = subscriptionRepository;
     this.paymentRepository = paymentRepository;
     this.seriesRequestRepository = seriesRequestRepository;
+    this.sepayService = sepayService;
+    this.listenerWalletService = listenerWalletService;
     this.playbackUrlService = playbackUrlService;
     this.commentRealtimeHub = commentRealtimeHub;
     this.packageFeatures = packageFeatures;
@@ -522,6 +528,9 @@ public class ListenerFlowService {
   @Transactional
   public MembershipCheckoutItem createMembershipCheckout(UUID userId, MembershipCheckout request) {
     packageFeatures.requireMemberships();
+    AppUser buyer = userRepository.findByIdForUpdate(userId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Listener."));
+    String method = request.paymentMethod() == null ? "SEPAY" : request.paymentMethod();
     MembershipPlan plan =
         membershipPlanRepository
             .lockById(request.membershipPlanId())
@@ -531,11 +540,24 @@ public class ListenerFlowService {
                     new ResourceNotFoundException(
                         "Không tìm thấy membership plan đang hoạt động."));
     assertCreatorApproved(plan.getProducerProfile());
-    if (subscriptionRepository
-        .existsByUser_UserIdAndMembershipPlan_MembershipPlanIdAndStatusIgnoreCase(
-            userId, plan.getMembershipPlanId(), "PENDING")) {
-      throw new ResourceConflictException("Bạn đã có checkout đang chờ cho membership plan này.");
-    }
+    if (!"VND".equalsIgnoreCase(plan.getCurrency().trim()))
+      throw new InvalidFlowRequestException("Thanh toán membership chỉ hỗ trợ VND.");
+    UUID channelId = plan.getProducerProfile().getProducerProfileId();
+    subscriptionRepository.findFirstByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByCreatedAtDesc(
+        userId, channelId, "PENDING")
+        .flatMap(pending -> paymentRepository.findFirstBySubscription_SubscriptionIdOrderByCreatedAtDesc(
+            pending.getSubscriptionId()))
+        .ifPresent(pendingPayment -> sepayService.getPaymentStatus(userId, pendingPayment.getPaymentId()));
+    if (subscriptionRepository.findFirstByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByCreatedAtDesc(
+        userId, channelId, "PENDING").isPresent())
+      throw new ResourceConflictException("Bạn đã có checkout membership đang chờ tại kênh này.");
+    subscriptionRepository.findFirstByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByCreatedAtDesc(
+        userId, channelId, "EXPIRED")
+        .flatMap(expired -> paymentRepository.findFirstBySubscription_SubscriptionIdOrderByCreatedAtDesc(
+            expired.getSubscriptionId()))
+        .filter(expiredPayment -> expiredPayment.getCreatedAt().plus(35, java.time.temporal.ChronoUnit.MINUTES).isAfter(Instant.now()))
+        .ifPresent(expiredPayment -> { throw new ResourceConflictException(
+            "Checkout vừa hết hạn; vui lòng đợi thêm tối đa 5 phút trước khi tạo checkout mới."); });
     Instant now = Instant.now();
     if (subscriptionRepository
         .existsByUser_UserIdAndMembershipPlan_ProducerProfile_ProducerProfileIdAndStatusIgnoreCaseAndStartAtBeforeAndEndAtAfter(
@@ -544,29 +566,45 @@ public class ListenerFlowService {
     }
 
     Subscription subscription = new Subscription();
-    subscription.setUser(requireUser(userId));
+    subscription.setUser(buyer);
     subscription.setMembershipPlan(plan);
     subscription.setStartAt(now);
     subscription.setEndAt(now.plus(plan.getDurationDays(), java.time.temporal.ChronoUnit.DAYS));
-    subscription.setStatus("PENDING");
+    subscription.setStatus("WALLET".equals(method) ? "ACTIVE" : "PENDING");
     subscription.setAutoRenew(false);
     subscription = subscriptionRepository.save(subscription);
 
     Payment payment = new Payment();
-    payment.setUser(requireUser(userId));
+    payment.setUser(buyer);
     payment.setSubscription(subscription);
     payment.setAmount(plan.getPrice());
     payment.setCurrency(plan.getCurrency());
-    payment.setStatus("PENDING");
+    payment.setStatus("WALLET".equals(method) ? "PAID" : "PENDING");
+    payment.setProvider(method);
+    payment.setPaymentMethod(method);
+    if ("WALLET".equals(method)) payment.setPaidAt(now);
+    String paymentCode = null;
+    String qrImageUrl = null;
+    if ("SEPAY".equals(method)) {
+      paymentCode = sepayService.generatePaymentCode();
+      payment.setPaymentCode(paymentCode);
+      qrImageUrl = sepayService.createQrImageUrl(payment.getAmount(), paymentCode);
+    }
     payment = paymentRepository.save(payment);
+    if ("WALLET".equals(method)) {
+      listenerWalletService.debit(listenerWalletService.walletForLockedUser(buyer), payment);
+    }
     return new MembershipCheckoutItem(
         subscription.getSubscriptionId(),
         payment.getPaymentId(),
+        payment.getPaymentCode(),
+        qrImageUrl,
         payment.getAmount(),
         payment.getCurrency(),
         subscription.getStatus(),
         payment.getStatus(),
-        "Checkout đã được tạo. Membership chỉ được kích hoạt sau khi cổng thanh toán xác nhận.");
+        "WALLET".equals(method) ? "Đã thanh toán bằng ví và kích hoạt membership."
+            : "Checkout đã được tạo. Membership chỉ được kích hoạt sau khi SePay xác nhận.");
   }
 
   @Transactional
@@ -587,7 +625,10 @@ public class ListenerFlowService {
         || "EXPIRED".equalsIgnoreCase(subscription.getStatus())) {
       throw new ResourceConflictException("Membership đã kết thúc hoặc đã bị hủy.");
     }
-    subscription.setStatus("CANCELLED");
+    // A paid membership remains usable until its paid endAt; there is no automatic renewal.
+    if ("PENDING".equalsIgnoreCase(subscription.getStatus())) {
+      subscription.setStatus("CANCELLED");
+    }
     subscription.setAutoRenew(false);
     subscriptionRepository.save(subscription);
     linkedPayment

@@ -11,6 +11,13 @@ abstract class CreatorRepository {
   });
   Future<void> upgradeToPremium();
 
+  // System Plans & Checkout
+  Future<List<CreatorSystemPlan>> getSystemPlans();
+  Future<CreatorSystemSubscription?> getMySystemSubscription();
+  Future<CreatorCheckoutPayment> subscribeSystemPlan(String planId);
+  Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId);
+  Future<void> cancelPendingCheckout();
+
   // Categories
   Future<List<CreatorCategory>> getCategories();
 
@@ -183,4 +190,14 @@ abstract class CreatorRepository {
   Future<AgoraJoinResponse> startLivestream(String livestreamId);
   Future<AgoraJoinResponse> renewLivestreamToken(String livestreamId);
   Future<CreatorLivestreamItem> endLivestream(String livestreamId);
+
+  // Channel Membership Plans
+  Future<List<CreatorChannelPlan>> getMyChannelMembershipPlans();
+  Future<List<CreatorPlanTemplate>> getMembershipPlanTemplates();
+  Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode);
+  Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price);
+
+  // Notifications
+  Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30});
+  Future<void> markNotificationAsRead(String notificationId);
 }

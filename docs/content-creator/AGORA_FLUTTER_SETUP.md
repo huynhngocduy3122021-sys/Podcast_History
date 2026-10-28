@@ -1,6 +1,6 @@
 # Cài Agora cho Flutter và nối luồng livestream
 
-Tài liệu này dành cho frontend tích hợp live của **Content Creator (host)** và **Listener (audience)**. SDK đã được cài trong project; hiện **chưa có màn hình, lời gọi API hoặc mã tham gia phòng Agora** trong `Frontend/lib`.
+Tài liệu này dành cho frontend tích hợp live của **Content Creator (host)** và **Listener (audience)**. Màn hình phát và xem live đã được nối với Agora RTC. Chat dùng Agora Signaling theo [AGORA_LIVE_CHAT.md](AGORA_LIVE_CHAT.md).
 
 ## 1. Những gì đã cài sẵn
 

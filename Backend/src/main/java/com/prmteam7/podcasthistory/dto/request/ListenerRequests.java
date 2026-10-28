@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public final class ListenerRequests {
@@ -44,7 +45,8 @@ public final class ListenerRequests {
     }
 
     public record MembershipCheckout(
-            @NotNull UUID membershipPlanId) {
+            @NotNull UUID membershipPlanId,
+            @Pattern(regexp = "SEPAY|WALLET") String paymentMethod) {
     }
 
     public record SeriesRequestCreate(

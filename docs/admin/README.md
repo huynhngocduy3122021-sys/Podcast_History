@@ -77,13 +77,13 @@ Luồng `POST /api/admin/withdrawals/{id}/approve` cũ giả định chưa giữ
 - Giải quyết: `POST /api/admin/disputes/{disputeId}/resolve` với `{ "decision": "RESUME_CONTRACT", "note": "Lý do" }`; `decision` nhận `RESUME_CONTRACT`, `CANCEL_CONTRACT`, `COMPLETE_CONTRACT`.
 - Tranh chấp milestone: `GET /api/admin/milestone-disputes/open`; `POST /api/admin/milestone-disputes/{disputeId}/resolve` với `{ "decision": "APPROVE_MILESTONE", "note": "Lý do" }`. `decision` có thể là `REQUEST_REVISION`.
 
-## 8. Gói đang tạm tắt
+## 8. Quản lý gói
 
-Hai cờ `CREATOR_PLANS_ENABLED=false` và `MEMBERSHIPS_ENABLED=false` đang tắt tính năng gói cho người dùng. Admin vẫn có thể quản lý dữ liệu gói:
+Hai cờ `CREATOR_PLANS_ENABLED=true` và `MEMBERSHIPS_ENABLED=true` bật tính năng gói mặc định. Admin có thể quản lý dữ liệu gói:
 
 - `POST /api/admin/membership-plans` với `{ "creatorId": "UUID", "name": "Tên gói", "description": "...", "price": 100000, "currency": "VND", "durationDays": 30, "status": "ACTIVE" }`; `price` dương, `durationDays` 1–3650, `status` là `ACTIVE`/`INACTIVE`.
 - `POST /api/admin/creator-system-plans` với `{ "code": "PRO", "name": "Gói Pro", "description": "...", "price": 100000, "currency": "VND", "durationDays": 30, "status": "ACTIVE", "benefits": [{ "key": "BENEFIT_KEY", "value": "giá trị", "description": "..." }] }`.
-- Các endpoint CRUD cùng nhóm `/api/admin/membership-plans` và `/api/admin/creator-system-plans` vẫn phục vụ quản trị. Không đưa gói vào checkout phía frontend khi cờ tính năng đang tắt.
+- Các endpoint CRUD cùng nhóm `/api/admin/membership-plans` và `/api/admin/creator-system-plans` phục vụ quản trị. Đặt cờ tương ứng thành `false` nếu cần tạm tắt một loại gói.
 
 ## Lỗi thường gặp
 

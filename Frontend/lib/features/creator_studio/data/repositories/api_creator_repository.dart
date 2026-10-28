@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as dev;
 
 import 'package:uuid/uuid.dart';
 import 'package:podcast_history/core/network/api_client.dart';
@@ -117,6 +118,13 @@ class ApiCreatorRepository implements CreatorRepository {
       }
     } catch (_) {}
 
+    try {
+      final sub = await getMySystemSubscription();
+      if (sub != null) {
+        _cachedProfile = _cachedProfile.copyWith(isPremium: sub.isActive);
+      }
+    } catch (_) {}
+
     return _cachedProfile;
   }
 
@@ -146,14 +154,85 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<void> upgradeToPremium() async {
-    // "cái nào chưa có thì bỏ qua": Attempt contract endpoint
     try {
-      await _apiClient.post(
-        ApiEndpoints.creatorUpgradePremium,
-        body: {'plan': 'MONTHLY'},
+      final plans = await getSystemPlans();
+      final paidPlan = plans.firstWhere(
+        (p) => p.isPaid && p.isActive,
+        orElse: () => plans.firstWhere((p) => p.isPaid, orElse: () => plans.first),
       );
+      if (paidPlan.planId.isNotEmpty) {
+        await subscribeSystemPlan(paidPlan.planId);
+      }
     } catch (_) {}
     _cachedProfile = _cachedProfile.copyWith(isPremium: true);
+  }
+
+  @override
+  Future<List<CreatorSystemPlan>> getSystemPlans() async {
+    try {
+      final response = await _apiClient.get(ApiEndpoints.creatorSystemPlans);
+      if (response is List) {
+        return response
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorSystemPlan.fromJson)
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  @override
+  Future<CreatorSystemSubscription?> getMySystemSubscription() async {
+    if (!_apiClient.isAuthenticated) return null;
+    try {
+      final response = await _apiClient.get(ApiEndpoints.creatorSystemPlansMe);
+      if (response is Map<String, dynamic>) {
+        final sub = CreatorSystemSubscription.fromJson(response);
+        if (sub.isActive) {
+          _cachedProfile = _cachedProfile.copyWith(isPremium: true);
+        }
+        return sub;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<CreatorCheckoutPayment> subscribeSystemPlan(String planId) async {
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorSystemPlanSubscribe(planId),
+    );
+    if (response is Map<String, dynamic>) {
+      return CreatorCheckoutPayment.fromJson(response);
+    }
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi tạo thanh toán gói không hợp lệ.',
+    );
+  }
+
+  @override
+  Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId) async {
+    final response = await _apiClient.get(ApiEndpoints.meCheckout(checkoutId));
+    if (response is Map<String, dynamic>) {
+      final checkout = CreatorCheckoutPayment.fromJson(response);
+      if (checkout.isPaid) {
+        _cachedProfile = _cachedProfile.copyWith(isPremium: true);
+      }
+      return checkout;
+    }
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi kiểm tra thanh toán không hợp lệ.',
+    );
+  }
+
+  @override
+  Future<void> cancelPendingCheckout() async {
+    await _apiClient.delete(
+      ApiEndpoints.creatorPendingCheckout,
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
   }
 
   // ==========================================
@@ -2320,5 +2399,106 @@ class ApiCreatorRepository implements CreatorRepository {
       return CreatorLivestreamItem.fromJson(res);
     }
     throw Exception('Không thể kết thúc livestream');
+  }
+
+  // Channel Membership Plans
+  @override
+  Future<List<CreatorChannelPlan>> getMyChannelMembershipPlans() async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorMembershipPlans,
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorChannelPlan.fromJson)
+            .toList();
+      }
+    } catch (e) {
+      dev.log('[ApiCreatorRepository] getMyChannelMembershipPlans error: $e');
+    }
+    return [];
+  }
+
+  @override
+  Future<List<CreatorPlanTemplate>> getMembershipPlanTemplates() async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorMembershipTemplates,
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorPlanTemplate.fromJson)
+            .toList();
+      }
+    } catch (e) {
+      dev.log('[ApiCreatorRepository] getMembershipPlanTemplates error: $e');
+    }
+    return [];
+  }
+
+  @override
+  Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode) async {
+    final res = await _apiClient.put(
+      ApiEndpoints.selectMembershipTemplate(templateCode),
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
+    if (res is Map<String, dynamic>) {
+      return CreatorChannelPlan.fromJson(res);
+    }
+    throw Exception('Không thể kích hoạt gói thành viên');
+  }
+
+  @override
+  Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price) async {
+    final res = await _apiClient.put(
+      ApiEndpoints.updateMembershipPlanPrice(planId),
+      body: {'price': price},
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
+    if (res is Map<String, dynamic>) {
+      return CreatorChannelPlan.fromJson(res);
+    }
+    throw Exception('Không thể cập nhật giá gói thành viên');
+  }
+
+  // Notifications
+  @override
+  Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30}) async {
+    try {
+      final res = await _apiClient.get(
+        '${ApiEndpoints.notifications}?page=$page&size=$size',
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic> && res['content'] is List) {
+        return (res['content'] as List)
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorStudioNotification.fromJson)
+            .toList();
+      } else if (res is List) {
+        return res
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorStudioNotification.fromJson)
+            .toList();
+      }
+    } catch (e) {
+      dev.log('[ApiCreatorRepository] getNotifications error: $e');
+    }
+    return [];
+  }
+
+  @override
+  Future<void> markNotificationAsRead(String notificationId) async {
+    try {
+      await _apiClient.put(
+        ApiEndpoints.markNotificationRead(notificationId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+    } catch (e) {
+      dev.log('[ApiCreatorRepository] markNotificationAsRead error: $e');
+    }
   }
 }

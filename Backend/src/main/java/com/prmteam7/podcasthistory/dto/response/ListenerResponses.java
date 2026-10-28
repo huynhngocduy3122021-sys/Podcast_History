@@ -58,6 +58,19 @@ public final class ListenerResponses {
             Instant lastListenedAt) {
     }
 
+    public record WalletTransactionItem(
+            UUID transactionId,
+            String type,
+            String direction,
+            BigDecimal amount,
+            String currency,
+            String status,
+            String referenceCode,
+            BigDecimal balanceAfter,
+            BigDecimal heldBalanceAfter,
+            Instant createdAt) {
+    }
+
     public record LikeSummary(UUID podcastId, long likeCount, boolean likedByMe) {
     }
 
@@ -140,6 +153,8 @@ public final class ListenerResponses {
     public record MembershipCheckoutItem(
             UUID subscriptionId,
             UUID paymentId,
+            String paymentCode,
+            String qrImageUrl,
             BigDecimal amount,
             String currency,
             String subscriptionStatus,

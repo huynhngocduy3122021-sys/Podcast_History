@@ -51,6 +51,7 @@ public class CreatorSystemSubscription extends BaseEntity {
   private void assignId() { if (subscriptionId == null) subscriptionId = UUID.randomUUID(); }
 
   public UUID getSubscriptionId() { return subscriptionId; }
+  public void setSubscriptionId(UUID value) { subscriptionId = value; }
   public ProducerProfile getProducerProfile() { return producerProfile; }
   public void setProducerProfile(ProducerProfile producerProfile) { this.producerProfile = producerProfile; }
   public CreatorSystemPlan getPlan() { return plan; }

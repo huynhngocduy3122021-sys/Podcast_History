@@ -2,6 +2,8 @@
 
 Hướng dẫn này dùng cho tài khoản `LISTENER` và các màn hình khám phá, nghe, tương tác, poll, yêu cầu podcast. Contract đối chiếu với controller/DTO backend hiện tại. `creatorId` trong URL là `creatorProfileId` của kênh, không phải `userId`.
 
+Chat livestream: sau `POST /api/livestreams/{livestreamId}/join`, gọi `POST /api/livestreams/{livestreamId}/chat-token` (không có body) để nhận token Agora Signaling. Tin nhắn đi trực tiếp qua Agora và không lưu trong database; xem [hướng dẫn chat live](../content-creator/AGORA_LIVE_CHAT.md).
+
 ## 1. Kết nối và phiên đăng nhập
 
 - Base URL local: `http://localhost:8081`; Android emulator: `http://10.0.2.2:8081`. Máy khác dùng URL HTTPS ngrok đang chạy, không lưu cố định hostname cũ.
@@ -123,7 +125,12 @@ Người tham gia hợp đồng còn có `POST /api/contracts/{contractId}/dispu
 
 ## 7. Gói thành viên và lỗi thường gặp
 
-Gói membership mặc định tắt (`MEMBERSHIPS_ENABLED=false`). `GET /api/creators/{creatorId}/membership-plans` trả `[]`; `POST /api/me/subscriptions` body `{membershipPlanId}` bị từ chối. `GET /api/me/subscriptions` vẫn xem lịch sử. Với cấu hình tắt, backend bỏ kiểm tra membership khi playback tập độc quyền. Frontend nên ẩn màn hình mua gói. Khi bật lại, checkout chỉ tạo payment/subscription `PENDING`; cần Admin đối soát mới thành `ACTIVE`.
+Gói membership mặc định bật (`MEMBERSHIPS_ENABLED=true`):
+- `GET /api/creators/{creatorId}/membership-plans`: Lấy gói hội viên đang `ACTIVE` của Creator để hiển thị nút đăng ký trên trang kênh.
+- `POST /api/me/subscriptions` với body `{"membershipPlanId": "<UUID>", "paymentMethod": "SEPAY" | "WALLET"}`:
+  - **SEPAY**: Trả về `paymentId`, `paymentCode`, `qrImageUrl` với trạng thái `PENDING`. Frontend polling `GET /api/me/payments/{paymentId}` định kỳ đến khi `PAID` và `subscriptionStatus = ACTIVE`.
+  - **WALLET**: Trừ trực tiếp số dư ví khả dụng (`GET /api/listener/wallet`). Nếu thành công chuyển ngay sang `ACTIVE`; nếu số dư ví không đủ, backend trả về lỗi `409 Conflict`.
+- `GET /api/me/subscriptions`: Danh sách các gói hội viên đã đăng ký. Khi `status = ACTIVE`, Listener được mở khóa các tập podcast `MEMBERS_ONLY`.
 
 | HTTP | Cách xử lý |
 |---:|---|

@@ -19,6 +19,7 @@ import org.hibernate.type.SqlTypes;
           columnNames = {"provider_transaction_id"})
     },
     indexes = {
+      @Index(name = "uk_payment_payment_code", columnList = "payment_code", unique = true),
       @Index(name = "idx_payment_user_id", columnList = "user_id"),
       @Index(name = "idx_payment_subscription_id", columnList = "subscription_id"),
       @Index(name = "idx_payment_series_request_id", columnList = "series_request_id"),
@@ -91,6 +92,9 @@ public class Payment extends BaseEntity {
 
   @Column(name = "provider_transaction_id", nullable = true, length = 180)
   private String providerTransactionId;
+
+  @Column(name = "payment_code", nullable = true, length = 64)
+  private String paymentCode;
 
   @Column(name = "status", nullable = false, length = 30)
   private String status;
@@ -193,6 +197,14 @@ public class Payment extends BaseEntity {
 
   public void setProviderTransactionId(String providerTransactionId) {
     this.providerTransactionId = providerTransactionId;
+  }
+
+  public String getPaymentCode() {
+    return paymentCode;
+  }
+
+  public void setPaymentCode(String paymentCode) {
+    this.paymentCode = paymentCode;
   }
 
   public String getStatus() {
