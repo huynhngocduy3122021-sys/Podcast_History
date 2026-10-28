@@ -90,6 +90,12 @@ class ApiEndpoints {
   static String creatorPollResponses(String id) =>
       '/api/creator/polls/$id/responses';
   static const String creatorUpgradePremium = '/api/creator/upgrade-premium';
+  static const String creatorSystemPlans = '/api/creator/system-plans';
+  static const String creatorSystemPlansMe = '/api/creator/system-plans/me';
+  static String creatorSystemPlanSubscribe(String planId) =>
+      '/api/creator/system-plans/$planId/subscribe';
+  static String meCheckout(String checkoutId) =>
+      '/api/me/checkouts/$checkoutId';
 
   // Creator Livestreams (Agora RTC)
   static const String creatorLivestreams = '/api/creator/livestreams';

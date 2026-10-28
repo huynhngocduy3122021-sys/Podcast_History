@@ -7,7 +7,9 @@ String resolveImageUrl(String? url) {
   final trimmed = url.trim();
   if (trimmed.startsWith('data:image')) return trimmed;
   if (kIsWeb) {
-    if (trimmed.contains('.r2.dev') || trimmed.contains('r2.cloudflarestorage.com')) {
+    if (trimmed.contains('.r2.dev') ||
+        trimmed.contains('r2.cloudflarestorage.com') ||
+        trimmed.contains('vietqr.app')) {
       if (!trimmed.contains('images.weserv.nl')) {
         return 'https://images.weserv.nl/?url=${Uri.encodeComponent(trimmed)}';
       }

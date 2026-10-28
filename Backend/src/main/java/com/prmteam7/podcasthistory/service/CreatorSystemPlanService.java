@@ -4,6 +4,7 @@ import com.prmteam7.podcasthistory.dto.request.CreatorSystemPlanWrite;
 import com.prmteam7.podcasthistory.config.PackageFeatures;
 import com.prmteam7.podcasthistory.dto.response.CreatorSystemPlanView;
 import com.prmteam7.podcasthistory.dto.response.CreatorSystemSubscriptionView;
+import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
 import com.prmteam7.podcasthistory.exception.*;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
@@ -23,6 +24,8 @@ public class CreatorSystemPlanService {
   private final PodcastRepository podcasts;
   private final AdminSupportService adminSupport;
   private final PackageFeatures packageFeatures;
+  private final CheckoutPaymentRepository checkouts;
+  private final SepayService sepay;
 
   public CreatorSystemPlanService(
       CreatorSystemPlanRepository plans,
@@ -30,13 +33,15 @@ public class CreatorSystemPlanService {
       ProducerProfileRepository creators,
       PodcastRepository podcasts,
       AdminSupportService adminSupport,
-      PackageFeatures packageFeatures) {
+      PackageFeatures packageFeatures, CheckoutPaymentRepository checkouts, SepayService sepay) {
     this.plans = plans;
     this.subscriptions = subscriptions;
     this.creators = creators;
     this.podcasts = podcasts;
     this.adminSupport = adminSupport;
     this.packageFeatures = packageFeatures;
+    this.checkouts = checkouts;
+    this.sepay = sepay;
   }
 
   public List<CreatorSystemPlanView> available() {
@@ -105,15 +110,29 @@ public class CreatorSystemPlanService {
   }
 
   @Transactional
-  public CreatorSystemSubscriptionView subscribe(UUID userId, UUID planId) {
+  public CheckoutPaymentView subscribe(UUID userId, UUID planId) {
     packageFeatures.requireCreatorPlans();
     var profile = approvedCreator(userId, true);
     var now = Instant.now();
     if (activeSubscription(profile.getProducerProfileId(), now).isPresent())
       throw new ResourceConflictException("Gói CC hiện tại còn hiệu lực; hãy đăng ký sau khi hết hạn.");
+    checkouts.findFirstByCreatorSubscription_ProducerProfile_ProducerProfileIdAndStatusOrderByCreatedAtDesc(
+        profile.getProducerProfileId(), "PENDING")
+        .ifPresent(checkout -> sepay.getCheckoutStatus(userId, checkout.getCheckoutId()));
+    if (subscriptions.existsByProducerProfile_ProducerProfileIdAndPaymentStatus(profile.getProducerProfileId(), "PENDING"))
+      throw new ResourceConflictException("Đã có thanh toán gói CC đang chờ.");
+    checkouts.findFirstByCreatorSubscription_ProducerProfile_ProducerProfileIdAndStatusOrderByCreatedAtDesc(
+        profile.getProducerProfileId(), "EXPIRED")
+        .filter(checkout -> checkout.getCreatedAt().plus(35, ChronoUnit.MINUTES).isAfter(now))
+        .ifPresent(checkout -> { throw new ResourceConflictException(
+            "Checkout vừa hết hạn; vui lòng đợi thêm tối đa 5 phút trước khi đăng ký lại."); });
     var plan = requirePlan(planId);
     if (!"ACTIVE".equals(plan.getStatus()) || plan.getPrice().signum() <= 0)
       throw new ResourceConflictException("Chỉ có thể đăng ký gói trả phí đang hoạt động.");
+    if (!"VND".equalsIgnoreCase(plan.getCurrency().trim()))
+      throw new InvalidFlowRequestException("SePay chỉ hỗ trợ thanh toán gói bằng VND.");
+    String paymentCode = sepay.generatePaymentCode();
+    String qrImageUrl = sepay.createQrImageUrl(plan.getPrice(), paymentCode);
     var subscription = new CreatorSystemSubscription();
     subscription.setProducerProfile(profile);
     subscription.setPlan(plan);
@@ -121,14 +140,24 @@ public class CreatorSystemPlanService {
     subscription.setEndAt(now.plus(plan.getDurationDays(), ChronoUnit.DAYS));
     subscription.setAmount(plan.getPrice());
     subscription.setCurrency(plan.getCurrency());
-    subscription.setPaymentStatus("SUCCEEDED");
-    subscription.setPaymentReference("SIMULATED-" + UUID.randomUUID());
+    subscription.setPaymentStatus("PENDING");
+    subscription.setPaymentReference(paymentCode);
     subscription.setBenefits(new ArrayList<>(plan.getBenefits().stream()
         .map(b -> new CreatorSystemBenefit(b.getKey(), b.getValue(), b.getDescription()))
         .toList()));
     subscription = subscriptions.saveAndFlush(subscription);
-    var used = podcasts.countByProducerProfile_ProducerProfileIdAndMediaUrlIsNotNull(profile.getProducerProfileId());
-    return subscriptionView(plan, subscription, subscription.getBenefits(), used);
+    var checkout = new CheckoutPayment();
+    checkout.setUser(profile.getUser());
+    checkout.setCreatorSubscription(subscription);
+    checkout.setPurpose("CREATOR_PLAN");
+    checkout.setAmount(plan.getPrice());
+    checkout.setCurrency(plan.getCurrency());
+    checkout.setPaymentCode(paymentCode);
+    checkout.setStatus("PENDING");
+    checkout = checkouts.saveAndFlush(checkout);
+    return new CheckoutPaymentView(checkout.getCheckoutId(), subscription.getSubscriptionId(),
+        checkout.getPurpose(), paymentCode, qrImageUrl, checkout.getAmount(), checkout.getCurrency(),
+        checkout.getStatus(), null, checkout.getCreatedAt().plus(30, ChronoUnit.MINUTES));
   }
 
   @Transactional

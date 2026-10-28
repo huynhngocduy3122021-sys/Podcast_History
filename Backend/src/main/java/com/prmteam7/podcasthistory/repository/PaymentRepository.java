@@ -56,6 +56,16 @@ public interface PaymentRepository
   @org.springframework.data.jpa.repository.Query("select p from Payment p where p.paymentId=:id")
   Optional<Payment> lockById(@org.springframework.data.repository.query.Param("id") UUID id);
 
+  @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+  @org.springframework.data.jpa.repository.Query(
+      "select p from Payment p where p.paymentCode=:code")
+  Optional<Payment> lockByPaymentCode(
+      @org.springframework.data.repository.query.Param("code") String code);
+
+  Optional<Payment> findByPaymentIdAndUser_UserId(UUID paymentId, UUID userId);
+
+  boolean existsByPaymentCode(String paymentCode);
+
   boolean existsByProviderTransactionId(String reference);
 
   boolean existsByRefundReference(String reference);

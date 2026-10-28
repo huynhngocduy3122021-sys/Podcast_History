@@ -76,12 +76,66 @@ class CreatorProfileNotifier extends Notifier<AsyncValue<CreatorProfile>> {
     await _repo.upgradeToPremium();
     await loadProfile();
   }
+
+  void setPremiumStatus(bool isPremium) {
+    final current = state.value;
+    if (current != null) {
+      state = AsyncValue.data(current.copyWith(isPremium: isPremium));
+    }
+  }
 }
 
 final creatorProfileProvider =
     NotifierProvider<CreatorProfileNotifier, AsyncValue<CreatorProfile>>(
       CreatorProfileNotifier.new,
     );
+
+// Creator System Plans Provider
+final creatorSystemPlansProvider =
+    FutureProvider<List<CreatorSystemPlan>>((ref) async {
+  final token = ref.watch(creatorAccessTokenProvider);
+  if (token == null || token.isEmpty) {
+    return const [];
+  }
+  final repo = ref.watch(creatorRepositoryProvider);
+  return repo.getSystemPlans();
+});
+
+// Creator Subscription Controller & Provider
+class CreatorSubscriptionNotifier
+    extends Notifier<AsyncValue<CreatorSystemSubscription?>> {
+  @override
+  AsyncValue<CreatorSystemSubscription?> build() {
+    Future.microtask(() => loadSubscription());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadSubscription() async {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null || token.isEmpty) {
+      state = const AsyncValue.data(null);
+      return;
+    }
+    try {
+      state = const AsyncValue.loading();
+      final sub = await _repo.getMySystemSubscription();
+      state = AsyncValue.data(sub);
+      if (sub != null && sub.isActive) {
+        ref.read(creatorProfileProvider.notifier).setPremiumStatus(true);
+      }
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+}
+
+final creatorSubscriptionProvider = NotifierProvider<
+    CreatorSubscriptionNotifier,
+    AsyncValue<CreatorSystemSubscription?>>(
+  CreatorSubscriptionNotifier.new,
+);
 
 // Categories Controller
 class CreatorCategoriesNotifier

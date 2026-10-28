@@ -76,14 +76,109 @@ class VietCastApp extends StatefulWidget {
   State<VietCastApp> createState() => _AppState();
 }
 
-class _AppState extends State<VietCastApp> {
+class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
   ThemeMode mode = ThemeMode.light;
   Account? account;
+  Timer? _tokenRefreshTimer;
+  bool _isRefreshingToken = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restoreSavedSession();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tokenRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final current = account;
+      if (current != null && current.session.refreshToken.isNotEmpty) {
+        if (_isTokenExpiringSoon(current.session.accessToken)) {
+          _autoRefreshToken();
+        }
+      }
+    }
+  }
+
+  int _getTokenRemainingSeconds(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return 600;
+      var output = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      switch (output.length % 4) {
+        case 0:
+          break;
+        case 2:
+          output += '==';
+          break;
+        case 3:
+          output += '=';
+          break;
+        default:
+          return 600;
+      }
+      final decoded = utf8.decode(base64Url.decode(output));
+      final payload = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = payload['exp'] as num?;
+      if (exp != null) {
+        final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        return exp.toInt() - nowSec;
+      }
+    } catch (_) {}
+    return 600;
+  }
+
+  bool _isTokenExpiringSoon(String token, {int thresholdSeconds = 120}) {
+    final remaining = _getTokenRemainingSeconds(token);
+    return remaining <= thresholdSeconds;
+  }
+
+  void _scheduleTokenRefresh(Account acc) {
+    _tokenRefreshTimer?.cancel();
+    final remaining = _getTokenRemainingSeconds(acc.session.accessToken);
+    // Refresh 2 minutes (120s) before token expires, or at least in 15 seconds if already near expiry
+    final delaySeconds = math.max(15, remaining - 120);
+    _tokenRefreshTimer = Timer(Duration(seconds: delaySeconds), () {
+      _autoRefreshToken();
+    });
+  }
+
+  Future<void> _autoRefreshToken() async {
+    if (_isRefreshingToken) return;
+    final current = account;
+    if (current == null || current.session.refreshToken.isEmpty) return;
+
+    _isRefreshingToken = true;
+    try {
+      final newSession = await AuthApi().refresh(current.session.refreshToken);
+      final updated = Account(
+        email: current.email,
+        name: current.name,
+        role: current.role,
+        session: newSession,
+      );
+      _saveSession(updated);
+    } catch (e) {
+      if (e is ApiException && (e.statusCode == 401 || e.statusCode == 403)) {
+        logout();
+      } else {
+        // Transient network or server failure: retry in 30 seconds
+        _tokenRefreshTimer?.cancel();
+        _tokenRefreshTimer = Timer(const Duration(seconds: 30), () {
+          _autoRefreshToken();
+        });
+      }
+    } finally {
+      _isRefreshingToken = false;
+    }
   }
 
   void _restoreSavedSession() {
@@ -93,6 +188,11 @@ class _AppState extends State<VietCastApp> {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
         final restored = Account.fromJson(decoded);
         setState(() => account = restored);
+        if (_isTokenExpiringSoon(restored.session.accessToken)) {
+          _autoRefreshToken();
+        } else {
+          _scheduleTokenRefresh(restored);
+        }
       }
     } catch (_) {}
   }
@@ -106,7 +206,9 @@ class _AppState extends State<VietCastApp> {
           jsonEncode(acc.toJson()),
         );
       } catch (_) {}
+      _scheduleTokenRefresh(acc);
     } else {
+      _tokenRefreshTimer?.cancel();
       SessionStorage.removeItem('vietcast_saved_account');
     }
   }
@@ -382,7 +484,7 @@ class _ShellState extends State<Shell> {
   final progressByShow = <String, double>{shows[0].title: .42};
   final likedShowTitles = <String>{shows[0].title};
   final savedShowTitles = <String>{};
-  int walletBalance = 350000;
+  int walletBalance = 0;
   final notifications = <AppNotification>[];
 
   @override
@@ -446,6 +548,16 @@ class _ShellState extends State<Shell> {
     );
     shows = List<Show>.of(fallbackShows);
     _loadListenerFlow();
+  }
+
+  @override
+  void didUpdateWidget(covariant Shell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.accessToken != widget.session.accessToken ||
+        oldWidget.session.refreshToken != widget.session.refreshToken) {
+      api.accessToken = widget.session.accessToken;
+      api.refreshToken = widget.session.refreshToken;
+    }
   }
 
   Future<void> _loadListenerFlow() async {
@@ -795,15 +907,29 @@ class _ShellState extends State<Shell> {
               onPressed: () async {
                 Navigator.pop(context);
                 try {
-                  final checkout = await api.checkout(planId);
+                  final checkout = await api.checkout(
+                    planId,
+                    paymentMethod: 'SEPAY',
+                  );
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Checkout ${checkout['subscriptionStatus'] ?? 'PENDING'} - chua xac nhan thanh toan.',
-                      ),
+                  final paid = await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => PaymentDialog(
+                      api: api,
+                      checkout: checkout,
+                      planName: planName,
                     ),
                   );
+                  if (paid == true && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Thanh toán thành công. Membership đã được kích hoạt.',
+                        ),
+                      ),
+                    );
+                  }
                 } catch (_) {
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1043,15 +1169,166 @@ class _ShellState extends State<Shell> {
     ),
   );
 
-  void _openWallet() => Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => ListenerWalletPage(
-        balance: walletBalance,
-        onTopUp: () => setState(() => walletBalance += 200000),
+  Future<void> _openWallet() async {
+    try {
+      final wallet = await api.wallet();
+      walletBalance = (wallet['availableBalance'] as num?)?.round() ?? 0;
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Không thể tải số dư ví.')));
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ListenerWalletPage(
+          api: api,
+          initialBalance: walletBalance,
+          onBalanceChanged: (balance) =>
+              setState(() => walletBalance = balance),
+        ),
       ),
-    ),
-  );
+    );
+  }
+
   void openPlayer() => _showPlayer(current!);
+}
+
+class PaymentDialog extends StatefulWidget {
+  const PaymentDialog({
+    super.key,
+    required this.api,
+    required this.checkout,
+    required this.planName,
+  });
+
+  final ListenerApi api;
+  final Map<String, dynamic> checkout;
+  final String planName;
+
+  @override
+  State<PaymentDialog> createState() => _PaymentDialogState();
+}
+
+class _PaymentDialogState extends State<PaymentDialog> {
+  Timer? _pollTimer;
+  late Map<String, dynamic> _payment;
+  String? _error;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _payment = Map<String, dynamic>.from(widget.checkout);
+    _pollTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      _checkPayment();
+    });
+  }
+
+  String? get _paymentId => _payment['paymentId']?.toString();
+  String get _status =>
+      '${_payment['paymentStatus'] ?? _payment['status'] ?? 'PENDING'}'
+          .toUpperCase();
+
+  Future<void> _checkPayment() async {
+    final paymentId = _paymentId;
+    if (_checking || paymentId == null || paymentId.isEmpty || !mounted) return;
+    _checking = true;
+    try {
+      final latest = await widget.api.paymentStatus(paymentId);
+      if (!mounted) return;
+      setState(() {
+        _payment = {..._payment, ...latest};
+        _error = null;
+      });
+      if (_status == 'PAID' &&
+          '${_payment['subscriptionStatus'] ?? ''}'.toUpperCase() == 'ACTIVE') {
+        _pollTimer?.cancel();
+        Navigator.of(context).pop(true);
+      } else if (_status == 'EXPIRED' || _status == 'CANCELLED') {
+        _pollTimer?.cancel();
+      } else {
+        // Keep polling while the payment is still pending.
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Chưa kiểm tra được trạng thái thanh toán.');
+      }
+    } finally {
+      _checking = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final qrUrl = _payment['qrImageUrl']?.toString();
+    final paymentCode = _payment['paymentCode']?.toString();
+    final amount = _payment['amount']?.toString() ?? '';
+    final terminal = _status == 'EXPIRED' || _status == 'CANCELLED';
+    return AlertDialog(
+      title: Text('Thanh toán $_status'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.planName,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            if (qrUrl != null && qrUrl.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Image.network(
+                resolveImageUrl(qrUrl),
+                width: 220,
+                height: 220,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.qr_code_2, size: 160),
+              ),
+            ],
+            if (amount.isNotEmpty) Text('Số tiền: $amount VND'),
+            if (paymentCode != null && paymentCode.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SelectableText('Nội dung chuyển khoản: $paymentCode'),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              terminal
+                  ? 'Phiên thanh toán đã kết thúc. Vui lòng tạo giao dịch mới.'
+                  : 'Quét QR và chờ hệ thống xác nhận. Màn hình tự kiểm tra mỗi 4 giây.',
+              textAlign: TextAlign.center,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(terminal ? 'Đóng' : 'Để sau'),
+        ),
+        if (!terminal)
+          FilledButton(
+            onPressed: _checking ? null : _checkPayment,
+            child: const Text('Kiểm tra ngay'),
+          ),
+      ],
+    );
+  }
 }
 
 class CreatorShell extends StatelessWidget {
@@ -2741,14 +3018,56 @@ class LivestreamPage extends StatelessWidget {
   );
 }
 
-class ListenerWalletPage extends StatelessWidget {
+class ListenerWalletPage extends StatefulWidget {
   const ListenerWalletPage({
     super.key,
-    required this.balance,
-    required this.onTopUp,
+    required this.api,
+    required this.initialBalance,
+    required this.onBalanceChanged,
   });
-  final int balance;
-  final VoidCallback onTopUp;
+  final ListenerApi api;
+  final int initialBalance;
+  final ValueChanged<int> onBalanceChanged;
+
+  @override
+  State<ListenerWalletPage> createState() => _ListenerWalletPageState();
+}
+
+class _ListenerWalletPageState extends State<ListenerWalletPage> {
+  late int balance = widget.initialBalance;
+  bool loading = false;
+
+  Future<void> _topUp() async {
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (_) => const _TopUpAmountDialog(),
+    );
+    if (amount == null || !mounted) return;
+    setState(() => loading = true);
+    try {
+      final checkout = await widget.api.topUpWallet(amount);
+      if (!mounted) return;
+      final paid = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => WalletTopUpDialog(api: widget.api, checkout: checkout),
+      );
+      if (paid == true) {
+        final wallet = await widget.api.wallet();
+        balance = (wallet['availableBalance'] as num?)?.round() ?? balance;
+        widget.onBalanceChanged(balance);
+        if (mounted) setState(() {});
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể tạo giao dịch nạp tiền.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => PageFrame(
@@ -2768,7 +3087,7 @@ class ListenerWalletPage extends StatelessWidget {
               const Text('Dùng để ủng hộ creator và đăng ký membership'),
               const SizedBox(height: 14),
               FilledButton.icon(
-                onPressed: onTopUp,
+                onPressed: loading ? null : _topUp,
                 icon: const Icon(Icons.add_card),
                 label: const Text('Nạp tiền'),
               ),
@@ -2785,6 +3104,158 @@ class ListenerWalletPage extends StatelessWidget {
       const Transaction(title: 'Nạp tiền vào ví', amount: '+200.000 VND'),
     ],
   );
+}
+
+class _TopUpAmountDialog extends StatefulWidget {
+  const _TopUpAmountDialog();
+
+  @override
+  State<_TopUpAmountDialog> createState() => _TopUpAmountDialogState();
+}
+
+class _TopUpAmountDialogState extends State<_TopUpAmountDialog> {
+  final controller = TextEditingController(text: '200000');
+  String? error;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  void submit() {
+    final amount = int.tryParse(controller.text.replaceAll('.', '').trim());
+    if (amount == null || amount < 10000 || amount > 100000000) {
+      setState(() => error = 'Nhập số tiền từ 10.000 đến 100.000.000 VND.');
+      return;
+    }
+    Navigator.of(context).pop(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Nạp tiền vào ví'),
+    content: TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: 'Số tiền (VND)', errorText: error),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Hủy'),
+      ),
+      FilledButton(onPressed: submit, child: const Text('Tiếp tục')),
+    ],
+  );
+}
+
+class WalletTopUpDialog extends StatefulWidget {
+  const WalletTopUpDialog({
+    super.key,
+    required this.api,
+    required this.checkout,
+  });
+
+  final ListenerApi api;
+  final Map<String, dynamic> checkout;
+
+  @override
+  State<WalletTopUpDialog> createState() => _WalletTopUpDialogState();
+}
+
+class _WalletTopUpDialogState extends State<WalletTopUpDialog> {
+  Timer? pollTimer;
+  late Map<String, dynamic> checkout = Map.from(widget.checkout);
+  bool checking = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => check());
+  }
+
+  String get status => '${checkout['status'] ?? 'PENDING'}'.toUpperCase();
+
+  Future<void> check() async {
+    final id = checkout['checkoutId']?.toString();
+    if (checking || id == null || id.isEmpty || !mounted) return;
+    checking = true;
+    try {
+      final latest = await widget.api.checkoutStatus(id);
+      if (!mounted) return;
+      setState(() {
+        checkout = {...checkout, ...latest};
+        error = null;
+      });
+      if (status == 'PAID') {
+        pollTimer?.cancel();
+        Navigator.pop(context, true);
+      } else if (status == 'EXPIRED' || status == 'CANCELLED') {
+        pollTimer?.cancel();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'Chưa kiểm tra được trạng thái thanh toán.');
+      }
+    } finally {
+      checking = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final qrUrl = checkout['qrImageUrl']?.toString();
+    final code = checkout['paymentCode']?.toString();
+    final terminal = status == 'EXPIRED' || status == 'CANCELLED';
+    return AlertDialog(
+      title: const Text('Nạp tiền'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (qrUrl?.isNotEmpty == true)
+              Image.network(
+                resolveImageUrl(qrUrl),
+                width: 220,
+                height: 220,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.qr_code_2, size: 160),
+              ),
+            Text('Số tiền: ${checkout['amount'] ?? ''} VND'),
+            if (code?.isNotEmpty == true) SelectableText('Nội dung: $code'),
+            const SizedBox(height: 12),
+            Text(
+              terminal
+                  ? 'Phiên đã kết thúc. Vui lòng tạo giao dịch mới.'
+                  : 'Quét QR và chờ hệ thống xác nhận. Tự kiểm tra mỗi 4 giây.',
+              textAlign: TextAlign.center,
+            ),
+            if (error != null) Text(error!),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(terminal ? 'Đóng' : 'Để sau'),
+        ),
+        if (!terminal)
+          FilledButton(
+            onPressed: checking ? null : check,
+            child: const Text('Kiểm tra ngay'),
+          ),
+      ],
+    );
+  }
 }
 
 class Profile extends StatelessWidget {
@@ -4868,30 +5339,29 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
             ),
           ),
           const SizedBox(height: 8),
-          if (kPackagesEnabled)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: widget.show.creatorId == null
-                    ? null
-                    : widget.onMembership,
-                icon: const Icon(Icons.workspace_premium_outlined),
-                label: const Text('Đăng ký thành viên'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Colors.white54),
-                ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: widget.show.creatorId == null
+                  ? null
+                  : widget.onMembership,
+              icon: const Icon(Icons.workspace_premium_outlined),
+              label: const Text('Đăng ký gói thành viên'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white54),
               ),
             ),
+          ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: loadingFollow || !isMember ? null : _showRequestDialog,
+              onPressed: loadingFollow || widget.show.creatorId == null
+                  ? null
+                  : _showRequestDialog,
               icon: const Icon(Icons.record_voice_over_outlined),
-              label: Text(
-                isMember ? 'Yêu cầu audio' : 'Yêu cầu audio (cần thành viên)',
-              ),
+              label: const Text('Gửi yêu cầu'),
             ),
           ),
           const SizedBox(height: 24),

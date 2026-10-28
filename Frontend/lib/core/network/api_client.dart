@@ -27,7 +27,9 @@ class ApiClient {
   final void Function(String newAccessToken, String newRefreshToken)? onTokensRefreshed;
   final VoidCallback? onSessionExpired;
   final http.Client _client;
-  Future<bool>? _refreshFuture;
+  static Future<bool>? _staticRefreshFuture;
+  static String? _latestAccessToken;
+  static String? _latestRefreshToken;
 
   ApiClient({
     String? baseUrl,
@@ -39,7 +41,14 @@ class ApiClient {
   })  : _baseUrl = baseUrl ?? _resolveDefaultBaseUrl(),
         _accessToken = initialToken,
         _refreshToken = initialRefreshToken,
-        _client = client ?? http.Client();
+        _client = client ?? http.Client() {
+    if (initialToken != null && initialToken.isNotEmpty) {
+      _latestAccessToken = initialToken;
+    }
+    if (initialRefreshToken != null && initialRefreshToken.isNotEmpty) {
+      _latestRefreshToken = initialRefreshToken;
+    }
+  }
 
   static String _resolveDefaultBaseUrl() {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
@@ -56,11 +65,17 @@ class ApiClient {
   String? get accessToken => _accessToken;
   void setToken(String? token) {
     _accessToken = token;
+    if (token != null && token.isNotEmpty) {
+      _latestAccessToken = token;
+    }
   }
 
   String? get refreshToken => _refreshToken;
   void setRefreshToken(String? token) {
     _refreshToken = token;
+    if (token != null && token.isNotEmpty) {
+      _latestRefreshToken = token;
+    }
   }
 
   bool get isAuthenticated => _accessToken != null && _accessToken!.isNotEmpty;
@@ -71,8 +86,9 @@ class ApiClient {
       'Accept': 'application/json',
       'ngrok-skip-browser-warning': '1',
     };
-    if (_accessToken != null && _accessToken!.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $_accessToken';
+    final effectiveToken = _accessToken ?? _latestAccessToken;
+    if (effectiveToken != null && effectiveToken.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $effectiveToken';
     }
     if (extra != null) {
       headers.addAll(extra);
@@ -94,12 +110,18 @@ class ApiClient {
   }
 
   Future<bool> _performRefresh() {
-    if (_refreshFuture != null) {
-      return _refreshFuture!;
+    if (_staticRefreshFuture != null) {
+      return _staticRefreshFuture!.then((success) {
+        if (success) {
+          if (_latestAccessToken != null) _accessToken = _latestAccessToken;
+          if (_latestRefreshToken != null) _refreshToken = _latestRefreshToken;
+        }
+        return success;
+      });
     }
 
     final future = () async {
-      final rToken = _refreshToken;
+      final rToken = _refreshToken ?? _latestRefreshToken;
       if (rToken == null || rToken.isEmpty) {
         onSessionExpired?.call();
         return false;
@@ -124,8 +146,10 @@ class ApiClient {
           final newRefresh = data['refreshToken']?.toString();
           if (newAccess != null && newAccess.isNotEmpty) {
             _accessToken = newAccess;
+            _latestAccessToken = newAccess;
             if (newRefresh != null && newRefresh.isNotEmpty) {
               _refreshToken = newRefresh;
+              _latestRefreshToken = newRefresh;
             }
             _log('Token refresh successful! New accessToken: ${_accessToken!.substring(0, 10)}...');
             onTokensRefreshed?.call(_accessToken!, _refreshToken ?? '');
@@ -142,8 +166,8 @@ class ApiClient {
       return false;
     }();
 
-    _refreshFuture = future;
-    return future.whenComplete(() => _refreshFuture = null);
+    _staticRefreshFuture = future;
+    return future.whenComplete(() => _staticRefreshFuture = null);
   }
 
   Future<dynamic> _requestWithRetry(
@@ -158,10 +182,15 @@ class ApiClient {
       rethrow;
     }
 
-    if (response.statusCode == 401 && _refreshToken != null && _refreshToken!.isNotEmpty) {
+    final hasRefreshToken = (_refreshToken != null && _refreshToken!.isNotEmpty) ||
+        (_latestRefreshToken != null && _latestRefreshToken!.isNotEmpty);
+
+    if (response.statusCode == 401 && hasRefreshToken) {
       _log('Received 401 for $requestContext, attempting token refresh...');
       final success = await _performRefresh();
       if (success) {
+        if (_latestAccessToken != null) _accessToken = _latestAccessToken;
+        if (_latestRefreshToken != null) _refreshToken = _latestRefreshToken;
         _log('Token refreshed, retrying $requestContext...');
         try {
           response = await sendRequest();

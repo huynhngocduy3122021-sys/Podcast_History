@@ -10,8 +10,8 @@ public class PackageFeatures {
   private final boolean membershipsEnabled;
 
   public PackageFeatures(
-      @Value("${features.creator-plans-enabled:false}") boolean creatorPlansEnabled,
-      @Value("${features.memberships-enabled:false}") boolean membershipsEnabled) {
+      @Value("${features.creator-plans-enabled:true}") boolean creatorPlansEnabled,
+      @Value("${features.memberships-enabled:true}") boolean membershipsEnabled) {
     this.creatorPlansEnabled = creatorPlansEnabled;
     this.membershipsEnabled = membershipsEnabled;
   }

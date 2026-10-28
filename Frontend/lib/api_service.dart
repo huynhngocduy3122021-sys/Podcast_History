@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:podcast_history/features/livestream/chat_credentials.dart';
 
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
@@ -224,7 +225,7 @@ class ListenerApi {
   String accessToken;
   String? refreshToken;
   final void Function(AuthSession)? onSessionRefreshed;
-  Future<AuthSession>? _refreshing;
+  static Future<AuthSession>? _globalRefreshing;
   final http.Client _client;
 
   Future<List<ListenerPodcast>> searchPodcasts({
@@ -275,6 +276,11 @@ class ListenerApi {
   Future<ListenerAgoraJoin> joinLivestream(String livestreamId) async =>
       ListenerAgoraJoin.fromJson(
         await _send('POST', '/api/livestreams/$livestreamId/join'),
+      );
+
+  Future<ChatCredentials> livestreamChatToken(String livestreamId) async =>
+      ChatCredentials.fromJson(
+        await _send('POST', '/api/livestreams/$livestreamId/chat-token'),
       );
 
   Future<List<Map<String, dynamic>>> creators({String? query}) => _list(
@@ -506,11 +512,32 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> subscriptions() =>
       _list('GET', '/api/me/subscriptions');
 
-  Future<Map<String, dynamic>> checkout(String membershipPlanId) => _sendMap(
+  Future<Map<String, dynamic>> wallet() =>
+      _sendMap('GET', '/api/listener/wallet');
+
+  Future<Map<String, dynamic>> topUpWallet(int amount) => _sendMap(
+    'POST',
+    '/api/listener/wallet/top-ups',
+    body: {'amount': amount},
+  );
+
+  Future<Map<String, dynamic>> checkoutStatus(String checkoutId) =>
+      _sendMap('GET', '/api/me/checkouts/$checkoutId');
+
+  Future<Map<String, dynamic>> checkout(
+    String membershipPlanId, {
+    String paymentMethod = 'SEPAY',
+  }) => _sendMap(
     'POST',
     '/api/me/subscriptions',
-    body: {'membershipPlanId': membershipPlanId},
+    body: {
+      'membershipPlanId': membershipPlanId,
+      'paymentMethod': paymentMethod,
+    },
   );
+
+  Future<Map<String, dynamic>> paymentStatus(String paymentId) =>
+      _sendMap('GET', '/api/me/payments/$paymentId');
 
   Future<void> cancelSubscription(String subscriptionId) async {
     await _send('DELETE', '/api/me/subscriptions/$subscriptionId');
@@ -605,21 +632,22 @@ class ListenerApi {
       _ => throw ArgumentError('Unsupported HTTP method: $method'),
     }).timeout(const Duration(seconds: 20));
     var response = await send();
-    if (authenticated && response.statusCode == 401 && refreshToken != null) {
-      final pending = _refreshing ??= AuthApi(client: _client)
+    if (authenticated &&
+        response.statusCode == 401 &&
+        refreshToken != null &&
+        refreshToken!.isNotEmpty) {
+      final pending = _globalRefreshing ??= AuthApi(client: _client)
           .refresh(refreshToken!);
       try {
         final session = await pending;
-        if (identical(_refreshing, pending)) {
-          accessToken = session.accessToken;
-          refreshToken = session.refreshToken;
-          onSessionRefreshed?.call(session);
-        }
+        accessToken = session.accessToken;
+        refreshToken = session.refreshToken;
+        onSessionRefreshed?.call(session);
+        headers['Authorization'] = 'Bearer $accessToken';
+        response = await send();
       } finally {
-        if (identical(_refreshing, pending)) _refreshing = null;
+        if (identical(_globalRefreshing, pending)) _globalRefreshing = null;
       }
-      headers['Authorization'] = 'Bearer $accessToken';
-      response = await send();
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(_errorMessage(response), response.statusCode);

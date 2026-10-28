@@ -2,12 +2,14 @@ package com.prmteam7.podcasthistory.controller;
 
 import com.prmteam7.podcasthistory.dto.response.CreatorSystemPlanView;
 import com.prmteam7.podcasthistory.dto.response.CreatorSystemSubscriptionView;
+import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
 import com.prmteam7.podcasthistory.service.CreatorSystemPlanService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -32,8 +34,9 @@ public class CreatorSystemPlanController {
   }
 
   @PostMapping("/{planId}/subscribe")
-  @Operation(summary = "Giả lập thanh toán thành công và kích hoạt gói CC trả phí")
-  public CreatorSystemSubscriptionView subscribe(@AuthenticationPrincipal Jwt jwt,
+  @ResponseStatus(HttpStatus.ACCEPTED)
+  @Operation(summary = "Tạo checkout SePay cho gói CC; chỉ kích hoạt sau khi nhận xác nhận thanh toán")
+  public CheckoutPaymentView subscribe(@AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID planId) {
     return service.subscribe(id(jwt), planId);
   }
