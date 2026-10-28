@@ -22,6 +22,13 @@ public class MembershipPlan extends UpdatedEntity {
     @Column(name = "name", nullable = false, length = 150)
     private String name;
 
+    /**
+     * Null for legacy/custom plans. Standard channel plans use one of the backend-owned template
+     * codes so provisioning can be safely repeated without creating duplicates.
+     */
+    @Column(name = "template_code", length = 30)
+    private String templateCode;
+
     @Column(name = "description", nullable = true, columnDefinition = "text")
     private String description;
 
@@ -70,6 +77,14 @@ public class MembershipPlan extends UpdatedEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getTemplateCode() {
+        return templateCode;
+    }
+
+    public void setTemplateCode(String templateCode) {
+        this.templateCode = templateCode;
     }
 
     public String getDescription() {
