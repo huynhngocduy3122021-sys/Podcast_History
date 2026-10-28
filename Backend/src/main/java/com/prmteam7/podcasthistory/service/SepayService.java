@@ -4,6 +4,7 @@ import com.prmteam7.podcasthistory.config.SepayProperties;
 import com.prmteam7.podcasthistory.dto.request.SepayWebhookRequest;
 import com.prmteam7.podcasthistory.dto.response.PaymentStatusItem;
 import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
+import com.prmteam7.podcasthistory.dto.response.CheckoutHistoryItem;
 import com.prmteam7.podcasthistory.dto.response.SepayWebhookResponse;
 import com.prmteam7.podcasthistory.exception.ResourceNotFoundException;
 import com.prmteam7.podcasthistory.model.Payment;
@@ -29,11 +30,18 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -163,6 +171,36 @@ public class SepayService {
         checkout.getCurrency(), checkout.getStatus(), checkout.getPaidAt(), expiresAt);
   }
 
+  @Scheduled(fixedDelay = 60_000)
+  @Transactional
+  public void failExpiredWalletTopUps() {
+    int count = checkoutRepository.failExpiredWalletTopUps(Instant.now().minus(PAYMENT_EXPIRY));
+    if (count > 0) log.info("Marked {} expired wallet top-ups as FAILED.", count);
+  }
+
+  @Transactional(readOnly = true)
+  public Page<CheckoutHistoryItem> getCheckoutHistory(
+      UUID userId, String status, int page, int size) {
+    String normalizedStatus = status == null ? null : status.trim();
+    if (normalizedStatus != null && normalizedStatus.isBlank()) normalizedStatus = null;
+    Pageable pageable = PageRequest.of(
+        Math.max(0, page),
+        Math.min(100, Math.max(1, size)),
+        Sort.by(Sort.Direction.DESC, "createdAt"));
+    return checkoutRepository.findForUser(userId, normalizedStatus, pageable).map(checkout ->
+        new CheckoutHistoryItem(
+            checkout.getCheckoutId(),
+            checkout.getPurpose(),
+            checkout.getPaymentCode(),
+            checkout.getAmount(),
+            checkout.getCurrency(),
+            checkout.getStatus(),
+            checkout.getCreatedAt(),
+            checkout.getPaidAt(),
+            checkout.getCreatedAt().plus(PAYMENT_EXPIRY),
+            checkout.getProviderTransactionId()));
+  }
+
   @Transactional
   public ResponseEntity<SepayWebhookResponse> processWebhook(
       String authorization, SepayWebhookRequest request) {
@@ -188,7 +226,7 @@ public class SepayService {
       return success();
     }
 
-    String code = normalizeCode(request.code());
+    String code = resolvePaymentCode(request);
     if (code.isEmpty()) {
       log.info(
           "Ignored SePay webhook: id={}, code=null, amount={}, result=missing_code",
@@ -286,7 +324,8 @@ public class SepayService {
       log.info("Ignored SePay webhook: id={}, code={}, result=unknown_code", transactionId, code);
       return success();
     }
-    if (!"PENDING".equals(checkout.getStatus()) && !"EXPIRED".equals(checkout.getStatus()))
+    if (!"PENDING".equals(checkout.getStatus()) && !"EXPIRED".equals(checkout.getStatus())
+        && !"FAILED".equals(checkout.getStatus()))
       return success();
     if (paymentRepository.existsByProviderTransactionId(transactionId)
         || checkoutRepository.existsByProviderTransactionId(transactionId)) {
@@ -345,7 +384,7 @@ public class SepayService {
   }
 
   private void expireCheckout(CheckoutPayment checkout) {
-    checkout.setStatus("EXPIRED");
+    checkout.setStatus("WALLET_TOPUP".equals(checkout.getPurpose()) ? "FAILED" : "EXPIRED");
     checkoutRepository.save(checkout);
     if (checkout.getCreatorSubscription() != null) {
       CreatorSystemSubscription subscription = creatorSubscriptions.findById(
@@ -411,6 +450,21 @@ public class SepayService {
 
   private String normalizeCode(String code) {
     return trimToEmpty(code).toUpperCase(Locale.ROOT);
+  }
+
+  private String resolvePaymentCode(SepayWebhookRequest request) {
+    String code = normalizeCode(request.code());
+    if (!code.isEmpty()) return code;
+    String prefix = normalizeCode(properties.getCodePrefix());
+    int suffixLength = properties.getCodeSuffixLength();
+    if (prefix.isEmpty() || suffixLength < 1 || suffixLength > 64) return "";
+    String content = normalizeCode(request.content());
+    Pattern pattern = Pattern.compile("(?<![A-Z0-9])" + Pattern.quote(prefix)
+        + "[A-Z0-9]{" + suffixLength + "}(?![A-Z0-9])");
+    Matcher matcher = pattern.matcher(content);
+    if (!matcher.find()) return "";
+    String matchedCode = matcher.group();
+    return matcher.find() ? "" : matchedCode;
   }
 
   private String trimToEmpty(String value) {

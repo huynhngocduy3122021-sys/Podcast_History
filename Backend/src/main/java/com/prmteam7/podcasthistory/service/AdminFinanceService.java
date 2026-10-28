@@ -7,6 +7,7 @@ import com.prmteam7.podcasthistory.enums.ManualPaymentResult;
 import com.prmteam7.podcasthistory.exception.*;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
@@ -189,15 +190,16 @@ public class AdminFinanceService {
   public Page<WalletItem> wallets(UUID actor, int page, int size) {
     support.actor(actor, true);
     return wallets
-        .findAll(AdminSupportService.page(page, size))
-        .map(
-            w ->
-                new WalletItem(
-                    w.getUserWalletId(),
-                    w.getUser().getUserId(),
-                    w.getBalance(),
-                    w.getCurrency(),
-                    w.getStatus()));
+        .findAllForAdmin(AdminSupportService.page(page, size))
+        .map(this::walletItem);
+  }
+
+  public WalletItem wallet(UUID actor, UUID walletId) {
+    support.actor(actor, true);
+    return wallets
+        .findAdminById(walletId)
+        .map(this::walletItem)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ví."));
   }
 
   public Page<TransactionItem> transactions(
@@ -419,6 +421,28 @@ public class AdminFinanceService {
     return wallets
         .lockById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ví."));
+  }
+
+  private WalletItem walletItem(UserWallet wallet) {
+    AppUser user = wallet.getUser();
+    BigDecimal available = wallet.getBalance() == null ? BigDecimal.ZERO : wallet.getBalance();
+    BigDecimal held = wallet.getHeldBalance() == null ? BigDecimal.ZERO : wallet.getHeldBalance();
+    return new WalletItem(
+        wallet.getUserWalletId(),
+        user.getUserId(),
+        user.getUsername(),
+        user.getEmail(),
+        user.getDisplayName(),
+        user.getRole() == null ? null : user.getRole().getRoleCode(),
+        user.getIsActive(),
+        user.getIsVerified(),
+        available,
+        held,
+        available.add(held),
+        wallet.getCurrency(),
+        wallet.getStatus(),
+        wallet.getCreatedAt(),
+        wallet.getUpdatedAt());
   }
 
   private WithdrawalRequest lockWithdrawal(UUID id) {

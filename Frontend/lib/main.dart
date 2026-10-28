@@ -1162,6 +1162,10 @@ class _PaymentDialogState extends State<PaymentDialog> {
                 width: 220,
                 height: 220,
                 fit: BoxFit.contain,
+                // VietQR does not expose Access-Control-Allow-Origin. On Web,
+                // let the browser render the image element directly instead
+                // of making Flutter fetch the image through XHR/fetch.
+                webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
                 errorBuilder: (_, __, ___) =>
                     const Icon(Icons.qr_code_2, size: 160),
               ),
