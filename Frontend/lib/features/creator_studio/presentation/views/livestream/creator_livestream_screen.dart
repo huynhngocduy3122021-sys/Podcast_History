@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:podcast_history/core/network/api_client.dart' show ApiException;
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
+import 'package:podcast_history/core/utils/image_url_helper.dart' show resolveImageUrl;
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
@@ -16,6 +17,7 @@ import 'package:podcast_history/features/creator_studio/data/models/creator_live
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 import 'package:podcast_history/features/livestream/chat_credentials.dart';
 import 'package:podcast_history/features/livestream/livestream_chat_panel.dart';
 
@@ -280,17 +282,6 @@ class _CreatorLivestreamScreenState
         _isLive = true;
         _isLoading = false;
       });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Đang phát trực tiếp! Thính giả đã có thể tham gia nghe.',
-            ),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
     } catch (e) {
       await _disposeAgoraEngine();
       setState(() => _isLoading = false);
@@ -331,19 +322,6 @@ class _CreatorLivestreamScreenState
         _isLive = true;
         _isLoading = false;
       });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              item.isLive
-                  ? 'Đã kết nối lại phòng Livestream thành công.'
-                  : 'Buổi phát trực tiếp đã bắt đầu!',
-            ),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
     } catch (e) {
       await _disposeAgoraEngine();
       setState(() => _isLoading = false);
@@ -648,8 +626,10 @@ class _CreatorLivestreamScreenState
     final wallet = ref.watch(walletProvider).value;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isLive ? 'Đang phát sóng trực tiếp' : 'Livestream Studio'),
+      appBar: _isLive
+          ? null
+          : AppBar(
+              title: const Text('Livestream Studio'),
         actions: [
           // Nút Series
           Padding(
@@ -761,6 +741,7 @@ class _CreatorLivestreamScreenState
               ),
             ),
           ),
+          const CreatorNotificationButton(),
           const SizedBox(width: AppSpacing.sm),
         ],
       ),
@@ -773,6 +754,48 @@ class _CreatorLivestreamScreenState
   // --- VIEW: BROADCASTING (WHEN LIVE) ---
 
   Widget _buildLiveBroadcastingView(bool isDark) {
+    final creatorProfile = ref.watch(creatorProfileProvider).value;
+    final avatarUrl = creatorProfile?.avatarUrl;
+    final displayName = creatorProfile?.name.isNotEmpty == true
+        ? creatorProfile!.name
+        : (_activeTitle ?? 'Phát trực tiếp');
+
+    final controlButtons = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildTikTokGlassButton(
+          icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
+          isActive: !_isMuted,
+          isDestructive: _isMuted,
+          tooltip: _isMuted ? 'Bật Mic' : 'Tắt Mic',
+          onTap: _toggleMute,
+        ),
+        const SizedBox(width: 8),
+        _buildTikTokGlassButton(
+          icon: _isVideoDisabled
+              ? Icons.videocam_off_rounded
+              : Icons.videocam_rounded,
+          isActive: !_isVideoDisabled,
+          isDestructive: _isVideoDisabled,
+          tooltip: _isVideoDisabled ? 'Bật Cam' : 'Tắt Cam',
+          onTap: _toggleVideo,
+        ),
+        const SizedBox(width: 8),
+        _buildTikTokGlassButton(
+          icon: Icons.flip_camera_ios_rounded,
+          tooltip: 'Đổi Cam',
+          onTap: _switchCamera,
+        ),
+        const SizedBox(width: 8),
+        _buildTikTokGlassButton(
+          icon: Icons.call_end_rounded,
+          isDestructive: true,
+          tooltip: 'Kết thúc Live',
+          onTap: () => _confirmAndEndLive(),
+        ),
+      ],
+    );
+
     return Container(
       color: Colors.black,
       child: Stack(
@@ -785,19 +808,19 @@ class _CreatorLivestreamScreenState
             AgoraVideoView(controller: _videoViewController!)
           else
             Container(
-              color: const Color(0xFF1E1E1E),
+              color: const Color(0xFF141414),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
-                      radius: 48,
+                      radius: 46,
                       backgroundColor: Colors.white12,
                       child: Icon(
                         _isVideoDisabled
                             ? Icons.videocam_off_rounded
                             : Icons.sensors_rounded,
-                        size: 48,
+                        size: 46,
                         color: Colors.white70,
                       ),
                     ),
@@ -829,129 +852,259 @@ class _CreatorLivestreamScreenState
               ),
             ),
 
-          // 2. Top Overlay Bar (Status, Title, Channel, Timer)
+          // 2. Top Scrim Gradient
           Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      // Badge LIVE
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.error,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              margin: const EdgeInsets.only(right: 5),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const Text(
-                              'TRỰC TIẾP',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Duration Timer
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white12,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.timer_outlined,
-                              color: Colors.white,
-                              size: 13,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              _formatDuration(_liveSeconds),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Spacer(),
-                      // Channel indicator & connection status
-                      Text(
-                        _activeChannelName != null
-                            ? '$_activeChannelName • $_connectionStatus'
-                            : _connectionStatus,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 130,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.7),
+                      Colors.transparent,
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _activeTitle ?? 'Phát trực tiếp Agora RTC',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
 
-          // 3. Bottom Controls Toolbar
+          // 3. Bottom Scrim Gradient
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 350,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.85),
+                      Colors.black.withValues(alpha: 0.3),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.65, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 4. TikTok Top Bar (Host Pill + Series + Close)
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 10,
+            left: 12,
+            right: 12,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Host Capsule Pill
+                Tooltip(
+                  message: _activeChannelName != null
+                      ? 'Kênh: $_activeChannelName • $_connectionStatus'
+                      : _connectionStatus,
+                  child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white24,
+                      width: 0.8,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: AppColors.primaryLight,
+                        backgroundImage: (avatarUrl != null &&
+                                avatarUrl.trim().isNotEmpty)
+                            ? NetworkImage(resolveImageUrl(avatarUrl))
+                            : null,
+                        child: (avatarUrl == null || avatarUrl.trim().isEmpty)
+                            ? const Icon(
+                                Icons.person,
+                                size: 18,
+                                color: Colors.white,
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 150),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              displayName,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1.5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE53935),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text(
+                                    'LIVE',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.4,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  _formatDuration(_liveSeconds),
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                                if (_connectionStatus != 'Đang phát sóng' &&
+                                    _connectionStatus != 'Sẵn sàng') ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '• $_connectionStatus',
+                                    style: const TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                  ),
+                ),
+              ),
+
+                const Spacer(),
+
+                // Series Shortcut Button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const SeriesManagementScreen(),
+                      ),
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white24,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.video_collection_rounded,
+                            size: 15,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'Series',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Close / End Live Button
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _confirmAndEndLive(),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.45),
+                        border: Border.all(
+                          color: Colors.white24,
+                          width: 0.8,
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 5. TikTok Chat Panel with Floating Bubbles + Bottom Action Bar
           if (_activeLivestreamId != null)
             Positioned(
               left: 12,
               right: 12,
-              bottom: 125,
-              height: 210,
+              bottom: 12,
+              height: 320,
               child: LivestreamChatPanel(
                 key: ValueKey('chat-$_activeLivestreamId'),
                 livestreamId: _activeLivestreamId!,
+                isOverlay: true,
+                trailingActions: controlButtons,
                 loadCredentials: () async {
                   final result = await ref
                       .read(apiClientProvider)
@@ -963,64 +1116,15 @@ class _CreatorLivestreamScreenState
                   );
                 },
               ),
+            )
+          else
+            Positioned(
+              right: 12,
+              bottom: 12,
+              child: controlButtons,
             ),
 
-          Positioned(
-            bottom: 24,
-            left: 20,
-            right: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.75),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.white24),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Mute / Unmute Mic
-                  _buildCircleControlButton(
-                    icon: _isMuted ? Icons.mic_off_rounded : Icons.mic_rounded,
-                    label: _isMuted ? 'Bật Mic' : 'Tắt Mic',
-                    isActive: !_isMuted,
-                    isDestructive: _isMuted,
-                    onPressed: _toggleMute,
-                  ),
-
-                  // Camera On / Off
-                  _buildCircleControlButton(
-                    icon: _isVideoDisabled
-                        ? Icons.videocam_off_rounded
-                        : Icons.videocam_rounded,
-                    label: _isVideoDisabled ? 'Bật Cam' : 'Tắt Cam',
-                    isActive: !_isVideoDisabled,
-                    isDestructive: _isVideoDisabled,
-                    onPressed: _toggleVideo,
-                  ),
-
-                  // Switch Camera (Front / Rear)
-                  _buildCircleControlButton(
-                    icon: Icons.flip_camera_ios_rounded,
-                    label: 'Đổi Cam',
-                    isActive: true,
-                    onPressed: _switchCamera,
-                  ),
-
-                  // End Livestream
-                  _buildCircleControlButton(
-                    icon: Icons.call_end_rounded,
-                    label: 'Kết thúc',
-                    isActive: true,
-                    isDestructive: true,
-                    onPressed: () => _confirmAndEndLive(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 4. Loading overlay if busy
+          // 6. Loading overlay if busy
           if (_isLoading)
             Container(
               color: Colors.black54,
@@ -1033,46 +1137,51 @@ class _CreatorLivestreamScreenState
     );
   }
 
-  Widget _buildCircleControlButton({
+  Widget _buildTikTokGlassButton({
     required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
+    required VoidCallback onTap,
+    String? tooltip,
     bool isActive = true,
     bool isDestructive = false,
   }) {
     Color bg;
     Color fg;
     if (isDestructive) {
-      bg = AppColors.error;
+      bg = const Color(0xFFE53935);
       fg = Colors.white;
     } else if (isActive) {
-      bg = Colors.white24;
+      bg = Colors.black.withValues(alpha: 0.5);
       fg = Colors.white;
     } else {
-      bg = Colors.white10;
-      fg = Colors.white38;
+      bg = Colors.black.withValues(alpha: 0.35);
+      fg = Colors.white54;
     }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(24),
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-            child: Icon(icon, color: fg, size: 22),
+    Widget button = Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(21),
+        child: Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: bg,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDestructive ? Colors.transparent : Colors.white24,
+              width: 0.8,
+            ),
           ),
+          child: Icon(icon, color: fg, size: 20),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white70, fontSize: 11),
-        ),
-      ],
+      ),
     );
+
+    if (tooltip != null) {
+      return Tooltip(message: tooltip, child: button);
+    }
+    return button;
   }
 
   // --- VIEW: STUDIO SETUP (WHEN IDLE) ---

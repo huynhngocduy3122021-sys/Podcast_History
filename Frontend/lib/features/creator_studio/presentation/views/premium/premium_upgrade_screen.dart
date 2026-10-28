@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
+import 'package:podcast_history/core/utils/image_url_helper.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
@@ -30,9 +31,48 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
 
   Future<void> _upgradeToPlan(CreatorSystemPlan plan) async {
     setState(() => _isSubscribing = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final repo = ref.read(creatorRepositoryProvider);
-      final checkout = await repo.subscribeSystemPlan(plan.planId);
+      CreatorCheckoutPayment checkout;
+      try {
+        checkout = await repo.subscribeSystemPlan(plan.planId);
+      } on ApiException catch (e) {
+        if (e.statusCode == 409) {
+          // Xung đột: Có thanh toán gói CC cũ đang PENDING
+          if (!mounted) return;
+          final shouldCancelAndRetry = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Đơn thanh toán đang chờ'),
+              content: const Text(
+                'Bạn đang có một mã thanh toán trước đó ở trạng thái chờ.\n\n'
+                'Bạn có muốn hủy đơn cũ để tạo mã QR thanh toán mới ngay không?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('Để sau'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('Hủy đơn cũ & Tạo mới'),
+                ),
+              ],
+            ),
+          );
+
+          if (shouldCancelAndRetry == true) {
+            await repo.cancelPendingCheckout();
+            checkout = await repo.subscribeSystemPlan(plan.planId);
+          } else {
+            return;
+          }
+        } else {
+          rethrow;
+        }
+      }
+
       if (!mounted) return;
 
       final success = await showDialog<bool>(
@@ -47,7 +87,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
       if (success == true && mounted) {
         await _handleRefresh();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Chúc mừng bạn đã nâng cấp thành công gói ${plan.name}!'),
             backgroundColor: AppColors.success,
@@ -56,7 +96,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text(e.message),
             backgroundColor: AppColors.error,
@@ -65,7 +105,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Không thể tạo giao dịch nâng cấp: $e'),
             backgroundColor: AppColors.error,
@@ -114,13 +154,6 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gói VietCast Studio Premium'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Làm mới',
-            onPressed: _handleRefresh,
-          ),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _handleRefresh,
@@ -264,6 +297,72 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
+            ],
+
+            // Cảnh báo giao dịch PENDING (nếu có)
+            if (subscription?.isPendingPayment == true) ...[
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  borderRadius: AppSpacing.roundedMd,
+                  border: Border.all(color: Colors.amber.shade700),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.pending_actions_rounded, color: Colors.amber),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Bạn đang có một đơn chờ thanh toán',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          Text(
+                            'Mã giao dịch: ${subscription?.lastPaymentReference ?? 'Đang chờ'}',
+                            style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ],
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Hủy đơn chờ cũ'),
+                            content: const Text(
+                              'Bạn có muốn hủy đơn thanh toán đang chờ này để tạo lại mã mới?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Không'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Đồng ý hủy'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await ref.read(creatorRepositoryProvider).cancelPendingCheckout();
+                          await _handleRefresh();
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      child: const Text('Hủy đơn cũ', style: TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
             ],
 
             // Giá gói (nếu chưa kích hoạt)
@@ -451,9 +550,14 @@ class _CreatorPaymentDialogState extends ConsumerState<CreatorPaymentDialog> {
     final paymentCode = _checkout.paymentCode;
     final formattedAmount = NumberFormat('#,###', 'vi_VN').format(_checkout.amount);
     final isTerminal = _checkout.isExpired;
+    final titleText = _checkout.isPaid
+        ? 'Thanh toán thành công'
+        : _checkout.isExpired
+            ? 'Giao dịch đã hết hạn'
+            : 'Thanh toán';
 
     return AlertDialog(
-      title: Text('Thanh toán ${_checkout.status}'),
+      title: Text(titleText),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -467,7 +571,7 @@ class _CreatorPaymentDialogState extends ConsumerState<CreatorPaymentDialog> {
             if (qrUrl.isNotEmpty) ...[
               const SizedBox(height: 12),
               Image.network(
-                qrUrl,
+                resolveImageUrl(qrUrl),
                 width: 220,
                 height: 220,
                 fit: BoxFit.contain,
@@ -479,7 +583,8 @@ class _CreatorPaymentDialogState extends ConsumerState<CreatorPaymentDialog> {
                     child: Center(child: CircularProgressIndicator()),
                   );
                 },
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.qr_code_2, size: 160),
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.qr_code_2, size: 160),
               ),
             ],
             const SizedBox(height: 12),

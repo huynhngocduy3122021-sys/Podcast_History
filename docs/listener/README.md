@@ -127,15 +127,12 @@ Người tham gia hợp đồng còn có `POST /api/contracts/{contractId}/dispu
 
 ## 7. Gói thành viên và lỗi thường gặp
 
-Mỗi kênh CC chỉ có một gói membership `ACTIVE` được chọn từ ba mẫu 25K/50K/75K.
-Frontend dùng contract chi tiết tại [MEMBERSHIP_PLANS.md](../MEMBERSHIP_PLANS.md).
-
-1. Lấy gói đang bán: `GET /api/creators/{creatorId}/membership-plans` với Bearer token. `creatorId` là `creatorProfileId`; response là mảng tối đa một phần tử có `membershipPlanId`, `name`, `price`, `currency`, `durationDays`.
-2. Tạo checkout: `POST /api/me/subscriptions` với body `{ "membershipPlanId": "<UUID>", "paymentMethod": "SEPAY" }` hoặc `"WALLET"`.
-3. Với `SEPAY`, response `202` trả `paymentId`, `paymentCode`, `qrImageUrl`, `paymentStatus = PENDING`; gọi `GET /api/me/payments/{paymentId}` cho tới khi `paymentStatus = PAID` và `subscriptionStatus = ACTIVE`.
-4. Với `WALLET`, backend kiểm tra và trừ ví trong cùng luồng; thành công trả `paymentStatus = PAID`, `subscriptionStatus = ACTIVE`. Gọi lại `GET /api/me/subscriptions` và `GET /api/listener/wallet` để refresh.
-
-Membership chỉ chuyển `ACTIVE` sau webhook SePay hợp lệ hoặc thanh toán ví thành công. Có thể đặt `MEMBERSHIPS_ENABLED=false` để tắt tính năng.
+Gói membership mặc định bật (`MEMBERSHIPS_ENABLED=true`):
+- `GET /api/creators/{creatorId}/membership-plans`: Lấy gói hội viên đang `ACTIVE` của Creator để hiển thị nút đăng ký trên trang kênh.
+- `POST /api/me/subscriptions` với body `{"membershipPlanId": "<UUID>", "paymentMethod": "SEPAY" | "WALLET"}`:
+  - **SEPAY**: Trả về `paymentId`, `paymentCode`, `qrImageUrl` với trạng thái `PENDING`. Frontend polling `GET /api/me/payments/{paymentId}` định kỳ đến khi `PAID` và `subscriptionStatus = ACTIVE`.
+  - **WALLET**: Trừ trực tiếp số dư ví khả dụng (`GET /api/listener/wallet`). Nếu thành công chuyển ngay sang `ACTIVE`; nếu số dư ví không đủ, backend trả về lỗi `409 Conflict`.
+- `GET /api/me/subscriptions`: Danh sách các gói hội viên đã đăng ký. Khi `status = ACTIVE`, Listener được mở khóa các tập podcast `MEMBERS_ONLY`.
 
 | HTTP | Cách xử lý |
 |---:|---|
