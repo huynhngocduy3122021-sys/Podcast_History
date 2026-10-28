@@ -76,14 +76,109 @@ class VietCastApp extends StatefulWidget {
   State<VietCastApp> createState() => _AppState();
 }
 
-class _AppState extends State<VietCastApp> {
+class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
   ThemeMode mode = ThemeMode.light;
   Account? account;
+  Timer? _tokenRefreshTimer;
+  bool _isRefreshingToken = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restoreSavedSession();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tokenRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final current = account;
+      if (current != null && current.session.refreshToken.isNotEmpty) {
+        if (_isTokenExpiringSoon(current.session.accessToken)) {
+          _autoRefreshToken();
+        }
+      }
+    }
+  }
+
+  int _getTokenRemainingSeconds(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return 600;
+      var output = parts[1].replaceAll('-', '+').replaceAll('_', '/');
+      switch (output.length % 4) {
+        case 0:
+          break;
+        case 2:
+          output += '==';
+          break;
+        case 3:
+          output += '=';
+          break;
+        default:
+          return 600;
+      }
+      final decoded = utf8.decode(base64Url.decode(output));
+      final payload = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = payload['exp'] as num?;
+      if (exp != null) {
+        final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+        return exp.toInt() - nowSec;
+      }
+    } catch (_) {}
+    return 600;
+  }
+
+  bool _isTokenExpiringSoon(String token, {int thresholdSeconds = 120}) {
+    final remaining = _getTokenRemainingSeconds(token);
+    return remaining <= thresholdSeconds;
+  }
+
+  void _scheduleTokenRefresh(Account acc) {
+    _tokenRefreshTimer?.cancel();
+    final remaining = _getTokenRemainingSeconds(acc.session.accessToken);
+    // Refresh 2 minutes (120s) before token expires, or at least in 15 seconds if already near expiry
+    final delaySeconds = math.max(15, remaining - 120);
+    _tokenRefreshTimer = Timer(Duration(seconds: delaySeconds), () {
+      _autoRefreshToken();
+    });
+  }
+
+  Future<void> _autoRefreshToken() async {
+    if (_isRefreshingToken) return;
+    final current = account;
+    if (current == null || current.session.refreshToken.isEmpty) return;
+
+    _isRefreshingToken = true;
+    try {
+      final newSession = await AuthApi().refresh(current.session.refreshToken);
+      final updated = Account(
+        email: current.email,
+        name: current.name,
+        role: current.role,
+        session: newSession,
+      );
+      _saveSession(updated);
+    } catch (e) {
+      if (e is ApiException && (e.statusCode == 401 || e.statusCode == 403)) {
+        logout();
+      } else {
+        // Transient network or server failure: retry in 30 seconds
+        _tokenRefreshTimer?.cancel();
+        _tokenRefreshTimer = Timer(const Duration(seconds: 30), () {
+          _autoRefreshToken();
+        });
+      }
+    } finally {
+      _isRefreshingToken = false;
+    }
   }
 
   void _restoreSavedSession() {
@@ -93,6 +188,11 @@ class _AppState extends State<VietCastApp> {
         final decoded = jsonDecode(raw) as Map<String, dynamic>;
         final restored = Account.fromJson(decoded);
         setState(() => account = restored);
+        if (_isTokenExpiringSoon(restored.session.accessToken)) {
+          _autoRefreshToken();
+        } else {
+          _scheduleTokenRefresh(restored);
+        }
       }
     } catch (_) {}
   }
@@ -106,7 +206,9 @@ class _AppState extends State<VietCastApp> {
           jsonEncode(acc.toJson()),
         );
       } catch (_) {}
+      _scheduleTokenRefresh(acc);
     } else {
+      _tokenRefreshTimer?.cancel();
       SessionStorage.removeItem('vietcast_saved_account');
     }
   }
@@ -446,6 +548,16 @@ class _ShellState extends State<Shell> {
     );
     shows = List<Show>.of(fallbackShows);
     _loadListenerFlow();
+  }
+
+  @override
+  void didUpdateWidget(covariant Shell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.session.accessToken != widget.session.accessToken ||
+        oldWidget.session.refreshToken != widget.session.refreshToken) {
+      api.accessToken = widget.session.accessToken;
+      api.refreshToken = widget.session.refreshToken;
+    }
   }
 
   Future<void> _loadListenerFlow() async {

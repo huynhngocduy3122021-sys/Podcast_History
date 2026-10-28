@@ -9,6 +9,7 @@ import 'package:podcast_history/core/widgets/empty_state_widget.dart';
 import 'package:podcast_history/core/widgets/error_state_widget.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'premium_upgrade_screen.dart';
 
 class FormBuilderScreen extends ConsumerStatefulWidget {
   const FormBuilderScreen({super.key});
@@ -174,9 +175,8 @@ class _FormBuilderScreenState extends ConsumerState<FormBuilderScreen> {
               label: 'Mở khóa Studio Premium',
               width: 220,
               onPressed: () {
-                ref.read(creatorProfileProvider.notifier).upgradeToPremium();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đã mở khóa tính năng Form tương tác!')),
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
                 );
               },
             ),
