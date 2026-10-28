@@ -53,6 +53,8 @@ class ApiEndpoints {
   static String requestMilestones(String id) => '/api/requests/$id/milestones';
   static String submitMilestone(String milestoneId) =>
       '/api/creator/milestones/$milestoneId/submissions';
+  static String milestoneSubmissions(String milestoneId) =>
+      '/api/milestones/$milestoneId/submissions';
 
   // Comments & Likes & History
   static String podcastComments(String podcastId) =>
@@ -114,6 +116,8 @@ class ApiEndpoints {
       '/api/creator/membership-plans/templates/$code/select';
   static String updateMembershipPlanPrice(String planId) =>
       '/api/creator/membership-plans/$planId/price';
+  static String creatorMemberships({String status = 'ACTIVE', int page = 0, int size = 20}) =>
+      '/api/creator/memberships?status=$status&page=$page&size=$size';
 
   // Notifications
   static const String notifications = '/api/me/notifications';

@@ -186,19 +186,21 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.timer_outlined, size: 14, color: AppColors.tertiaryLight),
+                    const Icon(Icons.schedule_rounded, size: 14, color: AppColors.tertiaryLight),
                     const SizedBox(width: 4),
                     Text(
-                      '${req.targetDurationMinutes} phút',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      AppFormatters.timeAgo(req.createdAt),
+                      style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMutedLight),
                     ),
-                    const SizedBox(width: AppSpacing.lg),
-                    const Icon(Icons.event_outlined, size: 14, color: AppColors.tertiaryLight),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Hạn: ${AppFormatters.formatDate(req.deadline)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                    if (req.milestones.isNotEmpty) ...[
+                      const SizedBox(width: AppSpacing.md),
+                      const Icon(Icons.layers_outlined, size: 14, color: AppColors.tertiaryLight),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${req.milestones.length} mốc',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
                   ],
                 ),
                 Text(

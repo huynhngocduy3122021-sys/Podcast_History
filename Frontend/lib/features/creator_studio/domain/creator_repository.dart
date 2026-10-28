@@ -89,7 +89,11 @@ abstract class CreatorRepository {
   // Custom Requests (Podcast theo yêu cầu)
   Future<List<PodcastRequest>> getRequests();
   Future<PodcastRequest?> getRequestById(String id);
-  Future<void> acceptRequest(String id);
+  Future<void> acceptRequest(
+    String id, {
+    String? responseText,
+    List<Map<String, dynamic>>? milestones,
+  });
   Future<void> rejectRequest(String id, String reason);
   Future<void> deliverWork(
     String id,
@@ -97,6 +101,7 @@ abstract class CreatorRepository {
     String note, {
     List<int>? fileBytes,
     String? filename,
+    String? milestoneId,
   });
   Future<void> sendChatMessage(String requestId, String message);
 
@@ -196,6 +201,7 @@ abstract class CreatorRepository {
   Future<List<CreatorPlanTemplate>> getMembershipPlanTemplates();
   Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode);
   Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price);
+  Future<PageCreatorMembers> getCreatorMemberships({String status = 'ACTIVE', int page = 0, int size = 20});
 
   // Notifications
   Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30});
