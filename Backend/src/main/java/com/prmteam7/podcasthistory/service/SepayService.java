@@ -63,6 +63,7 @@ public class SepayService {
   private final WalletTransactionRepository walletTransactions;
   private final PaymentMethodRepository paymentMethods;
   private final SepayProperties properties;
+  private final RealtimeEventPublisher realtime;
   private final SecureRandom secureRandom = new SecureRandom();
 
   public SepayService(
@@ -73,7 +74,8 @@ public class SepayService {
       UserWalletRepository wallets,
       WalletTransactionRepository walletTransactions,
       PaymentMethodRepository paymentMethods,
-      SepayProperties properties) {
+      SepayProperties properties,
+      RealtimeEventPublisher realtime) {
     this.paymentRepository = paymentRepository;
     this.subscriptionRepository = subscriptionRepository;
     this.checkoutRepository = checkoutRepository;
@@ -82,6 +84,7 @@ public class SepayService {
     this.walletTransactions = walletTransactions;
     this.paymentMethods = paymentMethods;
     this.properties = properties;
+    this.realtime = realtime;
   }
 
   public String generatePaymentCode() {
@@ -308,6 +311,18 @@ public class SepayService {
     method.setDisplayName("SePay transfer");
     method.setIsActive(true);
     paymentMethods.save(method);
+    if (payment.getUser() != null) {
+      realtime.publishUser(
+          payment.getUser().getUserId(),
+          "PAYMENT_UPDATED",
+          java.util.Map.of(
+              "paymentId", payment.getPaymentId(),
+              "subscriptionId", subscription.getSubscriptionId(),
+              "status", payment.getStatus(),
+              "subscriptionStatus", subscription.getStatus(),
+              "amount", payment.getAmount(),
+              "currency", payment.getCurrency()));
+    }
 
     log.info(
         "Processed SePay webhook: id={}, code={}, amount={}, result=paid",
@@ -378,6 +393,17 @@ public class SepayService {
     checkout.setPaidAt(receivedAt);
     checkout.setProviderTransactionId(transactionId);
     checkoutRepository.save(checkout);
+    if (checkout.getUser() != null) {
+      realtime.publishUser(
+          checkout.getUser().getUserId(),
+          "PAYMENT_UPDATED",
+          java.util.Map.of(
+              "checkoutId", checkout.getCheckoutId(),
+              "purpose", checkout.getPurpose(),
+              "status", checkout.getStatus(),
+              "amount", checkout.getAmount(),
+              "currency", checkout.getCurrency()));
+    }
     log.info("Processed SePay checkout webhook: id={}, code={}, purpose={}, result=paid",
         transactionId, code, checkout.getPurpose());
     return success();

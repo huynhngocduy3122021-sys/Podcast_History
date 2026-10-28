@@ -14,6 +14,7 @@ import 'features/creator_studio/presentation/controllers/creator_controller.dart
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 import 'features/livestream/listener_livestream_screen.dart';
+import 'features/notifications/notification_socket.dart';
 
 import 'api_service.dart';
 
@@ -462,6 +463,7 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   late final ListenerApi api;
   late final AudioPlayer _audioPlayer;
+  late final NotificationSocket _notificationSocket;
   StreamSubscription<Duration>? _audioPositionSubscription;
   StreamSubscription<Duration>? _audioDurationSubscription;
   StreamSubscription<PlayerState>? _audioStateSubscription;
@@ -477,7 +479,7 @@ class _ShellState extends State<Shell> {
   final likeCountsByPodcast = <String, int>{};
   final commentCountsByPodcast = <String, int>{};
   final creatorDetails = <String, Map<String, dynamic>>{};
-  StreamSubscription<String>? commentSubscription;
+  String? commentTopic;
   int tab = 0;
   Show? current;
   bool playing = false;
@@ -546,6 +548,25 @@ class _ShellState extends State<Shell> {
       refreshToken: widget.session.refreshToken,
       onSessionRefreshed: widget.onSessionRefreshed,
     );
+    _notificationSocket = NotificationSocket(
+      url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
+      accessToken: widget.session.accessToken,
+      onNotification: (json) {
+        if (!mounted) return;
+        final item = AppNotification.fromJson(json);
+        setState(() {
+          notifications.removeWhere((existing) => existing.id == item.id);
+          notifications.insert(0, item);
+        });
+      },
+      onRealtime: (json) {
+        final type = '${json['type'] ?? ''}'.toUpperCase();
+        if (type == 'PAYMENT_UPDATED' || type == 'WALLET_UPDATED') {
+          unawaited(_refreshNotifications());
+        }
+      },
+      onReconnected: () => unawaited(_refreshNotifications()),
+    )..connect();
     shows = List<Show>.of(fallbackShows);
     _loadListenerFlow();
   }
@@ -557,6 +578,7 @@ class _ShellState extends State<Shell> {
         oldWidget.session.refreshToken != widget.session.refreshToken) {
       api.accessToken = widget.session.accessToken;
       api.refreshToken = widget.session.refreshToken;
+      _notificationSocket.updateAccessToken(widget.session.accessToken);
     }
   }
 
@@ -699,6 +721,20 @@ class _ShellState extends State<Shell> {
     }
   }
 
+  Future<void> _refreshNotifications() async {
+    try {
+      final items = await api.notifications(page: 0, size: 20);
+      if (!mounted) return;
+      setState(() {
+        notifications
+          ..clear()
+          ..addAll(items.map(AppNotification.fromJson));
+      });
+    } catch (_) {
+      // Keep the last REST result visible when the refresh request fails.
+    }
+  }
+
   void play(Show s) {
     setState(() {
       current = s;
@@ -761,18 +797,49 @@ class _ShellState extends State<Shell> {
 
   void openShow(Show show) {
     play(show);
-    commentSubscription?.cancel();
+    if (commentTopic != null) {
+      _notificationSocket.unlisten(commentTopic!);
+      commentTopic = null;
+    }
     if (show.id != null) {
-      commentSubscription = api
-          .commentStream(show.id!)
-          .listen((_) {}, onError: (_) {});
+      final topic = '/topic/podcasts/${show.id}/comments';
+      commentTopic = topic;
+      _notificationSocket.listen(topic, (_) {
+        unawaited(_reloadComments(show));
+      });
+      unawaited(_reloadComments(show));
     }
     _showPlayer(show);
   }
 
+  Future<void> _reloadComments(Show show) async {
+    final id = show.id;
+    if (id == null) return;
+    try {
+      final results = await Future.wait<dynamic>([
+        api.comments(id),
+        api.commentCount(id),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        commentsByPodcast[id] = results[0]
+            .map(
+              (comment) => CommentData.fromJson(
+                comment,
+                durationSeconds: show.durationSeconds ?? 0,
+              ),
+            )
+            .toList();
+        final count = results[1];
+        commentCountsByPodcast[id] = count is int ? count : 0;
+      });
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
-    commentSubscription?.cancel();
+    if (commentTopic != null) _notificationSocket.unlisten(commentTopic!);
+    _notificationSocket.dispose();
     _audioPositionSubscription?.cancel();
     _audioDurationSubscription?.cancel();
     _audioStateSubscription?.cancel();
@@ -1061,7 +1128,7 @@ class _ShellState extends State<Shell> {
         onOpen: openShow,
         onOpenCreator: _showCreatorProfile,
       ),
-      LivestreamPage(api: api),
+      LivestreamPage(api: api, socket: _notificationSocket),
       LibraryPage(
         api: api,
         likedTitles: likedShowTitles,
@@ -1149,25 +1216,34 @@ class _ShellState extends State<Shell> {
     ],
   );
 
-  void _showNotifications() => showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    isDismissible: true,
-    enableDrag: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => NotificationPanel(
-      notifications: notifications,
-      onRead: (id) {
-        setState(() {
-          final index = notifications.indexWhere((item) => item.id == id);
-          if (index >= 0) {
-            notifications[index] = notifications[index].copyWith(read: true);
-            unawaited(api.markNotificationRead(id));
-          }
-        });
-      },
-    ),
-  );
+  Future<void> _markNotificationRead(String id) async {
+    final index = notifications.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+    setState(() {
+      notifications[index] = notifications[index].copyWith(read: true);
+    });
+    try {
+      await api.markNotificationRead(id);
+    } catch (_) {
+      await _refreshNotifications();
+    }
+  }
+
+  Future<void> _showNotifications() async {
+    await _refreshNotifications();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => NotificationPanel(
+        notifications: notifications,
+        onRead: (id) => unawaited(_markNotificationRead(id)),
+      ),
+    );
+  }
 
   Future<void> _openWallet() async {
     try {
@@ -1185,6 +1261,7 @@ class _ShellState extends State<Shell> {
       MaterialPageRoute(
         builder: (_) => ListenerWalletPage(
           api: api,
+          socket: _notificationSocket,
           initialBalance: walletBalance,
           onBalanceChanged: (balance) =>
               setState(() => walletBalance = balance),
@@ -2312,11 +2389,6 @@ class _LibraryPageState extends State<LibraryPage> {
                   'Playlist của bạn',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                FilledButton.tonalIcon(
-                  onPressed: createPlaylist,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Tạo mới'),
-                ),
               ],
             ),
           ),
@@ -3007,14 +3079,15 @@ class _NotificationPanelState extends State<NotificationPanel> {
 }
 
 class LivestreamPage extends StatelessWidget {
-  const LivestreamPage({super.key, required this.api});
+  const LivestreamPage({super.key, required this.api, required this.socket});
 
   final ListenerApi api;
+  final NotificationSocket socket;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Livestream')),
-    body: ListenerLivestreamScreen(api: api),
+    body: ListenerLivestreamScreen(api: api, socket: socket),
   );
 }
 
@@ -3022,10 +3095,12 @@ class ListenerWalletPage extends StatefulWidget {
   const ListenerWalletPage({
     super.key,
     required this.api,
+    required this.socket,
     required this.initialBalance,
     required this.onBalanceChanged,
   });
   final ListenerApi api;
+  final NotificationSocket socket;
   final int initialBalance;
   final ValueChanged<int> onBalanceChanged;
 
@@ -3039,11 +3114,37 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
   bool historyLoading = true;
   String? historyError;
   List<Map<String, dynamic>> history = const [];
+  bool showAllHistory = false;
+  void Function()? removeRealtimeListener;
 
   @override
   void initState() {
     super.initState();
-    _loadHistory();
+    removeRealtimeListener = widget.socket.addRealtimeListener((event) {
+      if ('${event['type'] ?? ''}'.toUpperCase() == 'PAYMENT_UPDATED') {
+        unawaited(_loadWalletAndHistory());
+      }
+    });
+    _loadWalletAndHistory();
+  }
+
+  @override
+  void dispose() {
+    removeRealtimeListener?.call();
+    super.dispose();
+  }
+
+  Future<void> _loadWalletAndHistory() async {
+    try {
+      final wallet = await widget.api.wallet();
+      if (!mounted) return;
+      setState(
+        () =>
+            balance = (wallet['availableBalance'] as num?)?.round() ?? balance,
+      );
+      widget.onBalanceChanged(balance);
+      await _loadHistory();
+    } catch (_) {}
   }
 
   Future<void> _loadHistory() async {
@@ -3175,10 +3276,18 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
           child: Text('Chưa có giao dịch nào.'),
         )
       else
-        ...history.map(
+        ...((showAllHistory ? history : history.take(5)).map(
           (item) => Transaction.fromCheckout(
             item,
             onTap: () => _openTransaction(item),
+          ),
+        )),
+      if (!historyLoading && historyError == null && history.length > 5)
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            onPressed: () => setState(() => showAllHistory = !showAllHistory),
+            child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
           ),
         ),
     ],
@@ -4609,12 +4718,7 @@ class _PlayerState extends State<Player> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                IconButton(
-                  onPressed: () {},
-                  tooltip: 'Thêm tùy chọn',
-                  color: Colors.white,
-                  icon: const Icon(Icons.tune),
-                ),
+                const SizedBox(width: 48),
               ],
             ),
             const SizedBox(height: 8),
@@ -5155,14 +5259,6 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
             'Lưu để quay lại sau',
             style: TextStyle(color: Colors.white60),
           ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.add, color: Colors.white),
-          title: const Text(
-            'Tạo playlist mới',
-            style: TextStyle(color: Colors.white),
-          ),
-          onTap: () => Navigator.pop(context),
         ),
         const SizedBox(height: 10),
       ],
