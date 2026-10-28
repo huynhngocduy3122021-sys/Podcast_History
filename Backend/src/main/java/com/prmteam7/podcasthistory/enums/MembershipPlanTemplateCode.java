@@ -1,17 +1,21 @@
 package com.prmteam7.podcasthistory.enums;
 
 import java.math.BigDecimal;
+import java.util.Set;
 
 /**
- * The fixed membership tiers that every approved channel receives.
+ * The single membership template that every approved channel can select.
  *
- * <p>The price is intentionally part of the backend definition so a creator does not have to
- * create a plan or enter a price before memberships can be sold.
+ * <p>The suggested price is only a starting point. A creator can change the price for their own
+ * channel without changing this system-wide template.
  */
 public enum MembershipPlanTemplateCode {
-  BASIC_25K("Gói thành viên 25K", new BigDecimal("25000")),
-  STANDARD_50K("Gói thành viên 50K", new BigDecimal("50000")),
-  PREMIUM_75K("Gói thành viên 75K", new BigDecimal("75000"));
+  DEFAULT("Gói thành viên", new BigDecimal("25000"));
+
+  /** Template codes from the previous three-tier rollout. They are kept only for safe data
+   * migration; they are never returned as selectable templates again. */
+  private static final Set<String> LEGACY_CODES = Set.of(
+      "BASIC_25K", "STANDARD_50K", "PREMIUM_75K");
 
   public static final int DEFAULT_DURATION_DAYS = 30;
   public static final String CURRENCY = "VND";
@@ -31,5 +35,9 @@ public enum MembershipPlanTemplateCode {
 
   public BigDecimal getPrice() {
     return price;
+  }
+
+  public static boolean isLegacyCode(String code) {
+    return code != null && LEGACY_CODES.contains(code.trim().toUpperCase(java.util.Locale.ROOT));
   }
 }

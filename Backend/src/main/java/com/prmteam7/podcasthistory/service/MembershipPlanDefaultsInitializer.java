@@ -6,7 +6,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
-/** Ensures existing approved channels receive the fixed membership tiers after deployment. */
+/** Ensures existing approved channels receive the single membership template after deployment. */
 @Component
 public class MembershipPlanDefaultsInitializer implements ApplicationRunner {
   private static final Logger log = LoggerFactory.getLogger(MembershipPlanDefaultsInitializer.class);

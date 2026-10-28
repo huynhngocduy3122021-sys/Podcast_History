@@ -40,8 +40,10 @@ public class CreatorMembershipPlanService {
 
   public List<ChannelPlan> myPlans(UUID userId) {
     var profile = approved(userId, false);
-    return plans.findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(
-        profile.getProducerProfileId()).stream().map(this::view).toList();
+    // Only the currently sellable plan is returned. Historical inactive rows are retained for
+    // subscriptions/payments but must not appear as additional selectable packages.
+    return plans.findAllByProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByPriceAsc(
+        profile.getProducerProfileId(), "ACTIVE").stream().map(this::view).toList();
   }
 
   @Transactional
@@ -97,8 +99,16 @@ public class CreatorMembershipPlanService {
   }
 
   private MembershipPlanTemplateCode template(String code) {
+    if (code == null || code.isBlank()) {
+      throw new ResourceNotFoundException("Không tìm thấy gói mẫu.");
+    }
+    String normalized = code.trim().toUpperCase(java.util.Locale.ROOT);
+    // Accept old client links during migration, but map them to the only current template.
+    if (MembershipPlanTemplateCode.isLegacyCode(normalized)) {
+      return MembershipPlanTemplateCode.DEFAULT;
+    }
     try {
-      return MembershipPlanTemplateCode.valueOf(code.toUpperCase(java.util.Locale.ROOT));
+      return MembershipPlanTemplateCode.valueOf(normalized);
     } catch (IllegalArgumentException exception) {
       throw new ResourceNotFoundException("Không tìm thấy gói mẫu.");
     }

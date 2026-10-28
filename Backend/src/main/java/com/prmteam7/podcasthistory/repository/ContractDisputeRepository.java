@@ -10,6 +10,8 @@ public interface ContractDisputeRepository
   long countByStatus(String status);
 
   boolean existsByContract_ContractIdAndStatus(UUID id, String status);
+  Optional<ContractDispute> findFirstByContract_ContractIdAndStatus(UUID id, String status);
+  Optional<ContractDispute> findFirstByContract_ContractIdOrderByCreatedAtDesc(UUID id);
 
   @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
   @Query("select d from ContractDispute d where d.disputeId=:id")

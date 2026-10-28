@@ -6,8 +6,27 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
+  @Query(value = """
+      select s from Subscription s
+      join fetch s.user member
+      join fetch s.membershipPlan plan
+      where plan.producerProfile.producerProfileId = :creatorId
+        and (:status is null or upper(s.status) = :status)
+        and (:status <> 'ACTIVE' or (s.startAt <= :now and s.endAt > :now))
+      """, countQuery = """
+      select count(s) from Subscription s
+      where s.membershipPlan.producerProfile.producerProfileId = :creatorId
+        and (:status is null or upper(s.status) = :status)
+        and (:status <> 'ACTIVE' or (s.startAt <= :now and s.endAt > :now))
+      """)
+  Page<Subscription> findChannelMembers(@Param("creatorId") UUID creatorId,
+      @Param("status") String status, @Param("now") Instant now, Pageable pageable);
   boolean existsByMembershipPlan_MembershipPlanId(UUID planId);
 
   @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)

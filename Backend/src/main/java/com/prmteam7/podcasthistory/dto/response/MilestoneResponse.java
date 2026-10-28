@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.dto.response;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.time.Instant;
 
 public record MilestoneResponse(
         UUID milestoneId,
@@ -11,5 +12,8 @@ public record MilestoneResponse(
         BigDecimal amount,
         String currency,
         String status,
-        UUID paymentId) {
+        UUID paymentId,
+        long revisionCount,
+        int maxRevisions,
+        Instant dueAt) {
 }
