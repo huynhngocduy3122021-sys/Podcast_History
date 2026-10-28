@@ -117,6 +117,13 @@ class ApiCreatorRepository implements CreatorRepository {
       }
     } catch (_) {}
 
+    try {
+      final sub = await getMySystemSubscription();
+      if (sub != null) {
+        _cachedProfile = _cachedProfile.copyWith(isPremium: sub.isActive);
+      }
+    } catch (_) {}
+
     return _cachedProfile;
   }
 
@@ -146,14 +153,77 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<void> upgradeToPremium() async {
-    // "cái nào chưa có thì bỏ qua": Attempt contract endpoint
     try {
-      await _apiClient.post(
-        ApiEndpoints.creatorUpgradePremium,
-        body: {'plan': 'MONTHLY'},
+      final plans = await getSystemPlans();
+      final paidPlan = plans.firstWhere(
+        (p) => p.isPaid && p.isActive,
+        orElse: () => plans.firstWhere((p) => p.isPaid, orElse: () => plans.first),
       );
+      if (paidPlan.planId.isNotEmpty) {
+        await subscribeSystemPlan(paidPlan.planId);
+      }
     } catch (_) {}
     _cachedProfile = _cachedProfile.copyWith(isPremium: true);
+  }
+
+  @override
+  Future<List<CreatorSystemPlan>> getSystemPlans() async {
+    try {
+      final response = await _apiClient.get(ApiEndpoints.creatorSystemPlans);
+      if (response is List) {
+        return response
+            .whereType<Map<String, dynamic>>()
+            .map(CreatorSystemPlan.fromJson)
+            .toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  @override
+  Future<CreatorSystemSubscription?> getMySystemSubscription() async {
+    if (!_apiClient.isAuthenticated) return null;
+    try {
+      final response = await _apiClient.get(ApiEndpoints.creatorSystemPlansMe);
+      if (response is Map<String, dynamic>) {
+        final sub = CreatorSystemSubscription.fromJson(response);
+        if (sub.isActive) {
+          _cachedProfile = _cachedProfile.copyWith(isPremium: true);
+        }
+        return sub;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<CreatorCheckoutPayment> subscribeSystemPlan(String planId) async {
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorSystemPlanSubscribe(planId),
+    );
+    if (response is Map<String, dynamic>) {
+      return CreatorCheckoutPayment.fromJson(response);
+    }
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi tạo thanh toán gói không hợp lệ.',
+    );
+  }
+
+  @override
+  Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId) async {
+    final response = await _apiClient.get(ApiEndpoints.meCheckout(checkoutId));
+    if (response is Map<String, dynamic>) {
+      final checkout = CreatorCheckoutPayment.fromJson(response);
+      if (checkout.isPaid) {
+        _cachedProfile = _cachedProfile.copyWith(isPremium: true);
+      }
+      return checkout;
+    }
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi kiểm tra thanh toán không hợp lệ.',
+    );
   }
 
   // ==========================================

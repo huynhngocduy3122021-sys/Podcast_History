@@ -11,6 +11,12 @@ abstract class CreatorRepository {
   });
   Future<void> upgradeToPremium();
 
+  // System Plans & Checkout
+  Future<List<CreatorSystemPlan>> getSystemPlans();
+  Future<CreatorSystemSubscription?> getMySystemSubscription();
+  Future<CreatorCheckoutPayment> subscribeSystemPlan(String planId);
+  Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId);
+
   // Categories
   Future<List<CreatorCategory>> getCategories();
 

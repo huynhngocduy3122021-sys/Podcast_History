@@ -225,7 +225,7 @@ class ListenerApi {
   String accessToken;
   String? refreshToken;
   final void Function(AuthSession)? onSessionRefreshed;
-  Future<AuthSession>? _refreshing;
+  static Future<AuthSession>? _globalRefreshing;
   final http.Client _client;
 
   Future<List<ListenerPodcast>> searchPodcasts({
@@ -632,21 +632,22 @@ class ListenerApi {
       _ => throw ArgumentError('Unsupported HTTP method: $method'),
     }).timeout(const Duration(seconds: 20));
     var response = await send();
-    if (authenticated && response.statusCode == 401 && refreshToken != null) {
-      final pending = _refreshing ??= AuthApi(client: _client)
+    if (authenticated &&
+        response.statusCode == 401 &&
+        refreshToken != null &&
+        refreshToken!.isNotEmpty) {
+      final pending = _globalRefreshing ??= AuthApi(client: _client)
           .refresh(refreshToken!);
       try {
         final session = await pending;
-        if (identical(_refreshing, pending)) {
-          accessToken = session.accessToken;
-          refreshToken = session.refreshToken;
-          onSessionRefreshed?.call(session);
-        }
+        accessToken = session.accessToken;
+        refreshToken = session.refreshToken;
+        onSessionRefreshed?.call(session);
+        headers['Authorization'] = 'Bearer $accessToken';
+        response = await send();
       } finally {
-        if (identical(_refreshing, pending)) _refreshing = null;
+        if (identical(_globalRefreshing, pending)) _globalRefreshing = null;
       }
-      headers['Authorization'] = 'Bearer $accessToken';
-      response = await send();
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ApiException(_errorMessage(response), response.statusCode);

@@ -12,6 +12,7 @@ import 'package:podcast_history/features/creator_studio/presentation/controllers
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/core/utils/image_url_helper.dart';
+import '../premium/premium_upgrade_screen.dart';
 
 class UploadPodcastScreen extends ConsumerStatefulWidget {
   final CreatorPodcast? editingPodcast;
@@ -866,12 +867,8 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             AppButton(
               label: 'Nâng cấp Premium ngay',
               onPressed: () {
-                ref.read(creatorProfileProvider.notifier).upgradeToPremium();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Chúc mừng bạn đã nâng cấp thành công gói Studio Premium!'),
-                    backgroundColor: AppColors.success,
-                  ),
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
                 );
               },
             ),
