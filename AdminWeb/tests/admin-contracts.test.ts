@@ -62,7 +62,7 @@ test('Spring page retains pagination metadata and rejects a List or missing meta
 })
 
 test('new pagination schema does not change existing notification and dashboard mappings', () => {
-  assert.deepEqual(notificationsPageSchema.parse({ content: [] }), { content: [] })
+  assert.deepEqual(notificationsPageSchema.parse({ content: [], number: 0, size: 20, totalElements: 0, totalPages: 0 }), { content: [], number: 0, size: 20, totalElements: 0, totalPages: 0 })
   assert.equal(dashboardSchema.safeParse({ users: 0, activeUsers: 0, creators: 0, pendingCreators: 0, podcasts: 0, pendingPodcasts: 0, pendingReports: 0, pendingWithdrawals: 0, openDisputes: 0, podcastStatuses: [], collectedPayments: [] }).success, true)
   assert.equal(creatorApplicationSchema.safeParse({ applicationId: 'not-a-uuid' }).success, false)
 })

@@ -13,6 +13,8 @@ export const adminKeys = {
   plans: (userId: string | undefined) => ['membership-plans', userId] as const,
   planList: (userId: string | undefined, creatorId: string, status: string, page: number, size: number) => ['membership-plans', userId, 'list', creatorId, status, page, size] as const,
   planDetail: (userId: string | undefined, planId: string | null) => ['membership-plans', userId, 'detail', planId] as const,
+  creatorSystemPlans: (userId: string | undefined) => ['creator-system-plans', userId] as const,
+  creatorSystemPlanDetail: (userId: string | undefined, planId: string | null) => ['creator-system-plans', userId, 'detail', planId] as const,
   audits: (userId: string | undefined) => ['audit-logs', userId] as const,
   auditList: (userId: string | undefined, resourceType: string, resourceId: string, page: number, size: number) => ['audit-logs', userId, 'list', resourceType, resourceId, page, size] as const,
   payments: (userId: string | undefined) => ['payments', userId] as const,
@@ -23,7 +25,9 @@ export const adminKeys = {
   withdrawalDetail: (userId: string | undefined, withdrawalId: string | null) => ['withdrawals', userId, 'detail', withdrawalId] as const,
   withdrawalReviews: (userId: string | undefined, withdrawalId: string | null, page: number, size: number) => ['withdrawals', userId, 'reviews', withdrawalId, page, size] as const,
   wallets: (userId: string | undefined) => ['wallets', userId] as const,
-  walletList: (userId: string | undefined, page: number, size: number) => ['wallets', userId, 'list', page, size] as const,
+  walletList: (userId: string | undefined, qOrPage: string | number, roleOrSize: string | number, page?: number, size?: number) => typeof qOrPage === 'number'
+    ? ['wallets', userId, 'list', qOrPage, roleOrSize] as const
+    : ['wallets', userId, 'list', qOrPage, roleOrSize, page, size] as const,
   walletTransactions: (userId: string | undefined, walletId: string, status: string, page: number, size: number) => ['wallet-transactions', userId, walletId, status, page, size] as const,
   contracts: (userId: string | undefined) => ['contracts', userId] as const,
   contractList: (userId: string | undefined, status: string, page: number, size: number) => ['contracts', userId, 'list', status, page, size] as const,
@@ -65,6 +69,13 @@ export async function planChangeConfirmed(client: QueryClient, userId: string | 
   await Promise.all([
     client.invalidateQueries({ queryKey: adminKeys.plans(userId) }),
     planId ? client.invalidateQueries({ queryKey: adminKeys.planDetail(userId, planId) }) : Promise.resolve(),
+  ])
+}
+
+export async function creatorSystemPlanChangeConfirmed(client: QueryClient, userId: string | undefined, planId?: string) {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.creatorSystemPlans(userId) }),
+    planId ? client.invalidateQueries({ queryKey: adminKeys.creatorSystemPlanDetail(userId, planId) }) : Promise.resolve(),
   ])
 }
 

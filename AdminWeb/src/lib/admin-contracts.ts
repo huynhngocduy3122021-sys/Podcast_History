@@ -101,11 +101,57 @@ export const planWriteSchema = z.object({
   description: textWithLimit(10000, 'Mô tả tối đa 10.000 ký tự'),
   price: money,
   currency: z.string().regex(/^[A-Z]{3}$/, 'Tiền tệ dùng 3 chữ in hoa'),
-  durationDays: z.preprocess(value => typeof value === 'string' && value.trim() ? Number(value) : value,
+  durationDays: z.preprocess(value => typeof value === 'string' ? (value.trim() ? Number(value) : null) : value,
     z.number().int().min(1, 'Thời hạn tối thiểu 1 ngày').max(3650, 'Thời hạn tối đa 3.650 ngày')),
   status: planStatusSchema,
 })
 export const planDeactivateSchema = z.object({ note: noteSchema })
+
+export const creatorSystemPlanStatusSchema = z.enum(['ACTIVE', 'INACTIVE'])
+export const creatorSystemBenefitSchema = z.object({
+  key: z.string(), value: z.string(), description: z.string().nullable(),
+})
+export const creatorSystemPlanSchema = z.object({
+  planId: uuid,
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  price: decimalSchema,
+  currency: z.string().length(3),
+  durationDays: z.number().int().nullable(),
+  status: creatorSystemPlanStatusSchema,
+  benefits: z.array(creatorSystemBenefitSchema),
+})
+export const creatorSystemPlansSchema = z.array(creatorSystemPlanSchema)
+const creatorSystemBenefitWriteSchema = z.object({
+  key: textWithLimit(60, 'Mã quyền lợi tối đa 60 ký tự').trim().min(1, 'Nhập mã quyền lợi')
+    .regex(/^[A-Za-z][A-Za-z0-9_]*$/, 'Mã quyền lợi không hợp lệ'),
+  value: textWithLimit(200, 'Giá trị quyền lợi tối đa 200 ký tự').trim().min(1, 'Nhập giá trị quyền lợi'),
+  description: textWithLimit(500, 'Mô tả quyền lợi tối đa 500 ký tự'),
+})
+const creatorSystemPrice = textWithLimit(13, 'Giá tối đa 10 chữ số và 2 chữ số thập phân').trim()
+  .refine(value => /^\d{1,10}(?:\.\d{1,2})?$/.test(value), 'Giá phải là số không âm, tối đa 2 chữ số thập phân')
+export const creatorSystemPlanWriteSchema = z.object({
+  code: textWithLimit(60, 'Mã gói tối đa 60 ký tự').trim().regex(/^[A-Za-z][A-Za-z0-9_]{1,59}$/, 'Mã gói không hợp lệ'),
+  name: textWithLimit(150, 'Tên gói tối đa 150 ký tự').trim().min(1, 'Nhập tên gói'),
+  description: textWithLimit(10000, 'Mô tả tối đa 10.000 ký tự'),
+  price: creatorSystemPrice,
+  currency: z.string().regex(/^[A-Z]{3}$/, 'Tiền tệ dùng 3 chữ in hoa'),
+  durationDays: z.preprocess(value => typeof value === 'string' && value.trim() ? Number(value) : value,
+    z.number().int().min(1, 'Thời hạn tối thiểu 1 ngày').max(3650, 'Thời hạn tối đa 3.650 ngày').nullable()),
+  status: creatorSystemPlanStatusSchema,
+  benefits: z.array(creatorSystemBenefitWriteSchema).max(30, 'Tối đa 30 quyền lợi'),
+}).superRefine((value, context) => {
+  const isFree = value.code.trim().toUpperCase() === 'FREE'
+  if (isFree && (value.price !== '0' || value.durationDays !== null || value.status !== 'ACTIVE')) {
+    context.addIssue({ code: 'custom', path: ['price'], message: 'Gói FREE phải có giá 0, không thời hạn và luôn ACTIVE' })
+  }
+  if (!isFree && (Number(value.price) <= 0 || value.durationDays === null)) {
+    context.addIssue({ code: 'custom', path: ['price'], message: 'Gói trả phí cần giá dương và thời hạn' })
+  }
+})
+export type CreatorSystemPlan = z.infer<typeof creatorSystemPlanSchema>
+export type CreatorSystemPlanWrite = z.infer<typeof creatorSystemPlanWriteSchema>
 
 export const paymentStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'SUCCESS', 'COMPLETED'])
 export const paymentSchema = z.object({
@@ -167,9 +213,19 @@ export const withdrawalReviewsPageSchema = pageSchema(withdrawalReviewSchema)
 export const walletSchema = z.object({
   walletId: uuid,
   userId: uuid,
+  username: z.string().optional(),
+  email: z.string().optional(),
+  displayName: z.string().optional(),
+  role: z.string().optional(),
+  active: z.boolean().optional(),
+  verified: z.boolean().optional(),
   availableBalance: decimalSchema,
+  heldBalance: decimalSchema.optional(),
+  totalBalance: decimalSchema.optional(),
   currency: z.string().length(3),
   status: z.string(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 })
 export const walletsPageSchema = pageSchema(walletSchema)
 export const transactionSchema = z.object({

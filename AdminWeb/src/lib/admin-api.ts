@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios'
-import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema } from './admin-contracts.ts'
+import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, creatorSystemPlanSchema, creatorSystemPlansSchema, creatorSystemPlanWriteSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema } from './admin-contracts.ts'
 import type { ApproveWithdrawal, CategoryForm, CompleteWithdrawal, CreatorStatus, AdminUserRole, PaymentReconcile, PaymentRefund, PaymentStatus, PlanWrite, WithdrawalNote, WithdrawalStatus } from './admin-contracts.ts'
 import { confirmedMutation } from './api-mutation.ts'
 
@@ -92,6 +92,23 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
       return confirmedMutation(() => client.delete(`/api/admin/membership-plans/${encodeURIComponent(planId)}`, { data: body }), planSchema, 200,
         data => data.planId === planId && data.status === 'INACTIVE')
     },
+    async creatorSystemPlans(signal?: AbortSignal) {
+      return creatorSystemPlansSchema.parse((await client.get('/api/admin/creator-system-plans', { signal })).data)
+    },
+    async creatorSystemPlan(planId: string, signal?: AbortSignal) {
+      return creatorSystemPlanSchema.parse((await client.get(`/api/admin/creator-system-plans/${encodeURIComponent(planId)}`, { signal })).data)
+    },
+    async saveCreatorSystemPlan(planId: string | undefined, values: unknown) {
+      const body = creatorSystemPlanWriteSchema.parse(values)
+      return confirmedMutation(() => planId
+        ? client.put(`/api/admin/creator-system-plans/${encodeURIComponent(planId)}`, body)
+        : client.post('/api/admin/creator-system-plans', body), creatorSystemPlanSchema, planId ? 200 : 201,
+        data => (!planId || data.planId === planId) && data.status === body.status)
+    },
+    async deactivateCreatorSystemPlan(planId: string) {
+      return confirmedMutation(() => client.delete(`/api/admin/creator-system-plans/${encodeURIComponent(planId)}`), creatorSystemPlanSchema, 200,
+        data => data.planId === planId && data.status === 'INACTIVE')
+    },
     async auditLogs(params: { resourceType?: string; resourceId?: string; page: number; size: number }, signal?: AbortSignal) {
       const resourceId = uuidFilterSchema.parse(params.resourceId || '')
       return auditsPageSchema.parse((await client.get('/api/admin/audit-logs', { params: { ...params, resourceType: params.resourceType || undefined, resourceId: resourceId || undefined }, signal })).data)
@@ -168,8 +185,15 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
       return confirmedMutation(() => client.post(`/api/admin/withdrawals/${encodeURIComponent(withdrawalId)}/fail`, body), withdrawalSchema, 200,
         data => data.withdrawalId === withdrawalId && data.status === 'FAILED' && !data.fundsReserved)
     },
-    async wallets(page: number, size: number, signal?: AbortSignal) {
-      return walletsPageSchema.parse((await client.get('/api/admin/wallets', { params: { page, size }, signal })).data)
+    async wallets(pageOrParams: number | { q?: string; role?: string; page: number; size: number }, sizeOrSignal?: number | AbortSignal, signal?: AbortSignal) {
+      const params = typeof pageOrParams === 'number'
+        ? { page: pageOrParams, size: sizeOrSignal as number, q: undefined, role: undefined }
+        : pageOrParams
+      const requestSignal = typeof sizeOrSignal === 'object' ? sizeOrSignal : signal
+      const requestParams: { page: number; size: number; q?: string; role?: string } = { page: params.page, size: params.size }
+      if (params.q) requestParams.q = params.q
+      if (params.role) requestParams.role = params.role
+      return walletsPageSchema.parse((await client.get('/api/admin/wallets', { params: requestParams, signal: requestSignal })).data)
     },
     async walletTransactions(params: { walletId?: string; status?: string; page: number; size: number }, signal?: AbortSignal) {
       const walletId = uuidFilterSchema.parse(params.walletId || '')
