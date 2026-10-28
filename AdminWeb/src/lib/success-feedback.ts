@@ -20,6 +20,9 @@ export const phase4SuccessMessages = {
   planCreated: 'Đã tạo gói thành viên.',
   planUpdated: 'Đã cập nhật gói thành viên.',
   planDeactivated: 'Đã chuyển gói thành không hoạt động.',
+  creatorSystemPlanCreated: 'Đã tạo gói Premium.',
+  creatorSystemPlanUpdated: 'Đã cập nhật gói Premium.',
+  creatorSystemPlanDeactivated: 'Đã ngừng bán gói Premium.',
 } as const
 
 export function categorySaveSuccess(previous: Pick<Category, 'active'> | undefined, current: Pick<Category, 'active'>): string {
