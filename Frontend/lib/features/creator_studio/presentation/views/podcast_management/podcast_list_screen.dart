@@ -14,6 +14,7 @@ import 'package:podcast_history/features/creator_studio/presentation/widgets/sou
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
 class PodcastListScreen extends ConsumerStatefulWidget {
   const PodcastListScreen({super.key});
@@ -157,6 +158,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
               );
             },
           ),
+          const CreatorNotificationButton(),
           const SizedBox(width: AppSpacing.sm),
         ],
         bottom: TabBar(

@@ -5,11 +5,13 @@ import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/comments/studio_comments_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_membership_plans_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/form_builder_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/premium_upgrade_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
 class CreatorMoreScreen extends ConsumerWidget {
   final VoidCallback? onTheme;
@@ -26,6 +28,10 @@ class CreatorMoreScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Công cụ & Cài đặt Studio'),
+        actions: const [
+          CreatorNotificationButton(),
+          SizedBox(width: 8),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.screenMargin),
@@ -65,6 +71,15 @@ class CreatorMoreScreen extends ConsumerWidget {
           _buildMenuSection(
             'Tài chính & Thu nhập',
             [
+              _MenuItem(
+                icon: Icons.card_membership_rounded,
+                iconColor: AppColors.secondaryLight,
+                title: 'Gói Hội viên Kênh (Membership)',
+                subtitle: 'Kích hoạt gói thành viên kênh và tùy chỉnh giá bán cho thính giả',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CreatorMembershipPlansScreen()),
+                ),
+              ),
               _MenuItem(
                 icon: Icons.account_balance_wallet_rounded,
                 iconColor: AppColors.success,

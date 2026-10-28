@@ -125,7 +125,12 @@ Người tham gia hợp đồng còn có `POST /api/contracts/{contractId}/dispu
 
 ## 7. Gói thành viên và lỗi thường gặp
 
-Gói membership mặc định bật (`MEMBERSHIPS_ENABLED=true`). `GET /api/creators/{creatorId}/membership-plans` trả các gói đang hoạt động; `POST /api/me/subscriptions` body `{membershipPlanId}` tạo payment/subscription `PENDING`. Membership chỉ chuyển `ACTIVE` sau khi SePay xác nhận thanh toán hoặc Admin đối soát. Có thể đặt `MEMBERSHIPS_ENABLED=false` để tắt tính năng.
+Gói membership mặc định bật (`MEMBERSHIPS_ENABLED=true`):
+- `GET /api/creators/{creatorId}/membership-plans`: Lấy gói hội viên đang `ACTIVE` của Creator để hiển thị nút đăng ký trên trang kênh.
+- `POST /api/me/subscriptions` với body `{"membershipPlanId": "<UUID>", "paymentMethod": "SEPAY" | "WALLET"}`:
+  - **SEPAY**: Trả về `paymentId`, `paymentCode`, `qrImageUrl` với trạng thái `PENDING`. Frontend polling `GET /api/me/payments/{paymentId}` định kỳ đến khi `PAID` và `subscriptionStatus = ACTIVE`.
+  - **WALLET**: Trừ trực tiếp số dư ví khả dụng (`GET /api/listener/wallet`). Nếu thành công chuyển ngay sang `ACTIVE`; nếu số dư ví không đủ, backend trả về lỗi `409 Conflict`.
+- `GET /api/me/subscriptions`: Danh sách các gói hội viên đã đăng ký. Khi `status = ACTIVE`, Listener được mở khóa các tập podcast `MEMBERS_ONLY`.
 
 | HTTP | Cách xử lý |
 |---:|---|

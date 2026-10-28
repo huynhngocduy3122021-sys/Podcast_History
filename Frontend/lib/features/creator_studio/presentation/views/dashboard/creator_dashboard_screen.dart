@@ -16,8 +16,10 @@ import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_podcast_player_sheet.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_membership_plans_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
 class CreatorDashboardScreen extends ConsumerStatefulWidget {
   final Function(int tabIndex)? onNavigateTab;
@@ -139,9 +141,12 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
             tooltip: 'Hội viên kênh',
             icon: const Icon(Icons.stars_rounded, color: AppColors.secondaryLight),
             onPressed: () {
-              widget.onNavigateTab?.call(4);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const CreatorMembershipPlansScreen()),
+              );
             },
           ),
+          const CreatorNotificationButton(),
           const SizedBox(width: 4),
         ],
       ),

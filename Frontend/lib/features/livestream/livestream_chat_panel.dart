@@ -12,10 +12,14 @@ class LivestreamChatPanel extends StatefulWidget {
     super.key,
     required this.livestreamId,
     required this.loadCredentials,
+    this.isOverlay = false,
+    this.trailingActions,
   });
 
   final String livestreamId;
   final Future<ChatCredentials> Function() loadCredentials;
+  final bool isOverlay;
+  final Widget? trailingActions;
 
   @override
   State<LivestreamChatPanel> createState() => _LivestreamChatPanelState();
@@ -208,101 +212,312 @@ class _LivestreamChatPanelState extends State<LivestreamChatPanel> {
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: const Color(0xE8191919),
-      border: Border.all(color: Colors.white24),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    padding: const EdgeInsets.all(8),
-    child: Column(
-      children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Chat trực tiếp',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        if (_error != null)
-          Text(
-            _error!,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.orangeAccent, fontSize: 11),
-          ),
-        Expanded(
-          child: _connecting
-              ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  reverse: true,
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final message = _messages[_messages.length - 1 - index];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: '${message.sender}: ',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: message.mine
-                                    ? Colors.amberAccent
-                                    : Colors.lightBlueAccent,
-                              ),
-                            ),
-                            TextSpan(
-                              text: message.text,
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  },
-                ),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _input,
-                enabled: _client != null,
-                maxLength: 300,
-                maxLines: 1,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: 'Nhập tin nhắn',
-                  hintStyle: TextStyle(color: Colors.white70),
-                  filled: true,
-                  fillColor: Color(0xFF303030),
-                  border: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white38),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white38),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white70),
-                  ),
-                  isDense: true,
-                  counterText: '',
-                ),
+  Widget build(BuildContext context) {
+    if (widget.isOverlay) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_error != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _error!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 11),
               ),
             ),
-            IconButton(
-              onPressed: _client == null || _sending ? null : _send,
-              icon: const Icon(Icons.send, color: Colors.white),
+          Expanded(
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: _connecting
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        reverse: true,
+                        padding: const EdgeInsets.only(bottom: 6),
+                        itemCount: _messages.length + 1,
+                        itemBuilder: (context, index) {
+                          if (index == _messages.length) {
+                            return Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(vertical: 3),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0x66FFB800),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0x99FFB800),
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: const Text(
+                                  '👋 Chào mừng đến với phòng live! Hãy bình luận văn minh và lịch sự.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          final message =
+                              _messages[_messages.length - 1 - index];
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 2.5),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: Colors.white12,
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: '${message.sender}: ',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12.5,
+                                        color: message.mine
+                                            ? const Color(0xFFFFD54F)
+                                            : const Color(0xFF81D4FA),
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: message.text,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12.5,
+                                        height: 1.25,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
             ),
-          ],
-        ),
-      ],
-    ),
-  );
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white24, width: 0.8),
+                  ),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            inputDecorationTheme: const InputDecorationTheme(
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                            ),
+                          ),
+                          child: TextField(
+                            controller: _input,
+                            enabled: _client != null,
+                            maxLength: 300,
+                            cursorColor: const Color(0xFFFFD54F),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Thêm bình luận...',
+                              hintStyle: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 13,
+                              ),
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              hoverColor: Colors.transparent,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(vertical: 10),
+                              counterText: '',
+                            ),
+                            onSubmitted: (_) => _send(),
+                          ),
+                        ),
+                      ),
+                      InkWell(
+                        onTap: _client == null || _sending ? null : _send,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          margin: const EdgeInsets.only(right: 6),
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFFFD54F),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_upward_rounded,
+                            color: Colors.black,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (widget.trailingActions != null) ...[
+                const SizedBox(width: 8),
+                widget.trailingActions!,
+              ],
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xE8191919),
+        border: Border.all(color: Colors.white24),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        children: [
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Chat trực tiếp',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (_error != null)
+            Text(
+              _error!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.orangeAccent, fontSize: 11),
+            ),
+          Expanded(
+            child: _connecting
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    reverse: true,
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final message = _messages[_messages.length - 1 - index];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '${message.sender}: ',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: message.mine
+                                      ? Colors.amberAccent
+                                      : Colors.lightBlueAccent,
+                                ),
+                              ),
+                              TextSpan(
+                                text: message.text,
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ],
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _input,
+                  enabled: _client != null,
+                  maxLength: 300,
+                  maxLines: 1,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _send(),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    hintText: 'Nhập tin nhắn',
+                    hintStyle: TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Color(0xFF303030),
+                    border: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white38),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white38),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.white70),
+                    ),
+                    isDense: true,
+                    counterText: '',
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _client == null || _sending ? null : _send,
+                icon: const Icon(Icons.send, color: Colors.white),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

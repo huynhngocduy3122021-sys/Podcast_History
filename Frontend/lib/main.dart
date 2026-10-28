@@ -876,80 +876,221 @@ class _ShellState extends State<Shell> {
       );
       return;
     }
-    try {
-      final plans = await api.membershipPlans(show.creatorId!);
-      if (!mounted) return;
-      if (plans.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Creator chưa có gói membership đang hoạt động.'),
+
+    // Hiển thị dialog chờ tải dữ liệu
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text('Đang tải thông tin gói hội viên...'),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+
+    List<Map<String, dynamic>> plans = [];
+    List<Map<String, dynamic>> subscriptions = [];
+    Map<String, dynamic> walletData = {};
+
+    try {
+      final results = await Future.wait<dynamic>([
+        api.membershipPlans(show.creatorId!),
+        api.subscriptions(),
+        api.wallet().catchError((_) => <String, dynamic>{'availableBalance': 0}),
+      ]);
+      plans = results[0] as List<Map<String, dynamic>>;
+      subscriptions = results[1] as List<Map<String, dynamic>>;
+      walletData = results[2] as Map<String, dynamic>;
+      if (mounted) Navigator.pop(context); // Tắt loading dialog
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Tắt loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể tải gói hội viên: $e')),
         );
-        return;
       }
-      final plan = plans.first;
-      final planId = '${plan['membershipPlanId']}';
-      final planName = '${plan['name'] ?? 'Membership'}';
-      final price = '${plan['price'] ?? ''} ${plan['currency'] ?? 'VND'}';
-      showDialog<void>(
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Kiểm tra xem đã có gói active của creator này chưa
+    final activeSub = subscriptions.cast<Map<String, dynamic>?>().firstWhere(
+      (item) =>
+          '${item?['creatorProfileId']}' == show.creatorId &&
+          '${item?['status']}'.toUpperCase() == 'ACTIVE',
+      orElse: () => null,
+    );
+
+    final currentBal =
+        (walletData['availableBalance'] as num?)?.round() ?? walletBalance;
+    walletBalance = currentBal;
+
+    if (activeSub != null) {
+      // Đã là Hội viên ACTIVE -> Hiển thị chi tiết gói
+      await showDialog<void>(
         context: context,
-        builder: (_) => AlertDialog(
-          title: Text('Đăng ký $planName'),
-          content: Text(
-            'Goi cua ${show.channel}: $price. Backend se tao checkout o trang thai cho thanh toan.',
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.verified_rounded, color: Color(0xFFFFB800), size: 28),
+              SizedBox(width: 10),
+              Text('Hội viên kênh'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade700),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      () {
+                        final rawName = '${activeSub['planName'] ?? ''}'.trim();
+                        return (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
+                            ? 'Gói thành viên'
+                            : rawName;
+                      }(),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Kênh: ${show.channel}',
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'ĐANG HOẠT ĐỘNG (ACTIVE)',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('Đặc quyền hội viên của bạn:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Nghe toàn bộ podcast độc quyền của kênh',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Huy hiệu hội viên kênh nổi bật',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Ưu tiên gửi & duyệt yêu cầu series podcast',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ],
+              ),
+            ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Hủy'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                try {
-                  final checkout = await api.checkout(
-                    planId,
-                    paymentMethod: 'SEPAY',
-                  );
-                  if (!mounted) return;
-                  final paid = await showDialog<bool>(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => PaymentDialog(
-                      api: api,
-                      checkout: checkout,
-                      planName: planName,
-                    ),
-                  );
-                  if (paid == true && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Thanh toán thành công. Membership đã được kích hoạt.',
-                        ),
-                      ),
-                    );
-                  }
-                } catch (_) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Không thể tạo phiên thanh toán.'),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Tạo phiên thanh toán'),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Đóng'),
             ),
           ],
         ),
       );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không thể tải gói membership.')),
-        );
-      }
+      return;
+    }
+
+    // Chưa là hội viên
+    if (plans.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Creator chưa có gói membership đang hoạt động.'),
+        ),
+      );
+      return;
+    }
+
+    final plan = plans.first;
+    final planId = '${plan['membershipPlanId']}';
+    final rawName = '${plan['name'] ?? ''}'.trim();
+    final planName = (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
+        ? 'Gói thành viên'
+        : rawName;
+    final priceVal = (plan['price'] as num?)?.toDouble() ?? 0.0;
+    final durationDays = (plan['durationDays'] as num?)?.toInt() ?? 30;
+    final desc = '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền hội viên.'}';
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ListenerMembershipSheet(
+        api: api,
+        show: show,
+        planId: planId,
+        planName: planName,
+        price: priceVal,
+        durationDays: durationDays,
+        description: desc,
+        walletBalance: walletBalance,
+        onOpenWallet: () async {
+          Navigator.pop(context);
+          await _openWallet();
+        },
+      ),
+    );
+
+    if (result == true && mounted) {
+      try {
+        final newWallet = await api.wallet();
+        final newBal = (newWallet['availableBalance'] as num?)?.round() ?? walletBalance;
+        setState(() => walletBalance = newBal);
+      } catch (_) {}
     }
   }
 
@@ -1196,6 +1337,543 @@ class _ShellState extends State<Shell> {
   void openPlayer() => _showPlayer(current!);
 }
 
+class ListenerMembershipSheet extends StatefulWidget {
+  const ListenerMembershipSheet({
+    super.key,
+    required this.api,
+    required this.show,
+    required this.planId,
+    required this.planName,
+    required this.price,
+    required this.durationDays,
+    required this.description,
+    required this.walletBalance,
+    required this.onOpenWallet,
+  });
+
+  final ListenerApi api;
+  final Show show;
+  final String planId;
+  final String planName;
+  final double price;
+  final int durationDays;
+  final String description;
+  final int walletBalance;
+  final VoidCallback onOpenWallet;
+
+  @override
+  State<ListenerMembershipSheet> createState() =>
+      _ListenerMembershipSheetState();
+}
+
+class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
+  String _selectedMethod = 'WALLET';
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.walletBalance < widget.price) {
+      _selectedMethod = 'SEPAY';
+    } else {
+      _selectedMethod = 'WALLET';
+    }
+  }
+
+  Future<void> _handlePayment() async {
+    setState(() => _isSubmitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (_selectedMethod == 'WALLET') {
+      try {
+        await widget.api.checkout(
+          widget.planId,
+          paymentMethod: 'WALLET',
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(true);
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.green.shade700,
+            content: Text(
+              'Thanh toán ví thành công! Bạn đã là Hội viên của kênh ${widget.show.channel}.',
+            ),
+          ),
+        );
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        final msg = e.statusCode == 409
+            ? 'Số dư ví không đủ hoặc bạn đã có gói hội viên đang hoạt động.'
+            : e.message;
+        messenger.showSnackBar(
+          SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text('Không thể thanh toán bằng ví: $e'),
+          ),
+        );
+      }
+    } else {
+      // SEPAY
+      try {
+        final checkout = await widget.api.checkout(
+          widget.planId,
+          paymentMethod: 'SEPAY',
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(false);
+        final paid = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => PaymentDialog(
+            api: widget.api,
+            checkout: checkout,
+            planName: widget.planName,
+          ),
+        );
+        if (paid == true && mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              backgroundColor: Colors.green.shade700,
+              content: Text(
+                'Thanh toán thành công! Chúc mừng bạn đã là Hội viên của ${widget.show.channel}.',
+              ),
+            ),
+          );
+        }
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        final msg = e.statusCode == 409
+            ? 'Bạn đang có một đơn thanh toán chờ xử lý hoặc đã là hội viên kênh này.'
+            : e.message;
+        messenger.showSnackBar(
+          SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        messenger.showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text('Không thể tạo phiên thanh toán SePay: $e'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final priceInt = widget.price.round();
+    final hasEnoughBalance = widget.walletBalance >= priceInt;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF201D1A) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        20,
+        16,
+        20,
+        MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Tiêu đề
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFB800).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.workspace_premium_rounded,
+                    color: Color(0xFFFFB800),
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Tham gia Hội viên Kênh',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        widget.show.channel,
+                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Card chi tiết gói
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? [const Color(0xFF2F2620), const Color(0xFF231E1B)]
+                      : [const Color(0xFFFFF7ED), const Color(0xFFFDF0E2)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isDark ? const Color(0xFF6B4C38) : const Color(0xFFF2D1B8),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.planName,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFB800).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'GÓI ĐANG MỞ',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFD48B00),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_formatVnd(priceInt)} / ${widget.durationDays} ngày',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? const Color(0xFFFFB800) : const Color(0xFFB87800),
+                    ),
+                  ),
+                  if (widget.description.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      widget.description,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 10),
+                  const Row(
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded,
+                          color: Colors.green, size: 16),
+                      SizedBox(width: 6),
+                      Text('Mở khóa podcast độc quyền (Members-Only)',
+                          style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Row(
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded,
+                          color: Colors.green, size: 16),
+                      SizedBox(width: 6),
+                      Text('Huy hiệu hội viên nổi bật bên cạnh tên',
+                          style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Row(
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded,
+                          color: Colors.green, size: 16),
+                      SizedBox(width: 6),
+                      Text('Ưu tiên gửi & duyệt yêu cầu series podcast',
+                          style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Chọn hình thức thanh toán
+            const Text(
+              'Chọn phương thức thanh toán:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+            const SizedBox(height: 10),
+
+            // Lựa chọn 1: Ví Podcast (WALLET)
+            InkWell(
+              onTap: () => setState(() => _selectedMethod = 'WALLET'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedMethod == 'WALLET'
+                        ? const Color(0xFFFFB800)
+                        : Colors.grey.withValues(alpha: 0.3),
+                    width: _selectedMethod == 'WALLET' ? 2 : 1,
+                  ),
+                  color: _selectedMethod == 'WALLET'
+                      ? (isDark
+                          ? const Color(0xFFFFB800).withValues(alpha: 0.08)
+                          : const Color(0xFFFFB800).withValues(alpha: 0.05))
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _selectedMethod == 'WALLET'
+                              ? const Color(0xFFFFB800)
+                              : Colors.grey,
+                          width: 2,
+                        ),
+                      ),
+                      child: _selectedMethod == 'WALLET'
+                          ? Center(
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFFFFB800),
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(Icons.account_balance_wallet_rounded,
+                        color: Color(0xFFFFB800), size: 26),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Ví Podcast (Trừ trực tiếp)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Text(
+                                'Số dư: ${_formatVnd(widget.walletBalance)}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: hasEnoughBalance
+                                      ? Colors.green
+                                      : Colors.redAccent,
+                                  fontWeight: hasEnoughBalance
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              if (!hasEnoughBalance) ...[
+                                const SizedBox(width: 6),
+                                InkWell(
+                                  onTap: widget.onOpenWallet,
+                                  child: const Text(
+                                    '(Nạp thêm ví)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blueAccent,
+                                      fontWeight: FontWeight.bold,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Lựa chọn 2: Chuyển khoản QR SePay (SEPAY)
+            InkWell(
+              onTap: () => setState(() => _selectedMethod = 'SEPAY'),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedMethod == 'SEPAY'
+                        ? const Color(0xFFFFB800)
+                        : Colors.grey.withValues(alpha: 0.3),
+                    width: _selectedMethod == 'SEPAY' ? 2 : 1,
+                  ),
+                  color: _selectedMethod == 'SEPAY'
+                      ? (isDark
+                          ? const Color(0xFFFFB800).withValues(alpha: 0.08)
+                          : const Color(0xFFFFB800).withValues(alpha: 0.05))
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 20,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _selectedMethod == 'SEPAY'
+                              ? const Color(0xFFFFB800)
+                              : Colors.grey,
+                          width: 2,
+                        ),
+                      ),
+                      child: _selectedMethod == 'SEPAY'
+                          ? Center(
+                              child: Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Color(0xFFFFB800),
+                                ),
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    const Icon(Icons.qr_code_2_rounded,
+                        color: Colors.blueAccent, size: 26),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Chuyển khoản SePay (VietQR)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Quét mã QR ngân hàng tự động xác nhận',
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Nút bấm hành động
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: _isSubmitting
+                  ? const Center(child: CircularProgressIndicator())
+                  : FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFFFB800),
+                        foregroundColor: Colors.black,
+                      ),
+                      onPressed: () {
+                        if (_selectedMethod == 'WALLET' && !hasEnoughBalance) {
+                          widget.onOpenWallet();
+                          return;
+                        }
+                        _handlePayment();
+                      },
+                      child: Text(
+                        _selectedMethod == 'WALLET'
+                            ? (hasEnoughBalance
+                                ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
+                                : 'Ví không đủ số dư - Nạp ví ngay')
+                            : 'Tạo mã QR thanh toán (${_formatVnd(priceInt)})',
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class PaymentDialog extends StatefulWidget {
   const PaymentDialog({
     super.key,
@@ -1243,7 +1921,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
         _payment = {..._payment, ...latest};
         _error = null;
       });
-      if (_status == 'PAID' &&
+      if (_status == 'PAID' ||
           '${_payment['subscriptionStatus'] ?? ''}'.toUpperCase() == 'ACTIVE') {
         _pollTimer?.cancel();
         Navigator.of(context).pop(true);
@@ -1273,8 +1951,13 @@ class _PaymentDialogState extends State<PaymentDialog> {
     final paymentCode = _payment['paymentCode']?.toString();
     final amount = _payment['amount']?.toString() ?? '';
     final terminal = _status == 'EXPIRED' || _status == 'CANCELLED';
+    final titleText = _status == 'PAID'
+        ? 'Thanh toán thành công'
+        : terminal
+            ? 'Giao dịch đã hết hạn'
+            : 'Thanh toán';
     return AlertDialog(
-      title: Text('Thanh toán $_status'),
+      title: Text(titleText),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -5344,12 +6027,34 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
             child: OutlinedButton.icon(
               onPressed: widget.show.creatorId == null
                   ? null
-                  : widget.onMembership,
-              icon: const Icon(Icons.workspace_premium_outlined),
-              label: const Text('Đăng ký gói thành viên'),
+                  : () async {
+                      widget.onMembership();
+                      if (mounted) {
+                        _loadFollowState();
+                      }
+                    },
+              icon: Icon(
+                isMember
+                    ? Icons.verified_rounded
+                    : Icons.workspace_premium_outlined,
+                color: isMember ? const Color(0xFFFFB800) : Colors.white,
+              ),
+              label: Text(
+                isMember
+                    ? 'Hội viên kênh (Đang hoạt động)'
+                    : 'Đăng ký gói thành viên',
+                style: TextStyle(
+                  color: isMember ? const Color(0xFFFFB800) : Colors.white,
+                  fontWeight:
+                      isMember ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: const BorderSide(color: Colors.white54),
+                foregroundColor:
+                    isMember ? const Color(0xFFFFB800) : Colors.white,
+                side: BorderSide(
+                  color: isMember ? const Color(0xFFFFB800) : Colors.white54,
+                ),
               ),
             ),
           ),

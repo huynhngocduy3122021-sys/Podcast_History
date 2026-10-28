@@ -10,6 +10,7 @@ import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/requests/request_detail_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
 class RequestListScreen extends ConsumerStatefulWidget {
   const RequestListScreen({super.key});
@@ -49,6 +50,10 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
     return Scaffold(
       appBar: AppBar(
         title: const Text('Đơn đặt Podcast (Custom Request)'),
+        actions: const [
+          CreatorNotificationButton(),
+          SizedBox(width: 8),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: isDark ? AppColors.primaryDark : AppColors.primaryLight,
