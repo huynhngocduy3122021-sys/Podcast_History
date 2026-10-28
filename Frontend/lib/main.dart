@@ -3036,6 +3036,71 @@ class ListenerWalletPage extends StatefulWidget {
 class _ListenerWalletPageState extends State<ListenerWalletPage> {
   late int balance = widget.initialBalance;
   bool loading = false;
+  bool historyLoading = true;
+  String? historyError;
+  List<Map<String, dynamic>> history = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final results = await Future.wait([
+        widget.api.checkouts(),
+        widget.api.checkouts(status: 'PAID'),
+      ]);
+      final byId = <String, Map<String, dynamic>>{};
+      for (final item in [...results[0], ...results[1]]) {
+        final id = item['checkoutId']?.toString();
+        if (id != null && id.isNotEmpty) byId[id] = item;
+      }
+      if (!mounted) return;
+      setState(() {
+        history = byId.values.toList();
+        historyLoading = false;
+        historyError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        historyLoading = false;
+        historyError = 'Không thể tải lịch sử giao dịch.';
+      });
+    }
+  }
+
+  Future<void> _openTransaction(Map<String, dynamic> item) async {
+    final checkoutId = item['checkoutId']?.toString();
+    if (checkoutId == null || checkoutId.isEmpty) return;
+    try {
+      final latest = await widget.api.checkoutStatus(checkoutId);
+      if (!mounted) return;
+      final checkout = {...item, ...latest};
+      final status = '${checkout['status'] ?? ''}'.toUpperCase();
+      if (status == 'PENDING') {
+        await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) =>
+              WalletTopUpDialog(api: widget.api, checkout: checkout),
+        );
+        await _loadHistory();
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (_) => TransactionDetailDialog(checkout: checkout),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể tải thông tin giao dịch.')),
+      );
+    }
+  }
 
   Future<void> _topUp() async {
     final amount = await showDialog<int>(
@@ -3097,11 +3162,25 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       ),
       const SizedBox(height: 16),
       const Text('Giao dịch gần đây'),
-      const Transaction(
-        title: 'Membership VietCast Originals',
-        amount: '-79.000 VND',
-      ),
-      const Transaction(title: 'Nạp tiền vào ví', amount: '+200.000 VND'),
+      if (historyLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (historyError != null)
+        Text(historyError!)
+      else if (history.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Text('Chưa có giao dịch nào.'),
+        )
+      else
+        ...history.map(
+          (item) => Transaction.fromCheckout(
+            item,
+            onTap: () => _openTransaction(item),
+          ),
+        ),
     ],
   );
 }
@@ -3246,13 +3325,8 @@ class _WalletTopUpDialogState extends State<WalletTopUpDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text(terminal ? 'Đóng' : 'Để sau'),
+          child: const Text('Đóng'),
         ),
-        if (!terminal)
-          FilledButton(
-            onPressed: checking ? null : check,
-            child: const Text('Kiểm tra ngay'),
-          ),
       ],
     );
   }
@@ -3862,16 +3936,110 @@ class _WalletState extends State<WalletPage> {
   );
 }
 
-class Transaction extends StatelessWidget {
-  const Transaction({super.key, required this.title, required this.amount});
-  final String title, amount;
+class TransactionDetailDialog extends StatelessWidget {
+  const TransactionDetailDialog({super.key, required this.checkout});
+
+  final Map<String, dynamic> checkout;
+
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: const Icon(Icons.receipt_long_outlined),
-    title: Text(title),
-    subtitle: const Text('Đang xử lý'),
-    trailing: Text(amount),
+  Widget build(BuildContext context) {
+    final status = '${checkout['status'] ?? ''}'.toUpperCase();
+    final statusLabel = switch (status) {
+      'PAID' => 'Đã thanh toán',
+      'FAILED' || 'EXPIRED' || 'CANCELLED' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    final purpose = '${checkout['purpose'] ?? ''}'.toUpperCase();
+    final title = purpose == 'WALLET_TOPUP'
+        ? 'Nạp tiền vào ví'
+        : 'Thanh toán gói Creator';
+    return AlertDialog(
+      title: const Text('Chi tiết giao dịch'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Text(
+            'Số tiền: ${checkout['amount'] ?? ''} ${checkout['currency'] ?? 'VND'}',
+          ),
+          Text('Trạng thái: $statusLabel'),
+          if ('${checkout['paymentCode'] ?? ''}'.isNotEmpty)
+            SelectableText('Mã giao dịch: ${checkout['paymentCode']}'),
+          if ('${checkout['createdAt'] ?? ''}'.isNotEmpty)
+            Text('Thời gian tạo: ${checkout['createdAt']}'),
+          if ('${checkout['paidAt'] ?? ''}'.isNotEmpty)
+            Text('Thời gian thanh toán: ${checkout['paidAt']}'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Đóng'),
+        ),
+      ],
+    );
+  }
+}
+
+class Transaction extends StatelessWidget {
+  const Transaction({
+    super.key,
+    required this.title,
+    required this.amount,
+    this.status = 'Đang xử lý',
+    this.onTap,
+  });
+
+  factory Transaction.fromCheckout(
+    Map<String, dynamic> checkout, {
+    VoidCallback? onTap,
+  }) {
+    final purpose = '${checkout['purpose'] ?? ''}'.toUpperCase();
+    final title = purpose == 'WALLET_TOPUP'
+        ? 'Nạp tiền vào ví'
+        : 'Thanh toán gói Creator';
+    final amount = (checkout['amount'] as num?)?.round() ?? 0;
+    final status = '${checkout['status'] ?? 'PENDING'}'.toUpperCase();
+    final statusLabel = switch (status) {
+      'PAID' => 'Đã thanh toán',
+      'FAILED' || 'EXPIRED' || 'CANCELLED' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    return Transaction(
+      title: title,
+      amount: '${status == 'PAID' ? '+' : ''}${_formatVnd(amount)}',
+      status: statusLabel,
+      onTap: onTap,
+    );
+  }
+
+  final String title, amount;
+  final String status;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(8),
+    child: ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.receipt_long_outlined),
+      title: Text(title),
+      subtitle: Text(
+        status,
+        style: TextStyle(
+          color: switch (status) {
+            'Đã thanh toán' => Colors.green,
+            'Thất bại' => Colors.red,
+            _ => Colors.amber[800],
+          },
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      trailing: Text(amount),
+    ),
   );
 }
 

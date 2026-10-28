@@ -524,6 +524,20 @@ class ListenerApi {
   Future<Map<String, dynamic>> checkoutStatus(String checkoutId) =>
       _sendMap('GET', '/api/me/checkouts/$checkoutId');
 
+  Future<List<Map<String, dynamic>>> checkouts({
+    String? status,
+    int page = 0,
+    int size = 20,
+  }) => _list(
+    'GET',
+    '/api/me/checkouts',
+    queryParameters: {
+      'page': '$page',
+      'size': '$size',
+      if (status != null && status.isNotEmpty) 'status': status,
+    },
+  );
+
   Future<Map<String, dynamic>> checkout(
     String membershipPlanId, {
     String paymentMethod = 'SEPAY',
