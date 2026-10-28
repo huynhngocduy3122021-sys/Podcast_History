@@ -382,7 +382,7 @@ class _ShellState extends State<Shell> {
   final progressByShow = <String, double>{shows[0].title: .42};
   final likedShowTitles = <String>{shows[0].title};
   final savedShowTitles = <String>{};
-  int walletBalance = 350000;
+  int walletBalance = 0;
   final notifications = <AppNotification>[];
 
   @override
@@ -1057,14 +1057,30 @@ class _ShellState extends State<Shell> {
     ),
   );
 
-  void _openWallet() => Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => ListenerWalletPage(
-        balance: walletBalance,
-        onTopUp: () => setState(() => walletBalance += 200000),
+  Future<void> _openWallet() async {
+    try {
+      final wallet = await api.wallet();
+      walletBalance = (wallet['availableBalance'] as num?)?.round() ?? 0;
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Không thể tải số dư ví.')));
+      return;
+    }
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ListenerWalletPage(
+          api: api,
+          initialBalance: walletBalance,
+          onBalanceChanged: (balance) =>
+              setState(() => walletBalance = balance),
+        ),
       ),
-    ),
-  );
+    );
+  }
+
   void openPlayer() => _showPlayer(current!);
 }
 
@@ -1158,15 +1174,11 @@ class _PaymentDialogState extends State<PaymentDialog> {
             if (qrUrl != null && qrUrl.isNotEmpty) ...[
               const SizedBox(height: 12),
               Image.network(
-                qrUrl,
+                resolveImageUrl(qrUrl),
                 width: 220,
                 height: 220,
                 fit: BoxFit.contain,
-                // VietQR does not expose Access-Control-Allow-Origin. On Web,
-                // let the browser render the image element directly instead
-                // of making Flutter fetch the image through XHR/fetch.
-                webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (context, error, stackTrace) =>
                     const Icon(Icons.qr_code_2, size: 160),
               ),
             ],
@@ -2894,14 +2906,56 @@ class LivestreamPage extends StatelessWidget {
   );
 }
 
-class ListenerWalletPage extends StatelessWidget {
+class ListenerWalletPage extends StatefulWidget {
   const ListenerWalletPage({
     super.key,
-    required this.balance,
-    required this.onTopUp,
+    required this.api,
+    required this.initialBalance,
+    required this.onBalanceChanged,
   });
-  final int balance;
-  final VoidCallback onTopUp;
+  final ListenerApi api;
+  final int initialBalance;
+  final ValueChanged<int> onBalanceChanged;
+
+  @override
+  State<ListenerWalletPage> createState() => _ListenerWalletPageState();
+}
+
+class _ListenerWalletPageState extends State<ListenerWalletPage> {
+  late int balance = widget.initialBalance;
+  bool loading = false;
+
+  Future<void> _topUp() async {
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (_) => const _TopUpAmountDialog(),
+    );
+    if (amount == null || !mounted) return;
+    setState(() => loading = true);
+    try {
+      final checkout = await widget.api.topUpWallet(amount);
+      if (!mounted) return;
+      final paid = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => WalletTopUpDialog(api: widget.api, checkout: checkout),
+      );
+      if (paid == true) {
+        final wallet = await widget.api.wallet();
+        balance = (wallet['availableBalance'] as num?)?.round() ?? balance;
+        widget.onBalanceChanged(balance);
+        if (mounted) setState(() {});
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể tạo giao dịch nạp tiền.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) => PageFrame(
@@ -2921,7 +2975,7 @@ class ListenerWalletPage extends StatelessWidget {
               const Text('Dùng để ủng hộ creator và đăng ký membership'),
               const SizedBox(height: 14),
               FilledButton.icon(
-                onPressed: onTopUp,
+                onPressed: loading ? null : _topUp,
                 icon: const Icon(Icons.add_card),
                 label: const Text('Nạp tiền'),
               ),
@@ -2938,6 +2992,158 @@ class ListenerWalletPage extends StatelessWidget {
       const Transaction(title: 'Nạp tiền vào ví', amount: '+200.000 VND'),
     ],
   );
+}
+
+class _TopUpAmountDialog extends StatefulWidget {
+  const _TopUpAmountDialog();
+
+  @override
+  State<_TopUpAmountDialog> createState() => _TopUpAmountDialogState();
+}
+
+class _TopUpAmountDialogState extends State<_TopUpAmountDialog> {
+  final controller = TextEditingController(text: '200000');
+  String? error;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  void submit() {
+    final amount = int.tryParse(controller.text.replaceAll('.', '').trim());
+    if (amount == null || amount < 10000 || amount > 100000000) {
+      setState(() => error = 'Nhập số tiền từ 10.000 đến 100.000.000 VND.');
+      return;
+    }
+    Navigator.of(context).pop(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Nạp tiền vào ví'),
+    content: TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: 'Số tiền (VND)', errorText: error),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Hủy'),
+      ),
+      FilledButton(onPressed: submit, child: const Text('Tiếp tục')),
+    ],
+  );
+}
+
+class WalletTopUpDialog extends StatefulWidget {
+  const WalletTopUpDialog({
+    super.key,
+    required this.api,
+    required this.checkout,
+  });
+
+  final ListenerApi api;
+  final Map<String, dynamic> checkout;
+
+  @override
+  State<WalletTopUpDialog> createState() => _WalletTopUpDialogState();
+}
+
+class _WalletTopUpDialogState extends State<WalletTopUpDialog> {
+  Timer? pollTimer;
+  late Map<String, dynamic> checkout = Map.from(widget.checkout);
+  bool checking = false;
+  String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    pollTimer = Timer.periodic(const Duration(seconds: 4), (_) => check());
+  }
+
+  String get status => '${checkout['status'] ?? 'PENDING'}'.toUpperCase();
+
+  Future<void> check() async {
+    final id = checkout['checkoutId']?.toString();
+    if (checking || id == null || id.isEmpty || !mounted) return;
+    checking = true;
+    try {
+      final latest = await widget.api.checkoutStatus(id);
+      if (!mounted) return;
+      setState(() {
+        checkout = {...checkout, ...latest};
+        error = null;
+      });
+      if (status == 'PAID') {
+        pollTimer?.cancel();
+        Navigator.pop(context, true);
+      } else if (status == 'EXPIRED' || status == 'CANCELLED') {
+        pollTimer?.cancel();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'Chưa kiểm tra được trạng thái thanh toán.');
+      }
+    } finally {
+      checking = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    pollTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final qrUrl = checkout['qrImageUrl']?.toString();
+    final code = checkout['paymentCode']?.toString();
+    final terminal = status == 'EXPIRED' || status == 'CANCELLED';
+    return AlertDialog(
+      title: const Text('Nạp tiền'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (qrUrl?.isNotEmpty == true)
+              Image.network(
+                resolveImageUrl(qrUrl),
+                width: 220,
+                height: 220,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.qr_code_2, size: 160),
+              ),
+            Text('Số tiền: ${checkout['amount'] ?? ''} VND'),
+            if (code?.isNotEmpty == true) SelectableText('Nội dung: $code'),
+            const SizedBox(height: 12),
+            Text(
+              terminal
+                  ? 'Phiên đã kết thúc. Vui lòng tạo giao dịch mới.'
+                  : 'Quét QR và chờ hệ thống xác nhận. Tự kiểm tra mỗi 4 giây.',
+              textAlign: TextAlign.center,
+            ),
+            if (error != null) Text(error!),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(terminal ? 'Đóng' : 'Để sau'),
+        ),
+        if (!terminal)
+          FilledButton(
+            onPressed: checking ? null : check,
+            child: const Text('Kiểm tra ngay'),
+          ),
+      ],
+    );
+  }
 }
 
 class Profile extends StatelessWidget {

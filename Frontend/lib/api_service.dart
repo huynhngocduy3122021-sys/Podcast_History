@@ -512,6 +512,18 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> subscriptions() =>
       _list('GET', '/api/me/subscriptions');
 
+  Future<Map<String, dynamic>> wallet() =>
+      _sendMap('GET', '/api/listener/wallet');
+
+  Future<Map<String, dynamic>> topUpWallet(int amount) => _sendMap(
+    'POST',
+    '/api/listener/wallet/top-ups',
+    body: {'amount': amount},
+  );
+
+  Future<Map<String, dynamic>> checkoutStatus(String checkoutId) =>
+      _sendMap('GET', '/api/me/checkouts/$checkoutId');
+
   Future<Map<String, dynamic>> checkout(
     String membershipPlanId, {
     String paymentMethod = 'SEPAY',
