@@ -9,10 +9,13 @@ import com.prmteam7.podcasthistory.model.PodcastTranscript;
 import com.prmteam7.podcasthistory.repository.AiModerationResultRepository;
 import com.prmteam7.podcasthistory.repository.PodcastRepository;
 import com.prmteam7.podcasthistory.repository.PodcastTranscriptRepository;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import java.util.HexFormat;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -35,10 +38,13 @@ public class AiModerationService {
     private final ApplicationEventPublisher events;
     private final PodcastTranscriptRepository transcripts;
     private final PodcastReviewService podcastReviews;
+    private final BigDecimal autoApproveConfidenceThreshold;
 
     public AiModerationService(AiModerationResultRepository results, PodcastRepository podcasts,
             GeminiModerationClient gemini, AdminSupportService support, ApplicationEventPublisher events,
-            PodcastTranscriptRepository transcripts, PodcastReviewService podcastReviews) {
+            PodcastTranscriptRepository transcripts, PodcastReviewService podcastReviews,
+            @org.springframework.beans.factory.annotation.Value("${gemini.auto-approve-confidence-threshold:0.90}")
+            BigDecimal autoApproveConfidenceThreshold) {
         this.results = results;
         this.podcasts = podcasts;
         this.gemini = gemini;
@@ -46,6 +52,11 @@ public class AiModerationService {
         this.events = events;
         this.transcripts = transcripts;
         this.podcastReviews = podcastReviews;
+        if (autoApproveConfidenceThreshold.compareTo(ModerationResponseValidator.ZERO) < 0
+                || autoApproveConfidenceThreshold.compareTo(ModerationResponseValidator.ONE) > 0) {
+            throw new IllegalArgumentException("gemini.auto-approve-confidence-threshold must be between 0.0 and 1.0.");
+        }
+        this.autoApproveConfidenceThreshold = autoApproveConfidenceThreshold;
     }
 
     @Transactional
@@ -60,16 +71,46 @@ public class AiModerationService {
     }
 
     // Called in the Creator submit transaction; publication runs only after commit.
+    @Transactional
     public AiModerationItem enqueue(Podcast podcast) {
+        Podcast lockedPodcast = podcasts.lockById(podcast.getPodcastId()).orElse(podcast);
+        String sourceHash = hash(lockedPodcast);
+        String mediaKey = lockedPodcast.getMediaUrl();
+        PodcastTranscript transcript = transcripts
+                .findByPodcast_PodcastIdAndMediaKey(lockedPodcast.getPodcastId(), mediaKey)
+                .orElse(null);
+        String transcriptHash = completedTranscriptHash(transcript);
+
+        List<AiModerationResult> candidates = results
+                .findAllByPodcast_PodcastIdAndSourceHashAndMediaKeyOrderByCreatedAtDesc(
+                        lockedPodcast.getPodcastId(), sourceHash, mediaKey);
+        for (AiModerationResult candidate : candidates) {
+            if (!sameContentVersion(candidate, transcript, transcriptHash)) {
+                if (isActive(candidate)) {
+                    finish(candidate, "SKIPPED", "STALE", "REVIEW",
+                            "Phiên bản moderation cũ không còn áp dụng cho transcript hiện tại.", null, null);
+                }
+                continue;
+            }
+            if (isActive(candidate)) return item(candidate, true);
+            if ("COMPLETED".equalsIgnoreCase(candidate.getStatus())) return item(candidate, true);
+            if ("FAILED".equalsIgnoreCase(candidate.getStatus())) {
+                resetForRetry(candidate, lockedPodcast, transcript, transcriptHash, sourceHash, mediaKey);
+                results.save(candidate);
+                events.publishEvent(new Requested(candidate.getModerationResultId()));
+                return item(candidate, true);
+            }
+        }
+
         AiModerationResult result = new AiModerationResult();
-        result.setPodcast(podcast);
+        result.setPodcast(lockedPodcast);
         result.setModelName(gemini.model());
         result.setOverallLabel("PENDING");
         result.setStatus("PENDING");
-        result.setSourceHash(hash(podcast));
-        result.setMediaKey(podcast.getMediaUrl());
-        transcripts.findByPodcast_PodcastIdAndMediaKey(podcast.getPodcastId(), podcast.getMediaUrl())
-                .ifPresent(result::setTranscript);
+        result.setSourceHash(sourceHash);
+        result.setMediaKey(mediaKey);
+        result.setTranscript(transcript);
+        result.setTranscriptHash(transcriptHash);
         results.save(result);
         events.publishEvent(new Requested(result.getModerationResultId()));
         return item(result, true);
@@ -101,8 +142,29 @@ public class AiModerationService {
     @EventListener
     @Async
     public void onTranscriptFinished(PodcastTranscriptService.Finished event) {
-        results.findAllByPodcast_PodcastIdAndStatusAndMediaKey(
-                event.podcastId(), "PENDING", event.mediaKey()).forEach(r -> process(r.getModerationResultId()));
+        Podcast podcast = podcasts.findByPodcastId(event.podcastId()).orElse(null);
+        if (podcast == null) return;
+        PodcastTranscript transcript = transcripts
+                .findByPodcast_PodcastIdAndMediaKey(event.podcastId(), event.mediaKey()).orElse(null);
+        String currentSourceHash = hash(podcast);
+        String currentTranscriptHash = completedTranscriptHash(transcript);
+        List<AiModerationResult> pending = results
+                .findAllByPodcast_PodcastIdAndStatusAndMediaKeyOrderByCreatedAtDesc(
+                        event.podcastId(), "PENDING", event.mediaKey());
+        AiModerationResult winner = pending.stream()
+                .filter(r -> Objects.equals(r.getSourceHash(), currentSourceHash)
+                        && sameContentVersion(r, transcript, currentTranscriptHash))
+                .findFirst().orElse(null);
+        if (winner == null) return;
+        for (AiModerationResult duplicate : pending) {
+            if (duplicate.getModerationResultId().equals(winner.getModerationResultId())) continue;
+            if (Objects.equals(duplicate.getSourceHash(), currentSourceHash)
+                    && sameContentVersion(duplicate, transcript, currentTranscriptHash)) {
+                finish(duplicate, "SKIPPED", "DUPLICATE", "REVIEW",
+                        "Job moderation trùng phiên bản đã được bỏ qua.", null, null);
+            }
+        }
+        process(winner.getModerationResultId());
     }
 
     private void process(UUID id) {
@@ -110,13 +172,20 @@ public class AiModerationService {
         if (result == null || !"PENDING".equals(result.getStatus())) return;
         Podcast podcast = podcasts.findByPodcastId(result.getPodcast().getPodcastId()).orElse(null);
         if (podcast == null) return;
-        if (!result.getSourceHash().equals(hash(podcast))) {
+        if (!Objects.equals(result.getSourceHash(), hash(podcast))
+                || !Objects.equals(result.getMediaKey(), podcast.getMediaUrl())) {
             finish(result, "SKIPPED", "STALE", "REVIEW", "Podcast đã thay đổi sau khi gửi duyệt.", null, null);
             return;
         }
         PodcastTranscript transcript = transcripts
                 .findByPodcast_PodcastIdAndMediaKey(podcast.getPodcastId(), podcast.getMediaUrl())
                 .orElse(null);
+        String transcriptHash = completedTranscriptHash(transcript);
+        if (!sameContentVersion(result, transcript, transcriptHash)) {
+            finish(result, "SKIPPED", "STALE", "REVIEW",
+                    "Phiên bản moderation cũ không còn áp dụng cho transcript hiện tại.", null, null);
+            return;
+        }
         if (transcript == null || "PENDING".equals(transcript.getStatus())
                 || "PROCESSING".equals(transcript.getStatus())) return;
         if (results.claim(id) == 0) return;
@@ -144,14 +213,21 @@ public class AiModerationService {
                     timedTranscript(transcript));
             JsonNode output = response.output();
             result.setModelName(response.modelName());
-            String label = allowed(output.path("label").asText(), "SAFE", "UNSAFE", "UNCERTAIN");
-            String recommendation = allowed(output.path("recommendation").asText(), "APPROVE", "REJECT", "REVIEW");
-            if (label == null || recommendation == null) {
-                throw new IllegalArgumentException("Gemini trả nhãn kiểm duyệt không hợp lệ.");
+            var validated = ModerationResponseValidator.validate(output);
+            result.setConfidenceScore(validated.confidence());
+            Podcast latestPodcast = podcasts.findByPodcastId(podcast.getPodcastId()).orElse(null);
+            PodcastTranscript latestTranscript = latestPodcast == null ? null
+                    : transcripts.findByPodcast_PodcastIdAndMediaKey(
+                            latestPodcast.getPodcastId(), latestPodcast.getMediaUrl()).orElse(null);
+            if (latestPodcast == null
+                    || !Objects.equals(result.getSourceHash(), hash(latestPodcast))
+                    || !Objects.equals(result.getMediaKey(), latestPodcast.getMediaUrl())
+                    || !sameContentVersion(result, latestTranscript, completedTranscriptHash(latestTranscript))) {
+                finish(result, "SKIPPED", "STALE", "REVIEW",
+                        "Podcast hoặc transcript đã thay đổi trong lúc AI xử lý.", null, null);
+                return;
             }
-            String reason = output.path("reason").asText();
-            if (reason.isBlank()) reason = "Gemini không cung cấp lý do.";
-            finish(result, "COMPLETED", label, recommendation, reason, output, null);
+            finish(result, "COMPLETED", validated.label(), validated.recommendation(), validated.reason(), output, null);
         } catch (Exception exception) {
             if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
             String message = exception.getMessage();
@@ -159,10 +235,21 @@ public class AiModerationService {
             finish(result, "FAILED", "ERROR", "REVIEW", "AI không xử lý được; cần Admin duyệt thủ công.",
                     null, error.substring(0, Math.min(error.length(), 500)));
         }
-        if ("COMPLETED".equals(result.getStatus()) && "SAFE".equals(result.getOverallLabel())
-                && "APPROVE".equals(result.getRecommendation())) {
+        if (isAutoApproveEligible(result, autoApproveConfidenceThreshold)) {
             podcastReviews.autoApprove(result.getModerationResultId());
         }
+    }
+
+    static boolean isAutoApproveEligible(AiModerationResult result, BigDecimal threshold) {
+        return "COMPLETED".equals(result.getStatus())
+                && "SAFE".equals(result.getOverallLabel())
+                && "APPROVE".equals(result.getRecommendation())
+                && meetsAutoApproveConfidence(result, threshold);
+    }
+
+    private static boolean meetsAutoApproveConfidence(AiModerationResult result, BigDecimal threshold) {
+        return result.getConfidenceScore() != null
+                && result.getConfidenceScore().compareTo(threshold) >= 0;
     }
 
     private void finish(AiModerationResult result, String status, String label, String recommendation,
@@ -177,9 +264,49 @@ public class AiModerationService {
         results.save(result);
     }
 
-    private String allowed(String value, String... choices) {
-        for (String choice : choices) if (choice.equals(value)) return value;
-        return null;
+    private void resetForRetry(AiModerationResult result, Podcast podcast, PodcastTranscript transcript,
+            String transcriptHash, String sourceHash, String mediaKey) {
+        result.setPodcast(podcast);
+        result.setModelName(gemini.model());
+        result.setOverallLabel("PENDING");
+        result.setRecommendation(null);
+        result.setConfidenceScore(null);
+        result.setReason(null);
+        result.setRawResult(null);
+        result.setErrorMessage(null);
+        result.setProcessedAt(null);
+        result.setStatus("PENDING");
+        result.setSourceHash(sourceHash);
+        result.setMediaKey(mediaKey);
+        result.setTranscript(transcript);
+        result.setTranscriptHash(transcriptHash);
+    }
+
+    static boolean sameContentVersion(AiModerationResult result, PodcastTranscript transcript,
+            String transcriptHash) {
+        if (transcript == null) {
+            return result.getTranscript() == null && !"COMPLETED".equalsIgnoreCase(result.getStatus());
+        }
+        if (result.getTranscript() == null
+                || !Objects.equals(result.getTranscript().getTranscriptId(), transcript.getTranscriptId())) {
+            return false;
+        }
+        if (transcriptHash == null) {
+            return !"COMPLETED".equalsIgnoreCase(result.getStatus()) && result.getTranscriptHash() == null;
+        }
+        return Objects.equals(result.getTranscriptHash(), transcriptHash)
+                || (isActive(result) && result.getTranscriptHash() == null);
+    }
+
+    private String completedTranscriptHash(PodcastTranscript transcript) {
+        if (transcript == null || !"COMPLETED".equalsIgnoreCase(transcript.getStatus())
+                || transcript.getFullText() == null || transcript.getFullText().isBlank()) return null;
+        return hashText(transcript.getFullText());
+    }
+
+    private static boolean isActive(AiModerationResult result) {
+        return "PENDING".equalsIgnoreCase(result.getStatus())
+                || "PROCESSING".equalsIgnoreCase(result.getStatus());
     }
 
     private AiModerationItem item(AiModerationResult r, boolean current) {
