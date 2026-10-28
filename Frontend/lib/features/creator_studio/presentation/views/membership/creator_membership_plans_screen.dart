@@ -6,6 +6,7 @@ import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_members_list_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
@@ -149,6 +150,7 @@ class _CreatorMembershipPlansScreenState
     final isDark = theme.brightness == Brightness.dark;
     final myPlansAsync = ref.watch(creatorChannelPlansProvider);
     final templatesAsync = ref.watch(creatorPlanTemplatesProvider);
+    final membersAsync = ref.watch(creatorMembershipsProvider('ACTIVE'));
 
     return Scaffold(
       appBar: AppBar(
@@ -164,6 +166,7 @@ class _CreatorMembershipPlansScreenState
             onRefresh: () async {
               await ref.read(creatorChannelPlansProvider.notifier).loadPlans();
               ref.invalidate(creatorPlanTemplatesProvider);
+              ref.invalidate(creatorMembershipsProvider('ACTIVE'));
             },
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.screenMargin),
@@ -386,6 +389,112 @@ class _CreatorMembershipPlansScreenState
                   },
                 ),
                 const SizedBox(height: AppSpacing.lg),
+
+                // Card xem danh sách thành viên kênh
+                InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CreatorMembersListScreen(),
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF211F1D)
+                          : const Color(0xFFF9F7F3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF4C3626)
+                            : const Color(0xFFEAD8C7),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color:
+                                AppColors.primaryLight.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.people_alt_rounded,
+                            color: AppColors.primaryLight,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Danh sách thành viên kênh',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  membersAsync.when(
+                                    data: (p) => p.totalElements > 0
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 7,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primaryLight,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              '${p.totalElements}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          )
+                                        : const SizedBox.shrink(),
+                                    loading: () => const SizedBox.shrink(),
+                                    error: (_, _) => const SizedBox.shrink(),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                membersAsync.when(
+                                  data: (p) => p.totalElements > 0
+                                      ? 'Có ${p.totalElements} thành viên đang tham gia gói của kênh'
+                                      : 'Xem thính giả đăng ký gói thành viên của kênh',
+                                  loading: () =>
+                                      'Đang tải thông tin thành viên...',
+                                  error: (_, _) =>
+                                      'Nhấn để xem danh sách thành viên',
+                                ),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color:
+                                      isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
 
                 // Card điều hướng sang ví
                 InkWell(

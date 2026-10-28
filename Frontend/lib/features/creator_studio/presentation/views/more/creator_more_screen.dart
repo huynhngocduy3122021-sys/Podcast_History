@@ -5,6 +5,7 @@ import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/comments/studio_comments_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_members_list_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_membership_plans_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/form_builder_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/premium_upgrade_screen.dart';
@@ -61,6 +62,15 @@ class CreatorMoreScreen extends ConsumerWidget {
                 subtitle: 'Tạo form thu thập ý kiến người nghe',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const FormBuilderScreen()),
+                ),
+              ),
+              _MenuItem(
+                icon: Icons.people_alt_rounded,
+                iconColor: AppColors.secondaryLight,
+                title: 'Thành viên kênh (Hội viên)',
+                subtitle: 'Xem danh sách thính giả đã đăng ký gói thành viên của kênh',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CreatorMembersListScreen()),
                 ),
               ),
             ],

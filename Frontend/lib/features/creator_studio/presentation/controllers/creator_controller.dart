@@ -440,8 +440,12 @@ class CreatorRequestsNotifier
     }
   }
 
-  Future<void> acceptRequest(String id) async {
-    await _repo.acceptRequest(id);
+  Future<void> acceptRequest(
+    String id, {
+    String? responseText,
+    List<Map<String, dynamic>>? milestones,
+  }) async {
+    await _repo.acceptRequest(id, responseText: responseText, milestones: milestones);
     await loadRequests();
   }
 
@@ -456,6 +460,7 @@ class CreatorRequestsNotifier
     String note, {
     List<int>? fileBytes,
     String? filename,
+    String? milestoneId,
   }) async {
     await _repo.deliverWork(
       id,
@@ -463,6 +468,7 @@ class CreatorRequestsNotifier
       note,
       fileBytes: fileBytes,
       filename: filename,
+      milestoneId: milestoneId,
     );
     await loadRequests();
   }
@@ -979,6 +985,12 @@ final creatorPlanTemplatesProvider =
     FutureProvider<List<CreatorPlanTemplate>>((ref) async {
   final repo = ref.watch(creatorRepositoryProvider);
   return repo.getMembershipPlanTemplates();
+});
+
+final creatorMembershipsProvider =
+    FutureProvider.family<PageCreatorMembers, String>((ref, status) async {
+  final repo = ref.watch(creatorRepositoryProvider);
+  return repo.getCreatorMemberships(status: status, page: 0, size: 50);
 });
 
 // Studio Notifications

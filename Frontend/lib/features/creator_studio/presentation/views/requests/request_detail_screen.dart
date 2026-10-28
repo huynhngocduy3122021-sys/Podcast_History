@@ -6,7 +6,6 @@ import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
-import 'package:podcast_history/core/widgets/app_confirm_dialog.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
@@ -22,14 +21,6 @@ class RequestDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
-  final TextEditingController _chatController = TextEditingController();
-
-  @override
-  void dispose() {
-    _chatController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     final requestsAsync = ref.watch(creatorRequestsProvider);
@@ -37,10 +28,16 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     final requests = requestsAsync.value ?? [];
-    final req = requests.firstWhere(
-      (r) => r.id == widget.requestId,
-      orElse: () => requests.first,
-    );
+    final req = requests.where((r) => r.id == widget.requestId).firstOrNull;
+
+    if (req == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Chi tiết đơn yêu cầu')),
+        body: requestsAsync.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : const Center(child: Text('Không tìm thấy thông tin đơn đặt podcast.')),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -75,19 +72,15 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 _buildOrderOverview(req, isDark),
                 const SizedBox(height: AppSpacing.lg),
 
-                // Các mốc thanh toán Escrow
+                // Các mốc thanh toán Escrow (Dữ liệu thực từ Backend)
                 _buildMilestonesSection(req, isDark),
                 const SizedBox(height: AppSpacing.lg),
 
-                // Sản phẩm đã nộp (nếu có)
+                // Sản phẩm đã nộp (nếu có từ Backend)
                 if (req.deliveryFileUrl != null || req.deliveryNote != null) ...[
                   _buildDeliverySection(req, isDark),
                   const SizedBox(height: AppSpacing.lg),
                 ],
-
-                // Khung trao đổi tin nhắn (Chat)
-                _buildChatSection(req, isDark),
-                const SizedBox(height: AppSpacing.lg),
               ],
             ),
           ),
@@ -107,7 +100,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         break;
       case CustomRequestStatus.accepted:
       case CustomRequestStatus.inProduction:
-        nextAction = 'Bước tiếp theo: Thực hiện nội dung và nộp bản thu âm trước hạn chót.';
+        nextAction = 'Bước tiếp theo: Thực hiện nội dung và nộp bản thu âm cho mốc thanh toán.';
         break;
       case CustomRequestStatus.delivered:
         nextAction = 'Bước tiếp theo: Đang chờ người nghe thẩm định và giải ngân mốc thanh toán.';
@@ -173,8 +166,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     if (req.status == CustomRequestStatus.sent) activeIndex = 0;
     if (req.status == CustomRequestStatus.accepted) activeIndex = 1;
     if (req.status == CustomRequestStatus.inProduction) activeIndex = 2;
-    if (req.status == CustomRequestStatus.delivered) activeIndex = 3;
-    if (req.status == CustomRequestStatus.completed || req.status == CustomRequestStatus.approved) activeIndex = 4;
+    if (req.status == CustomRequestStatus.delivered || req.milestones.any((m) => m.isSubmitted)) activeIndex = 3;
+    if (req.status == CustomRequestStatus.completed ||
+        req.status == CustomRequestStatus.approved ||
+        (req.milestones.isNotEmpty && req.milestones.every((m) => m.isApproved))) {
+      activeIndex = 4;
+    }
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -186,7 +183,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Tiến trình State Machine', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          const Text('Tiến trình thực hiện', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -256,7 +253,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                     ),
                     Text(
-                      'Người nghe đặt bài • Đã thanh toán tạm giữ Escrow',
+                      'Người nghe đặt podcast • Tạm giữ Escrow',
                       style: TextStyle(
                         fontSize: 11,
                         color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -272,23 +269,25 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             req.topic,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            req.description,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
-              height: 1.4,
+          if (req.description.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              req.description,
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
+                height: 1.4,
+              ),
             ),
-          ),
+          ],
           const SizedBox(height: AppSpacing.md),
           const Divider(height: 1),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetaItem('Thời lượng mong muốn', '${req.targetDurationMinutes} phút', Icons.timer_outlined),
-              _buildMetaItem('Hạn hoàn thành', AppFormatters.formatDate(req.deadline), Icons.calendar_today_outlined),
+              _buildMetaItem('Thời gian tạo', AppFormatters.formatDate(req.createdAt), Icons.calendar_today_outlined),
+              _buildMetaItem('Trạng thái', req.statusDisplay, Icons.info_outline),
               _buildMetaItem('Tổng ngân sách', AppFormatters.formatVND(req.totalBudget), Icons.payments_outlined, isHighlight: true),
             ],
           ),
@@ -332,13 +331,31 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Các mốc giải ngân (Escrow Milestones)', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Các mốc giải ngân (Escrow Milestones)',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+              if (req.milestones.isNotEmpty)
+                Text(
+                  '${req.milestones.length} mốc',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.sm),
           if (req.milestones.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               child: Text(
-                'Chưa có mốc giải ngân (sẽ được tạo khi bạn chấp thuận đơn hàng).',
+                req.status == CustomRequestStatus.sent
+                    ? 'Chưa thiết lập mốc giải ngân. Khi bạn chấp thuận đơn hàng, mốc giải ngân sẽ được khởi tạo.'
+                    : 'Chưa có mốc giải ngân nào.',
                 style: TextStyle(
                   fontSize: 12,
                   fontStyle: FontStyle.italic,
@@ -348,39 +365,139 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             )
           else
             ...req.milestones.map((m) {
-            return Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
-                borderRadius: AppSpacing.roundedSm,
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    m.isApproved ? Icons.check_circle_rounded : (m.isCompleted ? Icons.hourglass_top_rounded : Icons.radio_button_unchecked),
-                    size: 18,
-                    color: m.isApproved ? AppColors.success : AppColors.warning,
+              Color statusColor;
+              IconData statusIcon;
+              String statusText;
+
+              switch (m.status) {
+                case 'APPROVED':
+                  statusColor = AppColors.success;
+                  statusIcon = Icons.check_circle_rounded;
+                  statusText = 'Đã giải ngân';
+                  break;
+                case 'SUBMITTED':
+                  statusColor = AppColors.warning;
+                  statusIcon = Icons.hourglass_top_rounded;
+                  statusText = 'Chờ duyệt';
+                  break;
+                case 'REVISION_REQUESTED':
+                  statusColor = AppColors.error;
+                  statusIcon = Icons.published_with_changes_rounded;
+                  statusText = 'Cần sửa đổi';
+                  break;
+                case 'DISPUTED':
+                  statusColor = AppColors.error;
+                  statusIcon = Icons.gavel_rounded;
+                  statusText = 'Khiếu nại';
+                  break;
+                default:
+                  statusColor = AppColors.tertiaryLight;
+                  statusIcon = Icons.pending_actions_rounded;
+                  statusText = 'Chưa nộp';
+              }
+
+              final canSubmitThis = (req.status == CustomRequestStatus.accepted ||
+                      req.status == CustomRequestStatus.inProduction ||
+                      req.status == CustomRequestStatus.revisionRequested) &&
+                  (m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED');
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                  borderRadius: AppSpacing.roundedSm,
+                  border: Border.all(
+                    color: m.isApproved
+                        ? AppColors.success.withValues(alpha: 0.3)
+                        : (m.isSubmitted
+                            ? AppColors.warning.withValues(alpha: 0.3)
+                            : (isDark ? AppColors.outlineDark : AppColors.outlineLight)),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      m.title,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(statusIcon, size: 18, color: statusColor),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Mốc ${m.order}: ${m.title}',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                              if (m.description != null && m.description!.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  m.description!,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              AppFormatters.formatVND(m.amount),
+                              style: AppTypography.tabularNumbers(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: m.isApproved ? AppColors.success : null,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: statusColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ),
-                  Text(
-                    AppFormatters.formatVND(m.amount),
-                    style: AppTypography.tabularNumbers(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: m.isApproved ? AppColors.success : null,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                    if (canSubmitThis) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          icon: const Icon(Icons.upload_file_rounded, size: 14),
+                          label: Text(
+                            m.status == 'REVISION_REQUESTED' ? 'Nộp lại bài' : 'Nộp bài cho mốc này',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                          onPressed: () => _handleDeliver(req, milestoneId: m.id),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
         ],
       ),
     );
@@ -404,103 +521,34 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               Text('Bản podcast đã nộp cho người nghe', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.info)),
             ],
           ),
-          if (req.deliveryNote != null) ...[
+          if (req.deliveryNote != null && req.deliveryNote!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
             Text('Ghi chú: ${req.deliveryNote}', style: const TextStyle(fontSize: 13)),
           ],
-          if (req.deliveryFileUrl != null) ...[
+          if (req.deliveryFileUrl != null && req.deliveryFileUrl!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text('File: ${req.deliveryFileUrl}', style: const TextStyle(fontSize: 12, color: AppColors.tertiaryLight)),
+            Row(
+              children: [
+                const Icon(Icons.audio_file_outlined, size: 16, color: AppColors.tertiaryLight),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    req.deliveryFileUrl!,
+                    style: const TextStyle(fontSize: 12, color: AppColors.tertiaryLight),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChatSection(PodcastRequest req, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-        borderRadius: AppSpacing.roundedMd,
-        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Trao đổi & Ghi chú', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-          const SizedBox(height: AppSpacing.sm),
-          if (req.messages.isEmpty)
-            const Text('Chưa có tin nhắn nào.', style: TextStyle(fontSize: 12, color: AppColors.onSurfaceMutedLight))
-          else
-            ...req.messages.map((msg) {
-              return Align(
-                alignment: msg.isCreator ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: msg.isCreator
-                        ? (isDark ? AppColors.primaryDark : AppColors.primaryLight)
-                        : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight),
-                    borderRadius: AppSpacing.roundedMd,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: msg.isCreator ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        msg.message,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: msg.isCreator ? Colors.white : (isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        AppFormatters.timeAgo(msg.timestamp),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: msg.isCreator ? Colors.white70 : AppColors.onSurfaceMutedLight,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _chatController,
-                  decoration: const InputDecoration(
-                    hintText: 'Nhắn tin cho người nghe...',
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              IconButton(
-                icon: const Icon(Icons.send_rounded, color: AppColors.primaryLight),
-                onPressed: () {
-                  final text = _chatController.text.trim();
-                  if (text.isNotEmpty) {
-                    ref.read(creatorRequestsProvider.notifier).sendMessage(req.id, text);
-                    _chatController.clear();
-                  }
-                },
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
   Widget _buildBottomActionButtons(PodcastRequest req, bool isDark) {
-    if (req.status == CustomRequestStatus.completed) {
+    if (req.status == CustomRequestStatus.completed ||
+        (req.milestones.isNotEmpty && req.milestones.every((m) => m.isApproved))) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         color: AppColors.successContainer,
@@ -508,6 +556,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           child: Text(
             '✓ Đơn hàng đã hoàn thành và tất toán toàn bộ.',
             style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.success),
+          ),
+        ),
+      );
+    }
+
+    if (req.status == CustomRequestStatus.rejected) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        color: AppColors.surfaceVariantLight,
+        child: const Center(
+          child: Text(
+            'Đơn yêu cầu này đã bị từ chối.',
+            style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.onSurfaceMutedLight),
           ),
         ),
       );
@@ -533,14 +594,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             Expanded(
               child: AppButton(
                 label: 'Chấp nhận đơn',
-                onPressed: () async {
-                  await ref.read(creatorRequestsProvider.notifier).acceptRequest(req.id);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Đã nhận đơn! Bạn có thể bắt đầu sản xuất podcast.')),
-                    );
-                  }
-                },
+                onPressed: () => _handleAccept(req),
               ),
             ),
           ],
@@ -567,32 +621,178 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     return const SizedBox.shrink();
   }
 
-  void _handleReject(PodcastRequest req) {
-    final reasonController = TextEditingController();
-    final nav = Navigator.of(context);
-    AppConfirmDialog.show(
-      context,
-      title: 'Từ chối đơn yêu cầu',
-      content: 'Vui lòng cung cấp lý do từ chối để người nghe được biết và nhận lại tiền cọc Escrow.',
-      confirmLabel: 'Từ chối',
-      isDestructive: true,
-      onConfirm: () async {
-        await ref.read(creatorRequestsProvider.notifier).rejectRequest(
-              req.id,
-              reasonController.text.trim().isEmpty ? 'Tác giả bận lịch sản xuất' : reasonController.text.trim(),
-            );
-        nav.pop();
-      },
+  void _handleAccept(PodcastRequest req) {
+    final noteController = TextEditingController(text: 'Creator đồng ý nhận thực hiện đơn đặt podcast.');
+    final messenger = ScaffoldMessenger.of(context);
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Chấp nhận đơn đặt podcast', style: TextStyle(fontWeight: FontWeight.w700)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Bạn đang nhận sản xuất podcast theo yêu cầu của thính giả.'),
+                  const SizedBox(height: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: AppColors.successContainer.withValues(alpha: 0.5),
+                      borderRadius: AppSpacing.roundedSm,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Chủ đề: ${req.topic}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Ngân sách: ${AppFormatters.formatVND(req.totalBudget)}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.success, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Lời nhắn gửi người nghe',
+                    hint: 'Nhập ghi chú phản hồi...',
+                    controller: noteController,
+                    maxLines: 2,
+                    readOnly: isSubmitting,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Hủy'),
+              ),
+              AppButton(
+                label: isSubmitting ? 'Đang xử lý...' : 'Xác nhận nhận đơn',
+                width: 150,
+                isLoading: isSubmitting,
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          await ref.read(creatorRequestsProvider.notifier).acceptRequest(
+                                req.id,
+                                responseText: noteController.text.trim(),
+                              );
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã nhận đơn thành công! Bạn có thể bắt đầu sản xuất.'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Lỗi nhận đơn: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      },
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
-  void _handleDeliver(PodcastRequest req) {
-    final linkController = TextEditingController();
+  void _handleReject(PodcastRequest req) {
+    final reasonController = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Từ chối đơn yêu cầu', style: TextStyle(fontWeight: FontWeight.w700)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Vui lòng cung cấp lý do từ chối để người nghe được biết.'),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Lý do từ chối',
+                    hint: 'Ví dụ: Tác giả bận lịch sản xuất...',
+                    controller: reasonController,
+                    maxLines: 3,
+                    readOnly: isSubmitting,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Hủy'),
+              ),
+              AppButton(
+                label: isSubmitting ? 'Đang gửi...' : 'Từ chối',
+                type: AppButtonType.secondary,
+                width: 120,
+                isLoading: isSubmitting,
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final reason = reasonController.text.trim();
+                        if (reason.isEmpty) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Vui lòng nhập lý do từ chối.')),
+                          );
+                          return;
+                        }
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          await ref.read(creatorRequestsProvider.notifier).rejectRequest(req.id, reason);
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Đã từ chối đơn yêu cầu.')),
+                          );
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _handleDeliver(PodcastRequest req, {String? milestoneId}) {
     final noteController = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
     PlatformFile? pickedFile;
     List<int>? pickedBytes;
     bool isSubmitting = false;
+
+    // Determine target milestone
+    String? selectedMilestoneId = milestoneId;
+    if (selectedMilestoneId == null || selectedMilestoneId.isEmpty) {
+      final pending = req.milestones.where((m) => m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED').toList();
+      selectedMilestoneId = pending.isNotEmpty ? pending.first.id : (req.milestones.isNotEmpty ? req.milestones.first.id : null);
+    }
 
     showDialog(
       context: context,
@@ -601,6 +801,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         builder: (dialogCtx, setDialogState) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           final byteCount = pickedBytes?.length ?? 0;
+
+          // Find milestone name
+          final selectedMilestone = req.milestones.where((m) => m.id == selectedMilestoneId).firstOrNull;
+
           return AlertDialog(
             title: const Text('Nộp bài cho người nghe', style: TextStyle(fontWeight: FontWeight.w700)),
             content: SingleChildScrollView(
@@ -608,8 +812,56 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Người nghe sẽ nghe thử và có quyền Duyệt để giải phóng tiền hoặc Yêu cầu chỉnh sửa.'),
-                  const SizedBox(height: AppSpacing.md),
+                  const Text('Chọn tệp âm thanh hoàn thiện để nộp cho người nghe nghiệm thu.'),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (req.milestones.length > 1) ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedMilestoneId,
+                      decoration: const InputDecoration(
+                        labelText: 'Mốc thanh toán nộp bài',
+                        isDense: true,
+                      ),
+                      items: req.milestones.map((m) {
+                        return DropdownMenuItem<String>(
+                          value: m.id,
+                          child: Text('Mốc ${m.order}: ${m.title} (${AppFormatters.formatVND(m.amount)})'),
+                        );
+                      }).toList(),
+                      onChanged: isSubmitting
+                          ? null
+                          : (val) {
+                              setDialogState(() => selectedMilestoneId = val);
+                            },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ] else if (selectedMilestone != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                        borderRadius: AppSpacing.roundedSm,
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.layers_outlined, size: 16, color: AppColors.primaryLight),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Mốc ${selectedMilestone.order}: ${selectedMilestone.title}',
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          Text(
+                            AppFormatters.formatVND(selectedMilestone.amount),
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.success),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // Nút chọn file âm thanh
                   InkWell(
                     onTap: isSubmitting
                         ? null
@@ -625,14 +877,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 file = await FilePicker.pickFile(type: FileType.audio);
                               }
                               if (file != null && file.name.isNotEmpty) {
-                                final selectedName = file.name;
                                 final bytes = await file.readAsBytes();
                                 setDialogState(() {
                                   pickedFile = file;
                                   pickedBytes = bytes.isNotEmpty ? bytes : null;
-                                  if (linkController.text.trim().isEmpty) {
-                                    linkController.text = selectedName;
-                                  }
                                 });
                               }
                             } catch (e) {
@@ -663,7 +911,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  pickedFile != null ? pickedFile!.name : 'Chọn tệp âm thanh bàn giao (.mp3, .wav, .m4a)',
+                                  pickedFile != null ? pickedFile!.name : 'Chọn tệp âm thanh (.mp3, .wav, .m4a)',
                                   style: TextStyle(
                                     fontWeight: pickedFile != null ? FontWeight.bold : FontWeight.normal,
                                     fontSize: 13,
@@ -686,15 +934,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   AppTextField(
-                    label: 'Liên kết âm thanh / Tên tệp bàn giao',
-                    hint: 'https://... hoặc tên tệp hoàn thiện',
-                    controller: linkController,
-                    readOnly: isSubmitting,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
                     label: 'Ghi chú bàn giao',
-                    hint: 'Mô tả tóm tắt bản thu âm...',
+                    hint: 'Mô tả tóm tắt bản thu âm bàn giao...',
                     controller: noteController,
                     maxLines: 3,
                     readOnly: isSubmitting,
@@ -714,7 +955,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 onPressed: isSubmitting
                     ? null
                     : () async {
-                        final link = linkController.text.trim();
+                        if (pickedBytes == null || pickedFile == null) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Vui lòng chọn tệp âm thanh trước khi nộp.')),
+                          );
+                          return;
+                        }
                         final note = noteController.text.trim();
                         setDialogState(() {
                           isSubmitting = true;
@@ -722,10 +968,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         try {
                           await ref.read(creatorRequestsProvider.notifier).deliverWork(
                                 req.id,
-                                link.isNotEmpty ? link : (pickedFile?.name ?? 'delivery_${req.id}.mp3'),
+                                pickedFile!.name,
                                 note.isNotEmpty ? note : 'Bản thu âm hoàn thiện cho đơn đặt podcast.',
                                 fileBytes: pickedBytes,
                                 filename: pickedFile?.name,
+                                milestoneId: selectedMilestoneId,
                               );
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
