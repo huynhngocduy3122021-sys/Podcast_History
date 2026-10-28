@@ -515,6 +515,20 @@ class ListenerApi {
   Future<Map<String, dynamic>> wallet() =>
       _sendMap('GET', '/api/listener/wallet');
 
+  Future<List<Map<String, dynamic>>> walletTransactions({
+    String? status,
+    int page = 0,
+    int size = 20,
+  }) => _list(
+    'GET',
+    '/api/listener/wallet/transactions',
+    queryParameters: {
+      'page': '$page',
+      'size': '$size',
+      if (status != null && status.isNotEmpty) 'status': status,
+    },
+  );
+
   Future<Map<String, dynamic>> topUpWallet(int amount) => _sendMap(
     'POST',
     '/api/listener/wallet/top-ups',
@@ -559,6 +573,41 @@ class ListenerApi {
 
   Future<List<Map<String, dynamic>>> seriesRequests() =>
       _list('GET', '/api/me/series-requests');
+
+  Future<List<Map<String, dynamic>>> requestFlowRequests() =>
+      _list('GET', '/api/requests/me');
+
+  Future<List<Map<String, dynamic>>> requestMilestones(String requestId) =>
+      _list('GET', '/api/requests/$requestId/milestones');
+
+  Future<List<Map<String, dynamic>>> milestoneSubmissions(String milestoneId) =>
+      _list('GET', '/api/milestones/$milestoneId/submissions');
+
+  Future<Map<String, dynamic>> approveMilestone(String milestoneId) =>
+      _sendMap('POST', '/api/listener/milestones/$milestoneId/approve');
+
+  Future<void> requestMilestoneRevision(
+    String milestoneId,
+    String reason,
+  ) async {
+    await _send(
+      'POST',
+      '/api/listener/milestones/$milestoneId/revision',
+      body: {'reason': reason},
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> requestMessages(String requestId) =>
+      _list('GET', '/api/requests/$requestId/messages');
+
+  Future<Map<String, dynamic>> sendRequestMessage(
+    String requestId,
+    String content,
+  ) => _sendMap(
+    'POST',
+    '/api/requests/$requestId/messages',
+    body: {'content': content},
+  );
 
   Future<Map<String, dynamic>> createSeriesRequest(
     String creatorId, {

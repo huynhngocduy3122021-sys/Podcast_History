@@ -1313,6 +1313,7 @@ class _ShellState extends State<Shell> {
       ),
       Profile(
         displayName: widget.displayName,
+        api: api,
         onTheme: widget.onTheme,
         onLogout: widget.onLogout,
         session: widget.session,
@@ -3856,6 +3857,9 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
   bool historyLoading = true;
   String? historyError;
   List<Map<String, dynamic>> history = const [];
+  bool walletTransactionsLoading = true;
+  String? walletTransactionsError;
+  List<Map<String, dynamic>> walletTransactions = const [];
   bool showAllHistory = false;
   void Function()? removeRealtimeListener;
 
@@ -3894,6 +3898,7 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       final results = await Future.wait([
         widget.api.checkouts(),
         widget.api.checkouts(status: 'PAID'),
+        widget.api.walletTransactions(size: 50),
       ]);
       final byId = <String, Map<String, dynamic>>{};
       for (final item in [...results[0], ...results[1]]) {
@@ -3905,11 +3910,16 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
         history = byId.values.toList();
         historyLoading = false;
         historyError = null;
+        walletTransactions = results[2];
+        walletTransactionsLoading = false;
+        walletTransactionsError = null;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         historyLoading = false;
+        walletTransactionsLoading = false;
+        walletTransactionsError = 'Không thể tải giao dịch chi tiêu.';
         historyError = 'Không thể tải lịch sử giao dịch.';
       });
     }
@@ -4032,8 +4042,31 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
             child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
           ),
         ),
+      const SizedBox(height: 22),
+      const Text('Giao dịch chi tiêu từ ví'),
+      if (walletTransactionsLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (walletTransactionsError != null)
+        Text(walletTransactionsError!)
+      else if (walletTransactions.where(_isWalletExpense).isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Text('Chưa có giao dịch chi tiêu nào.'),
+        )
+      else
+        ...walletTransactions
+            .where(_isWalletExpense)
+            .map(Transaction.fromWalletTransaction),
     ],
   );
+}
+
+bool _isWalletExpense(Map<String, dynamic> transaction) {
+  final direction = '${transaction['direction'] ?? ''}'.toUpperCase();
+  return direction == 'DEBIT' || direction == 'OUT';
 }
 
 class _TopUpAmountDialog extends StatefulWidget {
@@ -4187,6 +4220,7 @@ class Profile extends StatelessWidget {
   const Profile({
     super.key,
     required this.displayName,
+    this.api,
     required this.onTheme,
     required this.onLogout,
     this.session,
@@ -4194,6 +4228,7 @@ class Profile extends StatelessWidget {
     this.onSessionChanged,
   });
   final String displayName;
+  final ListenerApi? api;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   final AuthSession? session;
@@ -4249,6 +4284,17 @@ class Profile extends StatelessWidget {
             ),
           ),
         ),
+        if (api != null)
+          Setting(
+            icon: Icons.forum_outlined,
+            title: 'Yêu cầu & trao đổi',
+            subtitle: 'Nhắn với Creator, xem sản phẩm và thanh toán',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ListenerRequestsPage(api: api!),
+              ),
+            ),
+          ),
         Setting(
           icon: Icons.dark_mode_outlined,
           title: 'Giao diện tối',
@@ -4258,6 +4304,310 @@ class Profile extends StatelessWidget {
       ],
     ),
   );
+}
+
+class ListenerRequestsPage extends StatefulWidget {
+  const ListenerRequestsPage({super.key, required this.api});
+  final ListenerApi api;
+
+  @override
+  State<ListenerRequestsPage> createState() => _ListenerRequestsPageState();
+}
+
+class _ListenerRequestsPageState extends State<ListenerRequestsPage> {
+  late Future<List<Map<String, dynamic>>> future = widget.api
+      .requestFlowRequests();
+
+  void reload() => setState(() => future = widget.api.requestFlowRequests());
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Yêu cầu & trao đổi')),
+    body: FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Không thể tải yêu cầu: ${snapshot.error}'),
+          );
+        }
+        final requests = snapshot.data ?? const [];
+        if (requests.isEmpty) {
+          return const Center(child: Text('Bạn chưa gửi yêu cầu nào.'));
+        }
+        return RefreshIndicator(
+          onRefresh: () async => reload(),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: requests.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (_, index) {
+              final request = requests[index];
+              final status = '${request['status'] ?? 'PENDING'}';
+              return Card(
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.headphones)),
+                  title: Text('${request['title'] ?? 'Yêu cầu podcast'}'),
+                  subtitle: Text(
+                    '${request['creatorChannelName'] ?? 'Creator'} • $status',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ListenerRequestDetailPage(
+                        api: widget.api,
+                        request: request,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class ListenerRequestDetailPage extends StatefulWidget {
+  const ListenerRequestDetailPage({
+    super.key,
+    required this.api,
+    required this.request,
+  });
+  final ListenerApi api;
+  final Map<String, dynamic> request;
+
+  @override
+  State<ListenerRequestDetailPage> createState() =>
+      _ListenerRequestDetailPageState();
+}
+
+class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
+  final messageController = TextEditingController();
+  late Future<List<Map<String, dynamic>>> messages = _loadMessages();
+  late Future<List<Map<String, dynamic>>> milestones = _loadMilestones();
+  bool sending = false;
+
+  String get requestId => '${widget.request['requestId']}';
+  Future<List<Map<String, dynamic>>> _loadMessages() =>
+      widget.api.requestMessages(requestId);
+  Future<List<Map<String, dynamic>>> _loadMilestones() =>
+      widget.api.requestMilestones(requestId);
+
+  @override
+  void dispose() {
+    messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage() async {
+    final text = messageController.text.trim();
+    if (text.isEmpty || sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.api.sendRequestMessage(requestId, text);
+      messageController.clear();
+      setState(() => messages = _loadMessages());
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
+        );
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  Future<void> _requestRevision(String milestoneId) async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Yêu cầu làm lại'),
+        content: TextField(
+          controller: reasonController,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Nêu nội dung cần chỉnh sửa',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, reasonController.text.trim()),
+            child: const Text('Gửi'),
+          ),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null || reason.isEmpty) return;
+    try {
+      await widget.api.requestMilestoneRevision(milestoneId, reason);
+      if (mounted) setState(() => milestones = _loadMilestones());
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể yêu cầu làm lại: $error')),
+        );
+    }
+  }
+
+  Future<void> _approve(String milestoneId) async {
+    try {
+      final result = await widget.api.approveMilestone(milestoneId);
+      if (!mounted) return;
+      setState(() => milestones = _loadMilestones());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result['message'] ?? 'Đã chấp nhận sản phẩm và tạo khoản thanh toán chờ xử lý.'}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể chấp nhận sản phẩm: $error')),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text('${widget.request['title'] ?? 'Chi tiết yêu cầu'}'),
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('${widget.request['description'] ?? ''}'),
+        const SizedBox(height: 18),
+        const Text(
+          'Trao đổi với Creator',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: messages,
+          builder: (_, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done)
+              return const LinearProgressIndicator();
+            final items = snapshot.data ?? const [];
+            return Column(
+              children: [
+                if (items.isEmpty)
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Chưa có tin nhắn.'),
+                  ),
+                ...items.map(
+                  (item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: Text('${item['senderName'] ?? 'Người dùng'}'),
+                    subtitle: Text('${item['content'] ?? ''}'),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: messageController,
+                        decoration: const InputDecoration(
+                          hintText: 'Nhập tin nhắn',
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: sending ? null : _sendMessage,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'Sản phẩm theo từng giai đoạn',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: milestones,
+          builder: (_, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done)
+              return const LinearProgressIndicator();
+            final items = snapshot.data ?? const [];
+            return Column(
+              children: items.map((item) => _milestoneCard(item)).toList(),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+
+  Widget _milestoneCard(Map<String, dynamic> milestone) {
+    final id = '${milestone['milestoneId']}';
+    final status = '${milestone['status'] ?? ''}'.toUpperCase();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${milestone['name'] ?? 'Giai đoạn'}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${milestone['amount'] ?? ''} ${milestone['currency'] ?? 'VND'} • $status',
+            ),
+            if (status == 'SUBMITTED') ...[
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: widget.api.milestoneSubmissions(id),
+                builder: (_, snapshot) {
+                  final submissions = snapshot.data ?? const [];
+                  return Column(
+                    children: submissions
+                        .map(
+                          (s) => SelectableText(
+                            'Sản phẩm: ${s['publicUrl'] ?? ''}\n${s['note'] ?? ''}',
+                          ),
+                        )
+                        .toList(),
+                  );
+                },
+              ),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () => _requestRevision(id),
+                    child: const Text('Yêu cầu làm lại'),
+                  ),
+                  FilledButton(
+                    onPressed: () => _approve(id),
+                    child: const Text('Đồng ý & trả tiền'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class Setting extends StatelessWidget {
@@ -4864,6 +5214,33 @@ class Transaction extends StatelessWidget {
       status: statusLabel,
       onTap: onTap,
     );
+  }
+
+  factory Transaction.fromWalletTransaction(Map<String, dynamic> transaction) {
+    final type = _walletTransactionTitle(transaction['type']);
+    final status = '${transaction['status'] ?? 'PENDING'}'.toUpperCase();
+    final amount = (transaction['amount'] as num?)?.round() ?? 0;
+    final statusLabel = switch (status) {
+      'COMPLETED' || 'PAID' || 'SUCCESS' => 'Đã hoàn tất',
+      'FAILED' || 'CANCELLED' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    return Transaction(
+      title: type,
+      amount: '-${_formatVnd(amount)}',
+      status: statusLabel,
+    );
+  }
+
+  static String _walletTransactionTitle(dynamic rawType) {
+    final type = '$rawType'.toUpperCase();
+    return switch (type) {
+      'MEMBERSHIP_PURCHASE' => 'Thanh toán gói thành viên',
+      'WALLET_TOPUP' => 'Nạp tiền vào ví',
+      'ADMIN_BALANCE_ADJUSTMENT' => 'Điều chỉnh số dư',
+      'REFUND' => 'Hoàn tiền',
+      _ => 'Giao dịch ví',
+    };
   }
 
   final String title, amount;

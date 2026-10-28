@@ -15,12 +15,14 @@ import com.prmteam7.podcasthistory.dto.request.CreateSeriesRequest;
 import com.prmteam7.podcasthistory.dto.request.MilestoneOffer;
 import com.prmteam7.podcasthistory.dto.request.ResolveDisputeRequest;
 import com.prmteam7.podcasthistory.dto.request.RejectSeriesRequest;
+import com.prmteam7.podcasthistory.dto.request.SendSeriesRequestMessage;
 import com.prmteam7.podcasthistory.dto.response.DisputeResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneApprovalResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneSubmissionResponse;
 import com.prmteam7.podcasthistory.dto.response.MediaUploadResponse;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestDecisionResponse;
+import com.prmteam7.podcasthistory.dto.response.SeriesRequestMessageResponse;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestResponse;
 import com.prmteam7.podcasthistory.enums.ContractStageStatus;
 import com.prmteam7.podcasthistory.enums.MilestoneDisputeDecision;
@@ -39,6 +41,7 @@ import com.prmteam7.podcasthistory.model.Payment;
 import com.prmteam7.podcasthistory.model.ProducerProfile;
 import com.prmteam7.podcasthistory.model.RequestResponse;
 import com.prmteam7.podcasthistory.model.SeriesRequest;
+import com.prmteam7.podcasthistory.model.SeriesRequestMessage;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.ContractRepository;
 import com.prmteam7.podcasthistory.repository.ContractStageRepository;
@@ -49,6 +52,7 @@ import com.prmteam7.podcasthistory.repository.PaymentRepository;
 import com.prmteam7.podcasthistory.repository.ProducerProfileRepository;
 import com.prmteam7.podcasthistory.repository.RequestResponseRepository;
 import com.prmteam7.podcasthistory.repository.SeriesRequestRepository;
+import com.prmteam7.podcasthistory.repository.SeriesRequestMessageRepository;
 
 @Service
 public class PodcastRequestService {
@@ -58,6 +62,7 @@ public class PodcastRequestService {
     private final AppUserRepository userRepository;
     private final ProducerProfileRepository creatorRepository;
     private final SeriesRequestRepository requestRepository;
+    private final SeriesRequestMessageRepository messageRepository;
     private final RequestResponseRepository responseRepository;
     private final ContractRepository contractRepository;
     private final ContractStageRepository stageRepository;
@@ -71,6 +76,7 @@ public class PodcastRequestService {
             AppUserRepository userRepository,
             ProducerProfileRepository creatorRepository,
             SeriesRequestRepository requestRepository,
+            SeriesRequestMessageRepository messageRepository,
             RequestResponseRepository responseRepository,
             ContractRepository contractRepository,
             ContractStageRepository stageRepository,
@@ -82,6 +88,7 @@ public class PodcastRequestService {
         this.userRepository = userRepository;
         this.creatorRepository = creatorRepository;
         this.requestRepository = requestRepository;
+        this.messageRepository = messageRepository;
         this.responseRepository = responseRepository;
         this.contractRepository = contractRepository;
         this.stageRepository = stageRepository;
@@ -118,6 +125,29 @@ public class PodcastRequestService {
         requireRole(requireActiveUser(listenerId), UserRole.LISTENER);
         return requestRepository.findAllByUser_UserIdOrderByCreatedAtDesc(listenerId)
                 .stream().map(this::toRequestResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<SeriesRequestMessageResponse> getRequestMessages(UUID userId, UUID requestId) {
+        SeriesRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Request not found."));
+        requireRequestParticipant(request, userId);
+        return messageRepository.findAllBySeriesRequest_SeriesRequestIdOrderByCreatedAtAsc(requestId)
+                .stream().map(this::toMessageResponse).toList();
+    }
+
+    @Transactional
+    public SeriesRequestMessageResponse sendRequestMessage(
+            UUID userId, UUID requestId, SendSeriesRequestMessage input) {
+        SeriesRequest request = requestRepository.findById(requestId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Request not found."));
+        AppUser sender = requireActiveUser(userId);
+        requireRequestParticipant(request, userId);
+        SeriesRequestMessage message = new SeriesRequestMessage();
+        message.setSeriesRequest(request);
+        message.setSender(sender);
+        message.setContent(input.content().trim());
+        return toMessageResponse(messageRepository.save(message));
     }
 
     @Transactional(readOnly = true)
@@ -374,6 +404,14 @@ public class PodcastRequestService {
         revision.setRevisionNumber(Math.toIntExact(previousRevisions + 1));
         revision.setReason(reason.trim());
         revisionRepository.save(revision);
+    }
+
+    private SeriesRequestMessageResponse toMessageResponse(SeriesRequestMessage message) {
+        String senderName = message.getSender().getDisplayName();
+        if (senderName == null || senderName.isBlank()) senderName = message.getSender().getUsername();
+        return new SeriesRequestMessageResponse(
+                message.getMessageId(), message.getSender().getUserId(), senderName,
+                message.getContent(), message.getCreatedAt());
     }
 
     private SeriesRequestResponse toRequestResponse(SeriesRequest request) {
