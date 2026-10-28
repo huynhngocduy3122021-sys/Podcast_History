@@ -86,9 +86,26 @@ Gọi các bước theo thứ tự sau. `podcastId` là ID trả về từ bư�
 4. Khi listener chấp nhận sản phẩm và Admin đối soát thanh toán thành `PAID`, gọi `POST /api/creator/wallet/release-funds` (không body). `GET /api/creator/wallet/balance` trả `availableBalance`, `heldBalance`, `pendingRelease`, `currency`; số dư được tính theo thanh toán và phương thức thanh toán, không tự cộng khi chỉ có yêu cầu.
 5. `GET /api/creator/wallet/payout-accounts` để chọn tài khoản nhận tiền do Admin cấp. `POST /api/creator/wallet/withdrawals` với `{ "amount": 100000, "payoutAccountId": "UUID" }`; amount phải dương và không vượt số dư khả dụng. `GET /api/creator/wallet/withdrawals` để theo dõi; tiền được giữ ngay khi tạo yêu cầu và Admin xử lý kết quả qua luồng payout.
 
-## 6. Tình trạng gói
+## 6. Membership của kênh
 
-Tính năng gói Creator và membership listener đang tắt theo cấu hình mặc định. `GET /api/creator/system-plans` có thể trả `[]`; trạng thái gói của Creator là `DISABLED`, đăng ký gói bị chặn. Frontend nên ẩn nút mua/đăng ký khi nhận trạng thái này.
+Mỗi kênh CC chỉ mở bán **một** trong ba gói mẫu; không tạo cả ba gói active.
+Contract đầy đủ cho Frontend xem tại [MEMBERSHIP_PLANS.md](../MEMBERSHIP_PLANS.md).
+
+| Tác vụ | API | Body/ghi chú |
+|---|---|---|
+| Lấy ba mẫu 25K/50K/75K | `GET /api/creator/membership-plans/templates` | Token `CREATOR`; response có `code`, `suggestedPrice`, `benefit` |
+| Xem các row của kênh | `GET /api/creator/membership-plans` | Dùng row `status = ACTIVE` làm gói đang bán |
+| Chọn một mẫu | `PUT /api/creator/membership-plans/templates/{templateCode}/select` | Không body; mẫu khác tự thành `INACTIVE` |
+| Đặt giá riêng | `PUT /api/creator/membership-plans/{planId}/price` | `{ "price": 60000 }`; chỉ gói active; response có `planId` mới |
+
+`templateCode` nhận `BASIC_25K`, `STANDARD_50K`, `PREMIUM_75K`. Giá riêng của CC
+không thay đổi giá mẫu toàn hệ thống. Listener chỉ nhìn thấy gói active qua
+`GET /api/creators/{creatorId}/membership-plans`.
+
+## 7. Tình trạng gói
+
+Gói Creator system và membership listener bật theo cấu hình mặc định. Frontend
+nên ẩn nút tương ứng khi API trả mảng rỗng hoặc `409` do feature flag bị tắt.
 
 ## Thông báo cho Creator
 
@@ -100,7 +117,7 @@ Tính năng gói Creator và membership listener đang tắt theo cấu hình m�
 | `NEW_COMMENT` | Listener bình luận vào podcast của Creator | `podcastId`, `commentId`, `listenerId` |
 | `NEW_MEMBERSHIP` | Admin xác nhận thanh toán và membership chuyển `ACTIVE` | `creatorId`, `subscriptionId`, `membershipPlanId`, `listenerId` |
 
-`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Frontend tải lại danh sách thông báo để cập nhật, hiện chưa có luồng push riêng.
+`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Để nhận realtime, Frontend mở STOMP tại `/ws` với Bearer token trong frame `CONNECT`, rồi subscribe `/user/queue/notifications`; REST vẫn phải được gọi lúc mở màn hình và sau reconnect. Contract chi tiết, schema và cách xử lý theo role xem tại [docs/notifications/README.md](../notifications/README.md).
 
 ## Xử lý lỗi thường gặp
 

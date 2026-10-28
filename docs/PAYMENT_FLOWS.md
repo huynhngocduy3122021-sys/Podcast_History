@@ -113,16 +113,23 @@ số dư trên frontend lúc người dùng bấm “Nạp”; backend chỉ c�
 
 ## 3. Listener mua membership của kênh CC
 
+CC không tự tạo ba gói riêng. Backend cung cấp ba mẫu `BASIC_25K`,
+`STANDARD_50K`, `PREMIUM_75K`; mỗi kênh chỉ được chọn **một** mẫu để mở bán.
+CC dùng `GET /api/creator/membership-plans/templates` để lấy mẫu,
+`PUT /api/creator/membership-plans/templates/{templateCode}/select` để chọn,
+và `PUT /api/creator/membership-plans/{planId}/price` để đặt giá riêng cho
+gói active của kênh. Chi tiết request/response dành cho frontend xem tại
+[MEMBERSHIP_PLANS.md](MEMBERSHIP_PLANS.md).
+
+Listener gọi `GET /api/creators/{creatorId}/membership-plans`; API chỉ trả
+gói `ACTIVE` đang bán của kênh, nên một kênh bình thường trả tối đa một gói.
+
 ### Lấy gói của kênh
 
 `GET /api/creators/{creatorId}/membership-plans` — token người dùng đã đăng nhập,
-không có body. `creatorId` là **ID hồ sơ/kênh CC**. Response là mảng với
-`membershipPlanId`, `creatorProfileId`, `creatorChannelName`, `name`,
-`description`, `price`, `currency`, `durationDays`. Frontend lưu
-`membershipPlanId` của gói được chọn. Mảng rỗng nghĩa là kênh chưa có gói đang bán.
-
-**Hiện tại Admin tạo/sửa gói membership** qua `/api/admin/membership-plans`;
-CC chưa có API tự tạo gói membership.
+không có body. `creatorId` là **ID hồ sơ/kênh CC**. Frontend lưu
+`membershipPlanId` từ phần tử trả về; mảng rỗng nghĩa là kênh chưa chọn gói
+hoặc membership đang tắt.
 
 ### Chọn cách thanh toán
 

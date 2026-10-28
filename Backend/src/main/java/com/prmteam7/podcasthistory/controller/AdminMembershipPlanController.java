@@ -26,14 +26,13 @@ public class AdminMembershipPlanController {
   }
 
   @GetMapping
-  @Operation(summary = "Danh sách gói, lọc kênh/trạng thái, phân trang")
+  @Operation(summary = "Danh sách gói ACTIVE, lọc kênh và phân trang")
   public Page<PlanItem> list(
       @AuthenticationPrincipal Jwt jwt,
       @RequestParam(required = false) UUID creatorId,
-      @RequestParam(required = false) String status,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.list(id(jwt), creatorId, status, page, size);
+    return service.list(id(jwt), creatorId, page, size);
   }
 
   @GetMapping("/{planId}")
