@@ -2,16 +2,17 @@ package com.prmteam7.podcasthistory.model;
 
 import jakarta.persistence.*;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.UUID;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.ColumnTransformer;
 
 @Entity
 @Table(name = "\"Notification\"", indexes = {
         @Index(name = "idx_notification_user_id", columnList = "user_id")
     })
 public class Notification extends BaseEntity {
+    private static final ObjectMapper JSON = new ObjectMapper();
     @Id
     @Column(name = "notification_id", nullable = false, updatable = false)
     private UUID notificationId;
@@ -29,9 +30,9 @@ public class Notification extends BaseEntity {
     @Column(name = "message", nullable = false, columnDefinition = "text")
     private String message;
 
-    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload", nullable = true, columnDefinition = "jsonb")
-    private JsonNode payload;
+    @ColumnTransformer(write = "?::jsonb")
+    private String payload;
 
     @Column(name = "is_read", nullable = false)
     private Boolean isRead;
@@ -90,11 +91,16 @@ public class Notification extends BaseEntity {
     }
 
     public JsonNode getPayload() {
-        return payload;
+        if (payload == null) return null;
+        try {
+            return JSON.readTree(payload);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Notification payload JSON không hợp lệ.", exception);
+        }
     }
 
     public void setPayload(JsonNode payload) {
-        this.payload = payload;
+        this.payload = payload == null ? null : payload.toString();
     }
 
     public Boolean getIsRead() {

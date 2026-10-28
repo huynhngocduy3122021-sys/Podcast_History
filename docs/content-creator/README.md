@@ -112,7 +112,7 @@ Gói hệ thống hỗ trợ nâng cấp tài khoản Creator để mở quyền
 | `NEW_COMMENT` | Listener bình luận vào podcast của Creator | `podcastId`, `commentId`, `listenerId` |
 | `NEW_MEMBERSHIP` | Admin xác nhận thanh toán và membership chuyển `ACTIVE` | `creatorId`, `subscriptionId`, `membershipPlanId`, `listenerId` |
 
-`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Frontend tải lại danh sách thông báo để cập nhật, hiện chưa có luồng push riêng.
+`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Để nhận realtime, Frontend mở STOMP tại `/ws` với Bearer token trong frame `CONNECT`, rồi subscribe `/user/queue/notifications`; REST vẫn phải được gọi lúc mở màn hình và sau reconnect. Contract chi tiết, schema và cách xử lý theo role xem tại [docs/notifications/README.md](../notifications/README.md).
 
 ## Xử lý lỗi thường gặp
 

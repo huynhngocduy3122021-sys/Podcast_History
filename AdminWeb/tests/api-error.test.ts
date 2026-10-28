@@ -48,14 +48,16 @@ test('502/503 media failures use safe actionable fallbacks for complete and malf
   }
 })
 
-test('login 401 preserves the verified credential error, not the expired-session message', () => {
-  const message = 'Username/email hoặc mật khẩu không đúng, hoặc tài khoản đã bị khóa.'
-  assert.equal(errorMessage(failure(401, body(401, message), '/api/auth/login')), message)
-  assert.equal(errorMessage(failure(401, body(401, message), 'https://example.invalid/api/auth/login?test=1')), message)
-  for (const data of [undefined, '<html>private diagnostic</html>', body(401, 'private diagnostic'), body(500, message)]) {
+test('login 401 preserves the verified Backend credential error, not the expired-session message', () => {
+  const messages = ['Tài khoản không tồn tại.', 'Sai mật khẩu. Vui lòng thử lại.', 'Tài khoản của bạn đã bị khóa.']
+  for (const message of messages) {
+    assert.equal(errorMessage(failure(401, body(401, message), '/api/auth/login')), message)
+    assert.equal(errorMessage(failure(401, body(401, message), 'https://example.invalid/api/auth/login?test=1')), message)
+  }
+  for (const data of [undefined, '<html>private diagnostic</html>', body(401, 'private diagnostic'), body(500, 'private diagnostic')]) {
     assert.equal(errorMessage(failure(401, data, '/api/auth/login')), 'Không thể đăng nhập. Vui lòng kiểm tra thông tin đăng nhập và thử lại.')
   }
-  assert.equal(errorMessage(failure(401, body(401, message), '/api/auth/refresh')), 'Phiên đã hết hạn. Vui lòng đăng nhập lại.')
+  assert.equal(errorMessage(failure(401, body(401, 'Sai mật khẩu. Vui lòng thử lại.'), '/api/auth/refresh')), 'Phiên đã hết hạn. Vui lòng đăng nhập lại.')
 })
 
 test('uncertain writes give a check-data instruction without claiming success or exposing diagnostics', () => {

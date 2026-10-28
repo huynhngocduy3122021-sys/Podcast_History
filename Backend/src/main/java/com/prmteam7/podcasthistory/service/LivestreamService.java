@@ -28,14 +28,17 @@ public class LivestreamService {
   private final AppUserRepository users;
   private final AgoraRtcTokenService agora;
   private final AgoraChatTokenService chat;
+  private final RealtimeEventPublisher realtime;
 
   public LivestreamService(LivestreamRepository livestreams, ProducerProfileRepository creators,
-      AppUserRepository users, AgoraRtcTokenService agora, AgoraChatTokenService chat) {
+      AppUserRepository users, AgoraRtcTokenService agora, AgoraChatTokenService chat,
+      RealtimeEventPublisher realtime) {
     this.livestreams = livestreams;
     this.creators = creators;
     this.users = users;
     this.agora = agora;
     this.chat = chat;
+    this.realtime = realtime;
   }
 
   @Transactional
@@ -83,7 +86,9 @@ public class LivestreamService {
     live.setStatus("LIVE");
     live.setStartedAt(Instant.now());
     live.setEndedAt(null);
-    return agora.issue(livestreams.save(live), userId, true);
+    Livestream saved = livestreams.save(live);
+    realtime.publishTopic("/topic/livestreams", "LIVESTREAM_UPDATED", item(saved));
+    return agora.issue(saved, userId, true);
   }
 
   @Transactional(readOnly = true)
@@ -107,7 +112,9 @@ public class LivestreamService {
     requireLive(live);
     live.setStatus("ENDED");
     live.setEndedAt(Instant.now());
-    return item(livestreams.save(live));
+    Livestream saved = livestreams.save(live);
+    realtime.publishTopic("/topic/livestreams", "LIVESTREAM_UPDATED", item(saved));
+    return item(saved);
   }
 
   @Transactional(readOnly = true)

@@ -82,8 +82,19 @@ Luồng `POST /api/admin/withdrawals/{id}/approve` cũ giả định chưa giữ
 Hai cờ `CREATOR_PLANS_ENABLED=true` và `MEMBERSHIPS_ENABLED=true` bật tính năng gói mặc định. Admin có thể quản lý dữ liệu gói:
 
 - `POST /api/admin/membership-plans` với `{ "creatorId": "UUID", "name": "Tên gói", "description": "...", "price": 100000, "currency": "VND", "durationDays": 30, "status": "ACTIVE" }`; `price` dương, `durationDays` 1–3650, `status` là `ACTIVE`/`INACTIVE`.
+- `GET /api/admin/membership-plans?creatorId=<UUID>&page=0&size=20` chỉ trả các gói đang `ACTIVE`; bỏ `creatorId` để xem gói ACTIVE của tất cả kênh. Gói `INACTIVE` không nằm trong danh sách này.
 - `POST /api/admin/creator-system-plans` với `{ "code": "PRO", "name": "Gói Pro", "description": "...", "price": 100000, "currency": "VND", "durationDays": 30, "status": "ACTIVE", "benefits": [{ "key": "BENEFIT_KEY", "value": "giá trị", "description": "..." }] }`.
 - Các endpoint CRUD cùng nhóm `/api/admin/membership-plans` và `/api/admin/creator-system-plans` phục vụ quản trị. Đặt cờ tương ứng thành `false` nếu cần tạm tắt một loại gói.
+
+## 9. Thông báo của tài khoản Admin
+
+Admin không có endpoint feed riêng dưới `/api/admin/notifications`. Nếu màn hình Admin cần đọc thông báo gắn với chính tài khoản đang đăng nhập, dùng:
+
+- `GET /api/me/notifications?page=0&size=20` — đọc `content[]` và các field `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt`, `payload`.
+- `PUT /api/me/notifications/{notificationId}/read` — body rỗng, thành công `204`.
+- Realtime: STOMP `ws://<backend-host>/ws`, gửi `Authorization: Bearer <accessToken>` trong frame `CONNECT`, subscribe `/user/queue/notifications`.
+
+Các API `/api/admin/...` vẫn dùng để đọc trạng thái nghiệp vụ (payment, report, podcast, gói); không dùng chúng để lấy danh sách notification. Contract WebSocket, reconnect và phân loại event xem tại [docs/notifications/README.md](../notifications/README.md).
 
 ## Lỗi thường gặp
 

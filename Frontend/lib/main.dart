@@ -14,6 +14,7 @@ import 'features/creator_studio/presentation/controllers/creator_controller.dart
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 import 'features/livestream/listener_livestream_screen.dart';
+import 'features/notifications/notification_socket.dart';
 
 import 'api_service.dart';
 
@@ -462,6 +463,7 @@ class Shell extends StatefulWidget {
 class _ShellState extends State<Shell> {
   late final ListenerApi api;
   late final AudioPlayer _audioPlayer;
+  late final NotificationSocket _notificationSocket;
   StreamSubscription<Duration>? _audioPositionSubscription;
   StreamSubscription<Duration>? _audioDurationSubscription;
   StreamSubscription<PlayerState>? _audioStateSubscription;
@@ -477,7 +479,7 @@ class _ShellState extends State<Shell> {
   final likeCountsByPodcast = <String, int>{};
   final commentCountsByPodcast = <String, int>{};
   final creatorDetails = <String, Map<String, dynamic>>{};
-  StreamSubscription<String>? commentSubscription;
+  String? commentTopic;
   int tab = 0;
   Show? current;
   bool playing = false;
@@ -546,6 +548,25 @@ class _ShellState extends State<Shell> {
       refreshToken: widget.session.refreshToken,
       onSessionRefreshed: widget.onSessionRefreshed,
     );
+    _notificationSocket = NotificationSocket(
+      url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
+      accessToken: widget.session.accessToken,
+      onNotification: (json) {
+        if (!mounted) return;
+        final item = AppNotification.fromJson(json);
+        setState(() {
+          notifications.removeWhere((existing) => existing.id == item.id);
+          notifications.insert(0, item);
+        });
+      },
+      onRealtime: (json) {
+        final type = '${json['type'] ?? ''}'.toUpperCase();
+        if (type == 'PAYMENT_UPDATED' || type == 'WALLET_UPDATED') {
+          unawaited(_refreshNotifications());
+        }
+      },
+      onReconnected: () => unawaited(_refreshNotifications()),
+    )..connect();
     shows = List<Show>.of(fallbackShows);
     _loadListenerFlow();
   }
@@ -557,6 +578,7 @@ class _ShellState extends State<Shell> {
         oldWidget.session.refreshToken != widget.session.refreshToken) {
       api.accessToken = widget.session.accessToken;
       api.refreshToken = widget.session.refreshToken;
+      _notificationSocket.updateAccessToken(widget.session.accessToken);
     }
   }
 
@@ -699,6 +721,20 @@ class _ShellState extends State<Shell> {
     }
   }
 
+  Future<void> _refreshNotifications() async {
+    try {
+      final items = await api.notifications(page: 0, size: 20);
+      if (!mounted) return;
+      setState(() {
+        notifications
+          ..clear()
+          ..addAll(items.map(AppNotification.fromJson));
+      });
+    } catch (_) {
+      // Keep the last REST result visible when the refresh request fails.
+    }
+  }
+
   void play(Show s) {
     setState(() {
       current = s;
@@ -761,18 +797,49 @@ class _ShellState extends State<Shell> {
 
   void openShow(Show show) {
     play(show);
-    commentSubscription?.cancel();
+    if (commentTopic != null) {
+      _notificationSocket.unlisten(commentTopic!);
+      commentTopic = null;
+    }
     if (show.id != null) {
-      commentSubscription = api
-          .commentStream(show.id!)
-          .listen((_) {}, onError: (_) {});
+      final topic = '/topic/podcasts/${show.id}/comments';
+      commentTopic = topic;
+      _notificationSocket.listen(topic, (_) {
+        unawaited(_reloadComments(show));
+      });
+      unawaited(_reloadComments(show));
     }
     _showPlayer(show);
   }
 
+  Future<void> _reloadComments(Show show) async {
+    final id = show.id;
+    if (id == null) return;
+    try {
+      final results = await Future.wait<dynamic>([
+        api.comments(id),
+        api.commentCount(id),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        commentsByPodcast[id] = results[0]
+            .map(
+              (comment) => CommentData.fromJson(
+                comment,
+                durationSeconds: show.durationSeconds ?? 0,
+              ),
+            )
+            .toList();
+        final count = results[1];
+        commentCountsByPodcast[id] = count is int ? count : 0;
+      });
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
-    commentSubscription?.cancel();
+    if (commentTopic != null) _notificationSocket.unlisten(commentTopic!);
+    _notificationSocket.dispose();
     _audioPositionSubscription?.cancel();
     _audioDurationSubscription?.cancel();
     _audioStateSubscription?.cancel();
@@ -1202,7 +1269,7 @@ class _ShellState extends State<Shell> {
         onOpen: openShow,
         onOpenCreator: _showCreatorProfile,
       ),
-      LivestreamPage(api: api),
+      LivestreamPage(api: api, socket: _notificationSocket),
       LibraryPage(
         api: api,
         likedTitles: likedShowTitles,
@@ -1290,25 +1357,34 @@ class _ShellState extends State<Shell> {
     ],
   );
 
-  void _showNotifications() => showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    isDismissible: true,
-    enableDrag: true,
-    backgroundColor: Colors.transparent,
-    builder: (_) => NotificationPanel(
-      notifications: notifications,
-      onRead: (id) {
-        setState(() {
-          final index = notifications.indexWhere((item) => item.id == id);
-          if (index >= 0) {
-            notifications[index] = notifications[index].copyWith(read: true);
-            unawaited(api.markNotificationRead(id));
-          }
-        });
-      },
-    ),
-  );
+  Future<void> _markNotificationRead(String id) async {
+    final index = notifications.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+    setState(() {
+      notifications[index] = notifications[index].copyWith(read: true);
+    });
+    try {
+      await api.markNotificationRead(id);
+    } catch (_) {
+      await _refreshNotifications();
+    }
+  }
+
+  Future<void> _showNotifications() async {
+    await _refreshNotifications();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => NotificationPanel(
+        notifications: notifications,
+        onRead: (id) => unawaited(_markNotificationRead(id)),
+      ),
+    );
+  }
 
   Future<void> _openWallet() async {
     try {
@@ -1326,6 +1402,7 @@ class _ShellState extends State<Shell> {
       MaterialPageRoute(
         builder: (_) => ListenerWalletPage(
           api: api,
+          socket: _notificationSocket,
           initialBalance: walletBalance,
           onBalanceChanged: (balance) =>
               setState(() => walletBalance = balance),
@@ -2995,11 +3072,6 @@ class _LibraryPageState extends State<LibraryPage> {
                   'Playlist của bạn',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
-                FilledButton.tonalIcon(
-                  onPressed: createPlaylist,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Tạo mới'),
-                ),
               ],
             ),
           ),
@@ -3690,14 +3762,15 @@ class _NotificationPanelState extends State<NotificationPanel> {
 }
 
 class LivestreamPage extends StatelessWidget {
-  const LivestreamPage({super.key, required this.api});
+  const LivestreamPage({super.key, required this.api, required this.socket});
 
   final ListenerApi api;
+  final NotificationSocket socket;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Livestream')),
-    body: ListenerLivestreamScreen(api: api),
+    body: ListenerLivestreamScreen(api: api, socket: socket),
   );
 }
 
@@ -3705,10 +3778,12 @@ class ListenerWalletPage extends StatefulWidget {
   const ListenerWalletPage({
     super.key,
     required this.api,
+    required this.socket,
     required this.initialBalance,
     required this.onBalanceChanged,
   });
   final ListenerApi api;
+  final NotificationSocket socket;
   final int initialBalance;
   final ValueChanged<int> onBalanceChanged;
 
@@ -3719,6 +3794,97 @@ class ListenerWalletPage extends StatefulWidget {
 class _ListenerWalletPageState extends State<ListenerWalletPage> {
   late int balance = widget.initialBalance;
   bool loading = false;
+  bool historyLoading = true;
+  String? historyError;
+  List<Map<String, dynamic>> history = const [];
+  bool showAllHistory = false;
+  void Function()? removeRealtimeListener;
+
+  @override
+  void initState() {
+    super.initState();
+    removeRealtimeListener = widget.socket.addRealtimeListener((event) {
+      if ('${event['type'] ?? ''}'.toUpperCase() == 'PAYMENT_UPDATED') {
+        unawaited(_loadWalletAndHistory());
+      }
+    });
+    _loadWalletAndHistory();
+  }
+
+  @override
+  void dispose() {
+    removeRealtimeListener?.call();
+    super.dispose();
+  }
+
+  Future<void> _loadWalletAndHistory() async {
+    try {
+      final wallet = await widget.api.wallet();
+      if (!mounted) return;
+      setState(
+        () =>
+            balance = (wallet['availableBalance'] as num?)?.round() ?? balance,
+      );
+      widget.onBalanceChanged(balance);
+      await _loadHistory();
+    } catch (_) {}
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final results = await Future.wait([
+        widget.api.checkouts(),
+        widget.api.checkouts(status: 'PAID'),
+      ]);
+      final byId = <String, Map<String, dynamic>>{};
+      for (final item in [...results[0], ...results[1]]) {
+        final id = item['checkoutId']?.toString();
+        if (id != null && id.isNotEmpty) byId[id] = item;
+      }
+      if (!mounted) return;
+      setState(() {
+        history = byId.values.toList();
+        historyLoading = false;
+        historyError = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        historyLoading = false;
+        historyError = 'Không thể tải lịch sử giao dịch.';
+      });
+    }
+  }
+
+  Future<void> _openTransaction(Map<String, dynamic> item) async {
+    final checkoutId = item['checkoutId']?.toString();
+    if (checkoutId == null || checkoutId.isEmpty) return;
+    try {
+      final latest = await widget.api.checkoutStatus(checkoutId);
+      if (!mounted) return;
+      final checkout = {...item, ...latest};
+      final status = '${checkout['status'] ?? ''}'.toUpperCase();
+      if (status == 'PENDING') {
+        await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) =>
+              WalletTopUpDialog(api: widget.api, checkout: checkout),
+        );
+        await _loadHistory();
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (_) => TransactionDetailDialog(checkout: checkout),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không thể tải thông tin giao dịch.')),
+      );
+    }
+  }
 
   Future<void> _topUp() async {
     final amount = await showDialog<int>(
@@ -3780,11 +3946,33 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       ),
       const SizedBox(height: 16),
       const Text('Giao dịch gần đây'),
-      const Transaction(
-        title: 'Membership VietCast Originals',
-        amount: '-79.000 VND',
-      ),
-      const Transaction(title: 'Nạp tiền vào ví', amount: '+200.000 VND'),
+      if (historyLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (historyError != null)
+        Text(historyError!)
+      else if (history.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Text('Chưa có giao dịch nào.'),
+        )
+      else
+        ...((showAllHistory ? history : history.take(5)).map(
+          (item) => Transaction.fromCheckout(
+            item,
+            onTap: () => _openTransaction(item),
+          ),
+        )),
+      if (!historyLoading && historyError == null && history.length > 5)
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            onPressed: () => setState(() => showAllHistory = !showAllHistory),
+            child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
+          ),
+        ),
     ],
   );
 }
@@ -3929,13 +4117,8 @@ class _WalletTopUpDialogState extends State<WalletTopUpDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text(terminal ? 'Đóng' : 'Để sau'),
+          child: const Text('Đóng'),
         ),
-        if (!terminal)
-          FilledButton(
-            onPressed: checking ? null : check,
-            child: const Text('Kiểm tra ngay'),
-          ),
       ],
     );
   }
@@ -4545,16 +4728,110 @@ class _WalletState extends State<WalletPage> {
   );
 }
 
-class Transaction extends StatelessWidget {
-  const Transaction({super.key, required this.title, required this.amount});
-  final String title, amount;
+class TransactionDetailDialog extends StatelessWidget {
+  const TransactionDetailDialog({super.key, required this.checkout});
+
+  final Map<String, dynamic> checkout;
+
   @override
-  Widget build(BuildContext context) => ListTile(
-    contentPadding: EdgeInsets.zero,
-    leading: const Icon(Icons.receipt_long_outlined),
-    title: Text(title),
-    subtitle: const Text('Đang xử lý'),
-    trailing: Text(amount),
+  Widget build(BuildContext context) {
+    final status = '${checkout['status'] ?? ''}'.toUpperCase();
+    final statusLabel = switch (status) {
+      'PAID' => 'Đã thanh toán',
+      'FAILED' || 'EXPIRED' || 'CANCELLED' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    final purpose = '${checkout['purpose'] ?? ''}'.toUpperCase();
+    final title = purpose == 'WALLET_TOPUP'
+        ? 'Nạp tiền vào ví'
+        : 'Thanh toán gói Creator';
+    return AlertDialog(
+      title: const Text('Chi tiết giao dịch'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          Text(
+            'Số tiền: ${checkout['amount'] ?? ''} ${checkout['currency'] ?? 'VND'}',
+          ),
+          Text('Trạng thái: $statusLabel'),
+          if ('${checkout['paymentCode'] ?? ''}'.isNotEmpty)
+            SelectableText('Mã giao dịch: ${checkout['paymentCode']}'),
+          if ('${checkout['createdAt'] ?? ''}'.isNotEmpty)
+            Text('Thời gian tạo: ${checkout['createdAt']}'),
+          if ('${checkout['paidAt'] ?? ''}'.isNotEmpty)
+            Text('Thời gian thanh toán: ${checkout['paidAt']}'),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Đóng'),
+        ),
+      ],
+    );
+  }
+}
+
+class Transaction extends StatelessWidget {
+  const Transaction({
+    super.key,
+    required this.title,
+    required this.amount,
+    this.status = 'Đang xử lý',
+    this.onTap,
+  });
+
+  factory Transaction.fromCheckout(
+    Map<String, dynamic> checkout, {
+    VoidCallback? onTap,
+  }) {
+    final purpose = '${checkout['purpose'] ?? ''}'.toUpperCase();
+    final title = purpose == 'WALLET_TOPUP'
+        ? 'Nạp tiền vào ví'
+        : 'Thanh toán gói Creator';
+    final amount = (checkout['amount'] as num?)?.round() ?? 0;
+    final status = '${checkout['status'] ?? 'PENDING'}'.toUpperCase();
+    final statusLabel = switch (status) {
+      'PAID' => 'Đã thanh toán',
+      'FAILED' || 'EXPIRED' || 'CANCELLED' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    return Transaction(
+      title: title,
+      amount: '${status == 'PAID' ? '+' : ''}${_formatVnd(amount)}',
+      status: statusLabel,
+      onTap: onTap,
+    );
+  }
+
+  final String title, amount;
+  final String status;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(8),
+    child: ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.receipt_long_outlined),
+      title: Text(title),
+      subtitle: Text(
+        status,
+        style: TextStyle(
+          color: switch (status) {
+            'Đã thanh toán' => Colors.green,
+            'Thất bại' => Colors.red,
+            _ => Colors.amber[800],
+          },
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      trailing: Text(amount),
+    ),
   );
 }
 
@@ -5124,12 +5401,7 @@ class _PlayerState extends State<Player> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                IconButton(
-                  onPressed: () {},
-                  tooltip: 'Thêm tùy chọn',
-                  color: Colors.white,
-                  icon: const Icon(Icons.tune),
-                ),
+                const SizedBox(width: 48),
               ],
             ),
             const SizedBox(height: 8),
@@ -5670,14 +5942,6 @@ class _PlaylistPanelState extends State<PlaylistPanel> {
             'Lưu để quay lại sau',
             style: TextStyle(color: Colors.white60),
           ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.add, color: Colors.white),
-          title: const Text(
-            'Tạo playlist mới',
-            style: TextStyle(color: Colors.white),
-          ),
-          onTap: () => Navigator.pop(context),
         ),
         const SizedBox(height: 10),
       ],

@@ -39,7 +39,7 @@ export const aiModerationSchema = z.object({
   moderationResultId: z.uuid(), podcastId: z.uuid(), transcriptId: z.uuid().nullable(),
   transcriptHash: nullableText, modelName: nullableText, modelVersion: nullableText,
   status: z.string().min(1), overallLabel: nullableText, recommendation: nullableText,
-  confidenceScore: z.number().nullable(), reason: nullableText, rawResult: z.unknown().nullable(),
+  confidenceScore: z.number().finite().min(0).max(1).nullable(), reason: nullableText, rawResult: z.unknown().nullable(),
   sourceHash: nullableText, mediaKey: nullableText, errorMessage: nullableText,
   processedAt: instant.nullable(), current: z.boolean(),
 })

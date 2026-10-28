@@ -29,16 +29,19 @@ public class CreatorApplicationService {
   private final AppUserRepository appUserRepository;
   private final RoleRepository roleRepository;
   private final AdminSupportService support;
+  private final MembershipPlanDefaultsService membershipPlanDefaults;
 
   public CreatorApplicationService(
       ProducerProfileRepository producerProfileRepository,
       AppUserRepository appUserRepository,
       RoleRepository roleRepository,
-      AdminSupportService support) {
+      AdminSupportService support,
+      MembershipPlanDefaultsService membershipPlanDefaults) {
     this.producerProfileRepository = producerProfileRepository;
     this.appUserRepository = appUserRepository;
     this.roleRepository = roleRepository;
     this.support = support;
+    this.membershipPlanDefaults = membershipPlanDefaults;
   }
 
   @Transactional(readOnly = true)
@@ -156,7 +159,9 @@ public class CreatorApplicationService {
         "CREATOR_APPLICATION",
         "Hồ sơ Creator được duyệt",
         note == null ? "Đăng nhập lại để sử dụng quyền Creator." : note);
-    return toResponse(producerProfileRepository.save(profile));
+    ProducerProfile approved = producerProfileRepository.save(profile);
+    membershipPlanDefaults.provisionFor(approved);
+    return toResponse(approved);
   }
 
   @Transactional

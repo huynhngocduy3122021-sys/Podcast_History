@@ -81,7 +81,9 @@ Like comment chỉ áp dụng cho bình luận còn hiển thị của podcast �
 | Thông báo | `GET /api/me/notifications?page=0&size=20` | Page thông báo |
 | Đánh dấu đã đọc | `PUT /api/me/notifications/{notificationId}/read` | Không body; `204` |
 
-Khi kênh đang theo dõi có podcast mới được duyệt mà listener có quyền nghe, listener nhận thông báo `NEW_PODCAST`. Khi gói membership đang tắt, cả tập `MEMBERS_ONLY` cũng nghe được theo luồng playback hiện tại. Mỗi phần tử trong `content[]` của API thông báo có `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt` và `payload`. Với `NEW_PODCAST`, `payload` có `podcastId` và `creatorId`; dùng `podcastId` để mở chi tiết. Frontend gọi lại API danh sách để cập nhật thông báo; hiện chưa có luồng push riêng.
+Khi kênh đang theo dõi có podcast mới được duyệt mà listener có quyền nghe, listener nhận thông báo `NEW_PODCAST`. Khi gói membership đang tắt, cả tập `MEMBERS_ONLY` cũng nghe được theo luồng playback hiện tại. Mỗi phần tử trong `content[]` của API thông báo có `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt` và `payload`. Với `NEW_PODCAST`, `payload` có `podcastId` và `creatorId`; dùng `podcastId` để mở chi tiết.
+
+Để nhận thông báo ngay khi có bản ghi mới, mở STOMP tại `/ws` bằng Bearer token trong frame `CONNECT`, sau đó subscribe `/user/queue/notifications`. REST ở trên vẫn là fallback bắt buộc khi mở màn hình và sau mỗi lần reconnect. Xem contract đầy đủ, schema, reconnect và các loại thông báo theo role tại [docs/notifications/README.md](../notifications/README.md).
 
 ```json
 {"targetType":"PODCAST","targetId":"<podcastId>","reasonCode":"INAPPROPRIATE","description":"Lý do cụ thể"}
