@@ -5,12 +5,13 @@ import com.prmteam7.podcasthistory.model.MembershipPlan;
 import com.prmteam7.podcasthistory.model.ProducerProfile;
 import com.prmteam7.podcasthistory.repository.MembershipPlanRepository;
 import com.prmteam7.podcasthistory.repository.ProducerProfileRepository;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Provisions the fixed membership tiers for approved channels.
+ * Provisions the single membership template for approved channels.
  *
  * <p>This is deliberately idempotent: it can run at startup and after a creator is approved
  * without changing an existing plan or duplicating a plan.
@@ -44,25 +45,56 @@ public class MembershipPlanDefaultsService {
       return 0;
     }
 
-    int created = 0;
-    for (MembershipPlanTemplateCode template : MembershipPlanTemplateCode.values()) {
-      if (plans.existsByProducerProfile_ProducerProfileIdAndTemplateCode(
-          creator.getProducerProfileId(), template.name())) {
-        continue;
-      }
+    MembershipPlanTemplateCode template = MembershipPlanTemplateCode.DEFAULT;
+    List<MembershipPlan> channelPlans =
+        plans.findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(
+            creator.getProducerProfileId());
 
-      MembershipPlan plan = new MembershipPlan();
-      plan.setProducerProfile(creator);
-      plan.setTemplateCode(template.name());
-      plan.setName(template.getDisplayName());
-      plan.setDescription(MembershipPlanTemplateCode.PRIVATE_VIDEO_BENEFIT);
-      plan.setPrice(template.getPrice());
-      plan.setCurrency(MembershipPlanTemplateCode.CURRENCY);
-      plan.setDurationDays(MembershipPlanTemplateCode.DEFAULT_DURATION_DAYS);
-      plan.setStatus("INACTIVE");
-      plans.save(plan);
+    MembershipPlan selected = channelPlans.stream()
+        .filter(plan -> template.name().equalsIgnoreCase(plan.getTemplateCode())
+            && "ACTIVE".equalsIgnoreCase(plan.getStatus()))
+        .findFirst()
+        .orElseGet(() -> channelPlans.stream()
+            .filter(plan -> MembershipPlanTemplateCode.isLegacyCode(plan.getTemplateCode())
+                && "ACTIVE".equalsIgnoreCase(plan.getStatus()))
+            .findFirst()
+            .orElseGet(() -> channelPlans.stream()
+                .filter(plan -> template.name().equalsIgnoreCase(plan.getTemplateCode()))
+                .findFirst()
+                .orElseGet(() -> channelPlans.stream()
+                    .filter(plan -> MembershipPlanTemplateCode.isLegacyCode(plan.getTemplateCode()))
+                    .findFirst()
+                    .orElse(null))));
+
+    int created = 0;
+    if (selected == null) {
+      selected = new MembershipPlan();
+      selected.setProducerProfile(creator);
+      selected.setTemplateCode(template.name());
+      selected.setName(template.getDisplayName());
+      selected.setDescription(MembershipPlanTemplateCode.PRIVATE_VIDEO_BENEFIT);
+      selected.setPrice(template.getPrice());
+      selected.setCurrency(MembershipPlanTemplateCode.CURRENCY);
+      selected.setDurationDays(MembershipPlanTemplateCode.DEFAULT_DURATION_DAYS);
+      selected.setStatus("INACTIVE");
+      channelPlans.add(selected);
       created++;
+    } else if (!template.name().equalsIgnoreCase(selected.getTemplateCode())) {
+      // Reuse the legacy row so existing subscriptions and payment history keep their FK.
+      selected.setTemplateCode(template.name());
+      selected.setName(template.getDisplayName());
+      selected.setDescription(MembershipPlanTemplateCode.PRIVATE_VIDEO_BENEFIT);
     }
+
+    // Retire the old 25K/50K/75K template rows. They remain in the database for historical
+    // subscriptions, but are no longer selectable or visible as active channel plans.
+    for (MembershipPlan plan : channelPlans) {
+      if (plan != selected && (MembershipPlanTemplateCode.isLegacyCode(plan.getTemplateCode())
+          || template.name().equalsIgnoreCase(plan.getTemplateCode()))) {
+        plan.setStatus("INACTIVE");
+      }
+    }
+    plans.saveAll(channelPlans);
     return created;
   }
 }

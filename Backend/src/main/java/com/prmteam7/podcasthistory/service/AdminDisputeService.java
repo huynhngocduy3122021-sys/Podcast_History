@@ -20,18 +20,21 @@ public class AdminDisputeService {
   private final ContractStageRepository stages;
   private final ContractDisputeRepository disputes;
   private final PaymentRepository payments;
+  private final ContractEscrowRepository escrows;
 
   public AdminDisputeService(
       AdminSupportService support,
       ContractRepository contracts,
       ContractStageRepository stages,
       ContractDisputeRepository disputes,
-      PaymentRepository payments) {
+      PaymentRepository payments,
+      ContractEscrowRepository escrows) {
     this.support = support;
     this.contracts = contracts;
     this.stages = stages;
     this.disputes = disputes;
     this.payments = payments;
+    this.escrows = escrows;
   }
 
   public Page<ContractItem> contracts(UUID actor, String status, int page, int size) {
@@ -117,6 +120,8 @@ public class AdminDisputeService {
     var contractStages =
         stages.findAllByContract_ContractIdOrderByStageOrderAsc(contract.getContractId());
     if (body.decision() == DisputeDecision.CANCEL_CONTRACT) {
+      if (escrows.findByContract_ContractId(contract.getContractId()).isPresent())
+        throw new ResourceConflictException("Hợp đồng giữ tiền phải dùng luồng chấm dứt và hoàn escrow.");
       if (payments.countUnrefundedContractPayments(contract.getContractId()) > 0)
         throw new ResourceConflictException(
             "Cần đối soát/hoàn tiền các mốc đã thanh toán trước khi hủy hợp đồng.");

@@ -19,6 +19,9 @@ public interface MilestoneDisputeRepository extends JpaRepository<MilestoneDispu
     Optional<MilestoneDispute> findFirstByContractStage_ContractStageIdAndStatus(
             UUID stageId, String status);
 
+    @Query("select dispute.contractStage.contract.contractId from MilestoneDispute dispute where dispute.milestoneDisputeId = :disputeId")
+    Optional<UUID> findContractIdByDisputeId(@Param("disputeId") UUID disputeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select dispute from MilestoneDispute dispute where dispute.milestoneDisputeId = :disputeId")
     Optional<MilestoneDispute> findByIdForUpdate(@Param("disputeId") UUID disputeId);

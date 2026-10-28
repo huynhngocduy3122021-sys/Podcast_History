@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.service;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import com.prmteam7.podcasthistory.dto.request.MilestoneOffer;
 import com.prmteam7.podcasthistory.dto.request.ResolveDisputeRequest;
 import com.prmteam7.podcasthistory.dto.request.RejectSeriesRequest;
 import com.prmteam7.podcasthistory.dto.response.DisputeResponse;
+import com.prmteam7.podcasthistory.dto.response.ContractWorkflowResponses;
 import com.prmteam7.podcasthistory.dto.response.MilestoneApprovalResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneSubmissionResponse;
@@ -54,6 +56,7 @@ import com.prmteam7.podcasthistory.repository.SeriesRequestRepository;
 public class PodcastRequestService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2);
+    private static final int MAX_LISTENER_REVISIONS_PER_STAGE = 3;
 
     private final AppUserRepository userRepository;
     private final ProducerProfileRepository creatorRepository;
@@ -66,6 +69,8 @@ public class PodcastRequestService {
     private final MilestoneDisputeRepository disputeRepository;
     private final PaymentRepository paymentRepository;
     private final MediaUploadService mediaUploadService;
+    private final ContractEscrowService escrowService;
+    private final R2PlaybackUrlService playbackUrlService;
 
     public PodcastRequestService(
             AppUserRepository userRepository,
@@ -78,7 +83,9 @@ public class PodcastRequestService {
             MilestoneRevisionRepository revisionRepository,
             MilestoneDisputeRepository disputeRepository,
             PaymentRepository paymentRepository,
-            MediaUploadService mediaUploadService) {
+            MediaUploadService mediaUploadService,
+            ContractEscrowService escrowService,
+            R2PlaybackUrlService playbackUrlService) {
         this.userRepository = userRepository;
         this.creatorRepository = creatorRepository;
         this.requestRepository = requestRepository;
@@ -90,6 +97,8 @@ public class PodcastRequestService {
         this.disputeRepository = disputeRepository;
         this.paymentRepository = paymentRepository;
         this.mediaUploadService = mediaUploadService;
+        this.escrowService = escrowService;
+        this.playbackUrlService = playbackUrlService;
     }
 
     @Transactional
@@ -136,6 +145,9 @@ public class PodcastRequestService {
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy yêu cầu podcast."));
         requireRequestOwner(request, creator);
         requirePendingRequest(request);
+        if (escrowService.isEscrowRequest(requestId)) {
+            throw new PodcastWorkflowException("Yêu cầu có giữ tiền phải dùng API proposal và ký hợp đồng.");
+        }
         validateMilestoneAmounts(input.milestones());
 
         RequestResponse response = new RequestResponse();
@@ -192,6 +204,7 @@ public class PodcastRequestService {
         request.setStatus(RequestStatus.REJECTED.name());
         request.setRespondedAt(Instant.now());
         requestRepository.save(request);
+        escrowService.refundRejectedRequest(request);
         return new SeriesRequestDecisionResponse(toRequestResponse(request), input.responseText().trim(), List.of());
     }
 
@@ -218,6 +231,8 @@ public class PodcastRequestService {
         }
         ContractStage stage = requireStageForUpdate(stageId);
         requireCreatorParticipant(stage, creatorUserId);
+        escrowService.requireActiveSigned(stage.getContract());
+        escrowService.requirePreviousStagesApproved(stage);
         requireStageStatus(stage, ContractStageStatus.NOT_STARTED, ContractStageStatus.REVISION_REQUESTED);
 
         MediaUploadResponse uploaded = mediaUploadService.uploadMilestoneMedia(file, creatorUserId, stageId);
@@ -251,6 +266,22 @@ public class PodcastRequestService {
                 .stream().map(this::toSubmissionResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public ContractWorkflowResponses.MediaUrl getMilestoneMediaUrl(UUID userId, UUID stageId, UUID submissionId) {
+        ContractStage stage = stageRepository.findById(stageId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy đợt."));
+        AppUser user = requireActiveUser(userId);
+        if (user.getRole() == null || !UserRole.ADMIN.name().equalsIgnoreCase(user.getRole().getRoleCode())) {
+            requireStageParticipant(stage, userId);
+        }
+        MilestoneSubmission submission = submissionRepository.findById(submissionId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy bản bàn giao."));
+        if (!stageId.equals(submission.getContractStage().getContractStageId()))
+            throw new PodcastWorkflowNotFoundException("Bản bàn giao không thuộc đợt này.");
+        var signed = playbackUrlService.create(submission.getObjectKey(), true);
+        return new ContractWorkflowResponses.MediaUrl(submissionId, signed.url(), signed.expiresAt());
+    }
+
     @Transactional
     public MilestoneApprovalResponse approveMilestone(UUID listenerId, UUID stageId) {
         AppUser listener = requireActiveUser(listenerId);
@@ -258,12 +289,37 @@ public class PodcastRequestService {
         ContractStage stage = requireStageForUpdate(stageId);
         requireListenerParticipant(stage, listenerId);
         requireStageStatus(stage, ContractStageStatus.SUBMITTED);
+        escrowService.requireActiveSigned(stage.getContract());
 
+        if (escrowService.isEscrowContract(stage.getContract())) {
+            ContractWorkflowResponses.Settlement settlement = escrowService.settle(stage);
+            stage.setStatus(ContractStageStatus.APPROVED.name());
+            stageRepository.save(stage);
+            updateContractStatusIfAllApproved(stage.getContract());
+            return new MilestoneApprovalResponse(stageId, stage.getStatus(), settlement.paymentId(),
+                    settlement.status(), settlement.grossAmount(), "VND", "Đã giải ngân từ ngân sách giữ.",
+                    settlement.creatorNet(), settlement.platformFee(), settlement.remainingHeld());
+        }
         Payment payment = createPendingPayment(stage);
         stage.setStatus(ContractStageStatus.APPROVED.name());
         stageRepository.save(stage);
         updateContractStatusIfAllApproved(stage.getContract());
         return toApprovalResponse(stage, payment);
+    }
+
+    @Transactional
+    public void autoApproveMilestone(UUID stageId) {
+        ContractStage stage = requireStageForUpdate(stageId);
+        if (!ContractStageStatus.SUBMITTED.name().equals(stage.getStatus())
+                || !"IN_PROGRESS".equals(stage.getContract().getStatus())
+                || !escrowService.autoAcceptEnabled(stage.getContract())) return;
+        MilestoneSubmission latest = submissionRepository
+                .findFirstByContractStage_ContractStageIdOrderBySubmittedAtDesc(stageId).orElse(null);
+        if (latest == null || latest.getSubmittedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now())) return;
+        escrowService.settle(stage);
+        stage.setStatus(ContractStageStatus.APPROVED.name());
+        stageRepository.save(stage);
+        updateContractStatusIfAllApproved(stage.getContract());
     }
 
     @Transactional
@@ -273,6 +329,12 @@ public class PodcastRequestService {
         ContractStage stage = requireStageForUpdate(stageId);
         requireListenerParticipant(stage, listenerId);
         requireStageStatus(stage, ContractStageStatus.SUBMITTED);
+        escrowService.requireActiveSigned(stage.getContract());
+
+        long previousRevisions = revisionRepository.countByContractStage_ContractStageIdAndRequestedBy_UserId(stageId, listenerId);
+        if (previousRevisions >= MAX_LISTENER_REVISIONS_PER_STAGE) {
+            throw new PodcastWorkflowException("Đợt này đã hết 3 lượt yêu cầu làm lại; hãy mở tranh chấp nếu hai bên chưa thống nhất.");
+        }
 
         recordRevision(stage, listener, reason);
         stage.setStatus(ContractStageStatus.REVISION_REQUESTED.name());
@@ -284,6 +346,7 @@ public class PodcastRequestService {
         AppUser user = requireActiveUser(userId);
         ContractStage stage = requireStageForUpdate(stageId);
         requireStageParticipant(stage, userId);
+        escrowService.requireActiveSigned(stage.getContract());
         if (user.getRole() == null
                 || !(UserRole.LISTENER.name().equalsIgnoreCase(user.getRole().getRoleCode())
                 || UserRole.CREATOR.name().equalsIgnoreCase(user.getRole().getRoleCode()))) {
@@ -316,6 +379,10 @@ public class PodcastRequestService {
     public DisputeResponse resolveDispute(UUID adminId, UUID disputeId, ResolveDisputeRequest input) {
         AppUser admin = requireActiveUser(adminId);
         requireRole(admin, UserRole.ADMIN);
+        UUID contractId = disputeRepository.findContractIdByDisputeId(disputeId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy tranh chấp."));
+        contractRepository.lockById(contractId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy hợp đồng."));
         MilestoneDispute dispute = disputeRepository.findByIdForUpdate(disputeId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy tranh chấp."));
         if (!DisputeStatus.OPEN.name().equals(dispute.getStatus())) {
@@ -325,7 +392,14 @@ public class PodcastRequestService {
         ContractStage stage = requireStageForUpdate(dispute.getContractStage().getContractStageId());
         requireStageStatus(stage, ContractStageStatus.DISPUTED);
         if (input.decision() == MilestoneDisputeDecision.APPROVE_MILESTONE) {
-            createPendingPayment(stage);
+            if (escrowService.isEscrowContract(stage.getContract())) {
+                if (dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now())) {
+                    throw new PodcastWorkflowException("Chưa hết 3 ngày ưu tiên thương lượng tranh chấp.");
+                }
+                escrowService.settle(stage);
+            } else {
+                createPendingPayment(stage);
+            }
             stage.setStatus(ContractStageStatus.APPROVED.name());
             updateContractStatusIfAllApproved(stage.getContract());
         } else {
@@ -360,7 +434,7 @@ public class PodcastRequestService {
                 .findAllByContract_ContractIdOrderByStageOrder(contract.getContractId());
         if (!stages.isEmpty() && stages.stream()
                 .allMatch(stage -> ContractStageStatus.APPROVED.name().equals(stage.getStatus()))) {
-            contract.setStatus("AWAITING_PAYMENT");
+            contract.setStatus(escrowService.isEscrowContract(contract) ? "COMPLETED" : "AWAITING_PAYMENT");
             contractRepository.save(contract);
         }
     }
@@ -402,7 +476,11 @@ public class PodcastRequestService {
                 stage.getAmount(),
                 stage.getContract().getSeriesResponse().getSeriesRequest().getCurrency(),
                 stage.getStatus(),
-                paymentId);
+                paymentId,
+                revisionRepository.countByContractStage_ContractStageIdAndRequestedBy_UserId(
+                        stage.getContractStageId(), stage.getContract().getUser().getUserId()),
+                MAX_LISTENER_REVISIONS_PER_STAGE,
+                stage.getDueAt());
     }
 
     private MilestoneSubmissionResponse toSubmissionResponse(MilestoneSubmission submission) {
@@ -473,8 +551,11 @@ public class PodcastRequestService {
     }
 
     private ContractStage requireStageForUpdate(UUID stageId) {
-        return stageRepository.findByIdForUpdate(stageId)
+        ContractStage snapshot = stageRepository.findById(stageId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy mốc podcast."));
+        contractRepository.lockById(snapshot.getContract().getContractId())
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy hợp đồng."));
+        return stageRepository.findByIdForUpdate(stageId).orElseThrow();
     }
 
     private void requireRequestOwner(SeriesRequest request, ProducerProfile creator) {

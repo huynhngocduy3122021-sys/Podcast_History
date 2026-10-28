@@ -29,7 +29,7 @@ public class CreatorMembershipPlanController {
   }
 
   @GetMapping("/templates")
-  @Operation(summary = "Xem ba gói membership đề xuất 25K, 50K, 75K")
+  @Operation(summary = "Xem một gói membership mẫu; CC có thể đặt giá riêng cho kênh")
   public List<PlanTemplate> templates(@AuthenticationPrincipal Jwt jwt) {
     return service.templates(userId(jwt));
   }
@@ -41,7 +41,7 @@ public class CreatorMembershipPlanController {
   }
 
   @PutMapping("/templates/{templateCode}/select")
-  @Operation(summary = "Chọn một gói mẫu để mở bán trên kênh")
+  @Operation(summary = "Chọn gói mẫu duy nhất để mở bán trên kênh")
   public ChannelPlan select(@AuthenticationPrincipal Jwt jwt, @PathVariable String templateCode) {
     return service.select(userId(jwt), templateCode);
   }

@@ -1,0 +1,392 @@
+package com.prmteam7.podcasthistory.service;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+import com.prmteam7.podcasthistory.dto.request.ContractWorkflowRequests;
+import com.prmteam7.podcasthistory.enums.ContractStageStatus;
+import com.prmteam7.podcasthistory.exception.PodcastWorkflowException;
+import com.prmteam7.podcasthistory.model.*;
+import com.prmteam7.podcasthistory.repository.*;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.Optional;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class ContractEscrowServiceTest {
+    @Mock AppUserRepository users;
+    @Mock ProducerProfileRepository creators;
+    @Mock SeriesRequestRepository requests;
+    @Mock RequestResponseRepository responses;
+    @Mock ContractRepository contracts;
+    @Mock ContractStageRepository stages;
+    @Mock ContractEscrowRepository escrows;
+    @Mock UserWalletRepository wallets;
+    @Mock WalletTransactionRepository transactions;
+    @Mock PaymentRepository payments;
+    @Mock PaymentMethodRepository paymentMethods;
+    @Mock ListenerWalletService listenerWallets;
+    @Mock ContractDisputeRepository contractDisputes;
+    @Mock MilestoneSubmissionRepository submissions;
+    @Mock AdminDisputeService adminDisputes;
+    @InjectMocks ContractEscrowService service;
+
+    @Test
+    void creatingContractRequestMovesBudgetToHeldBalance() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        UserWallet wallet = wallet(listener, "150000", "0");
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(creators.findById(profile.getProducerProfileId())).thenReturn(Optional.of(profile));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet);
+        when(requests.saveAndFlush(any(SeriesRequest.class))).thenAnswer(call -> {
+            SeriesRequest request = call.getArgument(0);
+            request.setSeriesRequestId(UUID.randomUUID());
+            return request;
+        });
+
+        var result = service.create(listener.getUserId(), new ContractWorkflowRequests.Create(
+                UUID.randomUUID(),
+                profile.getProducerProfileId(), "Audio lịch sử", "Mô tả", new BigDecimal("100000"),
+                "AUDIO", "MP3", "10 phút", "Âm thanh rõ", false));
+
+        assertEquals(0, result.heldAmount().compareTo(new BigDecimal("100000")));
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("50000")));
+        assertEquals(0, wallet.getHeldBalance().compareTo(new BigDecimal("100000")));
+        verify(escrows).save(any(ContractEscrow.class));
+        verify(transactions).save(argThat(t -> "CONTRACT_HOLD".equals(t.getTransactionType())
+                && "DEBIT".equals(t.getDirection())));
+    }
+
+    @Test
+    void retryWithSameIdempotencyKeyDoesNotHoldMoneyTwice() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setProducerProfile(profile);
+        request.setRequestedTitle("Audio lịch sử");
+        request.setDescription("Mô tả");
+        request.setStatus("PENDING");
+        ContractEscrow existing = new ContractEscrow();
+        existing.setRequest(request);
+        existing.setBudget(new BigDecimal("100000"));
+        existing.setRemaining(new BigDecimal("100000"));
+        existing.setProductType("AUDIO");
+        existing.setFileFormat("MP3");
+        existing.setDurationDescription("10 phút");
+        existing.setAcceptanceCriteria("Âm thanh rõ");
+        UUID key = UUID.randomUUID();
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(escrows.findByIdempotencyKey(key)).thenReturn(Optional.of(existing));
+
+        var result = service.create(listener.getUserId(), new ContractWorkflowRequests.Create(
+                key, profile.getProducerProfileId(), "Audio lịch sử", "Mô tả",
+                new BigDecimal("100000"), "AUDIO", "MP3", "10 phút", "Âm thanh rõ", false));
+
+        assertEquals(request.getSeriesRequestId(), result.requestId());
+        verify(listenerWallets, never()).walletForLockedUser(any());
+        verify(transactions, never()).save(any());
+    }
+
+    @Test
+    void approvedStagePaysCreatorNetAndRecordsPlatformFeeOnce() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        contract.setProducerProfile(profile);
+        contract.setStatus("IN_PROGRESS");
+        ContractStage stage = new ContractStage();
+        stage.setContractStageId(UUID.randomUUID());
+        stage.setContract(contract);
+        stage.setStatus(ContractStageStatus.SUBMITTED.name());
+        stage.setAmount(new BigDecimal("20000"));
+        SeriesRequest request = new SeriesRequest();
+        request.setUser(listener);
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setContract(contract);
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setListenerSignedAt(Instant.now());
+        escrow.setCreatorSignedAt(Instant.now());
+        UserWallet listenerWallet = wallet(listener, "0", "100000");
+        UserWallet creatorWallet = wallet(creator, "0", "0");
+        when(escrows.lockByContractId(contract.getContractId())).thenReturn(Optional.of(escrow));
+        when(payments.findFirstByContractStage_ContractStageId(stage.getContractStageId()))
+                .thenReturn(Optional.empty());
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(listenerWallet);
+        when(wallets.findByUserIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creatorWallet));
+        when(payments.saveAndFlush(any(Payment.class))).thenAnswer(call -> {
+            Payment payment = call.getArgument(0);
+            payment.setPaymentId(UUID.randomUUID());
+            return payment;
+        });
+
+        var result = service.settle(stage);
+
+        assertEquals(0, result.creatorNet().compareTo(new BigDecimal("16000")));
+        assertEquals(0, result.platformFee().compareTo(new BigDecimal("4000")));
+        assertEquals(0, listenerWallet.getHeldBalance().compareTo(new BigDecimal("80000")));
+        assertEquals(0, creatorWallet.getBalance().compareTo(new BigDecimal("16000")));
+        assertEquals(0, escrow.getRemaining().compareTo(new BigDecimal("80000")));
+        verify(transactions).save(argThat(t -> "PLATFORM_FEE".equals(t.getTransactionType())
+                && t.getAmount().compareTo(new BigDecimal("4000")) == 0));
+        verify(transactions).save(argThat(t -> "RELEASE_FUNDS".equals(t.getTransactionType())
+                && t.getAmount().compareTo(new BigDecimal("16000")) == 0));
+    }
+
+    @Test
+    void settlementDoesNotSpendOtherContractsHeldBalance() {
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setStatus("IN_PROGRESS");
+        ContractStage stage = new ContractStage();
+        stage.setContractStageId(UUID.randomUUID());
+        stage.setContract(contract);
+        stage.setStatus("SUBMITTED");
+        stage.setAmount(new BigDecimal("20000"));
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRemaining(new BigDecimal("10000"));
+        escrow.setListenerSignedAt(Instant.now());
+        escrow.setCreatorSignedAt(Instant.now());
+        when(escrows.lockByContractId(contract.getContractId())).thenReturn(Optional.of(escrow));
+        when(payments.findFirstByContractStage_ContractStageId(stage.getContractStageId()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(PodcastWorkflowException.class, () -> service.settle(stage));
+        verify(payments, never()).save(any());
+    }
+
+    @Test
+    void bothPartiesSignSameHashBeforeContractBecomesActive() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setProducerProfile(profile);
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        contract.setStatus("PENDING_SIGNATURE");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setContract(contract);
+        escrow.setContractVersion(1);
+        escrow.setContentHash("abc123");
+        escrow.setContentSnapshot("Bản hợp đồng cố định");
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
+        when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(users.findById(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet(listener, "0", "100000"));
+
+        service.sign(creator.getUserId(), request.getSeriesRequestId(),
+                new ContractWorkflowRequests.Sign(1, "abc123", true));
+        assertEquals("PENDING_SIGNATURE", contract.getStatus());
+        assertNotNull(escrow.getCreatorSignedAt());
+        assertNull(escrow.getListenerSignedAt());
+
+        service.sign(listener.getUserId(), request.getSeriesRequestId(),
+                new ContractWorkflowRequests.Sign(1, "abc123", true));
+        assertEquals("IN_PROGRESS", contract.getStatus());
+        assertNotNull(escrow.getListenerSignedAt());
+        assertEquals("abc123", escrow.getContentHash());
+    }
+
+    @Test
+    void proposalRejectsMilestonesThatDoNotMatchHeldBudget() {
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setProducerProfile(profile);
+        request.setStatus("PENDING");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setBudget(new BigDecimal("100000"));
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
+        when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+
+        var input = new ContractWorkflowRequests.Proposal("Làm được", List.of(
+                new ContractWorkflowRequests.Stage("Đợt 1", "Bản nháp", Instant.now().plusSeconds(86400),
+                        new BigDecimal("90000"))));
+        assertThrows(PodcastWorkflowException.class,
+                () -> service.propose(creator.getUserId(), request.getSeriesRequestId(), input));
+        verify(contracts, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void terminationTakesTenPercentFeeFromCreatorCompensationAndRefundsRemainder() {
+        AppUser admin = user("ADMIN");
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        contract.setProducerProfile(profile);
+        contract.setStatus("DISPUTED");
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setContract(contract);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        ContractStage stage = new ContractStage();
+        stage.setContractStageId(UUID.randomUUID());
+        stage.setContract(contract);
+        stage.setStageOrder(1);
+        stage.setStatus("SUBMITTED");
+        stage.setAmount(new BigDecimal("40000"));
+        MilestoneSubmission submission = new MilestoneSubmission();
+        submission.setMilestoneSubmissionId(UUID.randomUUID());
+        submission.setContractStage(stage);
+        ContractDispute dispute = new ContractDispute();
+        dispute.setContract(contract);
+        dispute.setCreatedAt(Instant.now().minusSeconds(4 * 86400L));
+        dispute.setStatus("OPEN");
+        UserWallet listenerWallet = wallet(listener, "0", "100000");
+        UserWallet creatorWallet = wallet(creator, "0", "0");
+        when(users.findByIdForUpdate(admin.getUserId())).thenReturn(Optional.of(admin));
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(users.findById(admin.getUserId())).thenReturn(Optional.of(admin));
+        when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(contractDisputes.findFirstByContract_ContractIdAndStatus(contract.getContractId(), "OPEN"))
+                .thenReturn(Optional.of(dispute));
+        when(contractDisputes.lockById(dispute.getDisputeId())).thenReturn(Optional.of(dispute));
+        when(stages.lockAllByContractId(contract.getContractId())).thenReturn(List.of(stage));
+        when(escrows.lockByContractId(contract.getContractId())).thenReturn(Optional.of(escrow));
+        when(submissions.findById(submission.getMilestoneSubmissionId())).thenReturn(Optional.of(submission));
+        when(payments.findFirstByContractStage_ContractStageId(stage.getContractStageId()))
+                .thenReturn(Optional.empty());
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(listenerWallet);
+        when(wallets.findByUserIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creatorWallet));
+        when(payments.saveAndFlush(any(Payment.class))).thenAnswer(call -> {
+            Payment payment = call.getArgument(0);
+            payment.setPaymentId(UUID.randomUUID());
+            return payment;
+        });
+
+        var result = service.terminate(admin.getUserId(), contract.getContractId(),
+                new ContractWorkflowRequests.Terminate("Đã đối chiếu", true,
+                        submission.getMilestoneSubmissionId(), "Đáp ứng tiêu chí âm thanh tối thiểu"));
+
+        assertEquals(0, result.compensationGross().compareTo(new BigDecimal("12000")));
+        assertEquals(0, result.platformFee().compareTo(new BigDecimal("1200")));
+        assertEquals(0, result.creatorNet().compareTo(new BigDecimal("10800")));
+        assertEquals(0, result.refundedToListener().compareTo(new BigDecimal("88000")));
+        assertEquals(0, listenerWallet.getBalance().compareTo(new BigDecimal("88000")));
+        assertEquals(0, listenerWallet.getHeldBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0, creatorWallet.getBalance().compareTo(new BigDecimal("10800")));
+        assertEquals("TERMINATED", contract.getStatus());
+    }
+
+    @Test
+    void listenerCanDeclineUnsignedProposalAndRecoverFullBudget() {
+        AppUser listener = user("LISTENER");
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setStatus("ACCEPTED");
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setStatus("PENDING_SIGNATURE");
+        ContractStage stage = new ContractStage();
+        stage.setStatus("NOT_STARTED");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setContract(contract);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        UserWallet wallet = wallet(listener, "0", "100000");
+        when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
+        when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet);
+        when(stages.findAllByContract_ContractIdOrderByStageOrder(contract.getContractId()))
+                .thenReturn(List.of(stage));
+
+        var result = service.cancel(listener.getUserId(), request.getSeriesRequestId());
+
+        assertEquals("CANCELLED", result.status());
+        assertEquals("CANCELLED", contract.getStatus());
+        assertEquals("CANCELLED", stage.getStatus());
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("100000")));
+        assertEquals(0, wallet.getHeldBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0, escrow.getRemaining().compareTo(BigDecimal.ZERO));
+        verify(transactions).save(argThat(t -> "CONTRACT_REFUND".equals(t.getTransactionType())));
+    }
+
+    @Test
+    void terminationCannotDistributeEscrowBeforeNegotiationWindowEnds() {
+        AppUser admin = user("ADMIN");
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setStatus("DISPUTED");
+        ContractDispute dispute = new ContractDispute();
+        dispute.setCreatedAt(Instant.now().minusSeconds(86400));
+        dispute.setStatus("OPEN");
+        when(users.findByIdForUpdate(admin.getUserId())).thenReturn(Optional.of(admin));
+        when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(contractDisputes.findFirstByContract_ContractIdAndStatus(contract.getContractId(), "OPEN"))
+                .thenReturn(Optional.of(dispute));
+        when(contractDisputes.lockById(dispute.getDisputeId())).thenReturn(Optional.of(dispute));
+
+        assertThrows(PodcastWorkflowException.class, () -> service.terminate(admin.getUserId(),
+                contract.getContractId(), new ContractWorkflowRequests.Terminate("Chấm dứt", false, null, null)));
+        verify(payments, never()).save(any());
+        verify(wallets, never()).save(any());
+    }
+
+    private AppUser user(String roleCode) {
+        Role role = new Role();
+        role.setRoleCode(roleCode);
+        AppUser user = new AppUser();
+        user.setUserId(UUID.randomUUID());
+        user.setRole(role);
+        user.setIsActive(true);
+        return user;
+    }
+
+    private UserWallet wallet(AppUser user, String balance, String held) {
+        UserWallet wallet = new UserWallet();
+        wallet.setUser(user);
+        wallet.setBalance(new BigDecimal(balance));
+        wallet.setHeldBalance(new BigDecimal(held));
+        wallet.setCurrency("VND");
+        wallet.setStatus("ACTIVE");
+        return wallet;
+    }
+}

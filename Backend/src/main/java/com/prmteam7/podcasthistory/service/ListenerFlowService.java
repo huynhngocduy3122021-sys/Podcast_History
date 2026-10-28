@@ -105,6 +105,7 @@ public class ListenerFlowService {
   private final CommentRealtimeHub commentRealtimeHub;
   private final PackageFeatures packageFeatures;
   private final AudienceNotificationService audienceNotifications;
+  private final ContractEscrowService contractEscrowService;
 
   public ListenerFlowService(
       AppUserRepository userRepository,
@@ -128,7 +129,8 @@ public class ListenerFlowService {
       R2PlaybackUrlService playbackUrlService,
       CommentRealtimeHub commentRealtimeHub,
       PackageFeatures packageFeatures,
-      AudienceNotificationService audienceNotifications) {
+      AudienceNotificationService audienceNotifications,
+      ContractEscrowService contractEscrowService) {
     this.userRepository = userRepository;
     this.categoryRepository = categoryRepository;
     this.producerProfileRepository = producerProfileRepository;
@@ -151,6 +153,7 @@ public class ListenerFlowService {
     this.commentRealtimeHub = commentRealtimeHub;
     this.packageFeatures = packageFeatures;
     this.audienceNotifications = audienceNotifications;
+    this.contractEscrowService = contractEscrowService;
   }
 
   @Transactional(readOnly = true)
@@ -690,6 +693,10 @@ public class ListenerFlowService {
   public void cancelSeriesRequest(UUID userId, UUID requestId) {
     SeriesRequest seriesRequest = requireSeriesRequest(userId, requestId);
     requirePending(seriesRequest.getStatus(), "Chỉ hủy được yêu cầu đang chờ creator phản hồi.");
+    if (contractEscrowService.isEscrowRequest(requestId)) {
+      contractEscrowService.cancel(userId, requestId);
+      return;
+    }
     seriesRequest.setStatus("CANCELLED");
     seriesRequestRepository.save(seriesRequest);
   }

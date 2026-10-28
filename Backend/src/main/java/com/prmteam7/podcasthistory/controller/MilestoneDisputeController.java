@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.prmteam7.podcasthistory.dto.request.CreateDisputeRequest;
 import com.prmteam7.podcasthistory.dto.response.DisputeResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneSubmissionResponse;
+import com.prmteam7.podcasthistory.dto.response.ContractWorkflowResponses;
 import com.prmteam7.podcasthistory.service.PodcastRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -41,6 +42,15 @@ public class MilestoneDisputeController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId) {
         return podcastRequestService.getMilestoneSubmissions(userId(jwt), milestoneId);
+    }
+
+    @GetMapping("/{milestoneId}/submissions/{submissionId}/media")
+    @Operation(summary = "Cấp URL xem file bàn giao riêng tư trong 5 phút cho hai bên hoặc Admin")
+    public ContractWorkflowResponses.MediaUrl media(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID milestoneId,
+            @PathVariable UUID submissionId) {
+        return podcastRequestService.getMilestoneMediaUrl(userId(jwt), milestoneId, submissionId);
     }
 
     @PostMapping("/{milestoneId}/disputes")
