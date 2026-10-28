@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.controller;
 
 import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
+import com.prmteam7.podcasthistory.dto.response.ListenerResponses.WalletTransactionItem;
 import com.prmteam7.podcasthistory.model.UserWallet;
 import com.prmteam7.podcasthistory.service.ListenerWalletService;
 import jakarta.validation.Valid;
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -39,6 +41,15 @@ public class ListenerWalletController {
   public CheckoutPaymentView topUp(@AuthenticationPrincipal Jwt jwt,
       @Valid @RequestBody TopUpRequest request) {
     return service.topUp(userId(jwt), request.amount());
+  }
+
+  @GetMapping("/transactions")
+  public Page<WalletTransactionItem> transactions(
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return service.transactions(userId(jwt), status, page, size);
   }
 
   private UUID userId(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("user_id")); }

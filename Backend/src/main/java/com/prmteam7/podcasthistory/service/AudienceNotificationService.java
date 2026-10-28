@@ -20,16 +20,18 @@ public class AudienceNotificationService {
   private final SubscriptionRepository subscriptions;
   private final PackageFeatures packageFeatures;
   private final ObjectMapper mapper;
+  private final NotificationRealtimePublisher realtime;
 
   public AudienceNotificationService(
       NotificationRepository notifications, FollowRepository follows,
       SubscriptionRepository subscriptions, PackageFeatures packageFeatures,
-      ObjectMapper mapper) {
+      ObjectMapper mapper, NotificationRealtimePublisher realtime) {
     this.notifications = notifications;
     this.follows = follows;
     this.subscriptions = subscriptions;
     this.packageFeatures = packageFeatures;
     this.mapper = mapper;
+    this.realtime = realtime;
   }
 
   public void newPodcast(Podcast podcast) {
@@ -85,6 +87,6 @@ public class AudienceNotificationService {
     notification.setMessage(message);
     notification.setPayload(mapper.valueToTree(payload));
     notification.setIsRead(false);
-    notifications.save(notification);
+    realtime.publish(notifications.save(notification));
   }
 }

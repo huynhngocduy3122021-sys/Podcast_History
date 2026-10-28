@@ -3,9 +3,11 @@ package com.prmteam7.podcasthistory.controller;
 import com.prmteam7.podcasthistory.dto.request.SepayWebhookRequest;
 import com.prmteam7.podcasthistory.dto.response.PaymentStatusItem;
 import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
+import com.prmteam7.podcasthistory.dto.response.CheckoutHistoryItem;
 import com.prmteam7.podcasthistory.dto.response.SepayWebhookResponse;
 import com.prmteam7.podcasthistory.service.SepayService;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -37,6 +40,15 @@ public class SepayController {
   public CheckoutPaymentView getCheckoutStatus(@AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID checkoutId) {
     return sepayService.getCheckoutStatus(userId(jwt), checkoutId);
+  }
+
+  @GetMapping("/me/checkouts")
+  public Page<CheckoutHistoryItem> getCheckoutHistory(
+      @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size) {
+    return sepayService.getCheckoutHistory(userId(jwt), status, page, size);
   }
 
   @PostMapping("/webhooks/sepay")

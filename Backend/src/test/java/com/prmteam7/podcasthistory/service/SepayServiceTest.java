@@ -219,6 +219,30 @@ class SepayServiceTest {
   }
 
   @Test
+  void creditsWalletWhenSepayCodeIsNullButTransferContentContainsIt() {
+    CheckoutPayment checkout = pendingCheckout("WALLET_TOPUP", Instant.now().minusSeconds(60));
+    AppUser listener = new AppUser();
+    listener.setUserId(UUID.randomUUID());
+    checkout.setUser(listener);
+    UserWallet wallet = new UserWallet();
+    wallet.setBalance(BigDecimal.ZERO);
+    wallet.setHeldBalance(BigDecimal.ZERO);
+    wallet.setCurrency("VND");
+    wallet.setStatus("ACTIVE");
+    when(checkoutRepository.lockByPaymentCode(PAYMENT_CODE)).thenReturn(Optional.of(checkout));
+    when(wallets.findByUserIdForUpdate(listener.getUserId())).thenReturn(Optional.of(wallet));
+
+    SepayWebhookRequest request = new SepayWebhookRequest(42L, "in",
+        new BigDecimal("50000"), null, "153917312538-" + PAYMENT_CODE + "-CHUYEN TIEN");
+    sepayService.processWebhook(API_KEY_HEADER, request);
+    sepayService.processWebhook(API_KEY_HEADER, request);
+
+    assertEquals("PAID", checkout.getStatus());
+    assertEquals(new BigDecimal("50000"), wallet.getBalance());
+    verify(walletTransactions, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
   void doesNotCreditWalletWhenTopUpAmountDiffers() {
     CheckoutPayment checkout = pendingCheckout("WALLET_TOPUP", Instant.now().minusSeconds(60));
     when(checkoutRepository.lockByPaymentCode(PAYMENT_CODE)).thenReturn(Optional.of(checkout));
@@ -257,7 +281,7 @@ class SepayServiceTest {
 
     sepayService.processWebhook(API_KEY_HEADER, webhook(PAYMENT_CODE, "50000"));
 
-    assertEquals("EXPIRED", checkout.getStatus());
+    assertEquals("FAILED", checkout.getStatus());
     verifyNoInteractions(wallets, walletTransactions);
   }
 

@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.response.CheckoutPaymentView;
+import com.prmteam7.podcasthistory.dto.response.ListenerResponses.WalletTransactionItem;
 import com.prmteam7.podcasthistory.exception.ResourceConflictException;
 import com.prmteam7.podcasthistory.exception.ResourceNotFoundException;
 import com.prmteam7.podcasthistory.model.*;
@@ -8,6 +9,10 @@ import com.prmteam7.podcasthistory.repository.*;
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +66,31 @@ public class ListenerWalletService {
     return new CheckoutPaymentView(checkout.getCheckoutId(), null, checkout.getPurpose(), code,
         qr, amount, "VND", checkout.getStatus(), null,
         checkout.getCreatedAt().plus(30, ChronoUnit.MINUTES));
+  }
+
+  @Transactional(readOnly = true)
+  public Page<WalletTransactionItem> transactions(UUID userId, String status, int page, int size) {
+    AppUser user = users.findById(userId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
+    requireListener(user);
+    String normalizedStatus = status == null ? null : status.trim();
+    if (normalizedStatus != null && normalizedStatus.isBlank()) normalizedStatus = null;
+    Pageable pageable = PageRequest.of(
+        Math.max(0, page),
+        Math.min(100, Math.max(1, size)),
+        Sort.by(Sort.Direction.DESC, "createdAt"));
+    return transactions.findForUser(userId, normalizedStatus, pageable).map(transaction ->
+        new WalletTransactionItem(
+            transaction.getWalletTransactionId(),
+            transaction.getTransactionType(),
+            transaction.getDirection(),
+            transaction.getAmount(),
+            transaction.getCurrency(),
+            transaction.getStatus(),
+            transaction.getReferenceCode(),
+            transaction.getBalanceAfter(),
+            transaction.getHeldBalanceAfter(),
+            transaction.getCreatedAt()));
   }
 
   public UserWallet walletForLockedUser(AppUser user) {

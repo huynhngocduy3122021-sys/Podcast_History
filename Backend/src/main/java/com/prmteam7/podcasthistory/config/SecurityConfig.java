@@ -59,6 +59,8 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/webhooks/sepay")
                     .permitAll()
+                    .requestMatchers("/ws", "/ws/**")
+                    .permitAll()
                     .requestMatchers(
                         "/api/admin/dashboard",
                         "/api/admin/podcasts", "/api/admin/podcasts/**",

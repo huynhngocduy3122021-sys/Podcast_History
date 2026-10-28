@@ -134,7 +134,21 @@ public final class AdminResponses {
       UUID reviewId, UUID reviewerId, String decision, String note, Instant reviewedAt) {}
 
   public record WalletItem(
-      UUID walletId, UUID userId, BigDecimal availableBalance, String currency, String status) {}
+      UUID walletId,
+      UUID userId,
+      String username,
+      String email,
+      String displayName,
+      String role,
+      Boolean active,
+      Boolean verified,
+      BigDecimal availableBalance,
+      BigDecimal heldBalance,
+      BigDecimal totalBalance,
+      String currency,
+      String status,
+      Instant createdAt,
+      Instant updatedAt) {}
 
   public record TransactionItem(
       UUID transactionId,
