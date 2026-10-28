@@ -973,7 +973,9 @@ class _ShellState extends State<Shell> {
       final results = await Future.wait<dynamic>([
         api.membershipPlans(show.creatorId!),
         api.subscriptions(),
-        api.wallet().catchError((_) => <String, dynamic>{'availableBalance': 0}),
+        api.wallet().catchError(
+          (_) => <String, dynamic>{'availableBalance': 0},
+        ),
       ]);
       plans = results[0] as List<Map<String, dynamic>>;
       subscriptions = results[1] as List<Map<String, dynamic>>;
@@ -1033,11 +1035,17 @@ class _ShellState extends State<Shell> {
                     Text(
                       () {
                         final rawName = '${activeSub['planName'] ?? ''}'.trim();
-                        return (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
+                        return (rawName.isEmpty ||
+                                rawName.toLowerCase().startsWith(
+                                  'gói thành viên',
+                                ))
                             ? 'Gói thành viên'
                             : rawName;
                       }(),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1046,7 +1054,10 @@ class _ShellState extends State<Shell> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.green.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(6),
@@ -1064,38 +1075,58 @@ class _ShellState extends State<Shell> {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('Đặc quyền hội viên của bạn:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(
+                'Đặc quyền hội viên của bạn:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               const SizedBox(height: 8),
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text('Nghe toàn bộ podcast độc quyền của kênh',
-                        style: TextStyle(fontSize: 13)),
+                    child: Text(
+                      'Nghe toàn bộ podcast độc quyền của kênh',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text('Huy hiệu hội viên kênh nổi bật',
-                        style: TextStyle(fontSize: 13)),
+                    child: Text(
+                      'Huy hiệu hội viên kênh nổi bật',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text('Ưu tiên gửi & duyệt yêu cầu series podcast',
-                        style: TextStyle(fontSize: 13)),
+                    child: Text(
+                      'Ưu tiên gửi & duyệt yêu cầu series podcast',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
@@ -1125,12 +1156,14 @@ class _ShellState extends State<Shell> {
     final plan = plans.first;
     final planId = '${plan['membershipPlanId']}';
     final rawName = '${plan['name'] ?? ''}'.trim();
-    final planName = (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
+    final planName =
+        (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
         ? 'Gói thành viên'
         : rawName;
     final priceVal = (plan['price'] as num?)?.toDouble() ?? 0.0;
     final durationDays = (plan['durationDays'] as num?)?.toInt() ?? 30;
-    final desc = '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền hội viên.'}';
+    final desc =
+        '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền hội viên.'}';
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -1155,7 +1188,8 @@ class _ShellState extends State<Shell> {
     if (result == true && mounted) {
       try {
         final newWallet = await api.wallet();
-        final newBal = (newWallet['availableBalance'] as num?)?.round() ?? walletBalance;
+        final newBal =
+            (newWallet['availableBalance'] as num?)?.round() ?? walletBalance;
         setState(() => walletBalance = newBal);
       } catch (_) {}
     }
@@ -1463,10 +1497,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
 
     if (_selectedMethod == 'WALLET') {
       try {
-        await widget.api.checkout(
-          widget.planId,
-          paymentMethod: 'WALLET',
-        );
+        await widget.api.checkout(widget.planId, paymentMethod: 'WALLET');
         if (!mounted) return;
         Navigator.of(context).pop(true);
         messenger.showSnackBar(
@@ -1610,7 +1641,10 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                       ),
                       Text(
                         widget.show.channel,
-                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -1635,7 +1669,9 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                 ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark ? const Color(0xFF6B4C38) : const Color(0xFFF2D1B8),
+                  color: isDark
+                      ? const Color(0xFF6B4C38)
+                      : const Color(0xFFF2D1B8),
                 ),
               ),
               child: Column(
@@ -1677,7 +1713,9 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? const Color(0xFFFFB800) : const Color(0xFFB87800),
+                      color: isDark
+                          ? const Color(0xFFFFB800)
+                          : const Color(0xFFB87800),
                     ),
                   ),
                   if (widget.description.isNotEmpty) ...[
@@ -1695,31 +1733,46 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                   const SizedBox(height: 10),
                   const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green, size: 16),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
-                      Text('Mở khóa podcast độc quyền (Members-Only)',
-                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        'Mở khóa podcast độc quyền (Members-Only)',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green, size: 16),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
-                      Text('Huy hiệu hội viên nổi bật bên cạnh tên',
-                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        'Huy hiệu hội viên nổi bật bên cạnh tên',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green, size: 16),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
-                      Text('Ưu tiên gửi & duyệt yêu cầu series podcast',
-                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        'Ưu tiên gửi & duyệt yêu cầu series podcast',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                 ],
@@ -1750,8 +1803,8 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                   ),
                   color: _selectedMethod == 'WALLET'
                       ? (isDark
-                          ? const Color(0xFFFFB800).withValues(alpha: 0.08)
-                          : const Color(0xFFFFB800).withValues(alpha: 0.05))
+                            ? const Color(0xFFFFB800).withValues(alpha: 0.08)
+                            : const Color(0xFFFFB800).withValues(alpha: 0.05))
                       : null,
                 ),
                 child: Row(
@@ -1782,8 +1835,11 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                           : null,
                     ),
                     const SizedBox(width: 10),
-                    const Icon(Icons.account_balance_wallet_rounded,
-                        color: Color(0xFFFFB800), size: 26),
+                    const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Color(0xFFFFB800),
+                      size: 26,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1853,8 +1909,8 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                   ),
                   color: _selectedMethod == 'SEPAY'
                       ? (isDark
-                          ? const Color(0xFFFFB800).withValues(alpha: 0.08)
-                          : const Color(0xFFFFB800).withValues(alpha: 0.05))
+                            ? const Color(0xFFFFB800).withValues(alpha: 0.08)
+                            : const Color(0xFFFFB800).withValues(alpha: 0.05))
                       : null,
                 ),
                 child: Row(
@@ -1885,8 +1941,11 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                           : null,
                     ),
                     const SizedBox(width: 10),
-                    const Icon(Icons.qr_code_2_rounded,
-                        color: Colors.blueAccent, size: 26),
+                    const Icon(
+                      Icons.qr_code_2_rounded,
+                      color: Colors.blueAccent,
+                      size: 26,
+                    ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Column(
@@ -1934,8 +1993,8 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                       child: Text(
                         _selectedMethod == 'WALLET'
                             ? (hasEnoughBalance
-                                ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
-                                : 'Ví không đủ số dư - Nạp ví ngay')
+                                  ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
+                                  : 'Ví không đủ số dư - Nạp ví ngay')
                             : 'Tạo mã QR thanh toán (${_formatVnd(priceInt)})',
                         style: const TextStyle(
                           fontSize: 15,
@@ -2031,8 +2090,8 @@ class _PaymentDialogState extends State<PaymentDialog> {
     final titleText = _status == 'PAID'
         ? 'Thanh toán thành công'
         : terminal
-            ? 'Giao dịch đã hết hạn'
-            : 'Thanh toán';
+        ? 'Giao dịch đã hết hạn'
+        : 'Thanh toán';
     return AlertDialog(
       title: Text(titleText),
       content: SingleChildScrollView(
@@ -6241,36 +6300,67 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: widget.show.colors.first,
-                child: const Icon(Icons.mic, color: Colors.white, size: 28),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  widget.show.colors.first.withAlpha(90),
+                  const Color(0xFF252525),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.show.channel,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Text(
-                      'Content creator lịch sử Việt Nam',
-                      style: TextStyle(color: Colors.white60),
-                    ),
-                  ],
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 38,
+                  backgroundColor: widget.show.colors.first,
+                  child: const Icon(Icons.mic, color: Colors.white, size: 30),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.show.channel,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 23,
+                          height: 1.1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.verified,
+                            size: 16,
+                            color: widget.show.colors.last,
+                          ),
+                          const SizedBox(width: 5),
+                          const Expanded(
+                            child: Text(
+                              'Content creator lịch sử Việt Nam',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -6283,55 +6373,79 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                     )
                   : Icon(following ? Icons.person_remove : Icons.person_add),
               label: Text(following ? 'Đang theo dõi' : 'Theo dõi creator'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: widget.show.creatorId == null
-                  ? null
-                  : () async {
-                      widget.onMembership();
-                      if (mounted) {
-                        _loadFollowState();
-                      }
-                    },
-              icon: Icon(
-                isMember
-                    ? Icons.verified_rounded
-                    : Icons.workspace_premium_outlined,
-                color: isMember ? const Color(0xFFFFB800) : Colors.white,
-              ),
-              label: Text(
-                isMember
-                    ? 'Hội viên kênh (Đang hoạt động)'
-                    : 'Đăng ký gói thành viên',
-                style: TextStyle(
-                  color: isMember ? const Color(0xFFFFB800) : Colors.white,
-                  fontWeight:
-                      isMember ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor:
-                    isMember ? const Color(0xFFFFB800) : Colors.white,
-                side: BorderSide(
-                  color: isMember ? const Color(0xFFFFB800) : Colors.white54,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: loadingFollow || widget.show.creatorId == null
-                  ? null
-                  : _showRequestDialog,
-              icon: const Icon(Icons.record_voice_over_outlined),
-              label: const Text('Gửi yêu cầu'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: widget.show.creatorId == null
+                      ? null
+                      : () async {
+                          widget.onMembership();
+                          if (mounted) _loadFollowState();
+                        },
+                  icon: Icon(
+                    isMember
+                        ? Icons.verified_rounded
+                        : Icons.workspace_premium_outlined,
+                    color: isMember ? const Color(0xFFFFB800) : Colors.white,
+                  ),
+                  label: Text(
+                    isMember ? 'Đã là hội viên' : 'Đăng ký thành viên',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isMember ? const Color(0xFFFFB800) : Colors.white,
+                      fontWeight: isMember
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isMember
+                        ? const Color(0xFFFFB800)
+                        : Colors.white,
+                    side: BorderSide(
+                      color: isMember
+                          ? const Color(0xFFFFB800)
+                          : Colors.white54,
+                    ),
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: loadingFollow || widget.show.creatorId == null
+                      ? null
+                      : _showRequestDialog,
+                  icon: const Icon(Icons.record_voice_over_outlined),
+                  label: const Text('Gửi yêu cầu'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF6B5F),
+                    side: const BorderSide(color: Color(0x99C62C24)),
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           const Text(
