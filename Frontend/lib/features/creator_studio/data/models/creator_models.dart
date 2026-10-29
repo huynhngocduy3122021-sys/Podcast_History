@@ -260,6 +260,208 @@ class CreatorPodcast {
 
 // --- CUSTOM PODCAST REQUEST (ESCROW & STATE MACHINE) ---
 
+class ContractStageModel {
+  final String milestoneId;
+  final String name;
+  final String description;
+  final DateTime dueAt;
+  final int amount;
+  final String status; // 'NOT_STARTED', 'SUBMITTED', 'REVISION_REQUESTED', 'DISPUTED', 'APPROVED', 'CANCELLED'
+
+  const ContractStageModel({
+    required this.milestoneId,
+    required this.name,
+    required this.description,
+    required this.dueAt,
+    required this.amount,
+    required this.status,
+  });
+
+  factory ContractStageModel.fromJson(Map<String, dynamic> json) {
+    return ContractStageModel(
+      milestoneId: json['milestoneId']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      dueAt: DateTime.tryParse(json['dueAt']?.toString() ?? '') ?? DateTime.now(),
+      amount: (json['amount'] as num?)?.toInt() ?? 0,
+      status: (json['status'] as String? ?? 'NOT_STARTED').toUpperCase(),
+    );
+  }
+
+  bool get isApproved => status == 'APPROVED';
+  bool get isSubmitted => status == 'SUBMITTED';
+  bool get isRevisionRequested => status == 'REVISION_REQUESTED';
+  bool get isDisputed => status == 'DISPUTED';
+  bool get isNotStarted => status == 'NOT_STARTED';
+  bool get isCancelled => status == 'CANCELLED';
+}
+
+class ContractAgreement {
+  final String requestId;
+  final String contractId;
+  final String contractStatus; // PENDING_SIGNATURE, IN_PROGRESS, DISPUTED, COMPLETED, TERMINATED, CANCELLED
+  final int contractVersion;
+  final String contentHash;
+  final String contentSnapshot;
+  final DateTime? creatorSignedAt;
+  final DateTime? listenerSignedAt;
+  final int budgetAmount;
+  final int remainingHeld;
+  final List<ContractStageModel> milestones;
+
+  const ContractAgreement({
+    required this.requestId,
+    required this.contractId,
+    required this.contractStatus,
+    required this.contractVersion,
+    required this.contentHash,
+    required this.contentSnapshot,
+    this.creatorSignedAt,
+    this.listenerSignedAt,
+    required this.budgetAmount,
+    required this.remainingHeld,
+    this.milestones = const [],
+  });
+
+  factory ContractAgreement.fromJson(Map<String, dynamic> json) {
+    final stagesJson = json['milestones'];
+    final stages = <ContractStageModel>[];
+    if (stagesJson is List) {
+      for (final s in stagesJson) {
+        if (s is Map<String, dynamic>) {
+          stages.add(ContractStageModel.fromJson(s));
+        }
+      }
+    }
+    return ContractAgreement(
+      requestId: json['requestId']?.toString() ?? '',
+      contractId: json['contractId']?.toString() ?? '',
+      contractStatus: (json['contractStatus'] as String? ?? 'PENDING_SIGNATURE').toUpperCase(),
+      contractVersion: (json['contractVersion'] as num?)?.toInt() ?? 1,
+      contentHash: json['contentHash'] as String? ?? '',
+      contentSnapshot: json['contentSnapshot'] as String? ?? '',
+      creatorSignedAt: json['creatorSignedAt'] != null
+          ? DateTime.tryParse(json['creatorSignedAt'].toString())
+          : null,
+      listenerSignedAt: json['listenerSignedAt'] != null
+          ? DateTime.tryParse(json['listenerSignedAt'].toString())
+          : null,
+      budgetAmount: (json['budgetAmount'] as num?)?.toInt() ?? 0,
+      remainingHeld: (json['remainingHeld'] as num?)?.toInt() ?? 0,
+      milestones: stages,
+    );
+  }
+
+  bool get isCreatorSigned => creatorSignedAt != null;
+  bool get isListenerSigned => listenerSignedAt != null;
+  bool get isBothSigned => isCreatorSigned && isListenerSigned;
+  bool get isPendingSignature => contractStatus == 'PENDING_SIGNATURE';
+  bool get isInProgress => contractStatus == 'IN_PROGRESS';
+  bool get isCompleted => contractStatus == 'COMPLETED';
+  bool get isDisputed => contractStatus == 'DISPUTED';
+  bool get isTerminated => contractStatus == 'TERMINATED';
+  bool get isCancelled => contractStatus == 'CANCELLED';
+}
+
+class ContractProposalStageInput {
+  final String name;
+  final String description;
+  final DateTime dueAt;
+  final int amount;
+
+  const ContractProposalStageInput({
+    required this.name,
+    required this.description,
+    required this.dueAt,
+    required this.amount,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'description': description,
+      'dueAt': dueAt.toUtc().toIso8601String(),
+      'amount': amount,
+    };
+  }
+}
+
+class ContractTerminationStatus {
+  final String disputeId;
+  final String contractId;
+  final String status;
+  final String? decision;
+  final DateTime createdAt;
+  final DateTime negotiationEndsAt;
+  final DateTime? resolvedAt;
+
+  const ContractTerminationStatus({
+    required this.disputeId,
+    required this.contractId,
+    required this.status,
+    this.decision,
+    required this.createdAt,
+    required this.negotiationEndsAt,
+    this.resolvedAt,
+  });
+
+  factory ContractTerminationStatus.fromJson(Map<String, dynamic> json) {
+    return ContractTerminationStatus(
+      disputeId: json['disputeId']?.toString() ?? '',
+      contractId: json['contractId']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      decision: json['decision'] as String?,
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      negotiationEndsAt: DateTime.tryParse(json['negotiationEndsAt']?.toString() ?? '') ?? DateTime.now(),
+      resolvedAt: json['resolvedAt'] != null ? DateTime.tryParse(json['resolvedAt'].toString()) : null,
+    );
+  }
+}
+
+class MilestoneSubmissionItem {
+  final String submissionId;
+  final String milestoneId;
+  final int revisionNumber;
+  final DateTime submittedAt;
+  final String? note;
+  final String? fileKey;
+  final String? mediaUrl;
+
+  const MilestoneSubmissionItem({
+    required this.submissionId,
+    required this.milestoneId,
+    required this.revisionNumber,
+    required this.submittedAt,
+    this.note,
+    this.fileKey,
+    this.mediaUrl,
+  });
+
+  factory MilestoneSubmissionItem.fromJson(Map<String, dynamic> json) {
+    return MilestoneSubmissionItem(
+      submissionId: json['submissionId']?.toString() ?? '',
+      milestoneId: json['milestoneId']?.toString() ?? '',
+      revisionNumber: (json['revisionNumber'] as num?)?.toInt() ?? 1,
+      submittedAt: DateTime.tryParse(json['submittedAt']?.toString() ?? '') ?? DateTime.now(),
+      note: json['note'] as String?,
+      fileKey: json['fileKey'] as String?,
+      mediaUrl: json['publicUrl'] as String?,
+    );
+  }
+
+  MilestoneSubmissionItem copyWith({String? mediaUrl}) {
+    return MilestoneSubmissionItem(
+      submissionId: submissionId,
+      milestoneId: milestoneId,
+      revisionNumber: revisionNumber,
+      submittedAt: submittedAt,
+      note: note,
+      fileKey: fileKey,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+    );
+  }
+}
+
 class RequestMilestone {
   final String id;
   final String title;
@@ -357,6 +559,17 @@ class PodcastRequest {
   final DateTime createdAt;
   final List<RequestChatMessage> messages;
 
+  // Escrow & Contract fields
+  final bool hasEscrow;
+  final ContractAgreement? contract;
+  final ContractTerminationStatus? termination;
+  final String? productType;
+  final String? fileFormat;
+  final String? duration;
+  final String? acceptanceCriteria;
+  final bool autoAcceptEnabled;
+  final List<MilestoneSubmissionItem> submissions;
+
   const PodcastRequest({
     required this.id,
     required this.listenerName,
@@ -374,9 +587,32 @@ class PodcastRequest {
     this.deliveryNote,
     required this.createdAt,
     this.messages = const [],
+    this.hasEscrow = false,
+    this.contract,
+    this.termination,
+    this.productType,
+    this.fileFormat,
+    this.duration,
+    this.acceptanceCriteria,
+    this.autoAcceptEnabled = false,
+    this.submissions = const [],
   });
 
   StatusType get statusType {
+    if (hasEscrow && contract != null) {
+      if (contract!.isPendingSignature) {
+        return contract!.isCreatorSigned ? StatusType.info : StatusType.warning;
+      }
+      if (contract!.isInProgress) {
+        if (milestones.any((m) => m.isRevisionRequested)) return StatusType.error;
+        if (milestones.any((m) => m.isSubmitted)) return StatusType.warning;
+        return StatusType.info;
+      }
+      if (contract!.isCompleted) return StatusType.success;
+      if (contract!.isDisputed || contract!.isTerminated) return StatusType.error;
+      if (contract!.isCancelled) return StatusType.error;
+    }
+
     switch (status) {
       case CustomRequestStatus.completed:
       case CustomRequestStatus.approved:
@@ -396,6 +632,45 @@ class PodcastRequest {
   }
 
   String get statusDisplay {
+    if (hasEscrow) {
+      if (status == CustomRequestStatus.rejected) {
+        return 'Đã từ chối';
+      }
+      if (contract == null) {
+        return 'Chờ đề xuất mốc (Escrow)';
+      }
+      if (contract!.isPendingSignature) {
+        if (contract!.isCreatorSigned && !contract!.isListenerSigned) {
+          return 'Chờ người nghe ký';
+        }
+        if (!contract!.isCreatorSigned) {
+          return 'Cần ký hợp đồng';
+        }
+        return 'Hợp đồng đã ký';
+      }
+      if (contract!.isInProgress) {
+        if (milestones.any((m) => m.isRevisionRequested)) {
+          return 'Cần sửa đổi';
+        }
+        if (milestones.any((m) => m.isSubmitted)) {
+          return 'Chờ nghiệm thu';
+        }
+        return 'Đang thực hiện';
+      }
+      if (contract!.isCompleted) {
+        return 'Đã hoàn tất';
+      }
+      if (contract!.isDisputed) {
+        return 'Đang tranh chấp';
+      }
+      if (contract!.isTerminated) {
+        return 'Đã chấm dứt';
+      }
+      if (contract!.isCancelled) {
+        return 'Đã hủy';
+      }
+    }
+
     switch (status) {
       case CustomRequestStatus.sent:
         return 'Yêu cầu mới';
@@ -428,6 +703,15 @@ class PodcastRequest {
     List<RequestChatMessage>? messages,
     int? targetDurationMinutes,
     DateTime? deadline,
+    bool? hasEscrow,
+    ContractAgreement? contract,
+    ContractTerminationStatus? termination,
+    String? productType,
+    String? fileFormat,
+    String? duration,
+    String? acceptanceCriteria,
+    bool? autoAcceptEnabled,
+    List<MilestoneSubmissionItem>? submissions,
   }) {
     return PodcastRequest(
       id: id,
@@ -446,6 +730,15 @@ class PodcastRequest {
       deliveryNote: deliveryNote ?? this.deliveryNote,
       createdAt: createdAt,
       messages: messages ?? this.messages,
+      hasEscrow: hasEscrow ?? this.hasEscrow,
+      contract: contract ?? this.contract,
+      termination: termination ?? this.termination,
+      productType: productType ?? this.productType,
+      fileFormat: fileFormat ?? this.fileFormat,
+      duration: duration ?? this.duration,
+      acceptanceCriteria: acceptanceCriteria ?? this.acceptanceCriteria,
+      autoAcceptEnabled: autoAcceptEnabled ?? this.autoAcceptEnabled,
+      submissions: submissions ?? this.submissions,
     );
   }
 }

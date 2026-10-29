@@ -86,7 +86,7 @@ abstract class CreatorRepository {
     required String filename,
   });
 
-  // Custom Requests (Podcast theo yêu cầu)
+  // Custom Requests (Podcast theo yêu cầu & Hợp đồng Escrow)
   Future<List<PodcastRequest>> getRequests();
   Future<PodcastRequest?> getRequestById(String id);
   Future<void> acceptRequest(
@@ -95,6 +95,17 @@ abstract class CreatorRepository {
     List<Map<String, dynamic>>? milestones,
   });
   Future<void> rejectRequest(String id, String reason);
+  Future<ContractAgreement> proposeContract(
+    String requestId, {
+    required String responseText,
+    required List<ContractProposalStageInput> milestones,
+  });
+  Future<ContractAgreement?> getContractAgreement(String requestId);
+  Future<ContractAgreement> signContract(
+    String requestId, {
+    required int contractVersion,
+    required String contentHash,
+  });
   Future<void> deliverWork(
     String id,
     String fileUrl,
@@ -103,6 +114,11 @@ abstract class CreatorRepository {
     String? filename,
     String? milestoneId,
   });
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(String milestoneId);
+  Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId);
+  Future<void> requestTermination(String requestId, {required String reason});
+  Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
+  Future<void> disputeMilestone(String milestoneId, {required String reason});
   Future<void> sendChatMessage(String requestId, String message);
 
   // Wallet & Withdraw
