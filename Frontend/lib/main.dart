@@ -1314,6 +1314,7 @@ class _ShellState extends State<Shell> {
       Profile(
         displayName: widget.displayName,
         api: api,
+        socket: _notificationSocket,
         onTheme: widget.onTheme,
         onLogout: widget.onLogout,
         session: widget.session,
@@ -4221,6 +4222,7 @@ class Profile extends StatelessWidget {
     super.key,
     required this.displayName,
     this.api,
+    this.socket,
     required this.onTheme,
     required this.onLogout,
     this.session,
@@ -4229,6 +4231,7 @@ class Profile extends StatelessWidget {
   });
   final String displayName;
   final ListenerApi? api;
+  final NotificationSocket? socket;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   final AuthSession? session;
@@ -4291,7 +4294,8 @@ class Profile extends StatelessWidget {
             subtitle: 'Nhắn với Creator, xem sản phẩm và thanh toán',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => ListenerRequestsPage(api: api!),
+                builder: (_) =>
+                    ListenerRequestsPage(api: api!, socket: socket!),
               ),
             ),
           ),
@@ -4307,8 +4311,13 @@ class Profile extends StatelessWidget {
 }
 
 class ListenerRequestsPage extends StatefulWidget {
-  const ListenerRequestsPage({super.key, required this.api});
+  const ListenerRequestsPage({
+    super.key,
+    required this.api,
+    required this.socket,
+  });
   final ListenerApi api;
+  final NotificationSocket socket;
 
   @override
   State<ListenerRequestsPage> createState() => _ListenerRequestsPageState();
@@ -4359,6 +4368,7 @@ class _ListenerRequestsPageState extends State<ListenerRequestsPage> {
                     MaterialPageRoute(
                       builder: (_) => ListenerRequestDetailPage(
                         api: widget.api,
+                        socket: widget.socket,
                         request: request,
                       ),
                     ),
@@ -4377,9 +4387,11 @@ class ListenerRequestDetailPage extends StatefulWidget {
   const ListenerRequestDetailPage({
     super.key,
     required this.api,
+    required this.socket,
     required this.request,
   });
   final ListenerApi api;
+  final NotificationSocket socket;
   final Map<String, dynamic> request;
 
   @override
@@ -4392,6 +4404,12 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   late Future<List<Map<String, dynamic>>> messages = _loadMessages();
   late Future<List<Map<String, dynamic>>> milestones = _loadMilestones();
   bool sending = false;
+  final Set<String> completedMilestones = <String>{};
+  final Set<String> loadingMilestones = <String>{};
+  AudioPlayer? _submissionPlayer;
+  StreamSubscription<void>? _playerCompleteSubscription;
+  String? _playingMilestoneId;
+  late final String _requestTopic;
 
   String get requestId => '${widget.request['requestId']}';
   Future<List<Map<String, dynamic>>> _loadMessages() =>
@@ -4400,7 +4418,23 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       widget.api.requestMilestones(requestId);
 
   @override
+  void initState() {
+    super.initState();
+    _requestTopic = '/topic/requests/$requestId';
+    widget.socket.listen(_requestTopic, (_) {
+      if (!mounted) return;
+      setState(() {
+        messages = _loadMessages();
+        milestones = _loadMilestones();
+      });
+    });
+  }
+
+  @override
   void dispose() {
+    widget.socket.unlisten(_requestTopic);
+    _playerCompleteSubscription?.cancel();
+    _submissionPlayer?.dispose();
     messageController.dispose();
     super.dispose();
   }
@@ -4581,11 +4615,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                   final submissions = snapshot.data ?? const [];
                   return Column(
                     children: submissions
-                        .map(
-                          (s) => SelectableText(
-                            'Sản phẩm: ${s['publicUrl'] ?? ''}\n${s['note'] ?? ''}',
-                          ),
-                        )
+                        .map((s) => _submissionAudio(id, s))
                         .toList(),
                   );
                 },
@@ -4593,20 +4623,103 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
               Row(
                 children: [
                   TextButton(
-                    onPressed: () => _requestRevision(id),
+                    onPressed: completedMilestones.contains(id)
+                        ? () => _requestRevision(id)
+                        : null,
                     child: const Text('Yêu cầu làm lại'),
                   ),
                   FilledButton(
-                    onPressed: () => _approve(id),
+                    onPressed: completedMilestones.contains(id)
+                        ? () => _approve(id)
+                        : null,
                     child: const Text('Đồng ý & trả tiền'),
                   ),
                 ],
               ),
+              if (!completedMilestones.contains(id))
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Nhấn phát podcast để mở khóa thao tác.'),
+                ),
             ],
           ],
         ),
       ),
     );
+  }
+
+  Widget _submissionAudio(String milestoneId, Map<String, dynamic> submission) {
+    final submissionId =
+        '${submission['submissionId'] ?? submission['milestoneSubmissionId'] ?? ''}';
+    final isPlaying = _playingMilestoneId == milestoneId;
+    final isLoading = loadingMilestones.contains(milestoneId);
+    return Row(
+      children: [
+        IconButton(
+          tooltip: isPlaying ? 'Tạm dừng podcast' : 'Nghe podcast',
+          onPressed: isLoading || submissionId.isEmpty
+              ? null
+              : () => isPlaying
+                    ? _pauseSubmission()
+                    : _handleSubmissionPlay(milestoneId, submissionId),
+          icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle),
+        ),
+        Expanded(
+          child: Text(
+            'Bản thu podcast${completedMilestones.contains(milestoneId) ? ' • Đã mở khóa' : ''}\n${submission['note'] ?? ''}',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _playSubmission(String milestoneId, String submissionId) async {
+    setState(() => loadingMilestones.add(milestoneId));
+    try {
+      final media = await widget.api.milestoneSubmissionMedia(
+        milestoneId,
+        submissionId,
+      );
+      final url = media['url']?.toString() ?? media['mediaUrl']?.toString();
+      if (url == null || url.isEmpty)
+        throw const FormatException('Không có URL audio.');
+      await _submissionPlayer?.stop();
+      await _playerCompleteSubscription?.cancel();
+      final player = _submissionPlayer ??= AudioPlayer();
+      _playingMilestoneId = milestoneId;
+      _playerCompleteSubscription = player.onPlayerComplete.listen((_) {
+        if (!mounted) return;
+        setState(() {
+          completedMilestones.add(milestoneId);
+          _playingMilestoneId = null;
+        });
+      });
+      await player.play(UrlSource(url));
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể phát podcast: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loadingMilestones.remove(milestoneId));
+    }
+  }
+
+  Future<void> _handleSubmissionPlay(
+    String milestoneId,
+    String submissionId,
+  ) async {
+    if (!completedMilestones.contains(milestoneId)) {
+      setState(() => completedMilestones.add(milestoneId));
+    }
+    await _playSubmission(milestoneId, submissionId);
+  }
+
+  Future<void> _pauseSubmission() async {
+    await _submissionPlayer?.pause();
+    if (mounted) setState(() => _playingMilestoneId = null);
   }
 }
 
@@ -6563,45 +6676,53 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     final descriptionController = TextEditingController();
     final result = await showDialog<(String, String)>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Yêu cầu audio'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Chủ đề / tiêu đề audio',
+      builder: (_) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Yêu cầu audio'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Chủ đề / tiêu đề audio',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descriptionController,
-                minLines: 4,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Mô tả yêu cầu',
-                  hintText: 'Bạn muốn Creator làm nội dung gì?',
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  minLines: 4,
+                  maxLines: 6,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Mô tả yêu cầu',
+                    hintText: 'Bạn muốn Creator làm nội dung gì?',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed:
+                  titleController.text.trim().isEmpty ||
+                      descriptionController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(context, (
+                      titleController.text.trim(),
+                      descriptionController.text.trim(),
+                    )),
+              child: const Text('Gửi yêu cầu'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, (
-              titleController.text.trim(),
-              descriptionController.text.trim(),
-            )),
-            child: const Text('Gửi yêu cầu'),
-          ),
-        ],
       ),
     );
     titleController.dispose();

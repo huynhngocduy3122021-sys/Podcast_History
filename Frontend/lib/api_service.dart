@@ -583,6 +583,14 @@ class ListenerApi {
   Future<List<Map<String, dynamic>>> milestoneSubmissions(String milestoneId) =>
       _list('GET', '/api/milestones/$milestoneId/submissions');
 
+  Future<Map<String, dynamic>> milestoneSubmissionMedia(
+    String milestoneId,
+    String submissionId,
+  ) => _sendMap(
+    'GET',
+    '/api/milestones/$milestoneId/submissions/$submissionId/media',
+  );
+
   Future<Map<String, dynamic>> approveMilestone(String milestoneId) =>
       _sendMap('POST', '/api/listener/milestones/$milestoneId/approve');
 

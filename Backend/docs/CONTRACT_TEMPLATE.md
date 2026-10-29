@@ -28,7 +28,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 2.1. Bên A thuê Bên B thực hiện sản phẩm nội dung số theo yêu cầu đã thống nhất.
 
 - Tên dự án: [PROJECT_NAME]
-- Loại sản phẩm: [AUDIO/VIDEO]
+- Loại sản phẩm: [AUDIO]
 - Mô tả yêu cầu: [REQUEST_DESCRIPTION]
 - Định dạng bàn giao: [FILE_FORMAT]
 - Thời lượng hoặc khối lượng: [DURATION]
@@ -44,15 +44,15 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 
 3.2. Bên A tự lựa chọn ngân sách và dành toàn bộ ngân sách này cho hợp đồng.
 
-3.3. Khi yêu cầu được tạo thành công, hệ thống chuyển ngân sách từ số dư khả dụng sang số dư đang giữ.
-
+3.3. Khi yêu cầu được tạo thành công, ngân sách sẽ được nền tảng tạm giữ để xử lý yêu cầu.
+     
 3.4. Tổng giá trị các đợt phải bằng đúng ngân sách đã giữ.
 
 3.5. Mọi khoản trả Bên B và phí nền tảng được trích từ ngân sách; Bên A không trả thêm phí.
 
 ## ĐIỀU 4. PHÂN CHIA GIAI ĐOẠN
 
-Hợp đồng có từ 01 đến 03 đợt do Bên B đề xuất và Bên A xác nhận.
+Hợp đồng có từ 01 đến 03 đợt (có thể thêm hoặc bớt) do Bên B đề xuất và Bên A xác nhận.
 
 | Đợt | Nội dung bàn giao | Thời hạn | Giá trị |
 |---|---|---|---|
@@ -68,13 +68,9 @@ Các đợt không sử dụng được bỏ qua. Bên B chỉ bắt đầu sau 
 
 5.2. Bên A có **03 ngày** kể từ bàn giao hợp lệ để phản hồi.
 
-5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
+5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt sẽ tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
 
 5.4. Tối đa **03 lần** yêu cầu chỉnh sửa mỗi đợt, trừ khi hai bên có thỏa thuận khác về lỗi không đạt tiêu chí tối thiểu.
-
-5.5. Chỉ được tự nghiệm thu khi Bên A đã đồng ý điều kiện này trước, hết thời hạn phản hồi và không có tranh chấp mở.
-
-5.6. Bên A đã từ chối hoặc yêu cầu sửa đúng hạn thì không được tự nghiệm thu chỉ vì hết giờ.
 
 ## ĐIỀU 6. THANH TOÁN VÀ PHÍ NỀN TẢNG
 
@@ -124,7 +120,7 @@ Các đợt không sử dụng được bỏ qua. Bên B chỉ bắt đầu sau 
 
 9.3. Quyền sử dụng quy định tại khoản 9.2 phát sinh sau khi đợt tương ứng được nghiệm thu và thanh toán đủ.
 
-9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán tuân theo thỏa thuận riêng và quy định pháp luật.
+9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán phải tuân theo thỏa thuận riêng và quy định pháp luật.
 
 ## ĐIỀU 10. TRÁCH NHIỆM
 
