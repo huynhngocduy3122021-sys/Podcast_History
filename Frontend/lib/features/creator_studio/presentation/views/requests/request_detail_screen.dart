@@ -1,6 +1,8 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
@@ -21,6 +23,68 @@ class RequestDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
+  // Local audio player for previewing submitted audio files
+  late final AudioPlayer _audioPlayer;
+  String? _currentlyPlayingUrl;
+  bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = state == PlayerState.playing;
+        });
+      }
+    });
+    _audioPlayer.onPositionChanged.listen((pos) {
+      if (mounted) {
+        setState(() => _currentPosition = pos);
+      }
+    });
+    _audioPlayer.onDurationChanged.listen((dur) {
+      if (mounted) {
+        setState(() => _totalDuration = dur);
+      }
+    });
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _currentPosition = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playAudio(String url) async {
+    try {
+      if (_currentlyPlayingUrl == url && _isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        _currentlyPlayingUrl = url;
+        await _audioPlayer.stop();
+        await _audioPlayer.play(UrlSource(url));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Lỗi phát âm thanh: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final requestsAsync = ref.watch(creatorRequestsProvider);
@@ -41,84 +105,140 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chi tiết đơn yêu cầu'),
+        title: const Text('Hợp đồng & Đơn đặt podcast'),
         actions: [
           IconButton(
-            tooltip: 'Khiếu nại / Báo cáo',
-            icon: const Icon(Icons.report_problem_outlined, color: AppColors.error),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Yêu cầu trợ giúp đã được gửi đến Admin VietCast.')),
-              );
-            },
+            tooltip: 'Tải lại',
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
           ),
+          if (req.hasEscrow && req.contract != null && (req.contract!.isInProgress || req.contract!.isDisputed))
+            IconButton(
+              tooltip: 'Tranh chấp / Chấm dứt',
+              icon: const Icon(Icons.gavel_rounded, color: AppColors.error),
+              onPressed: () => _handleTermination(req),
+            ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.screenMargin),
-              children: [
-                // Thẻ thông tin trạng thái & Next step
-                _buildStatusBanner(req, isDark),
-                const SizedBox(height: AppSpacing.lg),
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
+              child: ListView(
+                padding: const EdgeInsets.all(AppSpacing.screenMargin),
+                children: [
+                  // 1. Thẻ thông tin trạng thái & Next step Escrow
+                  _buildStatusBanner(req, isDark),
+                  const SizedBox(height: AppSpacing.md),
 
-                // Stepper quy trình
-                _buildWorkflowStepper(req, isDark),
-                const SizedBox(height: AppSpacing.lg),
+                  // 2. Stepper quy trình 5 bước Escrow
+                  _buildWorkflowStepper(req, isDark),
+                  const SizedBox(height: AppSpacing.md),
 
-                // Thông tin đơn hàng
-                _buildOrderOverview(req, isDark),
-                const SizedBox(height: AppSpacing.lg),
+                  // 3. Thông tin đơn hàng & Ngân sách giữ
+                  _buildOrderOverview(req, isDark),
+                  const SizedBox(height: AppSpacing.md),
 
-                // Các mốc thanh toán Escrow (Dữ liệu thực từ Backend)
-                _buildMilestonesSection(req, isDark),
-                const SizedBox(height: AppSpacing.lg),
+                  // 4. Thẻ Hợp đồng điện tử & Ký kết (Chữ ký số & SHA-256)
+                  if (req.contract != null) ...[
+                    _buildContractCard(req, isDark),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
 
-                // Sản phẩm đã nộp (nếu có từ Backend)
-                if (req.deliveryFileUrl != null || req.deliveryNote != null) ...[
-                  _buildDeliverySection(req, isDark),
-                  const SizedBox(height: AppSpacing.lg),
+                  // 5. Các mốc thanh toán Escrow (1 - 3 đợt)
+                  _buildMilestonesSection(req, isDark),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // 6. Lịch sử bàn giao & Phát âm thanh preview
+                  if (req.submissions.isNotEmpty || req.deliveryFileUrl != null) ...[
+                    _buildSubmissionsHistory(req, isDark),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
+
+                  // 7. Thông tin tranh chấp / chấm dứt nếu có
+                  if (req.termination != null || (req.contract != null && req.contract!.isDisputed)) ...[
+                    _buildDisputeSection(req, isDark),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
 
-          // Bottom Action Bar theo State Machine
+          // Bottom Action Bar theo State Machine Hợp đồng Escrow
           _buildBottomActionButtons(req, isDark),
         ],
       ),
     );
   }
 
+  // ==========================================
+  // 1. STATUS BANNER
+  // ==========================================
   Widget _buildStatusBanner(PodcastRequest req, bool isDark) {
     String nextAction;
-    switch (req.status) {
-      case CustomRequestStatus.sent:
-        nextAction = 'Bước tiếp theo: Hãy kiểm tra yêu cầu và quyết định Nhận hoặc Từ chối.';
-        break;
-      case CustomRequestStatus.accepted:
-      case CustomRequestStatus.inProduction:
-        nextAction = 'Bước tiếp theo: Thực hiện nội dung và nộp bản thu âm cho mốc thanh toán.';
-        break;
-      case CustomRequestStatus.delivered:
-        nextAction = 'Bước tiếp theo: Đang chờ người nghe thẩm định và giải ngân mốc thanh toán.';
-        break;
-      case CustomRequestStatus.revisionRequested:
-        nextAction = 'Bước tiếp theo: Người nghe yêu cầu chỉnh sửa. Vui lòng xem ghi chú và cập nhật.';
-        break;
-      case CustomRequestStatus.completed:
-        nextAction = 'Đơn đặt đã hoàn thành xuất sắc! Toàn bộ thù lao đã được thanh toán vào ví.';
-        break;
-      case CustomRequestStatus.rejected:
-        nextAction = 'Đơn đã bị từ chối.';
-        break;
-      case CustomRequestStatus.disputed:
-        nextAction = 'Đơn đang trong diện khiếu nại. Admin đang tiến hành đối soát.';
-        break;
-      default:
-        nextAction = '';
+    final contract = req.contract;
+
+    if (req.hasEscrow) {
+      if (contract == null) {
+        if (req.status == CustomRequestStatus.rejected) {
+          nextAction = 'Đơn yêu cầu này đã bị từ chối. Ngân sách đã được hoàn trả lại cho thính giả.';
+        } else {
+          nextAction = 'Bước tiếp theo: Hãy lập đề xuất các đợt bàn giao (1 đến 3 đợt) để tạo hợp đồng điện tử bảo đảm.';
+        }
+      } else if (contract.isPendingSignature) {
+        if (!contract.isCreatorSigned) {
+          nextAction = 'Bước tiếp theo: Hợp đồng đã tạo. Vui lòng xem kỹ điều khoản và ký xác nhận điện tử.';
+        } else if (!contract.isListenerSigned) {
+          nextAction = 'Bước tiếp theo: Bạn đã ký hợp đồng. Đang chờ người nghe ký để hợp đồng có hiệu lực sản xuất.';
+        } else {
+          nextAction = 'Hợp đồng đã đủ hai chữ ký và sẵn sàng bước vào giai đoạn sản xuất.';
+        }
+      } else if (contract.isInProgress) {
+        if (req.milestones.any((m) => m.isRevisionRequested)) {
+          nextAction = 'Chú ý: Người nghe yêu cầu chỉnh sửa ở đợt bàn giao. Vui lòng xem ghi chú và nộp lại bản sửa.';
+        } else if (req.milestones.any((m) => m.isSubmitted)) {
+          nextAction = 'Bước tiếp theo: Đã nộp bài đợt hiện tại. Đang chờ người nghe nghiệm thu (thời hạn 3 ngày).';
+        } else {
+          nextAction = 'Bước tiếp theo: Tiến hành sản xuất theo tiêu chí đã cam kết và nộp file bàn giao đúng hạn.';
+        }
+      } else if (contract.isCompleted) {
+        nextAction = 'Chúc mừng! Đơn hàng đã hoàn tất nghiệm thu toàn bộ. 80% thù lao đã được thanh toán vào ví khả dụng.';
+      } else if (contract.isDisputed) {
+        nextAction = 'Hợp đồng đang trong thời gian ưu tiên thương lượng 3 ngày. Admin đang theo dõi giải quyết.';
+      } else if (contract.isTerminated) {
+        nextAction = 'Hợp đồng đã chấm dứt theo phán quyết của Admin.';
+      } else {
+        nextAction = 'Hợp đồng đã hủy.';
+      }
+    } else {
+      switch (req.status) {
+        case CustomRequestStatus.sent:
+          nextAction = 'Bước tiếp theo: Hãy kiểm tra yêu cầu và quyết định Nhận hoặc Từ chối.';
+          break;
+        case CustomRequestStatus.accepted:
+        case CustomRequestStatus.inProduction:
+          nextAction = 'Bước tiếp theo: Thực hiện nội dung và nộp bản thu âm cho mốc thanh toán.';
+          break;
+        case CustomRequestStatus.delivered:
+          nextAction = 'Bước tiếp theo: Đang chờ người nghe thẩm định và giải ngân mốc thanh toán.';
+          break;
+        case CustomRequestStatus.revisionRequested:
+          nextAction = 'Bước tiếp theo: Người nghe yêu cầu chỉnh sửa. Vui lòng xem ghi chú và cập nhật.';
+          break;
+        case CustomRequestStatus.completed:
+          nextAction = 'Đơn đặt đã hoàn thành xuất sắc! Toàn bộ thù lao đã được thanh toán vào ví.';
+          break;
+        case CustomRequestStatus.rejected:
+          nextAction = 'Đơn đã bị từ chối.';
+          break;
+        case CustomRequestStatus.disputed:
+          nextAction = 'Đơn đang trong diện khiếu nại. Admin đang tiến hành đối soát.';
+          break;
+        default:
+          nextAction = '';
+      }
     }
 
     return Container(
@@ -126,7 +246,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       decoration: BoxDecoration(
         color: req.statusType == StatusType.success
             ? AppColors.successContainer
-            : (req.statusType == StatusType.warning ? AppColors.warningContainer : AppColors.surfaceVariantLight),
+            : (req.statusType == StatusType.warning
+                ? AppColors.warningContainer
+                : (req.statusType == StatusType.error
+                    ? AppColors.errorContainer
+                    : AppColors.surfaceVariantLight)),
         borderRadius: AppSpacing.roundedMd,
       ),
       child: Column(
@@ -135,14 +259,32 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'TRẠNG THÁI HIỆN TẠI',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                ),
+              Row(
+                children: [
+                  if (req.hasEscrow) ...[
+                    const Icon(Icons.shield_rounded, size: 16, color: AppColors.primaryLight),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'ESCROW BẢO ĐẢM',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      'TRẠNG THÁI HIỆN TẠI',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                      ),
+                    ),
+                  ],
+                ],
               ),
               StatusChip(
                 label: req.statusDisplay,
@@ -160,15 +302,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
+  // ==========================================
+  // 2. WORKFLOW STEPPER
+  // ==========================================
   Widget _buildWorkflowStepper(PodcastRequest req, bool isDark) {
-    final steps = ['Gửi đơn', 'Tiếp nhận', 'Sản xuất', 'Nộp bài', 'Nghiệm thu'];
+    final steps = ['Gửi đơn', 'Đề xuất mốc', 'Ký hợp đồng', 'Sản xuất', 'Nghiệm thu'];
     int activeIndex = 0;
-    if (req.status == CustomRequestStatus.sent) activeIndex = 0;
-    if (req.status == CustomRequestStatus.accepted) activeIndex = 1;
-    if (req.status == CustomRequestStatus.inProduction) activeIndex = 2;
-    if (req.status == CustomRequestStatus.delivered || req.milestones.any((m) => m.isSubmitted)) activeIndex = 3;
-    if (req.status == CustomRequestStatus.completed ||
-        req.status == CustomRequestStatus.approved ||
+
+    final contract = req.contract;
+    if (contract == null) {
+      activeIndex = req.status == CustomRequestStatus.sent ? 0 : 1;
+    } else if (contract.isPendingSignature) {
+      activeIndex = 2;
+    } else if (contract.isInProgress) {
+      activeIndex = 3;
+    } else if (contract.isCompleted ||
         (req.milestones.isNotEmpty && req.milestones.every((m) => m.isApproved))) {
       activeIndex = 4;
     }
@@ -183,7 +331,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Tiến trình thực hiện', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          const Text('Tiến trình hợp đồng Escrow', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -222,6 +370,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
+  // ==========================================
+  // 3. ORDER OVERVIEW
+  // ==========================================
   Widget _buildOrderOverview(PodcastRequest req, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -237,9 +388,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: req.listenerAvatar.isNotEmpty
-                    ? NetworkImage(req.listenerAvatar)
-                    : null,
+                backgroundImage: req.listenerAvatar.isNotEmpty ? NetworkImage(req.listenerAvatar) : null,
                 onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
                 child: const Icon(Icons.person, size: 20),
               ),
@@ -252,12 +401,18 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       req.listenerName,
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                     ),
-                    Text(
-                      'Người nghe đặt podcast • Tạm giữ Escrow',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.lock_clock_outlined, size: 12, color: AppColors.success),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Ngân sách đã giữ an toàn trong ví',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -286,9 +441,14 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetaItem('Thời gian tạo', AppFormatters.formatDate(req.createdAt), Icons.calendar_today_outlined),
-              _buildMetaItem('Trạng thái', req.statusDisplay, Icons.info_outline),
-              _buildMetaItem('Tổng ngân sách', AppFormatters.formatVND(req.totalBudget), Icons.payments_outlined, isHighlight: true),
+              _buildMetaItem('Ngày tạo', AppFormatters.formatDate(req.createdAt), Icons.calendar_today_outlined),
+              _buildMetaItem('Phân chia', '80% CC • 20% App', Icons.pie_chart_outline),
+              _buildMetaItem(
+                'Ngân sách giữ',
+                AppFormatters.formatVND(req.totalBudget),
+                Icons.account_balance_wallet_outlined,
+                isHighlight: true,
+              ),
             ],
           ),
         ],
@@ -320,6 +480,182 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
+  // ==========================================
+  // 4. CONTRACT CARD & SIGNATURE STATUS
+  // ==========================================
+  Widget _buildContractCard(PodcastRequest req, bool isDark) {
+    final contract = req.contract!;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(
+          color: contract.isInProgress
+              ? AppColors.primaryLight
+              : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
+          width: contract.isInProgress ? 1.5 : 1.0,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.description_outlined, color: AppColors.primaryLight, size: 18),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Hợp đồng điện tử (v1)',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: contract.isInProgress
+                      ? AppColors.success.withValues(alpha: 0.12)
+                      : (contract.isPendingSignature
+                          ? AppColors.warning.withValues(alpha: 0.12)
+                          : AppColors.info.withValues(alpha: 0.12)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  contract.contractStatus,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: contract.isInProgress
+                        ? AppColors.success
+                        : (contract.isPendingSignature ? AppColors.warning : AppColors.info),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Mã băm SHA-256: ${contract.contentHash.length > 20 ? "${contract.contentHash.substring(0, 10)}...${contract.contentHash.substring(contract.contentHash.length - 8)}" : contract.contentHash}',
+            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.grey),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const Divider(height: 1),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Trạng thái hai chữ ký
+          Row(
+            children: [
+              Expanded(
+                child: _buildSignatureStatus(
+                  title: 'Content Creator',
+                  isSigned: contract.isCreatorSigned,
+                  signedAt: contract.creatorSignedAt,
+                  isDark: isDark,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _buildSignatureStatus(
+                  title: 'Người nghe (Listener)',
+                  isSigned: contract.isListenerSigned,
+                  signedAt: contract.listenerSignedAt,
+                  isDark: isDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          // Nút xem toàn văn hợp đồng
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.visibility_outlined, size: 16),
+                  label: const Text('Xem văn bản hợp đồng'),
+                  onPressed: () => _showContractDialog(req),
+                ),
+              ),
+              if (!contract.isCreatorSigned) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primaryLight,
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: const Icon(Icons.edit_document, size: 16),
+                    label: const Text('Ký hợp đồng'),
+                    onPressed: () => _showContractDialog(req, autoSign: true),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSignatureStatus({
+    required String title,
+    required bool isSigned,
+    DateTime? signedAt,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: isSigned
+            ? AppColors.success.withValues(alpha: 0.08)
+            : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight),
+        borderRadius: AppSpacing.roundedSm,
+        border: Border.all(
+          color: isSigned ? AppColors.success.withValues(alpha: 0.3) : Colors.transparent,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isSigned ? Icons.verified_rounded : Icons.pending_outlined,
+                size: 14,
+                color: isSigned ? AppColors.success : Colors.grey,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            isSigned
+                ? 'Đã ký lúc ${signedAt != null ? DateFormat('HH:mm dd/MM').format(signedAt.toLocal()) : ''}'
+                : 'Chưa ký xác nhận',
+            style: TextStyle(
+              fontSize: 10,
+              color: isSigned ? AppColors.success : Colors.grey,
+              fontWeight: isSigned ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // 5. MILESTONES (1-3 ĐỢT BÀN GIAO)
+  // ==========================================
   Widget _buildMilestonesSection(PodcastRequest req, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -335,12 +671,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Các mốc giải ngân (Escrow Milestones)',
+                'Các đợt bàn giao & Mốc thanh toán',
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
               ),
               if (req.milestones.isNotEmpty)
                 Text(
-                  '${req.milestones.length} mốc',
+                  '${req.milestones.length} đợt',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -352,15 +688,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           if (req.milestones.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Text(
-                req.status == CustomRequestStatus.sent
-                    ? 'Chưa thiết lập mốc giải ngân. Khi bạn chấp thuận đơn hàng, mốc giải ngân sẽ được khởi tạo.'
-                    : 'Chưa có mốc giải ngân nào.',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontStyle: FontStyle.italic,
-                  color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    req.status == CustomRequestStatus.sent
+                        ? 'Chưa thiết lập đợt bàn giao. Bạn hãy nhấn "Lập đề xuất đợt bàn giao" để chia tiến độ và gửi hợp đồng cho người nghe.'
+                        : 'Chưa có thông tin đợt bàn giao.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                    ),
+                  ),
+                ],
               ),
             )
           else
@@ -373,17 +714,17 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 case 'APPROVED':
                   statusColor = AppColors.success;
                   statusIcon = Icons.check_circle_rounded;
-                  statusText = 'Đã giải ngân';
+                  statusText = 'Đã nghiệm thu';
                   break;
                 case 'SUBMITTED':
                   statusColor = AppColors.warning;
                   statusIcon = Icons.hourglass_top_rounded;
-                  statusText = 'Chờ duyệt';
+                  statusText = 'Chờ duyệt (3 ngày)';
                   break;
                 case 'REVISION_REQUESTED':
                   statusColor = AppColors.error;
                   statusIcon = Icons.published_with_changes_rounded;
-                  statusText = 'Cần sửa đổi';
+                  statusText = 'Yêu cầu sửa';
                   break;
                 case 'DISPUTED':
                   statusColor = AppColors.error;
@@ -396,9 +737,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   statusText = 'Chưa nộp';
               }
 
-              final canSubmitThis = (req.status == CustomRequestStatus.accepted ||
+              // Creator can submit when contract is IN_PROGRESS and this milestone is NOT_STARTED or REVISION_REQUESTED
+              final canSubmitThis = (req.contract?.isInProgress == true ||
                       req.status == CustomRequestStatus.inProduction ||
-                      req.status == CustomRequestStatus.revisionRequested) &&
+                      req.status == CustomRequestStatus.accepted) &&
                   (m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED');
 
               return Container(
@@ -427,7 +769,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Mốc ${m.order}: ${m.title}',
+                                'Đợt ${m.order}: ${m.title}',
                                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                               ),
                               if (m.description != null && m.description!.isNotEmpty) ...[
@@ -487,7 +829,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           ),
                           icon: const Icon(Icons.upload_file_rounded, size: 14),
                           label: Text(
-                            m.status == 'REVISION_REQUESTED' ? 'Nộp lại bài' : 'Nộp bài cho mốc này',
+                            m.status == 'REVISION_REQUESTED' ? 'Nộp lại bài chỉnh sửa' : 'Nộp bài cho đợt này',
                             style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                           ),
                           onPressed: () => _handleDeliver(req, milestoneId: m.id),
@@ -503,13 +845,16 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
-  Widget _buildDeliverySection(PodcastRequest req, bool isDark) {
+  // ==========================================
+  // 6. SUBMISSIONS HISTORY & AUDIO PLAYER
+  // ==========================================
+  Widget _buildSubmissionsHistory(PodcastRequest req, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         borderRadius: AppSpacing.roundedMd,
-        border: Border.all(color: AppColors.info, width: 1.5),
+        border: Border.all(color: AppColors.info, width: 1.2),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,27 +863,131 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               Icon(Icons.inventory_2_rounded, size: 18, color: AppColors.info),
               SizedBox(width: AppSpacing.xs),
-              Text('Bản podcast đã nộp cho người nghe', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.info)),
+              Text(
+                'Lịch sử bàn giao sản phẩm',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.info),
+              ),
             ],
           ),
-          if (req.deliveryNote != null && req.deliveryNote!.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text('Ghi chú: ${req.deliveryNote}', style: const TextStyle(fontSize: 13)),
-          ],
-          if (req.deliveryFileUrl != null && req.deliveryFileUrl!.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                const Icon(Icons.audio_file_outlined, size: 16, color: AppColors.tertiaryLight),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    req.deliveryFileUrl!,
-                    style: const TextStyle(fontSize: 12, color: AppColors.tertiaryLight),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+          const SizedBox(height: AppSpacing.sm),
+          if (req.submissions.isNotEmpty)
+            ...req.submissions.map((sub) {
+              final isCurrentSubPlaying = _currentlyPlayingUrl == sub.mediaUrl && _isPlaying;
+              return Container(
+                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                  borderRadius: AppSpacing.roundedSm,
                 ),
-              ],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Lần nộp #${sub.revisionNumber}',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                        ),
+                        Text(
+                          DateFormat('HH:mm dd/MM/yyyy').format(sub.submittedAt.toLocal()),
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    if (sub.note != null && sub.note!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('Ghi chú: ${sub.note}', style: const TextStyle(fontSize: 12)),
+                    ],
+                    if (sub.mediaUrl != null && sub.mediaUrl!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          IconButton(
+                            iconSize: 28,
+                            color: AppColors.primaryLight,
+                            icon: Icon(
+                              isCurrentSubPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                            ),
+                            onPressed: () => _playAudio(sub.mediaUrl!),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isCurrentSubPlaying ? 'Đang phát âm thanh...' : 'Nghe thử bản ghi âm R2',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                                if (isCurrentSubPlaying)
+                                  LinearProgressIndicator(
+                                    value: _totalDuration.inMilliseconds > 0
+                                        ? _currentPosition.inMilliseconds / _totalDuration.inMilliseconds
+                                        : 0.0,
+                                    backgroundColor: Colors.grey.withValues(alpha: 0.2),
+                                    valueColor: const AlwaysStoppedAnimation(AppColors.primaryLight),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            })
+          else ...[
+            if (req.deliveryNote != null) Text('Ghi chú: ${req.deliveryNote}'),
+            if (req.deliveryFileUrl != null) Text('Tệp: ${req.deliveryFileUrl}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // 7. DISPUTE & TERMINATION SECTION
+  // ==========================================
+  Widget _buildDisputeSection(PodcastRequest req, bool isDark) {
+    final termination = req.termination;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.errorContainer,
+        borderRadius: AppSpacing.roundedMd,
+        border: Border.all(color: AppColors.error),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.gavel_rounded, color: AppColors.error, size: 20),
+              SizedBox(width: 6),
+              Text(
+                'Yêu cầu chấm dứt & Tranh chấp hợp đồng',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.error),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'Hợp đồng đã đóng băng bước nghiệm thu/giải ngân. Hai bên có 3 ngày thương lượng tự giải quyết.',
+            style: TextStyle(fontSize: 12),
+          ),
+          if (termination != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Hạn thương lượng đến: ${DateFormat('HH:mm dd/MM/yyyy').format(termination.negotiationEndsAt.toLocal())}',
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Quy định Admin: Nếu xác nhận sản phẩm đạt tiêu chuẩn tối thiểu, CC nhận đền công 30% giá trị đợt đó (trừ 10% phí app, CC nhận ròng 90% khoản đền công). Phần còn lại hoàn trả cho người nghe.',
+              style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ],
         ],
@@ -546,21 +995,27 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
+  // ==========================================
+  // 8. BOTTOM ACTION BUTTONS
+  // ==========================================
   Widget _buildBottomActionButtons(PodcastRequest req, bool isDark) {
-    if (req.status == CustomRequestStatus.completed ||
-        (req.milestones.isNotEmpty && req.milestones.every((m) => m.isApproved))) {
+    final contract = req.contract;
+
+    // Completed
+    if (contract?.isCompleted == true || req.status == CustomRequestStatus.completed) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         color: AppColors.successContainer,
         child: const Center(
           child: Text(
-            '✓ Đơn hàng đã hoàn thành và tất toán toàn bộ.',
+            '✓ Hợp đồng đã hoàn tất và tất toán toàn bộ thù lao vào ví.',
             style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.success),
           ),
         ),
       );
     }
 
+    // Rejected
     if (req.status == CustomRequestStatus.rejected) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -574,7 +1029,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       );
     }
 
-    if (req.status == CustomRequestStatus.sent) {
+    // No proposal yet -> Propose Milestones / Reject
+    if (contract == null && req.status == CustomRequestStatus.sent) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
@@ -584,17 +1040,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         child: Row(
           children: [
             Expanded(
+              flex: 2,
               child: AppButton(
-                label: 'Từ chối đơn',
+                label: 'Từ chối',
                 type: AppButtonType.secondary,
                 onPressed: () => _handleReject(req),
               ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
+              flex: 4,
               child: AppButton(
-                label: 'Chấp nhận đơn',
-                onPressed: () => _handleAccept(req),
+                label: 'Lập đề xuất đợt bàn giao',
+                onPressed: () => _handleProposeMilestones(req),
               ),
             ),
           ],
@@ -602,8 +1060,38 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       );
     }
 
-    if (req.status == CustomRequestStatus.accepted ||
+    // Pending signature -> Sign Contract
+    if (contract != null && contract.isPendingSignature) {
+      if (!contract.isCreatorSigned) {
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+            border: Border(top: BorderSide(color: isDark ? AppColors.outlineDark : AppColors.outlineLight)),
+          ),
+          child: AppButton(
+            label: 'Xem & Ký hợp đồng điện tử',
+            onPressed: () => _showContractDialog(req, autoSign: true),
+          ),
+        );
+      } else {
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          color: AppColors.warningContainer,
+          child: const Center(
+            child: Text(
+              'Bạn đã ký hợp đồng. Đang chờ người nghe ký kết...',
+              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.warning),
+            ),
+          ),
+        );
+      }
+    }
+
+    // In Progress -> Deliver milestone work
+    if (contract?.isInProgress == true ||
         req.status == CustomRequestStatus.inProduction ||
+        req.status == CustomRequestStatus.accepted ||
         req.status == CustomRequestStatus.revisionRequested) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -621,9 +1109,41 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     return const SizedBox.shrink();
   }
 
-  void _handleAccept(PodcastRequest req) {
-    final noteController = TextEditingController(text: 'Creator đồng ý nhận thực hiện đơn đặt podcast.');
+  // ==========================================
+  // DIALOG: LẬP ĐỀ XUẤT 1 - 3 ĐỢT BÀN GIAO
+  // ==========================================
+  void _handleProposeMilestones(PodcastRequest req) {
     final messenger = ScaffoldMessenger.of(context);
+    final totalBudget = req.totalBudget;
+    int stageCount = 2; // Default 2 stages
+    final responseTextController = TextEditingController(
+      text: 'Tôi đồng ý sản xuất podcast theo yêu cầu và đề xuất các đợt bàn giao như dưới đây.',
+    );
+
+    // Stage inputs
+    final nameControllers = [
+      TextEditingController(text: 'Đợt 1: Bản nháp podcast & demo giọng'),
+      TextEditingController(text: 'Đợt 2: Bản hoàn thiện audio & hậu kỳ'),
+      TextEditingController(text: 'Đợt 3: Master audio & nghiệm thu'),
+    ];
+    final descControllers = [
+      TextEditingController(text: 'Phác thảo kịch bản chi tiết và thu âm demo 3 phút đầu.'),
+      TextEditingController(text: 'Hoàn thiện toàn bộ bản ghi âm kèm nhạc nền và hiệu ứng.'),
+      TextEditingController(text: 'Chỉnh sửa âm lượng master chuẩn 320kbps và nghiệm thu.'),
+    ];
+    final initialP1 = (totalBudget * 0.4).toInt();
+    final initialP2 = totalBudget - initialP1;
+    final amountControllers = [
+      TextEditingController(text: totalBudget > 0 ? '$initialP1' : '0'),
+      TextEditingController(text: totalBudget > 0 ? '$initialP2' : '0'),
+      TextEditingController(text: '0'),
+    ];
+    final dueDates = [
+      DateTime.now().add(const Duration(days: 3)),
+      DateTime.now().add(const Duration(days: 7)),
+      DateTime.now().add(const Duration(days: 10)),
+    ];
+
     bool isSubmitting = false;
 
     showDialog(
@@ -631,42 +1151,192 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       barrierDismissible: false,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          int currentTotal = 0;
+          for (int i = 0; i < stageCount; i++) {
+            currentTotal += int.tryParse(amountControllers[i].text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+          }
+          final isBudgetMatching = currentTotal == totalBudget;
+
           return AlertDialog(
-            title: const Text('Chấp nhận đơn đặt podcast', style: TextStyle(fontWeight: FontWeight.w700)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Bạn đang nhận sản xuất podcast theo yêu cầu của thính giả.'),
-                  const SizedBox(height: AppSpacing.md),
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: AppColors.successContainer.withValues(alpha: 0.5),
-                      borderRadius: AppSpacing.roundedSm,
+            title: const Text('Lập đề xuất đợt bàn giao (1 - 3 đợt)', style: TextStyle(fontWeight: FontWeight.w700)),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight.withValues(alpha: 0.1),
+                        borderRadius: AppSpacing.roundedSm,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Ngân sách hợp đồng: ${AppFormatters.formatVND(totalBudget)}',
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Tổng các đợt: ${AppFormatters.formatVND(currentTotal)} '
+                            '(${isBudgetMatching ? "Hợp lệ" : "Chưa khớp, chênh lệch ${AppFormatters.formatVND(totalBudget - currentTotal)}"})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isBudgetMatching ? AppColors.success : AppColors.error,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: AppSpacing.md),
+
+                    // Lời nhắn
+                    AppTextField(
+                      label: 'Lời nhắn gửi người nghe',
+                      hint: 'Nhập ghi chú phản hồi...',
+                      controller: responseTextController,
+                      maxLines: 2,
+                      readOnly: isSubmitting,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // Chọn số đợt
+                    Row(
                       children: [
-                        Text('Chủ đề: ${req.topic}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Ngân sách: ${AppFormatters.formatVND(req.totalBudget)}',
-                          style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.success, fontSize: 14),
+                        const Text('Số đợt bàn giao: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: const Text('1 đợt'),
+                          selected: stageCount == 1,
+                          onSelected: isSubmitting
+                              ? null
+                              : (_) {
+                                  setDialogState(() {
+                                    stageCount = 1;
+                                    amountControllers[0].text = '$totalBudget';
+                                  });
+                                },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('2 đợt'),
+                          selected: stageCount == 2,
+                          onSelected: isSubmitting
+                              ? null
+                              : (_) {
+                                  setDialogState(() {
+                                    stageCount = 2;
+                                    amountControllers[0].text = '${(totalBudget * 0.4).toInt()}';
+                                    amountControllers[1].text = '${totalBudget - (totalBudget * 0.4).toInt()}';
+                                  });
+                                },
+                        ),
+                        const SizedBox(width: 6),
+                        ChoiceChip(
+                          label: const Text('3 đợt'),
+                          selected: stageCount == 3,
+                          onSelected: isSubmitting
+                              ? null
+                              : (_) {
+                                  setDialogState(() {
+                                    stageCount = 3;
+                                    final p1 = (totalBudget * 0.3).toInt();
+                                    final p2 = (totalBudget * 0.4).toInt();
+                                    amountControllers[0].text = '$p1';
+                                    amountControllers[1].text = '$p2';
+                                    amountControllers[2].text = '${totalBudget - p1 - p2}';
+                                  });
+                                },
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    label: 'Lời nhắn gửi người nghe',
-                    hint: 'Nhập ghi chú phản hồi...',
-                    controller: noteController,
-                    maxLines: 2,
-                    readOnly: isSubmitting,
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.md),
+
+                    // Danh sách đợt
+                    ...List.generate(stageCount, (i) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withValues(alpha: 0.08),
+                          borderRadius: AppSpacing.roundedSm,
+                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Đợt ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                            const SizedBox(height: 6),
+                            AppTextField(
+                              label: 'Tên đợt',
+                              controller: nameControllers[i],
+                              readOnly: isSubmitting,
+                            ),
+                            const SizedBox(height: 6),
+                            AppTextField(
+                              label: 'Mô tả công việc',
+                              controller: descControllers[i],
+                              readOnly: isSubmitting,
+                              maxLines: 2,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: AppTextField(
+                                    label: 'Số tiền (VND)',
+                                    controller: amountControllers[i],
+                                    keyboardType: TextInputType.number,
+                                    readOnly: isSubmitting,
+                                    onChanged: (_) => setDialogState(() {}),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: isSubmitting
+                                        ? null
+                                        : () async {
+                                            final minDate = i == 0
+                                                ? DateTime.now().add(const Duration(days: 1))
+                                                : dueDates[i - 1].add(const Duration(days: 1));
+                                            final initial = dueDates[i].isAfter(minDate) ? dueDates[i] : minDate;
+                                            final picked = await showDatePicker(
+                                              context: context,
+                                              initialDate: initial,
+                                              firstDate: minDate,
+                                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                                            );
+                                            if (picked != null) {
+                                              setDialogState(() {
+                                                dueDates[i] = picked;
+                                                for (int j = i + 1; j < 3; j++) {
+                                                  if (!dueDates[j].isAfter(dueDates[j - 1])) {
+                                                    dueDates[j] = dueDates[j - 1].add(const Duration(days: 3));
+                                                  }
+                                                }
+                                              });
+                                            }
+                                          },
+                                    child: InputDecorator(
+                                      decoration: const InputDecoration(
+                                        labelText: 'Hạn nộp (Deadline)',
+                                        isDense: true,
+                                      ),
+                                      child: Text(DateFormat('dd/MM/yyyy').format(dueDates[i])),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -675,29 +1345,73 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 child: const Text('Hủy'),
               ),
               AppButton(
-                label: isSubmitting ? 'Đang xử lý...' : 'Xác nhận nhận đơn',
-                width: 150,
+                label: isSubmitting ? 'Đang gửi...' : 'Gửi đề xuất hợp đồng',
                 isLoading: isSubmitting,
-                onPressed: isSubmitting
+                onPressed: (!isBudgetMatching || isSubmitting)
                     ? null
                     : () async {
+                        final respText = responseTextController.text.trim();
+                        if (respText.isEmpty) {
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Vui lòng nhập lời nhắn phản hồi gửi người nghe.'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Validate strictly increasing due dates in future
+                        final now = DateTime.now();
+                        DateTime prev = now;
+                        for (int i = 0; i < stageCount; i++) {
+                          if (!dueDates[i].isAfter(prev)) {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('Hạn nộp đợt ${i + 1} phải lớn hơn hạn nộp đợt trước và ở tương lai.'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                            return;
+                          }
+                          prev = dueDates[i];
+                        }
+
                         setDialogState(() => isSubmitting = true);
                         try {
-                          await ref.read(creatorRequestsProvider.notifier).acceptRequest(
+                          final stages = List.generate(stageCount, (i) {
+                            final amt = int.parse(amountControllers[i].text.replaceAll('.', '').replaceAll(',', ''));
+                            final name = nameControllers[i].text.trim().isNotEmpty
+                                ? nameControllers[i].text.trim()
+                                : 'Đợt ${i + 1}';
+                            final desc = descControllers[i].text.trim().isNotEmpty
+                                ? descControllers[i].text.trim()
+                                : 'Bàn giao sản phẩm đợt ${i + 1} theo cam kết.';
+                            return ContractProposalStageInput(
+                              name: name,
+                              description: desc,
+                              dueAt: dueDates[i],
+                              amount: amt,
+                            );
+                          });
+
+                          await ref.read(creatorRequestsProvider.notifier).proposeContract(
                                 req.id,
-                                responseText: noteController.text.trim(),
+                                responseText: respText,
+                                milestones: stages,
                               );
+
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
                             const SnackBar(
-                              content: Text('Đã nhận đơn thành công! Bạn có thể bắt đầu sản xuất.'),
+                              content: Text('Đã gửi đề xuất hợp đồng thành công!'),
                               backgroundColor: AppColors.success,
                             ),
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
-                            SnackBar(content: Text('Lỗi nhận đơn: $e'), backgroundColor: AppColors.error),
+                            SnackBar(content: Text('Lỗi gửi đề xuất: $e'), backgroundColor: AppColors.error),
                           );
                         }
                       },
@@ -709,9 +1423,15 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
-  void _handleReject(PodcastRequest req) {
-    final reasonController = TextEditingController();
+  // ==========================================
+  // DIALOG: XEM & KÝ HỢP ĐỒNG ĐIỆN TỬ
+  // ==========================================
+  void _showContractDialog(PodcastRequest req, {bool autoSign = false}) {
+    final contract = req.contract;
+    if (contract == null) return;
+
     final messenger = ScaffoldMessenger.of(context);
+    bool agreed = autoSign;
     bool isSubmitting = false;
 
     showDialog(
@@ -719,60 +1439,141 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       barrierDismissible: false,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
           return AlertDialog(
-            title: const Text('Từ chối đơn yêu cầu', style: TextStyle(fontWeight: FontWeight.w700)),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Vui lòng cung cấp lý do từ chối để người nghe được biết.'),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    label: 'Lý do từ chối',
-                    hint: 'Ví dụ: Tác giả bận lịch sản xuất...',
-                    controller: reasonController,
-                    maxLines: 3,
-                    readOnly: isSubmitting,
+            title: Row(
+              children: [
+                const Icon(Icons.verified_user_rounded, color: AppColors.primaryLight, size: 22),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Hợp đồng sản xuất nội dung số',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                   ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 550,
+              height: 480,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                      borderRadius: AppSpacing.roundedSm,
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.fingerprint_rounded, size: 16, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'SHA-256: ${contract.contentHash}',
+                            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Nội dung văn bản hợp đồng
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.surfaceDark : Colors.white,
+                        borderRadius: AppSpacing.roundedSm,
+                        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          contract.contentSnapshot.isNotEmpty
+                              ? contract.contentSnapshot
+                              : 'Đang tải điều khoản hợp đồng...',
+                          style: const TextStyle(fontSize: 12.5, height: 1.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  if (!contract.isCreatorSigned) ...[
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: agreed,
+                          activeColor: AppColors.primaryLight,
+                          onChanged: isSubmitting
+                              ? null
+                              : (val) {
+                                  setDialogState(() => agreed = val ?? false);
+                                },
+                        ),
+                        const Expanded(
+                          child: Text(
+                            'Tôi đã đọc, hiểu rõ và đồng ý toàn bộ điều khoản trong hợp đồng điện tử này.',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      color: AppColors.successContainer,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Bạn đã ký hợp đồng lúc ${contract.creatorSignedAt != null ? DateFormat('HH:mm dd/MM/yyyy').format(contract.creatorSignedAt!.toLocal()) : ''}',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
             actions: [
               TextButton(
                 onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
-                child: const Text('Hủy'),
+                child: const Text('Đóng'),
               ),
-              AppButton(
-                label: isSubmitting ? 'Đang gửi...' : 'Từ chối',
-                type: AppButtonType.secondary,
-                width: 120,
-                isLoading: isSubmitting,
-                onPressed: isSubmitting
-                    ? null
-                    : () async {
-                        final reason = reasonController.text.trim();
-                        if (reason.isEmpty) {
-                          messenger.showSnackBar(
-                            const SnackBar(content: Text('Vui lòng nhập lý do từ chối.')),
-                          );
-                          return;
-                        }
-                        setDialogState(() => isSubmitting = true);
-                        try {
-                          await ref.read(creatorRequestsProvider.notifier).rejectRequest(req.id, reason);
-                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
-                          messenger.showSnackBar(
-                            const SnackBar(content: Text('Đã từ chối đơn yêu cầu.')),
-                          );
-                        } catch (e) {
-                          setDialogState(() => isSubmitting = false);
-                          messenger.showSnackBar(
-                            SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
-                          );
-                        }
-                      },
-              ),
+              if (!contract.isCreatorSigned)
+                AppButton(
+                  label: isSubmitting ? 'Đang ký...' : 'Ký xác nhận điện tử',
+                  isLoading: isSubmitting,
+                  onPressed: (!agreed || isSubmitting)
+                      ? null
+                      : () async {
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            await ref.read(creatorRequestsProvider.notifier).signContract(
+                                  req.id,
+                                  contractVersion: contract.contractVersion,
+                                  contentHash: contract.contentHash,
+                                );
+                            if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Đã ký hợp đồng điện tử thành công!'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                          } catch (e) {
+                            setDialogState(() => isSubmitting = false);
+                            messenger.showSnackBar(
+                              SnackBar(content: Text('Lỗi ký hợp đồng: $e'), backgroundColor: AppColors.error),
+                            );
+                          }
+                        },
+                ),
             ],
           );
         },
@@ -780,6 +1581,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
+  // ==========================================
+  // DIALOG: NỘP SẢN PHẨM BÀN GIAO
+  // ==========================================
   void _handleDeliver(PodcastRequest req, {String? milestoneId}) {
     final noteController = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
@@ -790,8 +1594,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     // Determine target milestone
     String? selectedMilestoneId = milestoneId;
     if (selectedMilestoneId == null || selectedMilestoneId.isEmpty) {
-      final pending = req.milestones.where((m) => m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED').toList();
-      selectedMilestoneId = pending.isNotEmpty ? pending.first.id : (req.milestones.isNotEmpty ? req.milestones.first.id : null);
+      final pending = req.milestones
+          .where((m) => m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED')
+          .toList();
+      selectedMilestoneId = pending.isNotEmpty
+          ? pending.first.id
+          : (req.milestones.isNotEmpty ? req.milestones.first.id : null);
     }
 
     showDialog(
@@ -801,8 +1609,6 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         builder: (dialogCtx, setDialogState) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           final byteCount = pickedBytes?.length ?? 0;
-
-          // Find milestone name
           final selectedMilestone = req.milestones.where((m) => m.id == selectedMilestoneId).firstOrNull;
 
           return AlertDialog(
@@ -812,19 +1618,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Chọn tệp âm thanh hoàn thiện để nộp cho người nghe nghiệm thu.'),
+                  const Text('Chọn tệp âm thanh/video hoàn thiện để nộp cho người nghe nghiệm thu.'),
                   const SizedBox(height: AppSpacing.sm),
                   if (req.milestones.length > 1) ...[
                     DropdownButtonFormField<String>(
                       initialValue: selectedMilestoneId,
                       decoration: const InputDecoration(
-                        labelText: 'Mốc thanh toán nộp bài',
+                        labelText: 'Đợt nộp bài',
                         isDense: true,
                       ),
                       items: req.milestones.map((m) {
                         return DropdownMenuItem<String>(
                           value: m.id,
-                          child: Text('Mốc ${m.order}: ${m.title} (${AppFormatters.formatVND(m.amount)})'),
+                          child: Text('Đợt ${m.order}: ${m.title} (${AppFormatters.formatVND(m.amount)})'),
                         );
                       }).toList(),
                       onChanged: isSubmitting
@@ -847,7 +1653,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Mốc ${selectedMilestone.order}: ${selectedMilestone.title}',
+                              'Đợt ${selectedMilestone.order}: ${selectedMilestone.title}',
                               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                           ),
@@ -861,7 +1667,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     const SizedBox(height: AppSpacing.md),
                   ],
 
-                  // Nút chọn file âm thanh
+                  // File picker box
                   InkWell(
                     onTap: isSubmitting
                         ? null
@@ -962,9 +1768,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           return;
                         }
                         final note = noteController.text.trim();
-                        setDialogState(() {
-                          isSubmitting = true;
-                        });
+                        setDialogState(() => isSubmitting = true);
                         try {
                           await ref.read(creatorRequestsProvider.notifier).deliverWork(
                                 req.id,
@@ -977,16 +1781,167 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
                             const SnackBar(
-                              content: Text('Đã nộp bài thành công! Đang chờ người nghe duyệt.'),
+                              content: Text('Đã nộp bài thành công! Người nghe có 3 ngày để nghiệm thu.'),
                               backgroundColor: AppColors.success,
                             ),
                           );
                         } catch (e) {
-                          setDialogState(() {
-                            isSubmitting = false;
-                          });
+                          setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
                             SnackBar(content: Text('Lỗi nộp bài: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ==========================================
+  // DIALOG: TRANH CHẤP / CHẤM DỨT HỢP ĐỒNG
+  // ==========================================
+  void _handleTermination(PodcastRequest req) {
+    final reasonController = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Yêu cầu chấm dứt hợp đồng', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.error)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Lưu ý: Khi yêu cầu chấm dứt, hợp đồng sẽ chuyển sang trạng thái Tranh chấp. Hai bên có 3 ngày thương lượng trước khi Admin đưa ra quyết định đền công / hoàn tiền.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Lý do chấm dứt hợp đồng',
+                    hint: 'Nêu rõ nguyên nhân không thể tiếp tục thực hiện...',
+                    controller: reasonController,
+                    maxLines: 4,
+                    readOnly: isSubmitting,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Hủy'),
+              ),
+              AppButton(
+                label: isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu chấm dứt',
+                type: AppButtonType.secondary,
+                isLoading: isSubmitting,
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final reason = reasonController.text.trim();
+                        if (reason.isEmpty) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Vui lòng nhập lý do chấm dứt.')),
+                          );
+                          return;
+                        }
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          await ref.read(creatorRequestsProvider.notifier).requestTermination(req.id, reason: reason);
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Đã mở yêu cầu chấm dứt hợp đồng.'),
+                              backgroundColor: AppColors.warning,
+                            ),
+                          );
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
+                          );
+                        }
+                      },
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ==========================================
+  // DIALOG: TỪ CHỐI ĐƠN HÀNG
+  // ==========================================
+  void _handleReject(PodcastRequest req) {
+    final reasonController = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Từ chối đơn yêu cầu', style: TextStyle(fontWeight: FontWeight.w700)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Ngân sách đang giữ sẽ được hoàn trả lại ví của người nghe. Vui lòng cung cấp lý do từ chối:'),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Lý do từ chối',
+                    hint: 'Ví dụ: Tác giả bận lịch sản xuất...',
+                    controller: reasonController,
+                    maxLines: 3,
+                    readOnly: isSubmitting,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Hủy'),
+              ),
+              AppButton(
+                label: isSubmitting ? 'Đang gửi...' : 'Từ chối',
+                type: AppButtonType.secondary,
+                width: 120,
+                isLoading: isSubmitting,
+                onPressed: isSubmitting
+                    ? null
+                    : () async {
+                        final reason = reasonController.text.trim();
+                        if (reason.isEmpty) {
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Vui lòng nhập lý do từ chối.')),
+                          );
+                          return;
+                        }
+                        setDialogState(() => isSubmitting = true);
+                        try {
+                          await ref.read(creatorRequestsProvider.notifier).rejectRequest(req.id, reason);
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('Đã từ chối đơn yêu cầu và hoàn tiền giữ cho thính giả.')),
+                          );
+                        } catch (e) {
+                          setDialogState(() => isSubmitting = false);
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
                           );
                         }
                       },
