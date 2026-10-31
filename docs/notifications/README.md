@@ -103,6 +103,7 @@ Một endpoint được dùng chung cho Listener, Creator/CC, Staff và Admin. R
 | `REPORT_RESULT` | Admin/Staff xử lý report do Listener gửi | thường không có |
 | `PAYMENT_RESULT` / `PAYMENT_REFUND` | Thanh toán hoặc hoàn tiền của Listener được xử lý | thường không có |
 | `CONTRACT_DISPUTE` / `DISPUTE_RESULT` | Tranh chấp hợp đồng của Listener mở/được giải quyết | thường không có |
+| `DISPUTE_CONFIRM_REQUIRED` / `DISPUTE_WITHDRAWN` | Bên kia mở tranh chấp cần xác nhận hoặc đã rút đơn trước khi xác nhận | thường không có |
 | `CREATOR_APPLICATION` | Đơn đăng ký Creator được duyệt/từ chối | thường không có |
 | `ACCOUNT_ACCESS` / `ACCOUNT_ROLE` | Admin đổi trạng thái truy cập hoặc role tài khoản | thường không có |
 
@@ -117,6 +118,7 @@ Một endpoint được dùng chung cho Listener, Creator/CC, Staff và Admin. R
 | `PODCAST_REVIEW` / `PODCAST_MODERATION` | Staff/Admin/AI duyệt hoặc xử lý podcast | thường không có |
 | `PAYMENT_RESULT` / `PAYMENT_REFUND` | Thanh toán liên quan nội dung/gói của CC được xử lý | thường không có |
 | `CONTRACT_DISPUTE` / `DISPUTE_RESULT` | Hợp đồng của CC có tranh chấp hoặc được giải quyết | thường không có |
+| `DISPUTE_CONFIRM_REQUIRED` / `DISPUTE_WITHDRAWN` | Bên kia mở tranh chấp cần xác nhận hoặc đã rút đơn trước khi xác nhận | thường không có |
 | `ACCOUNT_ACCESS` / `ACCOUNT_ROLE` | Admin đổi trạng thái truy cập hoặc role | thường không có |
 
 `NEW_MEMBERSHIP` chỉ phát sinh khi membership được xác nhận thành công; checkout `PENDING` chưa tạo loại thông báo này.

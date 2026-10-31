@@ -163,6 +163,32 @@ public class AdminDisputeService {
     return item(disputes.save(dispute));
   }
 
+  @Transactional
+  public DisputeItem withdraw(UUID actor, UUID id) {
+    AppUser user = support.user(actor);
+    ContractDispute snapshot = requireDispute(id);
+    Contract contract = contracts.lockById(snapshot.getContract().getContractId())
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hợp đồng."));
+    ContractDispute dispute = disputes.lockById(id).orElseThrow();
+    if (!dispute.getOpenedBy().getUserId().equals(actor))
+      throw new ResourceForbiddenException("Chỉ người mở tranh chấp được rút đơn.");
+    if ("WITHDRAWN".equals(dispute.getStatus())) return item(dispute);
+    if (!"AWAITING_RESPONSE".equals(dispute.getStatus())
+        || !dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now()))
+      throw new ResourceConflictException("Chỉ được rút tranh chấp trước khi bên kia xác nhận và còn trong hạn 3 ngày.");
+    AdminSupportService.state(contract.getStatus(), "DISPUTED");
+    contract.setStatus(dispute.getPreviousContractStatus());
+    dispute.setStatus("WITHDRAWN");
+    dispute.setResolvedAt(Instant.now());
+    disputes.save(dispute);
+    contracts.save(contract);
+    AppUser opponent = contract.getUser().getUserId().equals(actor)
+        ? contract.getProducerProfile().getUser() : contract.getUser();
+    staffNotifier.notifyWithdrawn(opponent, "hợp đồng", id);
+    support.audit(user, "WITHDRAW_DISPUTE", "CONTRACT_DISPUTE", id, "Người mở rút tranh chấp");
+    return item(dispute);
+  }
+
   public Page<DisputeItem> mine(UUID actor, int page, int size) {
     support.user(actor);
     return disputes

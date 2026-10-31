@@ -72,6 +72,13 @@ public class MilestoneDisputeController {
                 request == null ? null : request.listenerWinAction());
     }
 
+    @PostMapping("/{milestoneId}/disputes/{disputeId}/withdraw")
+    @Operation(summary = "Người mở rút tranh chấp đợt trước khi bên kia xác nhận")
+    public DisputeResponse withdraw(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID milestoneId,
+            @PathVariable UUID disputeId) {
+        return podcastRequestService.withdrawMilestoneDispute(userId(jwt), milestoneId, disputeId);
+    }
+
     private UUID userId(Jwt jwt) {
         return UUID.fromString(jwt.getClaimAsString("user_id"));
     }

@@ -503,6 +503,33 @@ public class PodcastRequestService {
         return toDisputeResponse(disputeRepository.save(dispute));
     }
 
+    @Transactional
+    public DisputeResponse withdrawMilestoneDispute(UUID actorId, UUID stageId, UUID disputeId) {
+        requireActiveUser(actorId);
+        ContractStage stage = requireStageForUpdate(stageId);
+        requireStageParticipant(stage, actorId);
+        MilestoneDispute dispute = disputeRepository.findByIdForUpdate(disputeId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy tranh chấp đợt."));
+        if (!stageId.equals(dispute.getContractStage().getContractStageId()))
+            throw new PodcastWorkflowNotFoundException("Tranh chấp không thuộc đợt này.");
+        if (!actorId.equals(dispute.getRaisedBy().getUserId()))
+            throw new PodcastWorkflowException("Chỉ người mở tranh chấp được rút đơn.");
+        if ("WITHDRAWN".equals(dispute.getStatus())) return toDisputeResponse(dispute);
+        if (!"AWAITING_RESPONSE".equals(dispute.getStatus())
+                || !dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now()))
+            throw new PodcastWorkflowException("Chỉ được rút tranh chấp trước khi bên kia xác nhận và còn trong hạn 3 ngày.");
+        requireStageStatus(stage, ContractStageStatus.DISPUTED);
+        stage.setStatus(dispute.getPreviousStageStatus());
+        dispute.setStatus("WITHDRAWN");
+        dispute.setResolvedAt(Instant.now());
+        stageRepository.save(stage);
+        disputeRepository.save(dispute);
+        AppUser opponent = stage.getContract().getUser().getUserId().equals(actorId)
+                ? stage.getContract().getProducerProfile().getUser() : stage.getContract().getUser();
+        staffNotifier.notifyWithdrawn(opponent, "đợt", disputeId);
+        return toDisputeResponse(dispute);
+    }
+
     @Transactional(readOnly = true)
     public List<DisputeResponse> getOpenDisputes(UUID adminId) {
         requireDisputeReviewer(requireActiveUser(adminId));
