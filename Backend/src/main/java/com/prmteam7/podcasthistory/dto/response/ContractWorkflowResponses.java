@@ -9,7 +9,9 @@ public final class ContractWorkflowResponses {
     private ContractWorkflowResponses() {}
 
     public record Request(UUID requestId, String status, BigDecimal budgetAmount,
-                          BigDecimal heldAmount, String currency) {}
+                          BigDecimal heldAmount, String currency,
+                          String requestedTitle, UUID listenerId, String listenerName,
+                          UUID creatorProfileId, String creatorChannelName) {}
 
     public record RequestDetail(UUID requestId, UUID creatorProfileId, String status,
                                 String requestedTitle, String description,
@@ -17,7 +19,10 @@ public final class ContractWorkflowResponses {
                                 boolean fundsHeld, String currency,
                                 String productType, String fileFormat, String duration,
                                 String acceptanceCriteria, boolean autoAcceptEnabled,
-                                Instant createdAt) {}
+                                Instant createdAt,
+                                UUID listenerId, String listenerName, String listenerAvatarUrl,
+                                String creatorChannelName, String creatorAvatarUrl,
+                                UUID contractId, String contractStatus) {}
 
     public record Stage(UUID milestoneId, String name, String description, Instant dueAt,
                         BigDecimal amount, String status) {}

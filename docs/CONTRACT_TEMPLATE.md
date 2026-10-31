@@ -1,6 +1,6 @@
 # HỢP ĐỒNG CUNG CẤP VÀ SẢN XUẤT NỘI DUNG SỐ
 
-> Bản đối chiếu với hợp đồng người dùng cung cấp. Backend đóng gói nội dung phiên bản 4 tại `Backend/src/main/resources/contracts/contract-v4.md` để tạo snapshot và lưu hai lần ký riêng. Bản mẫu này chưa phải một hợp đồng đã ký; bản ký cụ thể lấy từ `GET /api/requests/{requestId}/contract`. Các hợp đồng đã tạo vẫn giữ bản nội dung và hash đã lưu.
+> Mẫu hợp đồng phiên bản 6 dùng cho hợp đồng tạo mới. Backend lưu bản nội dung và hash riêng khi tạo hợp đồng; hợp đồng đã tạo giữ nguyên bản đã ký. FE hiển thị `contentSnapshot` từ `GET /api/requests/{requestId}/contract` khi ký.
 
 **Mã hợp đồng:** [CONTRACT_ID]  
 **Ngày lập:** [CREATED_AT]  
@@ -28,7 +28,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 2.1. Bên A thuê Bên B thực hiện sản phẩm nội dung số theo yêu cầu đã thống nhất.
 
 - Tên dự án: [PROJECT_NAME]
-- Loại sản phẩm: [AUDIO]
+- Loại sản phẩm: [AUDIO/VIDEO]
 - Mô tả yêu cầu: [REQUEST_DESCRIPTION]
 - Định dạng bàn giao: [FILE_FORMAT]
 - Thời lượng hoặc khối lượng: [DURATION]
@@ -66,7 +66,7 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 5.2. Bên A có **03 ngày** kể từ bàn giao hợp lệ để phản hồi.
 
-5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt sẽ tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
+5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
 
 5.4. Bên A được yêu cầu chỉnh sửa tối đa **03 lần** cho mỗi đợt trên hệ thống. Khi hết lượt, hai bên có thể mở tranh chấp để xử lý bất đồng.
 
@@ -86,31 +86,23 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 6.5. Rút tiền từ ví Creator theo quy trình payout của nền tảng.
 
-## ĐIỀU 7. CHẤM DỨT TRƯỚC HẠN
+## ĐIỀU 7. HỦY YÊU CẦU VÀ CHẤM DỨT HỢP ĐỒNG
 
-7.1. Hai bên có thể đề nghị chấm dứt khi không thể tiếp tục.
+7.1. Trước khi cả hai bên ký và hợp đồng có hiệu lực, Bên A được hủy yêu cầu. Nếu ngân sách đã được tạm giữ khi Bên B gửi đề xuất, nền tảng hoàn toàn bộ khoản còn giữ cho Bên A; hợp đồng chưa có hiệu lực và các đợt đề xuất bị hủy.
 
-7.2. Nếu Bên B đã bàn giao sản phẩm đạt tiêu chí tối thiểu của đợt đang làm, khoản đền công có thể bằng 30% giá trị đợt theo quyết định chấm dứt hợp lệ.
+7.2. Sau khi hợp đồng có hiệu lực, bất đồng về việc thực hiện hoặc nghiệm thu được xử lý theo Điều 8. Kết luận bên thắng làm chấm dứt toàn bộ hợp đồng, kể cả khi tranh chấp chỉ liên quan một đợt. Không áp dụng khoản đền công cố định 30% hoặc phí 10% cho kết luận tranh chấp theo hợp đồng này.
 
-7.3. Nền tảng khấu trừ 10% **khoản đền công của Bên B**, thay phí 20% thông thường trên cùng khoản đó.
-
-7.4. Phần ngân sách chưa giải ngân được hoàn cho Bên A. Phí 10% nằm trong khoản đền công, không thu thêm Bên A.
-
-7.5. Các đợt đã nghiệm thu và giải ngân giữ nguyên, không tính lại phí.
-
-7.6. Chưa bàn giao hoặc sản phẩm không đạt tiêu chí tối thiểu thì khoản đền công 30% không tự động phát sinh; hoàn tiền theo thỏa thuận hoặc quyết định tranh chấp.
-
-7.7. Nhấn “Từ chối” không tự động chấm dứt hoặc trả đền công.
+7.3. Các đợt đã nghiệm thu và giải ngân trước khi chấm dứt giữ nguyên; không giải ngân hoặc khấu trừ phí lần thứ hai. Nhấn “Từ chối” bản bàn giao không tự động hủy hợp đồng hoặc quyết toán ngân sách.
 
 ## ĐIỀU 8. TRANH CHẤP
 
-8.1. Tiền phần việc đang tranh chấp tiếp tục được giữ.
+8.1. Toàn bộ ngân sách chưa giải ngân tiếp tục được giữ trong thời gian tranh chấp; không nghiệm thu hoặc giải ngân đợt đang tranh chấp cho đến khi vụ việc được rút hoặc giải quyết.
 
-8.2. Listener hoặc CC có thể mở tranh chấp cho toàn hợp đồng hoặc một đợt. Bên còn lại có 03 ngày để xác nhận; hệ thống gửi thông báo và đóng băng phần đang tranh chấp. Nếu không xác nhận đúng hạn, bên mở tranh chấp thắng. Nếu xác nhận, Staff xử lý trên hồ sơ và chứng cứ; Admin được xem và có thể xử lý khi cần.
+8.2. Listener hoặc CC có thể mở tranh chấp cho toàn hợp đồng hoặc một đợt. Hệ thống thông báo cho bên còn lại; bên đó có 03 ngày để xác nhận. Bên mở có thể rút tranh chấp trước khi bên còn lại xác nhận và trước khi hết hạn; khi đó hợp đồng tiếp tục theo trạng thái trước tranh chấp. Nếu bên còn lại không xác nhận đúng hạn, bên mở thắng. Nếu xác nhận, Staff xử lý trên hồ sơ và chứng cứ; Admin được xem và có thể xử lý khi cần.
 
-8.3. Người xử lý xem yêu cầu, tiêu chí nghiệm thu, sản phẩm, lịch sử sửa, thời gian và bằng chứng hai bên. Nếu Listener thắng, áp dụng lựa chọn của Listener khi mở hoặc xác nhận tranh chấp: hủy hợp đồng và hoàn toàn bộ tiền còn giữ, hoặc hoàn tiền đợt hiện tại rồi tiếp tục hợp đồng. Các đợt đã trả tiền không bị thu hồi.
+8.3. Người xử lý xem yêu cầu, tiêu chí nghiệm thu, sản phẩm, lịch sử sửa, thời gian và bằng chứng hai bên. Khi có quyết định bên thắng, hợp đồng chấm dứt kể cả tranh chấp chỉ liên quan một đợt. Nếu Listener thắng, toàn bộ số tiền còn giữ trong ngân sách hợp đồng, gồm phần đợt đang làm và các đợt chưa làm, được hoàn vào ví Listener, không khấu trừ phí. Các đợt đã giải ngân trước đó không bị thu hồi.
 
-8.4. Nếu CC thắng, hợp đồng tiếp tục theo trạng thái trước tranh chấp; đợt chưa được tự động nghiệm thu hay giải ngân. Listener nghiệm thu theo luồng thông thường. Quyết định và hoàn tiền được ghi vào lịch sử.
+8.4. Nếu CC thắng, toàn bộ số tiền còn giữ trong ngân sách hợp đồng, gồm phần đợt đang làm và các đợt chưa làm, được quyết toán một lần: CC nhận 80%, nền tảng ghi nhận phí 20% từ khoản này. Hợp đồng chấm dứt, các đợt chưa hoàn thành bị hủy. Khoản đã giải ngân trước đó không được giải ngân hoặc tính phí lại. Quyết định và giao dịch được ghi vào lịch sử.
 
 8.5. Quyết định nội bộ không làm mất quyền khiếu nại, khởi kiện hoặc yêu cầu cơ quan có thẩm quyền.
 
@@ -122,7 +114,7 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 9.3. Quyền sử dụng quy định tại khoản 9.2 phát sinh sau khi đợt tương ứng được nghiệm thu và thanh toán đủ.
 
-9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán phải tuân theo thỏa thuận riêng và quy định pháp luật.
+9.4. Việc CC nhận tiền do thắng tranh chấp không tự động được coi là Bên A đã nghiệm thu sản phẩm chưa được duyệt. Quyền sử dụng sản phẩm chưa nghiệm thu hoặc chưa thanh toán tuân theo thỏa thuận riêng và quy định pháp luật.
 
 ## ĐIỀU 10. TRÁCH NHIỆM
 

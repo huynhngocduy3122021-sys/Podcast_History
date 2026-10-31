@@ -213,7 +213,9 @@ public class PodcastRequestService {
                 request.getDescription(), request.getRequestFee(), request.getCurrency(), request.getStatus(),
                 escrow == null ? "LEGACY" : "ESCROW", escrow == null ? null : escrow.getProductType(),
                 contract == null ? null : contract.getContractId(), contract == null ? null : contract.getStatus(),
-                request.getCreatedAt(), request.getRespondedAt());
+                request.getCreatedAt(), request.getRespondedAt(), displayName(request.getUser()),
+                request.getUser().getAvatarUrl(), request.getProducerProfile().getChannelName(),
+                request.getProducerProfile().getAvatarUrl());
     }
 
     @Transactional
@@ -449,8 +451,6 @@ public class PodcastRequestService {
         requireStageStatus(stage, ContractStageStatus.SUBMITTED, ContractStageStatus.REVISION_REQUESTED);
         boolean escrow = escrowService.isEscrowContract(stage.getContract());
         boolean listenerOpened = stage.getContract().getUser().getUserId().equals(userId);
-        if (escrow && listenerOpened && action == null)
-            throw new PodcastWorkflowException("Listener cần chọn cách xử lý khi thắng tranh chấp.");
         if (disputeRepository.findFirstByContractStage_ContractStageIdAndStatus(
                 stageId, DisputeStatus.OPEN.name()).isPresent()) {
             throw new PodcastWorkflowException("Mốc này đang có tranh chấp cần Admin xử lý.");
@@ -493,7 +493,6 @@ public class PodcastRequestService {
         if (!dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now()))
             throw new PodcastWorkflowException("Đã hết hạn 3 ngày xác nhận tranh chấp.");
         if (stage.getContract().getUser().getUserId().equals(actorId)) {
-            if (action == null) throw new PodcastWorkflowException("Listener cần chọn cách xử lý khi thắng.");
             dispute.setListenerWinAction(action);
         }
         dispute.setOpponentConfirmedAt(Instant.now());
@@ -624,11 +623,9 @@ public class PodcastRequestService {
             AppUser reviewer, MilestoneDisputeDecision winner, String note) {
         if (winner == MilestoneDisputeDecision.LISTENER_WINS) {
             escrowService.resolveListenerWin(stage.getContract().getContractId(),
-                    dispute.getListenerWinAction(), stage.getContractStageId());
+                    ListenerWinAction.CANCEL_CONTRACT, stage.getContractStageId());
         } else {
-            stage.setStatus(dispute.getPreviousStageStatus() == null
-                    ? ContractStageStatus.SUBMITTED.name() : dispute.getPreviousStageStatus());
-            stageRepository.save(stage);
+            escrowService.resolveCreatorWin(stage.getContract().getContractId());
         }
         dispute.setReviewedBy(reviewer);
         dispute.setDecision(winner.name());
@@ -695,7 +692,16 @@ public class PodcastRequestService {
                 request.getCurrency(),
                 request.getStatus(),
                 request.getCreatedAt(),
-                request.getRespondedAt());
+                request.getRespondedAt(),
+                displayName(request.getUser()),
+                request.getUser().getAvatarUrl(),
+                request.getProducerProfile().getAvatarUrl());
+    }
+
+    private String displayName(AppUser user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) return user.getDisplayName();
+        if (user.getUsername() != null && !user.getUsername().isBlank()) return user.getUsername();
+        return user.getEmail();
     }
 
     private MilestoneResponse toMilestoneResponse(ContractStage stage) {
@@ -740,9 +746,13 @@ public class PodcastRequestService {
     }
 
     private DisputeResponse toDisputeResponse(MilestoneDispute dispute) {
+        ContractStage stage = dispute.getContractStage();
+        Contract contract = stage.getContract();
+        SeriesRequest request = contract.getSeriesResponse() == null
+                ? null : contract.getSeriesResponse().getSeriesRequest();
         return new DisputeResponse(
                 dispute.getMilestoneDisputeId(),
-                dispute.getContractStage().getContractStageId(),
+                stage.getContractStageId(),
                 dispute.getRaisedBy().getUserId(),
                 dispute.getReason(),
                 dispute.getStatus(),
@@ -753,7 +763,14 @@ public class PodcastRequestService {
                 dispute.getResolvedAt(),
                 dispute.getCreatedAt() == null ? null : dispute.getCreatedAt().plus(3, ChronoUnit.DAYS),
                 dispute.getOpponentConfirmedAt(),
-                dispute.getListenerWinAction() == null ? null : dispute.getListenerWinAction().name());
+                dispute.getListenerWinAction() == null ? null : dispute.getListenerWinAction().name(),
+                contract.getContractId(), request == null ? null : request.getSeriesRequestId(),
+                request == null ? null : request.getRequestedTitle(), stage.getStageName(),
+                contract.getUser().getUserId(), displayName(contract.getUser()),
+                contract.getProducerProfile().getProducerProfileId(),
+                contract.getProducerProfile().getChannelName(),
+                displayName(dispute.getRaisedBy()),
+                dispute.getReviewedBy() == null ? null : displayName(dispute.getReviewedBy()));
     }
 
     private ProducerProfile requireCreatorProfile(UUID userId) {

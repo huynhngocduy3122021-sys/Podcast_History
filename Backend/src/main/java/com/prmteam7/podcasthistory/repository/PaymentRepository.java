@@ -35,6 +35,22 @@ public interface PaymentRepository
   @org.springframework.data.jpa.repository.Query("""
       select coalesce(sum(payment.amount), 0)
       from Payment payment
+      where payment.seriesRequest.producerProfile.producerProfileId = :creatorId
+        and payment.paymentMethod = 'WALLET_ESCROW_DISPUTE'
+        and upper(payment.status) in ('PAID', 'SUCCESS', 'COMPLETED')
+        and upper(payment.currency) = upper(:currency)
+        and payment.paidAt >= :from
+        and payment.paidAt < :to
+      """)
+  BigDecimal sumCreatorDisputeRevenue(
+      @org.springframework.data.repository.query.Param("creatorId") UUID creatorId,
+      @org.springframework.data.repository.query.Param("currency") String currency,
+      @org.springframework.data.repository.query.Param("from") Instant from,
+      @org.springframework.data.repository.query.Param("to") Instant to);
+
+  @org.springframework.data.jpa.repository.Query("""
+      select coalesce(sum(payment.amount), 0)
+      from Payment payment
       where payment.subscription.membershipPlan.producerProfile.producerProfileId = :creatorId
         and upper(payment.status) in ('PAID', 'SUCCESS', 'COMPLETED')
         and upper(payment.currency) = upper(:currency)

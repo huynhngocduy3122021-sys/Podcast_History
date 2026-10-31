@@ -18,4 +18,8 @@ public record CreatorRequestListItem(
         UUID contractId,
         String contractStatus,
         Instant createdAt,
-        Instant respondedAt) {}
+        Instant respondedAt,
+        String listenerName,
+        String listenerAvatarUrl,
+        String creatorChannelName,
+        String creatorAvatarUrl) {}
