@@ -28,7 +28,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 2.1. Bên A thuê Bên B thực hiện sản phẩm nội dung số theo yêu cầu đã thống nhất.
 
 - Tên dự án: [PROJECT_NAME]
-- Loại sản phẩm: [AUDIO/VIDEO]
+- Loại sản phẩm: [AUDIO]
 - Mô tả yêu cầu: [REQUEST_DESCRIPTION]
 - Định dạng bàn giao: [FILE_FORMAT]
 - Thời lượng hoặc khối lượng: [DURATION]
@@ -66,7 +66,7 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 5.2. Bên A có **03 ngày** kể từ bàn giao hợp lệ để phản hồi.
 
-5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
+5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt sẽ tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
 
 5.4. Bên A được yêu cầu chỉnh sửa tối đa **03 lần** cho mỗi đợt trên hệ thống. Khi hết lượt, hai bên có thể mở tranh chấp để xử lý bất đồng.
 
@@ -122,7 +122,7 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 9.3. Quyền sử dụng quy định tại khoản 9.2 phát sinh sau khi đợt tương ứng được nghiệm thu và thanh toán đủ.
 
-9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán tuân theo thỏa thuận riêng và quy định pháp luật.
+9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán phải tuân theo thỏa thuận riêng và quy định pháp luật.
 
 ## ĐIỀU 10. TRÁCH NHIỆM
 

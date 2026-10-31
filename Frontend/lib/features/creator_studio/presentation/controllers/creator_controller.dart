@@ -440,8 +440,12 @@ class CreatorRequestsNotifier
     }
   }
 
-  Future<void> acceptRequest(String id) async {
-    await _repo.acceptRequest(id);
+  Future<void> acceptRequest(
+    String id, {
+    String? responseText,
+    List<Map<String, dynamic>>? milestones,
+  }) async {
+    await _repo.acceptRequest(id, responseText: responseText, milestones: milestones);
     await loadRequests();
   }
 
@@ -450,12 +454,67 @@ class CreatorRequestsNotifier
     await loadRequests();
   }
 
+  Future<ContractAgreement> proposeContract(
+    String requestId, {
+    required String responseText,
+    required List<ContractProposalStageInput> milestones,
+  }) async {
+    final agreement = await _repo.proposeContract(
+      requestId,
+      responseText: responseText,
+      milestones: milestones,
+    );
+    await loadRequests();
+    return agreement;
+  }
+
+  Future<ContractAgreement?> getContractAgreement(String requestId) async {
+    return _repo.getContractAgreement(requestId);
+  }
+
+  Future<ContractAgreement> signContract(
+    String requestId, {
+    required int contractVersion,
+    required String contentHash,
+  }) async {
+    final agreement = await _repo.signContract(
+      requestId,
+      contractVersion: contractVersion,
+      contentHash: contentHash,
+    );
+    await loadRequests();
+    return agreement;
+  }
+
+  Future<void> requestTermination(String requestId, {required String reason}) async {
+    await _repo.requestTermination(requestId, reason: reason);
+    await loadRequests();
+  }
+
+  Future<ContractTerminationStatus?> getTerminationRequest(String requestId) async {
+    return _repo.getTerminationRequest(requestId);
+  }
+
+  Future<void> disputeMilestone(String milestoneId, {required String reason}) async {
+    await _repo.disputeMilestone(milestoneId, reason: reason);
+    await loadRequests();
+  }
+
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(String milestoneId) async {
+    return _repo.getMilestoneSubmissions(milestoneId);
+  }
+
+  Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId) async {
+    return _repo.getMilestoneMediaUrl(milestoneId, submissionId);
+  }
+
   Future<void> deliverWork(
     String id,
     String fileUrl,
     String note, {
     List<int>? fileBytes,
     String? filename,
+    String? milestoneId,
   }) async {
     await _repo.deliverWork(
       id,
@@ -463,6 +522,7 @@ class CreatorRequestsNotifier
       note,
       fileBytes: fileBytes,
       filename: filename,
+      milestoneId: milestoneId,
     );
     await loadRequests();
   }
@@ -979,6 +1039,12 @@ final creatorPlanTemplatesProvider =
     FutureProvider<List<CreatorPlanTemplate>>((ref) async {
   final repo = ref.watch(creatorRepositoryProvider);
   return repo.getMembershipPlanTemplates();
+});
+
+final creatorMembershipsProvider =
+    FutureProvider.family<PageCreatorMembers, String>((ref, status) async {
+  final repo = ref.watch(creatorRepositoryProvider);
+  return repo.getCreatorMemberships(status: status, page: 0, size: 50);
 });
 
 // Studio Notifications

@@ -973,7 +973,9 @@ class _ShellState extends State<Shell> {
       final results = await Future.wait<dynamic>([
         api.membershipPlans(show.creatorId!),
         api.subscriptions(),
-        api.wallet().catchError((_) => <String, dynamic>{'availableBalance': 0}),
+        api.wallet().catchError(
+          (_) => <String, dynamic>{'availableBalance': 0},
+        ),
       ]);
       plans = results[0] as List<Map<String, dynamic>>;
       subscriptions = results[1] as List<Map<String, dynamic>>;
@@ -1033,11 +1035,17 @@ class _ShellState extends State<Shell> {
                     Text(
                       () {
                         final rawName = '${activeSub['planName'] ?? ''}'.trim();
-                        return (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
+                        return (rawName.isEmpty ||
+                                rawName.toLowerCase().startsWith(
+                                  'gói thành viên',
+                                ))
                             ? 'Gói thành viên'
                             : rawName;
                       }(),
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1046,7 +1054,10 @@ class _ShellState extends State<Shell> {
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.green.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(6),
@@ -1064,38 +1075,58 @@ class _ShellState extends State<Shell> {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('Đặc quyền hội viên của bạn:',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const Text(
+                'Đặc quyền hội viên của bạn:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              ),
               const SizedBox(height: 8),
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text('Nghe toàn bộ podcast độc quyền của kênh',
-                        style: TextStyle(fontSize: 13)),
+                    child: Text(
+                      'Nghe toàn bộ podcast độc quyền của kênh',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text('Huy hiệu hội viên kênh nổi bật',
-                        style: TextStyle(fontSize: 13)),
+                    child: Text(
+                      'Huy hiệu hội viên kênh nổi bật',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
               const Row(
                 children: [
-                  Icon(Icons.check_circle_rounded, color: Colors.green, size: 18),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green,
+                    size: 18,
+                  ),
                   SizedBox(width: 8),
                   Expanded(
-                    child: Text('Ưu tiên gửi & duyệt yêu cầu series podcast',
-                        style: TextStyle(fontSize: 13)),
+                    child: Text(
+                      'Ưu tiên gửi & duyệt yêu cầu series podcast',
+                      style: TextStyle(fontSize: 13),
+                    ),
                   ),
                 ],
               ),
@@ -1125,12 +1156,14 @@ class _ShellState extends State<Shell> {
     final plan = plans.first;
     final planId = '${plan['membershipPlanId']}';
     final rawName = '${plan['name'] ?? ''}'.trim();
-    final planName = (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
+    final planName =
+        (rawName.isEmpty || rawName.toLowerCase().startsWith('gói thành viên'))
         ? 'Gói thành viên'
         : rawName;
     final priceVal = (plan['price'] as num?)?.toDouble() ?? 0.0;
     final durationDays = (plan['durationDays'] as num?)?.toInt() ?? 30;
-    final desc = '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền hội viên.'}';
+    final desc =
+        '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền hội viên.'}';
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -1155,7 +1188,8 @@ class _ShellState extends State<Shell> {
     if (result == true && mounted) {
       try {
         final newWallet = await api.wallet();
-        final newBal = (newWallet['availableBalance'] as num?)?.round() ?? walletBalance;
+        final newBal =
+            (newWallet['availableBalance'] as num?)?.round() ?? walletBalance;
         setState(() => walletBalance = newBal);
       } catch (_) {}
     }
@@ -1279,6 +1313,8 @@ class _ShellState extends State<Shell> {
       ),
       Profile(
         displayName: widget.displayName,
+        api: api,
+        socket: _notificationSocket,
         onTheme: widget.onTheme,
         onLogout: widget.onLogout,
         session: widget.session,
@@ -1463,10 +1499,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
 
     if (_selectedMethod == 'WALLET') {
       try {
-        await widget.api.checkout(
-          widget.planId,
-          paymentMethod: 'WALLET',
-        );
+        await widget.api.checkout(widget.planId, paymentMethod: 'WALLET');
         if (!mounted) return;
         Navigator.of(context).pop(true);
         messenger.showSnackBar(
@@ -1610,7 +1643,10 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                       ),
                       Text(
                         widget.show.channel,
-                        style: const TextStyle(fontSize: 13, color: Colors.grey),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -1635,7 +1671,9 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                 ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark ? const Color(0xFF6B4C38) : const Color(0xFFF2D1B8),
+                  color: isDark
+                      ? const Color(0xFF6B4C38)
+                      : const Color(0xFFF2D1B8),
                 ),
               ),
               child: Column(
@@ -1677,7 +1715,9 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? const Color(0xFFFFB800) : const Color(0xFFB87800),
+                      color: isDark
+                          ? const Color(0xFFFFB800)
+                          : const Color(0xFFB87800),
                     ),
                   ),
                   if (widget.description.isNotEmpty) ...[
@@ -1695,31 +1735,46 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                   const SizedBox(height: 10),
                   const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green, size: 16),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
-                      Text('Mở khóa podcast độc quyền (Members-Only)',
-                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        'Mở khóa podcast độc quyền (Members-Only)',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green, size: 16),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
-                      Text('Huy hiệu hội viên nổi bật bên cạnh tên',
-                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        'Huy hiệu hội viên nổi bật bên cạnh tên',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   const Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green, size: 16),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green,
+                        size: 16,
+                      ),
                       SizedBox(width: 6),
-                      Text('Ưu tiên gửi & duyệt yêu cầu series podcast',
-                          style: TextStyle(fontSize: 12)),
+                      Text(
+                        'Ưu tiên gửi & duyệt yêu cầu series podcast',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ],
                   ),
                 ],
@@ -1750,8 +1805,8 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                   ),
                   color: _selectedMethod == 'WALLET'
                       ? (isDark
-                          ? const Color(0xFFFFB800).withValues(alpha: 0.08)
-                          : const Color(0xFFFFB800).withValues(alpha: 0.05))
+                            ? const Color(0xFFFFB800).withValues(alpha: 0.08)
+                            : const Color(0xFFFFB800).withValues(alpha: 0.05))
                       : null,
                 ),
                 child: Row(
@@ -1782,8 +1837,11 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                           : null,
                     ),
                     const SizedBox(width: 10),
-                    const Icon(Icons.account_balance_wallet_rounded,
-                        color: Color(0xFFFFB800), size: 26),
+                    const Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: Color(0xFFFFB800),
+                      size: 26,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1853,8 +1911,8 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                   ),
                   color: _selectedMethod == 'SEPAY'
                       ? (isDark
-                          ? const Color(0xFFFFB800).withValues(alpha: 0.08)
-                          : const Color(0xFFFFB800).withValues(alpha: 0.05))
+                            ? const Color(0xFFFFB800).withValues(alpha: 0.08)
+                            : const Color(0xFFFFB800).withValues(alpha: 0.05))
                       : null,
                 ),
                 child: Row(
@@ -1885,8 +1943,11 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                           : null,
                     ),
                     const SizedBox(width: 10),
-                    const Icon(Icons.qr_code_2_rounded,
-                        color: Colors.blueAccent, size: 26),
+                    const Icon(
+                      Icons.qr_code_2_rounded,
+                      color: Colors.blueAccent,
+                      size: 26,
+                    ),
                     const SizedBox(width: 12),
                     const Expanded(
                       child: Column(
@@ -1934,8 +1995,8 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                       child: Text(
                         _selectedMethod == 'WALLET'
                             ? (hasEnoughBalance
-                                ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
-                                : 'Ví không đủ số dư - Nạp ví ngay')
+                                  ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
+                                  : 'Ví không đủ số dư - Nạp ví ngay')
                             : 'Tạo mã QR thanh toán (${_formatVnd(priceInt)})',
                         style: const TextStyle(
                           fontSize: 15,
@@ -2031,8 +2092,8 @@ class _PaymentDialogState extends State<PaymentDialog> {
     final titleText = _status == 'PAID'
         ? 'Thanh toán thành công'
         : terminal
-            ? 'Giao dịch đã hết hạn'
-            : 'Thanh toán';
+        ? 'Giao dịch đã hết hạn'
+        : 'Thanh toán';
     return AlertDialog(
       title: Text(titleText),
       content: SingleChildScrollView(
@@ -3797,6 +3858,9 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
   bool historyLoading = true;
   String? historyError;
   List<Map<String, dynamic>> history = const [];
+  bool walletTransactionsLoading = true;
+  String? walletTransactionsError;
+  List<Map<String, dynamic>> walletTransactions = const [];
   bool showAllHistory = false;
   void Function()? removeRealtimeListener;
 
@@ -3835,6 +3899,7 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       final results = await Future.wait([
         widget.api.checkouts(),
         widget.api.checkouts(status: 'PAID'),
+        widget.api.walletTransactions(size: 50),
       ]);
       final byId = <String, Map<String, dynamic>>{};
       for (final item in [...results[0], ...results[1]]) {
@@ -3846,11 +3911,16 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
         history = byId.values.toList();
         historyLoading = false;
         historyError = null;
+        walletTransactions = results[2];
+        walletTransactionsLoading = false;
+        walletTransactionsError = null;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         historyLoading = false;
+        walletTransactionsLoading = false;
+        walletTransactionsError = 'Không thể tải giao dịch chi tiêu.';
         historyError = 'Không thể tải lịch sử giao dịch.';
       });
     }
@@ -3973,8 +4043,31 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
             child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
           ),
         ),
+      const SizedBox(height: 22),
+      const Text('Giao dịch chi tiêu từ ví'),
+      if (walletTransactionsLoading)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (walletTransactionsError != null)
+        Text(walletTransactionsError!)
+      else if (walletTransactions.where(_isWalletExpense).isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: Text('Chưa có giao dịch chi tiêu nào.'),
+        )
+      else
+        ...walletTransactions
+            .where(_isWalletExpense)
+            .map(Transaction.fromWalletTransaction),
     ],
   );
+}
+
+bool _isWalletExpense(Map<String, dynamic> transaction) {
+  final direction = '${transaction['direction'] ?? ''}'.toUpperCase();
+  return direction == 'DEBIT' || direction == 'OUT';
 }
 
 class _TopUpAmountDialog extends StatefulWidget {
@@ -4128,6 +4221,8 @@ class Profile extends StatelessWidget {
   const Profile({
     super.key,
     required this.displayName,
+    this.api,
+    this.socket,
     required this.onTheme,
     required this.onLogout,
     this.session,
@@ -4135,6 +4230,8 @@ class Profile extends StatelessWidget {
     this.onSessionChanged,
   });
   final String displayName;
+  final ListenerApi? api;
+  final NotificationSocket? socket;
   final VoidCallback onTheme;
   final VoidCallback onLogout;
   final AuthSession? session;
@@ -4190,6 +4287,18 @@ class Profile extends StatelessWidget {
             ),
           ),
         ),
+        if (api != null)
+          Setting(
+            icon: Icons.forum_outlined,
+            title: 'Yêu cầu & trao đổi',
+            subtitle: 'Nhắn với Creator, xem sản phẩm và thanh toán',
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ListenerRequestsPage(api: api!, socket: socket!),
+              ),
+            ),
+          ),
         Setting(
           icon: Icons.dark_mode_outlined,
           title: 'Giao diện tối',
@@ -4199,6 +4308,419 @@ class Profile extends StatelessWidget {
       ],
     ),
   );
+}
+
+class ListenerRequestsPage extends StatefulWidget {
+  const ListenerRequestsPage({
+    super.key,
+    required this.api,
+    required this.socket,
+  });
+  final ListenerApi api;
+  final NotificationSocket socket;
+
+  @override
+  State<ListenerRequestsPage> createState() => _ListenerRequestsPageState();
+}
+
+class _ListenerRequestsPageState extends State<ListenerRequestsPage> {
+  late Future<List<Map<String, dynamic>>> future = widget.api
+      .requestFlowRequests();
+
+  void reload() => setState(() => future = widget.api.requestFlowRequests());
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Yêu cầu & trao đổi')),
+    body: FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Không thể tải yêu cầu: ${snapshot.error}'),
+          );
+        }
+        final requests = snapshot.data ?? const [];
+        if (requests.isEmpty) {
+          return const Center(child: Text('Bạn chưa gửi yêu cầu nào.'));
+        }
+        return RefreshIndicator(
+          onRefresh: () async => reload(),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: requests.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (_, index) {
+              final request = requests[index];
+              final status = '${request['status'] ?? 'PENDING'}';
+              return Card(
+                child: ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.headphones)),
+                  title: Text('${request['title'] ?? 'Yêu cầu podcast'}'),
+                  subtitle: Text(
+                    '${request['creatorChannelName'] ?? 'Creator'} • $status',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ListenerRequestDetailPage(
+                        api: widget.api,
+                        socket: widget.socket,
+                        request: request,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    ),
+  );
+}
+
+class ListenerRequestDetailPage extends StatefulWidget {
+  const ListenerRequestDetailPage({
+    super.key,
+    required this.api,
+    required this.socket,
+    required this.request,
+  });
+  final ListenerApi api;
+  final NotificationSocket socket;
+  final Map<String, dynamic> request;
+
+  @override
+  State<ListenerRequestDetailPage> createState() =>
+      _ListenerRequestDetailPageState();
+}
+
+class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
+  final messageController = TextEditingController();
+  late Future<List<Map<String, dynamic>>> messages = _loadMessages();
+  late Future<List<Map<String, dynamic>>> milestones = _loadMilestones();
+  bool sending = false;
+  final Set<String> completedMilestones = <String>{};
+  final Set<String> loadingMilestones = <String>{};
+  AudioPlayer? _submissionPlayer;
+  StreamSubscription<void>? _playerCompleteSubscription;
+  String? _playingMilestoneId;
+  late final String _requestTopic;
+
+  String get requestId => '${widget.request['requestId']}';
+  Future<List<Map<String, dynamic>>> _loadMessages() =>
+      widget.api.requestMessages(requestId);
+  Future<List<Map<String, dynamic>>> _loadMilestones() =>
+      widget.api.requestMilestones(requestId);
+
+  @override
+  void initState() {
+    super.initState();
+    _requestTopic = '/topic/requests/$requestId';
+    widget.socket.listen(_requestTopic, (_) {
+      if (!mounted) return;
+      setState(() {
+        messages = _loadMessages();
+        milestones = _loadMilestones();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.socket.unlisten(_requestTopic);
+    _playerCompleteSubscription?.cancel();
+    _submissionPlayer?.dispose();
+    messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage() async {
+    final text = messageController.text.trim();
+    if (text.isEmpty || sending) return;
+    setState(() => sending = true);
+    try {
+      await widget.api.sendRequestMessage(requestId, text);
+      messageController.clear();
+      setState(() => messages = _loadMessages());
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
+        );
+    } finally {
+      if (mounted) setState(() => sending = false);
+    }
+  }
+
+  Future<void> _requestRevision(String milestoneId) async {
+    final reasonController = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Yêu cầu làm lại'),
+        content: TextField(
+          controller: reasonController,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Nêu nội dung cần chỉnh sửa',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, reasonController.text.trim()),
+            child: const Text('Gửi'),
+          ),
+        ],
+      ),
+    );
+    reasonController.dispose();
+    if (reason == null || reason.isEmpty) return;
+    try {
+      await widget.api.requestMilestoneRevision(milestoneId, reason);
+      if (mounted) setState(() => milestones = _loadMilestones());
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể yêu cầu làm lại: $error')),
+        );
+    }
+  }
+
+  Future<void> _approve(String milestoneId) async {
+    try {
+      final result = await widget.api.approveMilestone(milestoneId);
+      if (!mounted) return;
+      setState(() => milestones = _loadMilestones());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${result['message'] ?? 'Đã chấp nhận sản phẩm và tạo khoản thanh toán chờ xử lý.'}',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể chấp nhận sản phẩm: $error')),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text('${widget.request['title'] ?? 'Chi tiết yêu cầu'}'),
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('${widget.request['description'] ?? ''}'),
+        const SizedBox(height: 18),
+        const Text(
+          'Trao đổi với Creator',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: messages,
+          builder: (_, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done)
+              return const LinearProgressIndicator();
+            final items = snapshot.data ?? const [];
+            return Column(
+              children: [
+                if (items.isEmpty)
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Chưa có tin nhắn.'),
+                  ),
+                ...items.map(
+                  (item) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: Text('${item['senderName'] ?? 'Người dùng'}'),
+                    subtitle: Text('${item['content'] ?? ''}'),
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: messageController,
+                        decoration: const InputDecoration(
+                          hintText: 'Nhập tin nhắn',
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: sending ? null : _sendMessage,
+                      icon: const Icon(Icons.send),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'Sản phẩm theo từng giai đoạn',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: milestones,
+          builder: (_, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done)
+              return const LinearProgressIndicator();
+            final items = snapshot.data ?? const [];
+            return Column(
+              children: items.map((item) => _milestoneCard(item)).toList(),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+
+  Widget _milestoneCard(Map<String, dynamic> milestone) {
+    final id = '${milestone['milestoneId']}';
+    final status = '${milestone['status'] ?? ''}'.toUpperCase();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${milestone['name'] ?? 'Giai đoạn'}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${milestone['amount'] ?? ''} ${milestone['currency'] ?? 'VND'} • $status',
+            ),
+            if (status == 'SUBMITTED') ...[
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: widget.api.milestoneSubmissions(id),
+                builder: (_, snapshot) {
+                  final submissions = snapshot.data ?? const [];
+                  return Column(
+                    children: submissions
+                        .map((s) => _submissionAudio(id, s))
+                        .toList(),
+                  );
+                },
+              ),
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: completedMilestones.contains(id)
+                        ? () => _requestRevision(id)
+                        : null,
+                    child: const Text('Yêu cầu làm lại'),
+                  ),
+                  FilledButton(
+                    onPressed: completedMilestones.contains(id)
+                        ? () => _approve(id)
+                        : null,
+                    child: const Text('Đồng ý & trả tiền'),
+                  ),
+                ],
+              ),
+              if (!completedMilestones.contains(id))
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Nhấn phát podcast để mở khóa thao tác.'),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _submissionAudio(String milestoneId, Map<String, dynamic> submission) {
+    final submissionId =
+        '${submission['submissionId'] ?? submission['milestoneSubmissionId'] ?? ''}';
+    final isPlaying = _playingMilestoneId == milestoneId;
+    final isLoading = loadingMilestones.contains(milestoneId);
+    return Row(
+      children: [
+        IconButton(
+          tooltip: isPlaying ? 'Tạm dừng podcast' : 'Nghe podcast',
+          onPressed: isLoading || submissionId.isEmpty
+              ? null
+              : () => isPlaying
+                    ? _pauseSubmission()
+                    : _handleSubmissionPlay(milestoneId, submissionId),
+          icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle),
+        ),
+        Expanded(
+          child: Text(
+            'Bản thu podcast${completedMilestones.contains(milestoneId) ? ' • Đã mở khóa' : ''}\n${submission['note'] ?? ''}',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _playSubmission(String milestoneId, String submissionId) async {
+    setState(() => loadingMilestones.add(milestoneId));
+    try {
+      final media = await widget.api.milestoneSubmissionMedia(
+        milestoneId,
+        submissionId,
+      );
+      final url = media['url']?.toString() ?? media['mediaUrl']?.toString();
+      if (url == null || url.isEmpty)
+        throw const FormatException('Không có URL audio.');
+      await _submissionPlayer?.stop();
+      await _playerCompleteSubscription?.cancel();
+      final player = _submissionPlayer ??= AudioPlayer();
+      _playingMilestoneId = milestoneId;
+      _playerCompleteSubscription = player.onPlayerComplete.listen((_) {
+        if (!mounted) return;
+        setState(() {
+          completedMilestones.add(milestoneId);
+          _playingMilestoneId = null;
+        });
+      });
+      await player.play(UrlSource(url));
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể phát podcast: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => loadingMilestones.remove(milestoneId));
+    }
+  }
+
+  Future<void> _handleSubmissionPlay(
+    String milestoneId,
+    String submissionId,
+  ) async {
+    if (!completedMilestones.contains(milestoneId)) {
+      setState(() => completedMilestones.add(milestoneId));
+    }
+    await _playSubmission(milestoneId, submissionId);
+  }
+
+  Future<void> _pauseSubmission() async {
+    await _submissionPlayer?.pause();
+    if (mounted) setState(() => _playingMilestoneId = null);
+  }
 }
 
 class Setting extends StatelessWidget {
@@ -4805,6 +5327,33 @@ class Transaction extends StatelessWidget {
       status: statusLabel,
       onTap: onTap,
     );
+  }
+
+  factory Transaction.fromWalletTransaction(Map<String, dynamic> transaction) {
+    final type = _walletTransactionTitle(transaction['type']);
+    final status = '${transaction['status'] ?? 'PENDING'}'.toUpperCase();
+    final amount = (transaction['amount'] as num?)?.round() ?? 0;
+    final statusLabel = switch (status) {
+      'COMPLETED' || 'PAID' || 'SUCCESS' => 'Đã hoàn tất',
+      'FAILED' || 'CANCELLED' => 'Thất bại',
+      _ => 'Đang xử lý',
+    };
+    return Transaction(
+      title: type,
+      amount: '-${_formatVnd(amount)}',
+      status: statusLabel,
+    );
+  }
+
+  static String _walletTransactionTitle(dynamic rawType) {
+    final type = '$rawType'.toUpperCase();
+    return switch (type) {
+      'MEMBERSHIP_PURCHASE' => 'Thanh toán gói thành viên',
+      'WALLET_TOPUP' => 'Nạp tiền vào ví',
+      'ADMIN_BALANCE_ADJUSTMENT' => 'Điều chỉnh số dư',
+      'REFUND' => 'Hoàn tiền',
+      _ => 'Giao dịch ví',
+    };
   }
 
   final String title, amount;
@@ -6127,45 +6676,53 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     final descriptionController = TextEditingController();
     final result = await showDialog<(String, String)>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Yêu cầu audio'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Chủ đề / tiêu đề audio',
+      builder: (_) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Yêu cầu audio'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Chủ đề / tiêu đề audio',
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descriptionController,
-                minLines: 4,
-                maxLines: 6,
-                decoration: const InputDecoration(
-                  labelText: 'Mô tả yêu cầu',
-                  hintText: 'Bạn muốn Creator làm nội dung gì?',
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descriptionController,
+                  minLines: 4,
+                  maxLines: 6,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Mô tả yêu cầu',
+                    hintText: 'Bạn muốn Creator làm nội dung gì?',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              onPressed:
+                  titleController.text.trim().isEmpty ||
+                      descriptionController.text.trim().isEmpty
+                  ? null
+                  : () => Navigator.pop(context, (
+                      titleController.text.trim(),
+                      descriptionController.text.trim(),
+                    )),
+              child: const Text('Gửi yêu cầu'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, (
-              titleController.text.trim(),
-              descriptionController.text.trim(),
-            )),
-            child: const Text('Gửi yêu cầu'),
-          ),
-        ],
       ),
     );
     titleController.dispose();
@@ -6241,36 +6798,67 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: widget.show.colors.first,
-                child: const Icon(Icons.mic, color: Colors.white, size: 28),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  widget.show.colors.first.withAlpha(90),
+                  const Color(0xFF252525),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.show.channel,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Text(
-                      'Content creator lịch sử Việt Nam',
-                      style: TextStyle(color: Colors.white60),
-                    ),
-                  ],
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 38,
+                  backgroundColor: widget.show.colors.first,
+                  child: const Icon(Icons.mic, color: Colors.white, size: 30),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.show.channel,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 23,
+                          height: 1.1,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.verified,
+                            size: 16,
+                            color: widget.show.colors.last,
+                          ),
+                          const SizedBox(width: 5),
+                          const Expanded(
+                            child: Text(
+                              'Content creator lịch sử Việt Nam',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -6283,55 +6871,79 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                     )
                   : Icon(following ? Icons.person_remove : Icons.person_add),
               label: Text(following ? 'Đang theo dõi' : 'Theo dõi creator'),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: widget.show.creatorId == null
-                  ? null
-                  : () async {
-                      widget.onMembership();
-                      if (mounted) {
-                        _loadFollowState();
-                      }
-                    },
-              icon: Icon(
-                isMember
-                    ? Icons.verified_rounded
-                    : Icons.workspace_premium_outlined,
-                color: isMember ? const Color(0xFFFFB800) : Colors.white,
-              ),
-              label: Text(
-                isMember
-                    ? 'Hội viên kênh (Đang hoạt động)'
-                    : 'Đăng ký gói thành viên',
-                style: TextStyle(
-                  color: isMember ? const Color(0xFFFFB800) : Colors.white,
-                  fontWeight:
-                      isMember ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor:
-                    isMember ? const Color(0xFFFFB800) : Colors.white,
-                side: BorderSide(
-                  color: isMember ? const Color(0xFFFFB800) : Colors.white54,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: loadingFollow || widget.show.creatorId == null
-                  ? null
-                  : _showRequestDialog,
-              icon: const Icon(Icons.record_voice_over_outlined),
-              label: const Text('Gửi yêu cầu'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: widget.show.creatorId == null
+                      ? null
+                      : () async {
+                          widget.onMembership();
+                          if (mounted) _loadFollowState();
+                        },
+                  icon: Icon(
+                    isMember
+                        ? Icons.verified_rounded
+                        : Icons.workspace_premium_outlined,
+                    color: isMember ? const Color(0xFFFFB800) : Colors.white,
+                  ),
+                  label: Text(
+                    isMember ? 'Đã là hội viên' : 'Đăng ký thành viên',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isMember ? const Color(0xFFFFB800) : Colors.white,
+                      fontWeight: isMember
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: isMember
+                        ? const Color(0xFFFFB800)
+                        : Colors.white,
+                    side: BorderSide(
+                      color: isMember
+                          ? const Color(0xFFFFB800)
+                          : Colors.white54,
+                    ),
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: loadingFollow || widget.show.creatorId == null
+                      ? null
+                      : _showRequestDialog,
+                  icon: const Icon(Icons.record_voice_over_outlined),
+                  label: const Text('Gửi yêu cầu'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF6B5F),
+                    side: const BorderSide(color: Color(0x99C62C24)),
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 24),
           const Text(

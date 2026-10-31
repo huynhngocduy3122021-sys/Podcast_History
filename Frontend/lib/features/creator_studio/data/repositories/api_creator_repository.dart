@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
+import 'package:flutter/foundation.dart';
 
 import 'package:uuid/uuid.dart';
 import 'package:podcast_history/core/network/api_client.dart';
@@ -1141,60 +1142,94 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> acceptRequest(String id) async {
+  Future<void> acceptRequest(
+    String id, {
+    String? responseText,
+    List<Map<String, dynamic>>? milestones,
+  }) async {
     final req = await getRequestById(id);
-    final totalBudget = (req != null && req.totalBudget > 0)
-        ? req.totalBudget
-        : 2000000;
-    final m1Amount = (totalBudget * 0.3).round();
-    final m2Amount = totalBudget - m1Amount;
+    final totalBudget = req?.totalBudget ?? 0;
 
+    final defaultMilestones = milestones ?? [
+      {
+        'name': 'Bản thu âm podcast hoàn chỉnh',
+        'description': 'Sản xuất và bàn giao bản audio theo đúng chủ đề yêu cầu.',
+        'amount': totalBudget.toDouble(),
+      },
+    ];
+
+    final body = {
+      'responseText': responseText?.trim().isNotEmpty == true
+          ? responseText!.trim()
+          : 'Creator đã chấp nhận đơn đặt podcast.',
+      'milestones': defaultMilestones,
+    };
+
+    List<RequestMilestone> realMilestones = [];
     try {
-      // Call POST /api/creator/requests/{requestId}/accept
-      final body = {
-        'responseText': 'Creator đã chấp nhận đơn đặt podcast.',
-        'milestones': [
-          {
-            'name': 'Giai đoạn 1: Đề cương & Kịch bản chi tiết',
-            'description': 'Hoàn thiện nghiên cứu lịch sử và khung nội dung',
-            'amount': m1Amount > 0 ? m1Amount.toDouble() : 500000.0,
-          },
-          {
-            'name': 'Giai đoạn 2: Thu âm & Hậu kỳ hoàn chỉnh',
-            'description': 'Bản audio chất lượng cao',
-            'amount': m2Amount > 0 ? m2Amount.toDouble() : 1500000.0,
-          },
-        ],
-      };
-      await _apiClient.post(ApiEndpoints.acceptRequest(id), body: body);
-    } catch (_) {}
+      final res = await _apiClient.post(ApiEndpoints.acceptRequest(id), body: body);
+      if (res is Map<String, dynamic>) {
+        final milestonesJson = res['milestones'];
+        if (milestonesJson is List) {
+          for (final m in milestonesJson) {
+            if (m is Map<String, dynamic>) {
+              final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
+              final statusStr = (m['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+              realMilestones.add(
+                RequestMilestone(
+                  id: m['milestoneId']?.toString() ?? '',
+                  title: m['name'] as String? ?? 'Mốc thanh toán',
+                  description: m['description'] as String?,
+                  order: (m['order'] as num?)?.toInt() ?? 1,
+                  percentage: totalBudget > 0 ? ((mAmount / totalBudget) * 100).toInt() : 100,
+                  amount: mAmount,
+                  status: statusStr,
+                  isCompleted: statusStr == 'APPROVED' || statusStr == 'SUBMITTED',
+                  isApproved: statusStr == 'APPROVED',
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error acceptRequest: $e');
+      rethrow;
+    }
+
+    if (realMilestones.isEmpty) {
+      try {
+        final res = await _apiClient.get(ApiEndpoints.requestMilestones(id));
+        if (res is List) {
+          for (final m in res) {
+            if (m is Map<String, dynamic>) {
+              final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
+              final statusStr = (m['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+              realMilestones.add(
+                RequestMilestone(
+                  id: m['milestoneId']?.toString() ?? '',
+                  title: m['name'] as String? ?? 'Mốc thanh toán',
+                  description: m['description'] as String?,
+                  order: (m['order'] as num?)?.toInt() ?? 1,
+                  percentage: totalBudget > 0 ? ((mAmount / totalBudget) * 100).toInt() : 100,
+                  amount: mAmount,
+                  status: statusStr,
+                  isCompleted: statusStr == 'APPROVED' || statusStr == 'SUBMITTED',
+                  isApproved: statusStr == 'APPROVED',
+                ),
+              );
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     final index = _cachedRequests.indexWhere((r) => r.id == id);
     if (index != -1) {
       final existing = _cachedRequests[index];
-      final milestones = existing.milestones.isNotEmpty
-          ? existing.milestones
-          : [
-              RequestMilestone(
-                id: 'm1_${existing.id}',
-                title: 'Giai đoạn 1: Đề cương & Kịch bản chi tiết',
-                percentage: 30,
-                amount: m1Amount,
-                isCompleted: false,
-                isApproved: false,
-              ),
-              RequestMilestone(
-                id: 'm2_${existing.id}',
-                title: 'Giai đoạn 2: Thu âm & Hậu kỳ hoàn chỉnh',
-                percentage: 70,
-                amount: m2Amount,
-                isCompleted: false,
-                isApproved: false,
-              ),
-            ];
       _cachedRequests[index] = existing.copyWith(
         status: CustomRequestStatus.accepted,
-        milestones: milestones,
+        milestones: realMilestones.isNotEmpty ? realMilestones : existing.milestones,
       );
     }
   }
@@ -1218,20 +1253,235 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<ContractAgreement> proposeContract(
+    String requestId, {
+    required String responseText,
+    required List<ContractProposalStageInput> milestones,
+  }) async {
+    final body = {
+      'responseText': responseText.trim(),
+      'milestones': milestones.map((s) => s.toJson()).toList(),
+    };
+
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorProposal(requestId),
+      body: body,
+    );
+
+    if (res is! Map<String, dynamic>) {
+      throw ApiException(
+        statusCode: 500,
+        message: 'Dữ liệu phản hồi hợp đồng không hợp lệ.',
+      );
+    }
+
+    final agreement = ContractAgreement.fromJson(res);
+
+    // Update in-memory cache
+    final index = _cachedRequests.indexWhere((r) => r.id == requestId);
+    if (index != -1) {
+      final existing = _cachedRequests[index];
+      final newMilestones = agreement.milestones.map((s) {
+        return RequestMilestone(
+          id: s.milestoneId,
+          title: s.name,
+          description: s.description,
+          order: agreement.milestones.indexOf(s) + 1,
+          percentage: agreement.budgetAmount > 0
+              ? ((s.amount / agreement.budgetAmount) * 100).toInt()
+              : 100,
+          amount: s.amount,
+          status: s.status,
+          isCompleted: s.isApproved || s.isSubmitted,
+          isApproved: s.isApproved,
+        );
+      }).toList();
+
+      _cachedRequests[index] = existing.copyWith(
+        hasEscrow: true,
+        contract: agreement,
+        status: CustomRequestStatus.accepted,
+        milestones: newMilestones,
+      );
+    }
+
+    return agreement;
+  }
+
+  @override
+  Future<ContractAgreement?> getContractAgreement(String requestId) async {
+    try {
+      final res = await _apiClient.get(ApiEndpoints.requestContract(requestId));
+      if (res is Map<String, dynamic>) {
+        return ContractAgreement.fromJson(res);
+      }
+    } catch (e) {
+      debugPrint('getContractAgreement: $e');
+    }
+    return null;
+  }
+
+  @override
+  Future<ContractAgreement> signContract(
+    String requestId, {
+    required int contractVersion,
+    required String contentHash,
+  }) async {
+    final body = {
+      'contractVersion': contractVersion,
+      'contentHash': contentHash,
+      'accepted': true,
+    };
+
+    final res = await _apiClient.post(
+      ApiEndpoints.signContract(requestId),
+      body: body,
+    );
+
+    if (res is! Map<String, dynamic>) {
+      throw ApiException(
+        statusCode: 500,
+        message: 'Phản hồi ký kết hợp đồng không hợp lệ.',
+      );
+    }
+
+    final agreement = ContractAgreement.fromJson(res);
+
+    final index = _cachedRequests.indexWhere((r) => r.id == requestId);
+    if (index != -1) {
+      final existing = _cachedRequests[index];
+      _cachedRequests[index] = existing.copyWith(
+        contract: agreement,
+        status: agreement.isInProgress
+            ? CustomRequestStatus.inProduction
+            : existing.status,
+      );
+    }
+
+    return agreement;
+  }
+
+  @override
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(
+    String milestoneId,
+  ) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.milestoneSubmissions(milestoneId),
+      );
+      if (res is List) {
+        final list = <MilestoneSubmissionItem>[];
+        for (final item in res) {
+          if (item is Map<String, dynamic>) {
+            var sub = MilestoneSubmissionItem.fromJson(item);
+            // Optionally fetch media URL for preview
+            try {
+              final mediaUrl = await getMilestoneMediaUrl(
+                milestoneId,
+                sub.submissionId,
+              );
+              if (mediaUrl != null && mediaUrl.isNotEmpty) {
+                sub = sub.copyWith(mediaUrl: mediaUrl);
+              }
+            } catch (_) {}
+            list.add(sub);
+          }
+        }
+        return list;
+      }
+    } catch (e) {
+      debugPrint('getMilestoneSubmissions error: $e');
+    }
+    return const [];
+  }
+
+  @override
+  Future<String?> getMilestoneMediaUrl(
+    String milestoneId,
+    String submissionId,
+  ) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.milestoneMedia(milestoneId, submissionId),
+      );
+      if (res is Map<String, dynamic>) {
+        return res['url'] as String?;
+      }
+    } catch (e) {
+      debugPrint('getMilestoneMediaUrl error: $e');
+    }
+    return null;
+  }
+
+  @override
+  Future<void> requestTermination(String requestId, {required String reason}) async {
+    await _apiClient.post(
+      ApiEndpoints.contractTerminationRequest(requestId),
+      body: {'reason': reason.trim()},
+    );
+
+    // Refresh request in cache
+    final index = _cachedRequests.indexWhere((r) => r.id == requestId);
+    if (index != -1) {
+      final agreement = await getContractAgreement(requestId);
+      final termStatus = await getTerminationRequest(requestId);
+      _cachedRequests[index] = _cachedRequests[index].copyWith(
+        contract: agreement,
+        termination: termStatus,
+        status: CustomRequestStatus.disputed,
+      );
+    }
+  }
+
+  @override
+  Future<ContractTerminationStatus?> getTerminationRequest(String requestId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.getContractTerminationRequest(requestId),
+      );
+      if (res is Map<String, dynamic>) {
+        return ContractTerminationStatus.fromJson(res);
+      }
+    } catch (e) {
+      debugPrint('getTerminationRequest error: $e');
+    }
+    return null;
+  }
+
+  @override
+  Future<void> disputeMilestone(String milestoneId, {required String reason}) async {
+    await _apiClient.post(
+      ApiEndpoints.milestoneDispute(milestoneId),
+      body: {'reason': reason.trim()},
+    );
+  }
+
+  @override
   Future<void> deliverWork(
     String id,
     String fileUrl,
     String note, {
     List<int>? fileBytes,
     String? filename,
+    String? milestoneId,
   }) async {
     try {
       final req = await getRequestById(id);
-      if (req != null && req.milestones.isNotEmpty) {
-        final milestoneId = req.milestones.first.id;
+      String? targetMilestoneId = milestoneId;
+      if (targetMilestoneId == null || targetMilestoneId.isEmpty) {
+        if (req != null && req.milestones.isNotEmpty) {
+          final pendingMilestone = req.milestones.firstWhere(
+            (m) => m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED',
+            orElse: () => req.milestones.first,
+          );
+          targetMilestoneId = pendingMilestone.id;
+        }
+      }
+
+      if (targetMilestoneId != null && targetMilestoneId.isNotEmpty) {
         if (fileBytes != null && fileBytes.isNotEmpty) {
           await _apiClient.uploadMultipart(
-            ApiEndpoints.submitMilestone(milestoneId),
+            ApiEndpoints.submitMilestone(targetMilestoneId),
             fileFieldName: 'file',
             filename: filename ?? 'delivery.mp3',
             fileBytes: fileBytes,
@@ -1239,36 +1489,56 @@ class ApiCreatorRepository implements CreatorRepository {
           );
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('deliverWork error: $e');
+      rethrow;
+    }
 
+    // Refresh request milestones from backend
     final index = _cachedRequests.indexWhere((r) => r.id == id);
     if (index != -1) {
+      final updatedMilestones = <RequestMilestone>[];
+      try {
+        final milestonesRes = await _apiClient.get(ApiEndpoints.requestMilestones(id));
+        if (milestonesRes is List && milestonesRes.isNotEmpty) {
+          for (final m in milestonesRes) {
+            if (m is Map<String, dynamic>) {
+              final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
+              final mStatus = (m['status'] as String? ?? 'SUBMITTED').toUpperCase();
+              updatedMilestones.add(
+                RequestMilestone(
+                  id: m['milestoneId']?.toString() ?? '',
+                  title: m['name'] as String? ?? 'Mốc thanh toán',
+                  description: m['description'] as String?,
+                  order: (m['order'] as num?)?.toInt() ?? 1,
+                  percentage: _cachedRequests[index].totalBudget > 0
+                      ? ((mAmount / _cachedRequests[index].totalBudget) * 100).toInt()
+                      : 100,
+                  amount: mAmount,
+                  status: mStatus,
+                  isCompleted: mStatus == 'APPROVED' || mStatus == 'SUBMITTED',
+                  isApproved: mStatus == 'APPROVED',
+                  publicUrl: fileUrl,
+                  submissionNote: note,
+                ),
+              );
+            }
+          }
+        }
+      } catch (_) {}
+
       _cachedRequests[index] = _cachedRequests[index].copyWith(
         status: CustomRequestStatus.delivered,
         deliveryFileUrl: fileUrl,
         deliveryNote: note,
+        milestones: updatedMilestones.isNotEmpty ? updatedMilestones : _cachedRequests[index].milestones,
       );
     }
   }
 
   @override
   Future<void> sendChatMessage(String requestId, String message) async {
-    final index = _cachedRequests.indexWhere((r) => r.id == requestId);
-    if (index != -1) {
-      final req = _cachedRequests[index];
-      final newMsg = RequestChatMessage(
-        id: 'msg_${_uuid.v4().substring(0, 6)}',
-        senderName: _cachedProfile.name.isNotEmpty
-            ? _cachedProfile.name
-            : 'Creator',
-        isCreator: true,
-        message: message,
-        timestamp: DateTime.now(),
-      );
-      final updatedMsgs = List<RequestChatMessage>.from(req.messages)
-        ..add(newMsg);
-      _cachedRequests[index] = req.copyWith(messages: updatedMsgs);
-    }
+    // Chat endpoint is not supported by backend for SeriesRequest
   }
 
   // ==========================================
@@ -2282,49 +2552,182 @@ class ApiCreatorRepository implements CreatorRepository {
     final totalBudget = budgetNum.toInt();
 
     final milestones = <RequestMilestone>[];
+    final allSubmissions = <MilestoneSubmissionItem>[];
+    String? latestDeliveryUrl;
+    String? latestDeliveryNote;
+
+    // Check for Escrow Contract
+    ContractAgreement? agreement;
     try {
-      final milestonesRes = await _apiClient.get(
-        ApiEndpoints.requestMilestones(requestId),
+      final contractRes = await _apiClient.get(
+        ApiEndpoints.requestContract(requestId),
       );
-      if (milestonesRes is List && milestonesRes.isNotEmpty) {
-        for (final m in milestonesRes) {
-          if (m is Map<String, dynamic>) {
-            final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
-            milestones.add(
-              RequestMilestone(
-                id: m['milestoneId']?.toString() ?? _uuid.v4(),
-                title: m['name'] as String? ?? 'Mốc thanh toán',
-                percentage: totalBudget > 0
-                    ? ((mAmount / totalBudget) * 100).toInt()
-                    : 0,
-                amount: mAmount,
-                isCompleted:
-                    m['status'] == 'APPROVED' || m['status'] == 'SUBMITTED',
-                isApproved: m['status'] == 'APPROVED',
-              ),
-            );
-          }
-        }
+      if (contractRes is Map<String, dynamic>) {
+        agreement = ContractAgreement.fromJson(contractRes);
       }
     } catch (_) {}
+
+    ContractTerminationStatus? termStatus;
+    if (agreement != null && (agreement.isDisputed || agreement.isTerminated)) {
+      try {
+        final termRes = await _apiClient.get(
+          ApiEndpoints.getContractTerminationRequest(requestId),
+        );
+        if (termRes is Map<String, dynamic>) {
+          termStatus = ContractTerminationStatus.fromJson(termRes);
+        }
+      } catch (_) {}
+    }
+
+    if (agreement != null && agreement.milestones.isNotEmpty) {
+      for (final stage in agreement.milestones) {
+        String? subUrl;
+        String? subNote;
+        try {
+          final subsRes = await _apiClient.get(
+            ApiEndpoints.milestoneSubmissions(stage.milestoneId),
+          );
+          if (subsRes is List && subsRes.isNotEmpty) {
+            for (final sItem in subsRes) {
+              if (sItem is Map<String, dynamic>) {
+                var sub = MilestoneSubmissionItem.fromJson(sItem);
+                try {
+                  final mediaRes = await _apiClient.get(
+                    ApiEndpoints.milestoneMedia(stage.milestoneId, sub.submissionId),
+                  );
+                  if (mediaRes is Map<String, dynamic> && mediaRes['url'] != null) {
+                    sub = sub.copyWith(mediaUrl: mediaRes['url'] as String);
+                  }
+                } catch (_) {}
+                allSubmissions.add(sub);
+                subUrl ??= sub.mediaUrl ?? sub.fileKey;
+                subNote ??= sub.note;
+                latestDeliveryUrl ??= subUrl;
+                latestDeliveryNote ??= subNote;
+              }
+            }
+          }
+        } catch (_) {}
+
+        final percentage = agreement.budgetAmount > 0
+            ? ((stage.amount / agreement.budgetAmount) * 100).toInt()
+            : 100;
+
+        milestones.add(
+          RequestMilestone(
+            id: stage.milestoneId,
+            title: stage.name,
+            description: stage.description,
+            order: agreement.milestones.indexOf(stage) + 1,
+            percentage: percentage,
+            amount: stage.amount,
+            status: stage.status,
+            isCompleted: stage.isApproved || stage.isSubmitted,
+            isApproved: stage.isApproved,
+            publicUrl: subUrl,
+            submissionNote: subNote,
+          ),
+        );
+      }
+
+      if (agreement.isCompleted) {
+        status = CustomRequestStatus.completed;
+      } else if (agreement.isDisputed) {
+        status = CustomRequestStatus.disputed;
+      } else if (agreement.isInProgress) {
+        if (milestones.any((m) => m.isRevisionRequested)) {
+          status = CustomRequestStatus.revisionRequested;
+        } else if (milestones.any((m) => m.isSubmitted)) {
+          status = CustomRequestStatus.delivered;
+        } else {
+          status = CustomRequestStatus.inProduction;
+        }
+      } else if (agreement.isPendingSignature) {
+        status = CustomRequestStatus.accepted;
+      }
+    } else {
+      // Fallback for non-escrow or legacy requests
+      try {
+        final milestonesRes = await _apiClient.get(
+          ApiEndpoints.requestMilestones(requestId),
+        );
+        if (milestonesRes is List && milestonesRes.isNotEmpty) {
+          for (final m in milestonesRes) {
+            if (m is Map<String, dynamic>) {
+              final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
+              final mStatus = (m['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+              final milestoneId = m['milestoneId']?.toString() ?? '';
+
+              String? subUrl;
+              String? subNote;
+              if (mStatus == 'SUBMITTED' || mStatus == 'APPROVED') {
+                try {
+                  final subsRes = await _apiClient.get(
+                    ApiEndpoints.milestoneSubmissions(milestoneId),
+                  );
+                  if (subsRes is List && subsRes.isNotEmpty) {
+                    final latestSub = subsRes.last;
+                    if (latestSub is Map<String, dynamic>) {
+                      subUrl = latestSub['publicUrl'] as String?;
+                      subNote = latestSub['note'] as String?;
+                      latestDeliveryUrl ??= subUrl;
+                      latestDeliveryNote ??= subNote;
+                    }
+                  }
+                } catch (_) {}
+              }
+
+              milestones.add(
+                RequestMilestone(
+                  id: milestoneId,
+                  title: m['name'] as String? ?? 'Mốc thanh toán',
+                  description: m['description'] as String?,
+                  order: (m['order'] as num?)?.toInt() ?? 1,
+                  percentage: totalBudget > 0
+                      ? ((mAmount / totalBudget) * 100).toInt()
+                      : 100,
+                  amount: mAmount,
+                  status: mStatus,
+                  isCompleted: mStatus == 'APPROVED' || mStatus == 'SUBMITTED',
+                  isApproved: mStatus == 'APPROVED',
+                  publicUrl: subUrl,
+                  submissionNote: subNote,
+                ),
+              );
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     final createdAtStr = json['createdAt'] as String?;
     final createdAt = createdAtStr != null
         ? DateTime.tryParse(createdAtStr) ?? DateTime.now()
         : DateTime.now();
 
+    final listenerIdStr = json['listenerId']?.toString() ?? '';
+    final listenerDisplay = listenerIdStr.length >= 6
+        ? 'Người nghe #${listenerIdStr.substring(0, 6)}'
+        : 'Người nghe';
+
+    final hasEscrow = agreement != null || totalBudget > 0;
+
     return PodcastRequest(
       id: requestId,
-      listenerName: 'Thính giả',
+      listenerName: listenerDisplay,
       listenerAvatar: '',
       topic: json['title'] as String? ?? 'Yêu cầu podcast',
       description: json['description'] as String? ?? '',
-      targetDurationMinutes: 30,
-      deadline: DateTime.now().add(const Duration(days: 7)),
-      totalBudget: totalBudget,
+      totalBudget: agreement?.budgetAmount ?? totalBudget,
       milestones: milestones,
       status: status,
+      deliveryFileUrl: latestDeliveryUrl,
+      deliveryNote: latestDeliveryNote,
       createdAt: createdAt,
+      hasEscrow: hasEscrow,
+      contract: agreement,
+      termination: termStatus,
+      submissions: allSubmissions,
     );
   }
 
@@ -2463,6 +2866,32 @@ class ApiCreatorRepository implements CreatorRepository {
       return CreatorChannelPlan.fromJson(res);
     }
     throw Exception('Không thể cập nhật giá gói thành viên');
+  }
+
+  @override
+  Future<PageCreatorMembers> getCreatorMemberships({
+    String status = 'ACTIVE',
+    int page = 0,
+    int size = 20,
+  }) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorMemberships(status: status, page: page, size: size),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return PageCreatorMembers.fromJson(res);
+      }
+    } catch (e) {
+      dev.log('[ApiCreatorRepository] getCreatorMemberships error: $e');
+    }
+    return PageCreatorMembers(
+      totalPages: 0,
+      totalElements: 0,
+      size: size,
+      number: page,
+      content: const [],
+    );
   }
 
   // Notifications
