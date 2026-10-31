@@ -95,9 +95,10 @@ public class ContractEscrowService {
         }
         ProducerProfile creator = creators.findById(input.creatorProfileId())
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy kênh CC."));
-        if (!Boolean.TRUE.equals(creator.getUser().getIsActive())
+        if (!"APPROVED".equalsIgnoreCase(creator.getVerificationStatus())
+                || !Boolean.TRUE.equals(creator.getUser().getIsActive())
                 || !"CREATOR".equalsIgnoreCase(creator.getUser().getRole().getRoleCode()))
-            throw new PodcastWorkflowException("Kênh CC không hoạt động.");
+            throw new PodcastWorkflowException("Kênh CC chưa được duyệt hoặc không hoạt động.");
         BigDecimal budget = input.budgetAmount().setScale(2);
         UserWallet wallet = listenerWallets.walletForLockedUser(listener);
         if (wallet.getBalance().compareTo(budget) < 0)
@@ -135,9 +136,8 @@ public class ContractEscrowService {
     @Transactional
     public ContractWorkflowResponses.Agreement propose(UUID creatorUserId, UUID requestId,
             ContractWorkflowRequests.Proposal input) {
-        if (input.milestones() == null || input.milestones().isEmpty()
-                || input.milestones().size() > 3)
-            throw new PodcastWorkflowException("Hợp đồng phải có từ 1 đến 3 đợt.");
+        if (input.milestones() == null || input.milestones().isEmpty())
+            throw new PodcastWorkflowException("Hợp đồng phải có ít nhất một đợt.");
         lockedActiveUser(creatorUserId, "CREATOR");
         SeriesRequest request = lockedRequest(requestId);
         if (!request.getProducerProfile().getUser().getUserId().equals(creatorUserId))
@@ -187,7 +187,7 @@ public class ContractEscrowService {
         }
 
         escrow.setContract(contract);
-        escrow.setContractVersion(1);
+        escrow.setContractVersion(2);
         escrow.setContentSnapshot(renderSnapshot(escrow, input.milestones()));
         escrow.setContentHash(sha256(escrow.getContentSnapshot()));
         escrows.save(escrow);
@@ -195,6 +195,33 @@ public class ContractEscrowService {
         request.setRespondedAt(now);
         requests.save(request);
         return view(escrow);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContractWorkflowResponses.RequestDetail> getCreatorContractRequests(UUID creatorUserId) {
+        activeUser(creatorUserId, "CREATOR");
+        return escrows.findAllForCreator(creatorUserId).stream().map(this::requestDetail).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ContractWorkflowResponses.RequestDetail getRequestDetail(UUID actorId, UUID requestId) {
+        ContractEscrow escrow = escrows.findByRequest_SeriesRequestId(requestId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy yêu cầu có giữ tiền."));
+        requireParticipant(escrow, actorId);
+        activeUser(actorId, actorId.equals(escrow.getRequest().getUser().getUserId())
+                ? "LISTENER" : "CREATOR");
+        return requestDetail(escrow);
+    }
+
+    private ContractWorkflowResponses.RequestDetail requestDetail(ContractEscrow escrow) {
+        SeriesRequest request = escrow.getRequest();
+        UUID requestId = request.getSeriesRequestId();
+        return new ContractWorkflowResponses.RequestDetail(requestId,
+                request.getProducerProfile().getProducerProfileId(), request.getStatus(),
+                request.getRequestedTitle(), request.getDescription(), escrow.getBudget(),
+                escrow.getRemaining(), "VND", escrow.getProductType(), escrow.getFileFormat(),
+                escrow.getDurationDescription(), escrow.getAcceptanceCriteria(),
+                escrow.isAutoAcceptEnabled(), request.getCreatedAt());
     }
 
     @Transactional(readOnly = true)
@@ -249,14 +276,13 @@ public class ContractEscrowService {
         if (!request.getUser().getUserId().equals(listenerId))
             throw new PodcastWorkflowException("Chỉ Listener tạo yêu cầu được hủy.");
         boolean beforeProposal = "PENDING".equals(request.getStatus()) && escrow.getContract() == null;
-        boolean unsignedProposal = "ACCEPTED".equals(request.getStatus())
+        boolean unactivatedProposal = "ACCEPTED".equals(request.getStatus())
                 && escrow.getContract() != null
-                && "PENDING_SIGNATURE".equals(escrow.getContract().getStatus())
-                && escrow.getListenerSignedAt() == null;
-        if (!beforeProposal && !unsignedProposal)
-            throw new PodcastWorkflowException("Chỉ hủy được yêu cầu trước khi Listener ký hợp đồng.");
+                && "PENDING_SIGNATURE".equals(escrow.getContract().getStatus());
+        if (!beforeProposal && !unactivatedProposal)
+            throw new PodcastWorkflowException("Chỉ hủy được yêu cầu trước khi cả hai bên ký và kích hoạt hợp đồng.");
         refundAll(escrow, "CONTRACT_CANCEL_REFUND:");
-        if (unsignedProposal) {
+        if (unactivatedProposal) {
             Contract contract = escrow.getContract();
             contract.setStatus("CANCELLED");
             contracts.save(contract);
@@ -304,7 +330,12 @@ public class ContractEscrowService {
     @Transactional
     public ContractWorkflowResponses.Termination terminate(UUID adminId, UUID contractId,
             ContractWorkflowRequests.Terminate input) {
-        lockedActiveUser(adminId, "ADMIN");
+        AppUser reviewer = users.findByIdForUpdate(adminId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy tài khoản xử lý tranh chấp."));
+        if (!Boolean.TRUE.equals(reviewer.getIsActive()) || reviewer.getRole() == null
+                || !("STAFF".equalsIgnoreCase(reviewer.getRole().getRoleCode())
+                || "ADMIN".equalsIgnoreCase(reviewer.getRole().getRoleCode())))
+            throw new PodcastWorkflowException("Chỉ Staff hoặc Admin được xử lý tranh chấp.");
         Contract contract = contracts.lockById(contractId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy hợp đồng."));
         if (!"DISPUTED".equals(contract.getStatus()))
@@ -387,7 +418,7 @@ public class ContractEscrowService {
         escrows.save(escrow);
         dispute.setStatus("RESOLVED");
         dispute.setDecision(input.compensateCurrentStage() ? "TERMINATE_COMPENSATED" : "TERMINATE_REFUNDED");
-        dispute.setReviewer(users.findById(adminId).orElseThrow());
+        dispute.setReviewer(reviewer);
         dispute.setNote(input.reason().trim() + (input.compensateCurrentStage()
                 ? "\nBản bàn giao: " + input.qualifyingSubmissionId()
                 + "\nBằng chứng: " + input.evidenceNote().trim() : ""));
@@ -569,7 +600,7 @@ public class ContractEscrowService {
     }
 
     private String renderSnapshot(ContractEscrow escrow, List<ContractWorkflowRequests.Stage> offers) {
-        try (var input = new ClassPathResource("contracts/contract-v1.md").getInputStream()) {
+        try (var input = new ClassPathResource("contracts/contract-v2.md").getInputStream()) {
             String text = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             SeriesRequest request = escrow.getRequest();
             Contract contract = escrow.getContract();
@@ -593,19 +624,21 @@ public class ContractEscrowService {
                     Map.entry("DURATION", safe(escrow.getDurationDescription())),
                     Map.entry("ACCEPTANCE_CRITERIA", safe(escrow.getAcceptanceCriteria())),
                     Map.entry("TOTAL_BUDGET", escrow.getBudget().toPlainString()),
-                    Map.entry("CONTRACT_VERSION", "1"),
+                    Map.entry("CONTRACT_VERSION", Integer.toString(escrow.getContractVersion())),
                     Map.entry("LISTENER_SIGNED_AT", "Lưu riêng trong bản ghi ký"),
                     Map.entry("CREATOR_SIGNED_AT", "Lưu riêng trong bản ghi ký"));
             for (var entry : values.entrySet()) text = text.replace("[" + entry.getKey() + "]", entry.getValue());
-            for (int index = 1; index <= 3; index++) {
-                var offer = index <= offers.size() ? offers.get(index - 1) : null;
-                text = text.replace("[MILESTONE_" + index + "_DESCRIPTION]",
-                        offer == null ? "Không sử dụng" : safe(offer.description()));
-                text = text.replace("[DUE_DATE_" + index + "]",
-                        offer == null ? "-" : offer.dueAt().toString());
-                text = text.replace("[AMOUNT_" + index + "]",
-                        offer == null ? "-" : offer.amount().toPlainString() + " VND");
+            StringBuilder rows = new StringBuilder();
+            for (int index = 0; index < offers.size(); index++) {
+                var offer = offers.get(index);
+                rows.append("| ").append(index + 1).append(" | ")
+                        .append(safe(offer.name())).append(" | ")
+                        .append(safe(offer.description())).append(" | ")
+                        .append(offer.dueAt()).append(" | ")
+                        .append(offer.amount().toPlainString()).append(" VND |\n");
             }
+            text = text.replace("[MILESTONE_COUNT]", Integer.toString(offers.size()));
+            text = text.replace("[MILESTONE_ROWS]", rows.toString().stripTrailing());
             return text;
         } catch (Exception exception) {
             throw new PodcastWorkflowException("Không đọc được mẫu hợp đồng để tạo bản ký.");

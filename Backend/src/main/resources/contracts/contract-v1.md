@@ -50,19 +50,17 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 
 ## ĐIỀU 4. PHÂN CHIA GIAI ĐOẠN
 
-Hợp đồng có từ 01 đến 03 đợt do Bên B đề xuất và Bên A xác nhận.
+Hợp đồng có [MILESTONE_COUNT] đợt do Bên B đề xuất và Bên A xác nhận bằng chữ ký trên bản hợp đồng này.
 
-| Đợt | Nội dung bàn giao | Thời hạn | Giá trị |
-|---|---|---|---|
-| 1 | [MILESTONE_1_DESCRIPTION] | [DUE_DATE_1] | [AMOUNT_1] |
-| 2 | [MILESTONE_2_DESCRIPTION] | [DUE_DATE_2] | [AMOUNT_2] |
-| 3 | [MILESTONE_3_DESCRIPTION] | [DUE_DATE_3] | [AMOUNT_3] |
+| Đợt | Tên đợt | Nội dung bàn giao | Thời hạn | Giá trị |
+|---|---|---|---|---|
+[MILESTONE_ROWS]
 
-Các đợt không sử dụng được bỏ qua. Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
+Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 ## ĐIỀU 5. BÀN GIAO VÀ NGHIỆM THU
 
-5.1. Bên B tải tệp lên hệ thống trước hạn đã thỏa thuận.
+5.1. Bên B tải bản nháp lên hệ thống trước hạn đã thỏa thuận. Bản nháp phải vượt qua bước AI kiểm duyệt an toàn lời nói; sau đó Bên B chủ động xác nhận bàn giao cho Bên A. Thời điểm bàn giao được tính từ lần xác nhận này.
 
 5.2. Bên A có **03 ngày** kể từ bàn giao hợp lệ để phản hồi.
 

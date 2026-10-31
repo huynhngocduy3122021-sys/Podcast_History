@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.repository;
 
 import com.prmteam7.podcasthistory.model.AppUser;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.LockModeType;
@@ -21,6 +22,8 @@ public interface AppUserRepository
   Optional<AppUser> lockById(@Param("id") UUID id);
 
   long countByIsActiveTrue();
+
+  List<AppUser> findAllByRole_RoleCodeAndIsActiveTrue(String roleCode);
 
   @Override
   @org.springframework.data.jpa.repository.EntityGraph(attributePaths = "role")

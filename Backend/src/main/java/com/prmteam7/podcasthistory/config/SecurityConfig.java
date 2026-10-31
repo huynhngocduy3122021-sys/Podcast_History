@@ -67,6 +67,13 @@ public class SecurityConfig {
                         "/api/admin/reports", "/api/admin/reports/**",
                         "/api/admin/podcast-appeals", "/api/admin/podcast-appeals/**")
                     .hasAnyRole("ADMIN", "STAFF")
+                    .requestMatchers(HttpMethod.GET, "/api/admin/contracts/*")
+                    .hasAnyRole("ADMIN", "STAFF")
+                    .requestMatchers(HttpMethod.POST, "/api/admin/contracts/*/terminate-escrow")
+                    .hasAnyRole("ADMIN", "STAFF")
+                    .requestMatchers("/api/admin/disputes", "/api/admin/disputes/**",
+                        "/api/admin/milestone-disputes/**")
+                    .hasAnyRole("ADMIN", "STAFF")
                     .requestMatchers("/api/admin/**")
                     .hasRole("ADMIN")
                     .requestMatchers("/api/creator/**")

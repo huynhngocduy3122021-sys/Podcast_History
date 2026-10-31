@@ -30,7 +30,7 @@ public final class ContractWorkflowRequests {
 
     public record Proposal(
             @NotBlank @Size(max = 5000) String responseText,
-            @NotEmpty @Size(min = 1, max = 3) List<@Valid Stage> milestones) {}
+            @NotEmpty List<@Valid Stage> milestones) {}
 
     public record Sign(
             @NotNull Integer contractVersion,

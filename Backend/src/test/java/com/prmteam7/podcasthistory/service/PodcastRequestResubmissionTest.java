@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.prmteam7.podcasthistory.exception.PodcastWorkflowException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -77,5 +80,37 @@ class PodcastRequestResubmissionTest {
         assertEquals("private/new-file", submission.getValue().getObjectKey());
         assertEquals(ContractStageStatus.SUBMITTED.name(), stage.getStatus());
         verify(stageRepository).save(stage);
+    }
+
+    @Test
+    void legacySubmissionCannotBypassAiGateForEscrowContract() {
+        UUID creatorId = UUID.randomUUID();
+        UUID stageId = UUID.randomUUID();
+        Role role = new Role();
+        role.setRoleCode("CREATOR");
+        AppUser creator = new AppUser();
+        creator.setUserId(creatorId);
+        creator.setRole(role);
+        creator.setIsActive(true);
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setProducerProfile(profile);
+        ContractStage stage = new ContractStage();
+        stage.setContractStageId(stageId);
+        stage.setContract(contract);
+        stage.setStatus(ContractStageStatus.NOT_STARTED.name());
+        when(userRepository.findById(creatorId)).thenReturn(Optional.of(creator));
+        when(stageRepository.findById(stageId)).thenReturn(Optional.of(stage));
+        when(contractRepository.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(stageRepository.findByIdForUpdate(stageId)).thenReturn(Optional.of(stage));
+        when(escrowService.isEscrowContract(contract)).thenReturn(true);
+
+        assertThrows(PodcastWorkflowException.class,
+                () -> service.submitMilestone(creatorId, stageId, file, null));
+
+        verify(mediaUploadService, never()).uploadMilestoneMedia(any(), any(), any());
+        verify(submissionRepository, never()).save(any());
     }
 }

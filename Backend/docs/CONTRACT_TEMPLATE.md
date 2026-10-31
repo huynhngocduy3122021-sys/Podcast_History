@@ -1,6 +1,6 @@
 # HỢP ĐỒNG CUNG CẤP VÀ SẢN XUẤT NỘI DUNG SỐ
 
-> Bản đã điền các điều khoản được chốt từ [mẫu gốc do người dùng cung cấp](CONTRACT_TEMPLATE_SOURCE.md). Backend đóng gói nội dung tại `src/main/resources/contracts/contract-v1.md` để tạo snapshot và lưu hai lần ký riêng. Bản mẫu này chưa phải một hợp đồng đã ký; bản ký cụ thể lấy từ `GET /api/requests/{requestId}/contract`.
+> Bản đối chiếu với hợp đồng người dùng cung cấp. Backend đóng gói nội dung phiên bản 2 tại `src/main/resources/contracts/contract-v2.md` để tạo snapshot và lưu hai lần ký riêng. Bản mẫu này chưa phải một hợp đồng đã ký; bản ký cụ thể lấy từ `GET /api/requests/{requestId}/contract`. Các hợp đồng đã tạo vẫn giữ bản nội dung và hash đã lưu.
 
 **Mã hợp đồng:** [CONTRACT_ID]  
 **Ngày lập:** [CREATED_AT]  
@@ -44,7 +44,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 
 3.2. Bên A tự lựa chọn ngân sách và dành toàn bộ ngân sách này cho hợp đồng.
 
-3.3. Khi yêu cầu được tạo thành công, hệ thống chuyển ngân sách từ số dư khả dụng sang số dư đang giữ.
+3.3. Khi yêu cầu được tạo thành công, nền tảng tạm giữ ngân sách từ ví Bên A để xử lý yêu cầu. Khoản này chỉ được giải ngân hoặc hoàn trả theo hợp đồng.
 
 3.4. Tổng giá trị các đợt phải bằng đúng ngân sách đã giữ.
 
@@ -52,27 +52,25 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 
 ## ĐIỀU 4. PHÂN CHIA GIAI ĐOẠN
 
-Hợp đồng có từ 01 đến 03 đợt do Bên B đề xuất và Bên A xác nhận.
+Hợp đồng có [MILESTONE_COUNT] đợt do Bên B đề xuất và Bên A xác nhận bằng chữ ký trên bản hợp đồng này.
 
-| Đợt | Nội dung bàn giao | Thời hạn | Giá trị |
-|---|---|---|---|
-| 1 | [MILESTONE_1_DESCRIPTION] | [DUE_DATE_1] | [AMOUNT_1] |
-| 2 | [MILESTONE_2_DESCRIPTION] | [DUE_DATE_2] | [AMOUNT_2] |
-| 3 | [MILESTONE_3_DESCRIPTION] | [DUE_DATE_3] | [AMOUNT_3] |
+| Đợt | Tên đợt | Nội dung bàn giao | Thời hạn | Giá trị |
+|---|---|---|---|---|
+[MILESTONE_ROWS]
 
-Các đợt không sử dụng được bỏ qua. Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
+Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 ## ĐIỀU 5. BÀN GIAO VÀ NGHIỆM THU
 
-5.1. Bên B tải tệp lên hệ thống trước hạn đã thỏa thuận.
+5.1. Bên B tải bản nháp audio/video lên hệ thống trước hạn đã thỏa thuận. Bản nháp phải được AI kiểm duyệt an toàn lời nói từ bản phiên âm trước khi Bên B xác nhận bàn giao cho Bên A. AI không đánh giá hình ảnh, âm nhạc, chất lượng kỹ thuật hoặc mức độ đáp ứng yêu cầu; các nội dung này do Bên A nghiệm thu. Thời điểm bàn giao được tính từ lúc Bên B xác nhận bàn giao, không tính từ lúc tải bản nháp.
 
 5.2. Bên A có **03 ngày** kể từ bàn giao hợp lệ để phản hồi.
 
 5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
 
-5.4. Tối đa **03 lần** yêu cầu chỉnh sửa mỗi đợt, trừ khi hai bên có thỏa thuận khác về lỗi không đạt tiêu chí tối thiểu.
+5.4. Bên A được yêu cầu chỉnh sửa tối đa **03 lần** cho mỗi đợt trên hệ thống. Khi hết lượt, hai bên có thể mở tranh chấp để xử lý bất đồng.
 
-5.5. Chỉ được tự nghiệm thu khi Bên A đã đồng ý điều kiện này trước, hết thời hạn phản hồi và không có tranh chấp mở.
+5.5. Chỉ được tự nghiệm thu sau 03 ngày khi Bên A đã chọn đồng ý điều kiện này lúc tạo yêu cầu, không phản hồi bản bàn giao trong thời hạn và không có tranh chấp mở.
 
 5.6. Bên A đã từ chối hoặc yêu cầu sửa đúng hạn thì không được tự nghiệm thu chỉ vì hết giờ.
 
@@ -110,7 +108,7 @@ Các đợt không sử dụng được bỏ qua. Bên B chỉ bắt đầu sau 
 
 8.2. Hai bên ưu tiên thương lượng trong 03 ngày.
 
-8.3. Admin xem yêu cầu, tiêu chí nghiệm thu, sản phẩm, lịch sử sửa, thời gian và bằng chứng hai bên.
+8.3. Staff xử lý tranh chấp; Admin có quyền xem hồ sơ và xử lý khi cần. Người xử lý xem yêu cầu, tiêu chí nghiệm thu, sản phẩm, lịch sử sửa, thời gian và bằng chứng hai bên.
 
 8.4. Phân bổ tiền theo chính sách đã chấp thuận và ghi lý do, bằng chứng.
 

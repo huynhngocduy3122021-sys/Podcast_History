@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.repository;
 
 import com.prmteam7.podcasthistory.model.ContractEscrow;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,9 @@ public interface ContractEscrowRepository extends JpaRepository<ContractEscrow, 
     Optional<ContractEscrow> findByRequest_SeriesRequestId(UUID requestId);
     Optional<ContractEscrow> findByIdempotencyKey(UUID idempotencyKey);
     Optional<ContractEscrow> findByContract_ContractId(UUID contractId);
+
+    @Query("select e from ContractEscrow e where e.request.producerProfile.user.userId = :creatorUserId order by e.createdAt desc")
+    List<ContractEscrow> findAllForCreator(@Param("creatorUserId") UUID creatorUserId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select e from ContractEscrow e where e.request.seriesRequestId = :requestId")

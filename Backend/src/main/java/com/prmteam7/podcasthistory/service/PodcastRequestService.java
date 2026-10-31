@@ -71,6 +71,7 @@ public class PodcastRequestService {
     private final MediaUploadService mediaUploadService;
     private final ContractEscrowService escrowService;
     private final R2PlaybackUrlService playbackUrlService;
+    private final DisputeStaffNotifier staffNotifier;
 
     public PodcastRequestService(
             AppUserRepository userRepository,
@@ -85,7 +86,8 @@ public class PodcastRequestService {
             PaymentRepository paymentRepository,
             MediaUploadService mediaUploadService,
             ContractEscrowService escrowService,
-            R2PlaybackUrlService playbackUrlService) {
+            R2PlaybackUrlService playbackUrlService,
+            DisputeStaffNotifier staffNotifier) {
         this.userRepository = userRepository;
         this.creatorRepository = creatorRepository;
         this.requestRepository = requestRepository;
@@ -99,6 +101,7 @@ public class PodcastRequestService {
         this.mediaUploadService = mediaUploadService;
         this.escrowService = escrowService;
         this.playbackUrlService = playbackUrlService;
+        this.staffNotifier = staffNotifier;
     }
 
     @Transactional
@@ -235,6 +238,9 @@ public class PodcastRequestService {
         escrowService.requirePreviousStagesApproved(stage);
         requireStageStatus(stage, ContractStageStatus.NOT_STARTED, ContractStageStatus.REVISION_REQUESTED);
 
+        if (escrowService.isEscrowContract(stage.getContract()))
+            throw new PodcastWorkflowException("Hợp đồng giữ tiền phải upload bản nháp, chờ AI duyệt rồi mới gọi API bàn giao.");
+
         MediaUploadResponse uploaded = mediaUploadService.uploadMilestoneMedia(file, creatorUserId, stageId);
         long previousSubmissions = submissionRepository.countByContractStage_ContractStageId(stageId);
         MilestoneSubmission submission = new MilestoneSubmission();
@@ -257,8 +263,7 @@ public class PodcastRequestService {
         ContractStage stage = stageRepository.findById(stageId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy mốc podcast."));
         AppUser requester = requireActiveUser(userId);
-        if (requester.getRole() == null
-                || !UserRole.ADMIN.name().equalsIgnoreCase(requester.getRole().getRoleCode())) {
+        if (!isDisputeReviewer(requester)) {
             requireParticipantRole(requester);
             requireStageParticipant(stage, userId);
         }
@@ -271,7 +276,7 @@ public class PodcastRequestService {
         ContractStage stage = stageRepository.findById(stageId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy đợt."));
         AppUser user = requireActiveUser(userId);
-        if (user.getRole() == null || !UserRole.ADMIN.name().equalsIgnoreCase(user.getRole().getRoleCode())) {
+        if (!isDisputeReviewer(user)) {
             requireStageParticipant(stage, userId);
         }
         MilestoneSubmission submission = submissionRepository.findById(submissionId)
@@ -365,12 +370,14 @@ public class PodcastRequestService {
         dispute.setStatus(DisputeStatus.OPEN.name());
         stage.setStatus(ContractStageStatus.DISPUTED.name());
         stageRepository.save(stage);
-        return toDisputeResponse(disputeRepository.save(dispute));
+        dispute = disputeRepository.save(dispute);
+        staffNotifier.notifyOpen("đợt", dispute.getMilestoneDisputeId());
+        return toDisputeResponse(dispute);
     }
 
     @Transactional(readOnly = true)
     public List<DisputeResponse> getOpenDisputes(UUID adminId) {
-        requireRole(requireActiveUser(adminId), UserRole.ADMIN);
+        requireDisputeReviewer(requireActiveUser(adminId));
         return disputeRepository.findAllByStatusOrderByCreatedAtAsc(DisputeStatus.OPEN.name())
                 .stream().map(this::toDisputeResponse).toList();
     }
@@ -378,7 +385,7 @@ public class PodcastRequestService {
     @Transactional
     public DisputeResponse resolveDispute(UUID adminId, UUID disputeId, ResolveDisputeRequest input) {
         AppUser admin = requireActiveUser(adminId);
-        requireRole(admin, UserRole.ADMIN);
+        requireDisputeReviewer(admin);
         UUID contractId = disputeRepository.findContractIdByDisputeId(disputeId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy tranh chấp."));
         contractRepository.lockById(contractId)
@@ -540,6 +547,18 @@ public class PodcastRequestService {
         if (user.getRole() == null || !role.name().equalsIgnoreCase(user.getRole().getRoleCode())) {
             throw new PodcastWorkflowException("Tài khoản không có quyền thực hiện thao tác này.");
         }
+    }
+
+    private boolean isDisputeReviewer(AppUser user) {
+        if (user.getRole() == null) return false;
+        String role = user.getRole().getRoleCode();
+        return UserRole.STAFF.name().equalsIgnoreCase(role)
+                || UserRole.ADMIN.name().equalsIgnoreCase(role);
+    }
+
+    private void requireDisputeReviewer(AppUser user) {
+        if (!isDisputeReviewer(user))
+            throw new PodcastWorkflowException("Chỉ Staff hoặc Admin được xem và xử lý tranh chấp.");
     }
 
     private void requireParticipantRole(AppUser user) {

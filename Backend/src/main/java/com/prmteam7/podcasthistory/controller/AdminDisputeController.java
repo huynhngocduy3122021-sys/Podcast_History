@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/admin")
-@Tag(name = "Admin - contracts and disputes")
+@Tag(name = "Staff/Admin - contracts and disputes")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminDisputeController {
   private final AdminDisputeService service;

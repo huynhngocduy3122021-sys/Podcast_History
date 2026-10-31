@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,6 +47,7 @@ class ContractEscrowServiceTest {
         ProducerProfile profile = new ProducerProfile();
         profile.setProducerProfileId(UUID.randomUUID());
         profile.setUser(creator);
+        profile.setVerificationStatus("APPROVED");
         UserWallet wallet = wallet(listener, "150000", "0");
         when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
         when(creators.findById(profile.getProducerProfileId())).thenReturn(Optional.of(profile));
@@ -102,6 +104,109 @@ class ContractEscrowServiceTest {
         assertEquals(request.getSeriesRequestId(), result.requestId());
         verify(listenerWallets, never()).walletForLockedUser(any());
         verify(transactions, never()).save(any());
+    }
+
+    @Test
+    void unapprovedCreatorCannotReceiveFundedRequest() {
+        AppUser listener = user("LISTENER");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(user("CREATOR"));
+        profile.setVerificationStatus("PENDING");
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(creators.findById(profile.getProducerProfileId())).thenReturn(Optional.of(profile));
+
+        assertThrows(PodcastWorkflowException.class, () -> service.create(listener.getUserId(),
+                new ContractWorkflowRequests.Create(UUID.randomUUID(), profile.getProducerProfileId(),
+                        "Audio lịch sử", "Mô tả", new BigDecimal("100000"),
+                        "AUDIO", "MP3", "10 phút", "Âm thanh rõ", false)));
+
+        verify(listenerWallets, never()).walletForLockedUser(any());
+        verify(requests, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void creatorCanReadRequirementsBeforeMakingProposal() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setProducerProfile(profile);
+        request.setRequestedTitle("Audio lịch sử");
+        request.setDescription("Mô tả đầy đủ");
+        request.setStatus("PENDING");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setProductType("AUDIO");
+        escrow.setFileFormat("MP3");
+        escrow.setDurationDescription("10 phút");
+        escrow.setAcceptanceCriteria("Âm thanh rõ");
+        when(escrows.findByRequest_SeriesRequestId(request.getSeriesRequestId()))
+                .thenReturn(Optional.of(escrow));
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+
+        var detail = service.getRequestDetail(creator.getUserId(), request.getSeriesRequestId());
+
+        assertEquals("AUDIO", detail.productType());
+        assertEquals("MP3", detail.fileFormat());
+        assertEquals("Âm thanh rõ", detail.acceptanceCriteria());
+        assertEquals(0, detail.remainingHeld().compareTo(new BigDecimal("100000")));
+    }
+
+    @Test
+    void unrelatedUserCannotReadFundedRequestDetails() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setProducerProfile(profile);
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        when(escrows.findByRequest_SeriesRequestId(request.getSeriesRequestId()))
+                .thenReturn(Optional.of(escrow));
+
+        assertThrows(PodcastWorkflowException.class, () -> service.getRequestDetail(
+                UUID.randomUUID(), request.getSeriesRequestId()));
+        verify(users, never()).findById(any());
+    }
+
+    @Test
+    void creatorCanFindContractRequestAfterItLeavesIncomingInbox() {
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setProducerProfile(profile);
+        request.setStatus("ACCEPTED");
+        request.setRequestedTitle("Audio lịch sử");
+        request.setDescription("Mô tả");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setProductType("AUDIO");
+        escrow.setFileFormat("MP3");
+        escrow.setDurationDescription("10 phút");
+        escrow.setAcceptanceCriteria("Âm thanh rõ");
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(escrows.findAllForCreator(creator.getUserId())).thenReturn(List.of(escrow));
+
+        var found = service.getCreatorContractRequests(creator.getUserId());
+
+        assertEquals(1, found.size());
+        assertEquals(request.getSeriesRequestId(), found.get(0).requestId());
+        assertEquals("ACCEPTED", found.get(0).status());
     }
 
     @Test
@@ -244,8 +349,71 @@ class ContractEscrowServiceTest {
     }
 
     @Test
-    void terminationTakesTenPercentFeeFromCreatorCompensationAndRefundsRemainder() {
-        AppUser admin = user("ADMIN");
+    void creatorCanChooseFourStagesAndAllAppearInSignedSnapshot() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        profile.setChannelName("Kênh lịch sử");
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setProducerProfile(profile);
+        request.setRequestedTitle("Audio lịch sử");
+        request.setDescription("Mô tả");
+        request.setStatus("PENDING");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setProductType("AUDIO");
+        escrow.setFileFormat("MP3");
+        escrow.setDurationDescription("10 phút");
+        escrow.setAcceptanceCriteria("Âm thanh rõ");
+        List<ContractStage> persistedStages = new ArrayList<>();
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
+        when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+        when(responses.save(any(RequestResponse.class))).thenAnswer(call -> call.getArgument(0));
+        when(contracts.saveAndFlush(any(Contract.class))).thenAnswer(call -> {
+            Contract contract = call.getArgument(0);
+            contract.setContractId(UUID.randomUUID());
+            contract.setCreatedAt(Instant.now());
+            return contract;
+        });
+        when(stages.save(any(ContractStage.class))).thenAnswer(call -> {
+            ContractStage stage = call.getArgument(0);
+            stage.setContractStageId(UUID.randomUUID());
+            persistedStages.add(stage);
+            return stage;
+        });
+        when(stages.findAllByContract_ContractIdOrderByStageOrder(any()))
+                .thenAnswer(call -> persistedStages);
+        Instant firstDue = Instant.now().plusSeconds(86400);
+        var offers = List.of(
+                new ContractWorkflowRequests.Stage("Dàn ý", "Dàn ý", firstDue, new BigDecimal("10000")),
+                new ContractWorkflowRequests.Stage("Bản nháp", "Bản nháp", firstDue.plusSeconds(86400), new BigDecimal("20000")),
+                new ContractWorkflowRequests.Stage("Bản sửa", "Bản sửa", firstDue.plusSeconds(172800), new BigDecimal("30000")),
+                new ContractWorkflowRequests.Stage("Bản hoàn chỉnh", "Bản hoàn chỉnh", firstDue.plusSeconds(259200), new BigDecimal("40000")));
+
+        var agreement = service.propose(creator.getUserId(), request.getSeriesRequestId(),
+                new ContractWorkflowRequests.Proposal("Tôi nhận làm", offers));
+
+        assertEquals(4, agreement.milestones().size());
+        assertEquals(2, agreement.contractVersion());
+        assertTrue(agreement.contentSnapshot().contains("Hợp đồng có 4 đợt"));
+        assertTrue(agreement.contentSnapshot().contains("| 4 | Bản hoàn chỉnh | Bản hoàn chỉnh |"));
+        assertTrue(agreement.contentSnapshot().contains("nền tảng tạm giữ ngân sách từ ví Bên A"));
+        assertFalse(agreement.contentSnapshot().contains("AI chỉ đánh giá hình ảnh"));
+        assertTrue(agreement.contentSnapshot().contains("AI không đánh giá hình ảnh"));
+        assertFalse(agreement.contentSnapshot().contains("[MILESTONE_ROWS]"));
+        assertEquals(64, agreement.contentHash().length());
+        assertEquals("PENDING_SIGNATURE", agreement.contractStatus());
+    }
+
+    @Test
+    void staffTerminationTakesTenPercentFeeFromCreatorCompensationAndRefundsRemainder() {
+        AppUser admin = user("STAFF");
         AppUser listener = user("LISTENER");
         AppUser creator = user("CREATOR");
         ProducerProfile profile = new ProducerProfile();
@@ -281,7 +449,6 @@ class ContractEscrowServiceTest {
         when(users.findByIdForUpdate(admin.getUserId())).thenReturn(Optional.of(admin));
         when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
         when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
-        when(users.findById(admin.getUserId())).thenReturn(Optional.of(admin));
         when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
         when(contractDisputes.findFirstByContract_ContractIdAndStatus(contract.getContractId(), "OPEN"))
                 .thenReturn(Optional.of(dispute));
@@ -311,10 +478,11 @@ class ContractEscrowServiceTest {
         assertEquals(0, listenerWallet.getHeldBalance().compareTo(BigDecimal.ZERO));
         assertEquals(0, creatorWallet.getBalance().compareTo(new BigDecimal("10800")));
         assertEquals("TERMINATED", contract.getStatus());
+        assertEquals(admin.getUserId(), dispute.getReviewer().getUserId());
     }
 
     @Test
-    void listenerCanDeclineUnsignedProposalAndRecoverFullBudget() {
+    void listenerCanCancelAfterOwnSignatureWhileCreatorHasNotSigned() {
         AppUser listener = user("LISTENER");
         SeriesRequest request = new SeriesRequest();
         request.setSeriesRequestId(UUID.randomUUID());
@@ -330,6 +498,7 @@ class ContractEscrowServiceTest {
         escrow.setContract(contract);
         escrow.setBudget(new BigDecimal("100000"));
         escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setListenerSignedAt(Instant.now());
         UserWallet wallet = wallet(listener, "0", "100000");
         when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
         when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));

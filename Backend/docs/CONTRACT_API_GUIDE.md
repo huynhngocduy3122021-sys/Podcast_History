@@ -8,7 +8,7 @@ Tài liệu này dành cho luồng **hợp đồng có giữ ngân sách VND**. 
 - UUID lấy từ response, không tự suy đoán. Thời gian gửi theo ISO 8601 UTC, ví dụ `2026-11-05T10:00:00Z`.
 - Ngân sách và tiền từng đợt là **VND nguyên**. Phí tính theo tỷ lệ, làm tròn về VND nguyên bằng `HALF_UP`; phần CC nhận bằng tiền gộp trừ phí nên tổng luôn khớp.
 - HTTP `409`: sai trạng thái, không đủ tiền, hash/phiên bản khác, vượt hạn mức hoặc đề xuất không khớp ngân sách. `404`: không tìm thấy đối tượng. `400`: body sai validation.
-- Mẫu hợp đồng được đóng gói trong Backend tại `src/main/resources/contracts/contract-v1.md`. `contentSnapshot` trả từ API là **bản phải hiển thị khi ký**; FE không dựng lại hợp đồng từ hồ sơ hiện tại.
+- Mẫu hợp đồng mới được đóng gói trong Backend tại `src/main/resources/contracts/contract-v2.md`. Hợp đồng đã tạo giữ nguyên `contentSnapshot` và `contentHash` của chính hợp đồng đó. `contentSnapshot` trả từ API là **bản phải hiển thị khi ký**; FE không dựng lại hợp đồng từ hồ sơ hiện tại.
 
 ## 1. Listener kiểm tra ví và nạp tiền nếu cần
 
@@ -22,6 +22,7 @@ Tài liệu này dành cho luồng **hợp đồng có giữ ngân sách VND**. 
 ## 2. Listener tạo yêu cầu và giữ ngân sách
 
 `POST /api/requests/contract` — role **LISTENER**. FE tạo `idempotencyKey` UUID một lần cho thao tác, giữ nguyên khi retry cùng nội dung. Backend khóa ví Listener, trừ số dư khả dụng và tăng số dư đang giữ **trong một transaction**. Nếu không đủ tiền, request không được tạo.
+Kênh CC được chọn phải có hồ sơ `APPROVED` và tài khoản Creator đang hoạt động.
 
 ```json
 {
@@ -44,25 +45,29 @@ Tài liệu này dành cho luồng **hợp đồng có giữ ngân sách VND**. 
 {"requestId":"<UUID>","status":"PENDING","budgetAmount":100000.00,"heldAmount":100000.00,"currency":"VND"}
 ```
 
-FE có thể gọi `GET /api/requests/me` để xem request, hoặc `POST /api/requests/{requestId}/contract/cancel` để hủy **trước khi Listener ký**; Backend hoàn toàn bộ tiền đang giữ và đóng đề xuất nếu đã có. Sau khi Listener đã ký, hai bên dùng luồng chấm dứt/tranh chấp. `DELETE /api/me/series-requests/{requestId}` của luồng cũ cũng được nối với hoàn escrow nếu request mới còn `PENDING`.
+FE có thể gọi `GET /api/requests/me` để xem danh sách request. Listener và CC lấy **toàn bộ nội dung request có giữ tiền** qua `GET /api/requests/{requestId}/contract-request`: `requestId`, `creatorProfileId`, `status`, `requestedTitle`, `description`, `budgetAmount`, `remainingHeld`, `currency`, `productType`, `fileFormat`, `duration`, `acceptanceCriteria`, `autoAcceptEnabled`, `createdAt`. API này dùng được cả trước khi CC đề xuất; tài khoản ngoài hai bên không xem được. Listener gọi `POST /api/requests/{requestId}/contract/cancel` để hủy **trước khi đủ hai chữ ký và hợp đồng kích hoạt**; Backend hoàn toàn bộ tiền đang giữ và đóng đề xuất nếu đã có. Sau khi hợp đồng đã kích hoạt, hai bên dùng luồng chấm dứt/tranh chấp. `DELETE /api/me/series-requests/{requestId}` của luồng cũ cũng được nối với hoàn escrow nếu request mới còn `PENDING`.
 
-## 3. CC xem, từ chối hoặc đề xuất 1–3 đợt
+Request đã giữ tiền không sửa trực tiếp bằng `PUT /api/me/series-requests/{requestId}`. Khi cần đổi yêu cầu trước khi hợp đồng có hiệu lực, Listener hủy để nhận lại ngân sách rồi tạo request mới với `idempotencyKey` mới; điều này giữ nội dung hợp đồng và khoản tiền đã khóa nhất quán.
 
-`GET /api/creator/requests/incoming` trả các request `PENDING` thuộc kênh CC. CC có thể gọi `POST /api/creator/requests/{requestId}/reject` với `{"responseText":"Lý do"}`; request mới bị từ chối sẽ **hoàn tiền giữ** cho Listener.
+## 3. CC xem, từ chối hoặc tự chọn số đợt bàn giao
 
-Để chấp nhận request hợp đồng mới, CC gọi `POST /api/creator/requests/{requestId}/proposal`:
+`GET /api/creator/requests/incoming` trả các request `PENDING` thuộc kênh CC. `GET /api/creator/requests/contracts` trả danh sách request có giữ tiền của kênh CC ở mọi trạng thái, kể cả sau khi đề xuất hoặc khi mở lại ứng dụng. Với mỗi `requestId`, CC gọi `GET /api/requests/{requestId}/contract-request` để xem ngân sách, loại file, thời lượng và tiêu chí trước khi quyết định. CC có thể gọi `POST /api/creator/requests/{requestId}/reject` với `{"responseText":"Lý do"}`; request mới bị từ chối sẽ **hoàn tiền giữ** cho Listener.
+
+Để chấp nhận request hợp đồng mới, **CC quyết định số đợt** rồi gọi `POST /api/creator/requests/{requestId}/proposal`. Listener chỉ chọn tổng ngân sách, còn số đợt, tiền từng đợt và hạn nộp do CC đề xuất; Listener chấp nhận toàn bộ đề xuất bằng chữ ký hoặc hủy trước khi hợp đồng có hiệu lực. Ví dụ CC chọn **4 đợt** cho ngân sách 100.000 VND:
 
 ```json
 {
   "responseText": "Tôi nhận sản xuất nội dung này",
   "milestones": [
-    {"name":"Đợt 1","description":"Bản nháp audio","dueAt":"2026-11-05T10:00:00Z","amount":40000},
-    {"name":"Đợt 2","description":"Bản hoàn chỉnh","dueAt":"2026-11-12T10:00:00Z","amount":60000}
+    {"name":"Đợt 1","description":"Dàn ý","dueAt":"2026-11-05T10:00:00Z","amount":10000},
+    {"name":"Đợt 2","description":"Bản nháp audio","dueAt":"2026-11-12T10:00:00Z","amount":20000},
+    {"name":"Đợt 3","description":"Bản chỉnh sửa","dueAt":"2026-11-19T10:00:00Z","amount":30000},
+    {"name":"Đợt 4","description":"Bản hoàn chỉnh","dueAt":"2026-11-26T10:00:00Z","amount":40000}
   ]
 }
 ```
 
-Backend yêu cầu **1–3 đợt**, các hạn nộp tăng dần trong tương lai và tổng `amount = budgetAmount`. Response là `Agreement` gồm `requestId`, `contractId`, `contractStatus: PENDING_SIGNATURE`, `contractVersion`, `contentHash`, `contentSnapshot`, `creatorSignedAt`, `listenerSignedAt`, `budgetAmount`, `remainingHeld`, `milestones[]` (có `milestoneId`, `dueAt`, `amount`, `status`). API `/accept` cũ **không chấp nhận request có escrow**, tránh bỏ qua bước ký.
+Backend yêu cầu **ít nhất một đợt**, mỗi đợt có tiền VND nguyên dương, các hạn nộp tăng dần trong tương lai và tổng `amount = budgetAmount`. Backend không đặt giới hạn 3 đợt. Bản hợp đồng tạo số hàng đúng với số đợt CC đã đề xuất; mỗi đợt được nghiệm thu và giải ngân riêng. Response là `Agreement` gồm `requestId`, `contractId`, `contractStatus: PENDING_SIGNATURE`, `contractVersion`, `contentHash`, `contentSnapshot`, `creatorSignedAt`, `listenerSignedAt`, `budgetAmount`, `remainingHeld`, `milestones[]` (có `milestoneId`, `dueAt`, `amount`, `status`). API `/accept` cũ **không chấp nhận request có escrow**, tránh bỏ qua bước ký.
 
 ## 4. Hai bên xem và ký đúng cùng một bản
 
@@ -70,24 +75,31 @@ Backend yêu cầu **1–3 đợt**, các hạn nộp tăng dần trong tương 
 2. Mỗi bên tự gọi `POST /api/requests/{requestId}/contract/sign` với body:
 
 ```json
-{"contractVersion":1,"contentHash":"<hash từ GET contract>","accepted":true}
+{"contractVersion":2,"contentHash":"<hash từ GET contract>","accepted":true}
 ```
 
-Backend kiểm tra người ký, phiên bản/hash, ghi `creatorSignedAt` hoặc `listenerSignedAt`. Khi đủ hai bên và tiền Listener vẫn đang giữ đủ, `contractStatus` chuyển `IN_PROGRESS`. Gọi lại cùng phiên bản/hash không tạo chữ ký thứ hai. Nếu không khớp hash, FE phải tải lại bản hợp đồng trước khi ký.
+`contractVersion: 2` là ví dụ cho hợp đồng mới; FE phải lấy đúng `contractVersion` và `contentHash` từ response GET của chính hợp đồng đang ký. Backend kiểm tra người ký, phiên bản/hash, ghi `creatorSignedAt` hoặc `listenerSignedAt`. Khi đủ hai bên và tiền Listener vẫn đang giữ đủ, `contractStatus` chuyển `IN_PROGRESS`. Gọi lại cùng phiên bản/hash không tạo chữ ký thứ hai. Nếu không khớp hash, FE phải tải lại bản hợp đồng trước khi ký.
 
-## 5. CC bàn giao, Listener nghiệm thu hoặc yêu cầu làm lại
+## 5. CC upload bản nháp, chờ AI duyệt, rồi mới bàn giao
+
+Đối với hợp đồng giữ tiền, **upload không còn là bàn giao**. CC thực hiện lần lượt:
+
+1. `POST /api/creator/milestones/{milestoneId}/drafts` với `multipart/form-data`: trường `file` (audio/video) và `note` tùy chọn. Response `201` có `draftId`, `draftNumber`, `status: PENDING`. Đợt vẫn `NOT_STARTED` hoặc `REVISION_REQUESTED`; Listener chưa thấy bản nháp và đồng hồ 3 ngày chưa chạy.
+2. `GET /api/creator/milestones/{milestoneId}/drafts` để xem `status`, `aiLabel`, `aiRecommendation`, `aiConfidence`, `aiReason`, `errorMessage`. Backend chạy Whisper rồi Gemini theo lịch 30 giây. Chỉ `APPROVED` nghĩa AI đã xác nhận **lời nói an toàn** với confidence đạt ngưỡng. `PROCESSING`, `REVIEW_REQUIRED`, `REJECTED` và `FAILED` đều **không thể bàn giao**. CC có thể upload bản nháp mới; chỉ bản mới nhất được bàn giao. Với `FAILED`, bản mới sẽ được kiểm duyệt lại. `GET /api/creator/milestones/{milestoneId}/drafts/{draftId}/media` cấp URL riêng tư cho CC xem lại file.
+3. Khi bản nháp mới nhất có `status: APPROVED`, CC chủ động gọi `POST /api/creator/milestones/{milestoneId}/drafts/{draftId}/deliver` (không body). Response `201` có `submissionId`, `revisionNumber`, `submittedAt`. Lúc này đợt mới chuyển `SUBMITTED`, Listener mới xem được file và thời gian 3 ngày nghiệm thu mới bắt đầu.
+
+AI hiện **chỉ đánh giá an toàn của lời nói trong transcript**. AI không xác nhận hình ảnh video, âm nhạc, chất lượng thu âm hay mức độ đáp ứng tiêu chí hợp đồng; Listener vẫn nghiệm thu sản phẩm. Nếu Whisper không tạo được lời nói đủ rõ, Gemini không cấu hình/lỗi hoặc kết quả chưa chắc chắn, Backend chặn bàn giao theo cơ chế fail closed. API cũ `POST /api/creator/milestones/{milestoneId}/submissions` trả `409` cho hợp đồng giữ tiền để không bỏ qua bước AI; nó chỉ còn dùng cho hợp đồng cũ không giữ tiền.
 
 | API | Ai gọi / dữ liệu | Kết quả |
 |---|---|---|
 | `GET /api/requests/{requestId}/milestones` | Hai bên; không body | Danh sách `milestoneId`, `dueAt`, `status`, `revisionCount`, `maxRevisions`, `paymentId` |
-| `POST /api/creator/milestones/{milestoneId}/submissions` | CC; multipart `file` audio/video và `note` tùy chọn | Chỉ sau khi ký, và đợt trước đã duyệt; đợt chuyển `SUBMITTED`, trả `submissionId`, `revisionNumber`, `submittedAt` |
 | `GET /api/milestones/{milestoneId}/submissions` | Hai bên; không body | Lịch sử các bản CC đã nộp |
 | `GET /api/milestones/{milestoneId}/submissions/{submissionId}/media` | Hai bên hoặc Admin; không body | `url` R2 có chữ ký, `expiresAt` sau khoảng 5 phút; chỉ dùng URL này để phát file riêng tư |
 | `POST /api/listener/milestones/{milestoneId}/reject` | Listener; `{"reason":"Nêu cụ thể phần phải làm lại"}` | HTTP 204; `REVISION_REQUESTED`; không chuyển tiền, CC có thể nộp lại |
 | `POST /api/listener/milestones/{milestoneId}/revision` | Listener; cùng body | Cùng tác dụng và cùng hạn mức `/reject` |
 | `POST /api/listener/milestones/{milestoneId}/approve` | Listener; không body | `APPROVED`, `paymentStatus: PAID`, `creatorNet`, `platformFee`, `remainingHeld` |
 
-Listener có **3 lượt yêu cầu làm lại mỗi đợt**. Sau CC nộp bản mới, đợt lại `SUBMITTED`; thời gian 3 ngày tính từ **bản nộp mới nhất**. Khi hết lượt, API `/reject` và `/revision` trả `409`, có thể mở tranh chấp. Nút “từ chối bản nộp” không tự chấm dứt hợp đồng.
+Listener có **3 lượt yêu cầu làm lại mỗi đợt**. Sau CC upload bản sửa, chờ AI duyệt và bấm bàn giao bản đó, đợt lại `SUBMITTED`; thời gian 3 ngày tính từ **lần bàn giao mới nhất**. Khi hết lượt, API `/reject` và `/revision` trả `409`, có thể mở tranh chấp. Nút “từ chối bản nộp” không tự chấm dứt hợp đồng.
 
 Khi duyệt, Backend chuyển đúng tiền gộp đợt khỏi khoản đang giữ: CC nhận **80%**, app **20%** (làm tròn VND). Ví dụ đợt 20.000 VND: `creatorNet=16000`, `platformFee=4000`. Có bút toán ví của Listener và CC, phí app, `Payment PAID`; không đòi Listener thanh toán lần hai. Nếu mọi đợt được duyệt, hợp đồng thành `COMPLETED`.
 
@@ -95,11 +107,11 @@ Nếu `autoAcceptEnabled=true`, job Backend kiểm tra mỗi phút: chỉ tự d
 
 ## 6. Tranh chấp và chấm dứt
 
-**Tranh chấp một đợt:** Listener hoặc CC gọi `POST /api/milestones/{milestoneId}/disputes` với `{"reason":"..."}`. Admin xem `GET /api/admin/milestone-disputes/open`, giải quyết qua `POST /api/admin/milestone-disputes/{disputeId}/resolve` với `decision: REQUEST_REVISION` hoặc `APPROVE_MILESTONE`. Nếu duyệt đợt của hợp đồng mới, Backend chỉ cho phép sau **3 ngày ưu tiên thương lượng** rồi giải ngân từ escrow theo 80/20.
+**Tranh chấp một đợt:** Listener hoặc CC gọi `POST /api/milestones/{milestoneId}/disputes` với `{"reason":"..."}`. Mỗi Staff đang hoạt động nhận thông báo `DISPUTE_ASSIGNED` qua API thông báo và WebSocket. Staff và Admin xem hàng chờ qua `GET /api/admin/milestone-disputes/open`, xem bằng chứng qua `GET /api/milestones/{milestoneId}/submissions` và `GET /api/milestones/{milestoneId}/submissions/{submissionId}/media`, rồi xử lý qua `POST /api/admin/milestone-disputes/{disputeId}/resolve` với `decision: REQUEST_REVISION` hoặc `APPROVE_MILESTONE`. Nếu duyệt đợt của hợp đồng mới, Backend chỉ cho phép sau **3 ngày ưu tiên thương lượng** rồi giải ngân từ escrow theo 80/20.
 
-**Đề nghị chấm dứt toàn hợp đồng:** Listener hoặc CC gọi `POST /api/requests/{requestId}/termination-requests` với `{"reason":"Không thể tiếp tục; nêu lý do"}`. Backend mở hồ sơ tranh chấp, hợp đồng `DISPUTED`, đóng băng bước nghiệm thu/giải ngân. Hai bên gọi `GET /api/requests/{requestId}/termination-request` để xem `status`, `createdAt`, `negotiationEndsAt`, `decision`.
+**Đề nghị chấm dứt toàn hợp đồng:** Listener hoặc CC gọi `POST /api/requests/{requestId}/termination-requests` với `{"reason":"Không thể tiếp tục; nêu lý do"}`. Backend mở hồ sơ tranh chấp, gửi `DISPUTE_ASSIGNED` cho Staff, hợp đồng `DISPUTED`, đóng băng bước nghiệm thu/giải ngân. Staff và Admin xem `GET /api/admin/disputes?status=OPEN&page=0&size=20`, `GET /api/admin/disputes/{disputeId}` và `GET /api/admin/contracts/{contractId}`. Hai bên gọi `GET /api/requests/{requestId}/termination-request` để xem `status`, `createdAt`, `negotiationEndsAt`, `decision`.
 
-Sau `negotiationEndsAt` (**3 ngày**), Admin gọi `POST /api/admin/contracts/{contractId}/terminate-escrow`:
+Sau `negotiationEndsAt` (**3 ngày**), Staff hoặc Admin gọi `POST /api/admin/contracts/{contractId}/terminate-escrow`:
 
 ```json
 {
