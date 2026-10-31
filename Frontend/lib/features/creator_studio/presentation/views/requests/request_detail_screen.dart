@@ -86,14 +86,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _playAudio(String url) async {
+  Future<void> _playAudio(String url, {String? mimeType}) async {
     try {
       if (_currentlyPlayingUrl == url && _isPlaying) {
         await _audioPlayer.pause();
+      } else if (_currentlyPlayingUrl == url &&
+          _audioPlayer.state == PlayerState.paused) {
+        await _audioPlayer.resume();
       } else {
         _currentlyPlayingUrl = url;
+        _currentPosition = Duration.zero;
+        _totalDuration = Duration.zero;
         await _audioPlayer.stop();
-        await _audioPlayer.play(UrlSource(url));
+        await _audioPlayer.play(UrlSource(url, mimeType: mimeType));
       }
     } catch (e) {
       if (mounted) {
@@ -105,6 +110,31 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         );
       }
     }
+  }
+
+  Future<void> _seekAudio(double value) async {
+    if (_totalDuration <= Duration.zero) return;
+    final position = Duration(
+      milliseconds: (value * _totalDuration.inMilliseconds).round(),
+    );
+    await _audioPlayer.seek(position);
+  }
+
+  Future<void> _skipAudio(int seconds) async {
+    if (_currentlyPlayingUrl == null) return;
+    final target = _currentPosition + Duration(seconds: seconds);
+    final max = _totalDuration;
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (max > Duration.zero && target > max ? max : target);
+    await _audioPlayer.seek(clamped);
+  }
+
+  String _formatAudioDuration(Duration value) {
+    final hours = value.inHours;
+    final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
   }
 
   @override
@@ -1460,8 +1490,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           const SizedBox(height: AppSpacing.sm),
           if (req.submissions.isNotEmpty)
             ...req.submissions.map((sub) {
+              final isCurrentSub = _currentlyPlayingUrl == sub.mediaUrl;
               final isCurrentSubPlaying =
-                  _currentlyPlayingUrl == sub.mediaUrl && _isPlaying;
+                  isCurrentSub && _isPlaying;
               return Container(
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                 padding: const EdgeInsets.all(AppSpacing.sm),
@@ -1529,24 +1560,83 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                if (isCurrentSubPlaying)
-                                  LinearProgressIndicator(
-                                    value: _totalDuration.inMilliseconds > 0
-                                        ? _currentPosition.inMilliseconds /
-                                              _totalDuration.inMilliseconds
-                                        : 0.0,
-                                    backgroundColor: Colors.grey.withValues(
-                                      alpha: 0.2,
+                                if (isCurrentSub) ...[
+                                  SliderTheme(
+                                    data: SliderTheme.of(context).copyWith(
+                                      trackHeight: 3,
+                                      thumbShape: const RoundSliderThumbShape(
+                                        enabledThumbRadius: 6,
+                                      ),
+                                      overlayShape: const RoundSliderOverlayShape(
+                                        overlayRadius: 12,
+                                      ),
                                     ),
-                                    valueColor: const AlwaysStoppedAnimation(
-                                      AppColors.primaryLight,
+                                    child: Slider(
+                                      min: 0,
+                                      max: 1,
+                                      value: _totalDuration.inMilliseconds > 0
+                                          ? (_currentPosition.inMilliseconds /
+                                                    _totalDuration.inMilliseconds)
+                                                .clamp(0.0, 1.0)
+                                                .toDouble()
+                                          : 0,
+                                      activeColor: AppColors.primaryLight,
+                                      onChanged: _totalDuration > Duration.zero
+                                          ? _seekAudio
+                                          : null,
                                     ),
                                   ),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        _formatAudioDuration(_currentPosition),
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                      Text(
+                                        _formatAudioDuration(_totalDuration),
+                                        style: const TextStyle(fontSize: 10),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),
                         ],
                       ),
+                      if (isCurrentSub) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              tooltip: 'Tua lùi 10 giây',
+                              icon: const Icon(Icons.replay_10_rounded),
+                              onPressed: () => _skipAudio(-10),
+                            ),
+                            IconButton(
+                              tooltip: isCurrentSubPlaying ? 'Tạm dừng' : 'Phát',
+                              iconSize: 34,
+                              color: AppColors.primaryLight,
+                              icon: Icon(
+                                isCurrentSubPlaying
+                                    ? Icons.pause_circle_filled
+                                    : Icons.play_circle_fill,
+                              ),
+                              onPressed: () => _playAudio(
+                                sub.mediaUrl!,
+                                mimeType: sub.contentType,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Tua tới 10 giây',
+                              icon: const Icon(Icons.forward_10_rounded),
+                              onPressed: () => _skipAudio(10),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ],
                 ),
@@ -1611,9 +1701,111 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
             ),
           ],
+          if (termination != null) _buildDisputeActions(termination),
         ],
       ),
     );
+  }
+
+  Widget _buildDisputeActions(ContractTerminationStatus termination) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Trạng thái: ${_disputeStatusLabel(termination.status)}',
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        if (termination.opponentConfirmedAt != null)
+          Text(
+            'Đối phương đã xác nhận: ${DateFormat('HH:mm dd/MM/yyyy').format(termination.opponentConfirmedAt!.toLocal())}',
+            style: const TextStyle(fontSize: 12),
+          ),
+        if (termination.listenerWinAction != null)
+          Text(
+            'Phương án Listener thắng: ${_disputeActionLabel(termination.listenerWinAction!)}',
+            style: const TextStyle(fontSize: 12),
+          ),
+        if (termination.decision != null)
+          Text(
+            'Quyết định: ${_disputeDecisionLabel(termination.decision!)}',
+            style: const TextStyle(fontSize: 12),
+          ),
+        if (termination.status == 'AWAITING_RESPONSE')
+          Wrap(
+            spacing: AppSpacing.sm,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.check_circle_outline),
+                label: const Text('Xác nhận tranh chấp'),
+                onPressed: () => _confirmContractDispute(termination.disputeId),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.undo_rounded),
+                label: const Text('Rút tranh chấp'),
+                onPressed: () =>
+                    _withdrawContractDispute(termination.disputeId),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Future<void> _confirmContractDispute(String disputeId) async {
+    try {
+      await ref
+          .read(creatorRequestsProvider.notifier)
+          .confirmContractDispute(disputeId);
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã xác nhận tranh chấp, hồ sơ chuyển Staff xử lý.'),
+          ),
+        );
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể xác nhận tranh chấp: $error')),
+        );
+    }
+  }
+
+  String _disputeStatusLabel(String status) => switch (status) {
+    'AWAITING_RESPONSE' => 'Chờ bên kia xác nhận',
+    'OPEN' => 'Đang chờ Staff xử lý',
+    'RESOLVED' => 'Đã xử lý',
+    'WITHDRAWN' => 'Đã rút',
+    _ => status,
+  };
+
+  String _disputeActionLabel(String action) => switch (action) {
+    'REFUND_STAGE_CONTINUE' => 'Hoàn đợt này, tiếp tục hợp đồng',
+    'CANCEL_CONTRACT' => 'Hoàn tiền, hủy hợp đồng',
+    _ => action,
+  };
+
+  String _disputeDecisionLabel(String decision) => switch (decision) {
+    'LISTENER_WINS' => 'Listener thắng',
+    'CREATOR_WINS' => 'CC thắng',
+    _ => decision,
+  };
+
+  Future<void> _withdrawContractDispute(String disputeId) async {
+    try {
+      await ref
+          .read(creatorRequestsProvider.notifier)
+          .withdrawContractDispute(disputeId);
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Đã rút tranh chấp.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể rút tranh chấp: $error')),
+        );
+      }
+    }
   }
 
   // ==========================================
@@ -2163,7 +2355,6 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             ),
                           );
                         } catch (e) {
-                          setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
                             SnackBar(
                               content: Text('Lỗi gửi đề xuất: $e'),
@@ -2680,6 +2871,39 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   // ==========================================
   // DIALOG: TRANH CHẤP / CHẤM DỨT HỢP ĐỒNG
   // ==========================================
+  Future<bool> _confirmTerminationTemplate(ContractAgreement contract) async {
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Xác nhận gửi tranh chấp'),
+        content: SizedBox(
+          width: 550,
+          height: 480,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              contract.contentSnapshot.isNotEmpty
+                  ? contract.contentSnapshot
+                  : 'Không có nội dung hợp đồng để hiển thị.',
+              style: const TextStyle(fontSize: 12.5, height: 1.5),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(false),
+            child: const Text('Quay lại'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(true),
+            child: const Text('Đồng ý gửi'),
+          ),
+        ],
+      ),
+    );
+    return accepted == true;
+  }
+
   void _handleTermination(PodcastRequest req) {
     final reasonController = TextEditingController();
     final messenger = ScaffoldMessenger.of(context);
@@ -2743,10 +2967,15 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         }
                         setDialogState(() => isSubmitting = true);
                         try {
+                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                          if (!mounted || req.contract == null) return;
+                          final accepted = await _confirmTerminationTemplate(
+                            req.contract!,
+                          );
+                          if (!accepted || !mounted) return;
                           await ref
                               .read(creatorRequestsProvider.notifier)
                               .requestTermination(req.id, reason: reason);
-                          if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
                             const SnackBar(
                               content: Text('Đã mở yêu cầu chấm dứt hợp đồng.'),

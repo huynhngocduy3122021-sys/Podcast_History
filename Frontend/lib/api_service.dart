@@ -688,19 +688,64 @@ class ListenerApi {
   Future<Map<String, dynamic>> requestContractTermination(
     String requestId, {
     required String reason,
+    String? listenerWinAction,
   }) => _sendMap(
     'POST',
     '/api/requests/$requestId/termination-requests',
-    body: {'reason': reason.trim()},
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
   );
 
   Future<Map<String, dynamic>> disputeMilestone(
     String milestoneId, {
     required String reason,
+    String? listenerWinAction,
   }) => _sendMap(
     'POST',
     '/api/milestones/$milestoneId/disputes',
-    body: {'reason': reason.trim()},
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> contractTermination(String requestId) =>
+      _sendMap('GET', ApiEndpoints.getContractTerminationRequest(requestId));
+
+  Future<Map<String, dynamic>> confirmContractDispute(
+    String disputeId, {
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.contractDisputeConfirm(disputeId),
+    body: {
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> withdrawContractDispute(String disputeId) =>
+      _sendMap('POST', ApiEndpoints.contractDisputeWithdraw(disputeId));
+
+  Future<Map<String, dynamic>> confirmMilestoneDispute(
+    String milestoneId,
+    String disputeId, {
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.milestoneDisputeConfirm(milestoneId, disputeId),
+    body: {
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> withdrawMilestoneDispute(
+    String milestoneId,
+    String disputeId,
+  ) => _sendMap(
+    'POST',
+    ApiEndpoints.milestoneDisputeWithdraw(milestoneId, disputeId),
   );
 
   Future<List<Map<String, dynamic>>> requestMessages(

@@ -226,7 +226,7 @@ class CreatorPodcast {
       case PodcastStatus.aiModerating:
         return 'AI đang kiểm duyệt';
       case PodcastStatus.pendingAdmin:
-        return 'Chờ Admin duyệt';
+        return 'Chờ duyệt';
       case PodcastStatus.rejected:
         return 'Bị từ chối';
       case PodcastStatus.draft:
@@ -282,7 +282,8 @@ class ContractStageModel {
       milestoneId: json['milestoneId']?.toString() ?? '',
       name: json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      dueAt: DateTime.tryParse(json['dueAt']?.toString() ?? '') ?? DateTime.now(),
+      dueAt:
+          DateTime.tryParse(json['dueAt']?.toString() ?? '') ?? DateTime.now(),
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       status: (json['status'] as String? ?? 'NOT_STARTED').toUpperCase(),
     );
@@ -336,7 +337,8 @@ class ContractAgreement {
     return ContractAgreement(
       requestId: json['requestId']?.toString() ?? '',
       contractId: json['contractId']?.toString() ?? '',
-      contractStatus: (json['contractStatus'] as String? ?? 'PENDING_SIGNATURE').toUpperCase(),
+      contractStatus: (json['contractStatus'] as String? ?? 'PENDING_SIGNATURE')
+          .toUpperCase(),
       contractVersion: (json['contractVersion'] as num?)?.toInt() ?? 1,
       contentHash: json['contentHash'] as String? ?? '',
       contentSnapshot: json['contentSnapshot'] as String? ?? '',
@@ -394,6 +396,8 @@ class ContractTerminationStatus {
   final DateTime createdAt;
   final DateTime negotiationEndsAt;
   final DateTime? resolvedAt;
+  final DateTime? opponentConfirmedAt;
+  final String? listenerWinAction;
 
   const ContractTerminationStatus({
     required this.disputeId,
@@ -403,6 +407,8 @@ class ContractTerminationStatus {
     required this.createdAt,
     required this.negotiationEndsAt,
     this.resolvedAt,
+    this.opponentConfirmedAt,
+    this.listenerWinAction,
   });
 
   factory ContractTerminationStatus.fromJson(Map<String, dynamic> json) {
@@ -411,9 +417,19 @@ class ContractTerminationStatus {
       contractId: json['contractId']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
       decision: json['decision'] as String?,
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
-      negotiationEndsAt: DateTime.tryParse(json['negotiationEndsAt']?.toString() ?? '') ?? DateTime.now(),
-      resolvedAt: json['resolvedAt'] != null ? DateTime.tryParse(json['resolvedAt'].toString()) : null,
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+      negotiationEndsAt:
+          DateTime.tryParse(json['negotiationEndsAt']?.toString() ?? '') ??
+          DateTime.now(),
+      resolvedAt: json['resolvedAt'] != null
+          ? DateTime.tryParse(json['resolvedAt'].toString())
+          : null,
+      opponentConfirmedAt: json['opponentConfirmedAt'] != null
+          ? DateTime.tryParse(json['opponentConfirmedAt'].toString())
+          : null,
+      listenerWinAction: json['listenerWinAction']?.toString(),
     );
   }
 }
@@ -426,6 +442,7 @@ class MilestoneSubmissionItem {
   final String? note;
   final String? fileKey;
   final String? mediaUrl;
+  final String? contentType;
 
   const MilestoneSubmissionItem({
     required this.submissionId,
@@ -435,6 +452,7 @@ class MilestoneSubmissionItem {
     this.note,
     this.fileKey,
     this.mediaUrl,
+    this.contentType,
   });
 
   factory MilestoneSubmissionItem.fromJson(Map<String, dynamic> json) {
@@ -442,10 +460,13 @@ class MilestoneSubmissionItem {
       submissionId: json['submissionId']?.toString() ?? '',
       milestoneId: json['milestoneId']?.toString() ?? '',
       revisionNumber: (json['revisionNumber'] as num?)?.toInt() ?? 1,
-      submittedAt: DateTime.tryParse(json['submittedAt']?.toString() ?? '') ?? DateTime.now(),
+      submittedAt:
+          DateTime.tryParse(json['submittedAt']?.toString() ?? '') ??
+          DateTime.now(),
       note: json['note'] as String?,
       fileKey: json['fileKey'] as String?,
       mediaUrl: json['publicUrl'] as String?,
+      contentType: json['contentType'] as String?,
     );
   }
 
@@ -458,6 +479,7 @@ class MilestoneSubmissionItem {
       note: note,
       fileKey: fileKey,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      contentType: contentType,
     );
   }
 }
@@ -604,12 +626,14 @@ class PodcastRequest {
         return contract!.isCreatorSigned ? StatusType.info : StatusType.warning;
       }
       if (contract!.isInProgress) {
-        if (milestones.any((m) => m.isRevisionRequested)) return StatusType.error;
+        if (milestones.any((m) => m.isRevisionRequested))
+          return StatusType.error;
         if (milestones.any((m) => m.isSubmitted)) return StatusType.warning;
         return StatusType.info;
       }
       if (contract!.isCompleted) return StatusType.success;
-      if (contract!.isDisputed || contract!.isTerminated) return StatusType.error;
+      if (contract!.isDisputed || contract!.isTerminated)
+        return StatusType.error;
       if (contract!.isCancelled) return StatusType.error;
     }
 
@@ -719,7 +743,8 @@ class PodcastRequest {
       listenerAvatar: listenerAvatar,
       topic: topic,
       description: description,
-      targetDurationMinutes: targetDurationMinutes ?? this.targetDurationMinutes,
+      targetDurationMinutes:
+          targetDurationMinutes ?? this.targetDurationMinutes,
       deadline: deadline ?? this.deadline,
       totalBudget: totalBudget,
       milestones: milestones ?? this.milestones,
@@ -876,21 +901,27 @@ class StudioComment {
     final statusStr = json['status']?.toString().toUpperCase() ?? '';
     return StudioComment(
       id: json['commentId']?.toString() ?? json['id']?.toString() ?? '',
-      podcastTitle: json['podcastTitle']?.toString() ?? fallbackPodcastTitle ?? 'Podcast',
+      podcastTitle:
+          json['podcastTitle']?.toString() ?? fallbackPodcastTitle ?? 'Podcast',
       podcastId: json['podcastId']?.toString() ?? fallbackPodcastId,
-      authorName: json['displayName']?.toString() ??
+      authorName:
+          json['displayName']?.toString() ??
           json['username']?.toString() ??
           json['authorName']?.toString() ??
           'Thính giả',
-      authorAvatar: json['avatarUrl']?.toString() ??
+      authorAvatar:
+          json['avatarUrl']?.toString() ??
           json['authorAvatar']?.toString() ??
           '',
       content: json['content']?.toString() ?? '',
       timestampSeconds: (json['timestampSeconds'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
       isPinned: json['isPinned'] == true,
       isHidden: statusStr == 'HIDDEN' || json['isHidden'] == true,
-      likesCount: (json['likeCount'] as num?)?.toInt() ??
+      likesCount:
+          (json['likeCount'] as num?)?.toInt() ??
           (json['likesCount'] as num?)?.toInt() ??
           0,
       likedByMe: json['likedByMe'] == true,
@@ -1014,7 +1045,8 @@ class GrowthDataPoint {
   factory GrowthDataPoint.fromJson(Map<String, dynamic> json) {
     return GrowthDataPoint(
       date: json['label'] as String? ?? json['date'] as String? ?? '',
-      value: (json['listens'] as num?)?.toDouble() ??
+      value:
+          (json['listens'] as num?)?.toDouble() ??
           (json['value'] as num?)?.toDouble() ??
           0.0,
     );
@@ -1048,14 +1080,17 @@ class DashboardMetrics {
 
   factory DashboardMetrics.fromJson(Map<String, dynamic> json) {
     return DashboardMetrics(
-      views: (json['totalListens'] as num?)?.toInt() ??
+      views:
+          (json['totalListens'] as num?)?.toInt() ??
           (json['views'] as num?)?.toInt() ??
           0,
       likes: (json['likes'] as num?)?.toInt() ?? 0,
-      followers: (json['followerCount'] as num?)?.toInt() ??
+      followers:
+          (json['followerCount'] as num?)?.toInt() ??
           (json['followers'] as num?)?.toInt() ??
           0,
-      earnings: (json['monthlyRevenue'] as num?)?.toDouble() ??
+      earnings:
+          (json['monthlyRevenue'] as num?)?.toDouble() ??
           (json['earnings'] as num?)?.toDouble() ??
           0.0,
       growthRate: (json['growthRate'] as num?)?.toDouble() ?? 0.0,
@@ -1091,7 +1126,8 @@ class CreatorDashboardData {
     final prof = json['profile'] as Map<String, dynamic>? ?? {};
     final met = json['metrics'] as Map<String, dynamic>? ?? {};
     final rawGrowth = (json['growth'] ?? json['growthSeries']) as List?;
-    final seriesList = rawGrowth
+    final seriesList =
+        rawGrowth
             ?.whereType<Map<String, dynamic>>()
             .map(GrowthDataPoint.fromJson)
             .toList() ??
@@ -1368,7 +1404,11 @@ class CreatorPlanTemplate {
       parsedBenefit = json['benefit'].toString();
     } else if (json['benefits'] is List) {
       parsedBenefit = (json['benefits'] as List)
-          .map((b) => b is Map ? (b['description'] ?? b['name'] ?? '').toString() : b.toString())
+          .map(
+            (b) => b is Map
+                ? (b['description'] ?? b['name'] ?? '').toString()
+                : b.toString(),
+          )
           .where((s) => s.isNotEmpty)
           .join(' • ');
     }
@@ -1376,7 +1416,8 @@ class CreatorPlanTemplate {
     return CreatorPlanTemplate(
       code: json['code']?.toString() ?? json['templateCode']?.toString() ?? '',
       name: json['name'] as String? ?? '',
-      suggestedPrice: (json['suggestedPrice'] as num?)?.toDouble() ??
+      suggestedPrice:
+          (json['suggestedPrice'] as num?)?.toDouble() ??
           (json['price'] as num?)?.toDouble() ??
           0.0,
       currency: json['currency'] as String? ?? 'VND',
@@ -1423,7 +1464,10 @@ class CreatorStudioNotification {
   factory CreatorStudioNotification.fromJson(Map<String, dynamic> json) {
     return CreatorStudioNotification(
       id: json['notificationId']?.toString() ?? json['id']?.toString() ?? '',
-      type: json['notificationType']?.toString() ?? json['type']?.toString() ?? 'SYSTEM',
+      type:
+          json['notificationType']?.toString() ??
+          json['type']?.toString() ??
+          'SYSTEM',
       title: json['title'] as String? ?? 'Thông báo Studio',
       message: json['message'] as String? ?? '',
       read: json['read'] == true || json['isRead'] == true,
@@ -1476,7 +1520,8 @@ class CreatorMemberItem {
       subscriptionId: json['subscriptionId']?.toString() ?? '',
       listenerId: json['listenerId']?.toString() ?? '',
       username: json['username']?.toString() ?? '',
-      displayName: json['displayName']?.toString() ??
+      displayName:
+          json['displayName']?.toString() ??
           json['username']?.toString() ??
           'Thính giả',
       avatarUrl: json['avatarUrl']?.toString() ?? '',
@@ -1514,9 +1559,9 @@ class PageCreatorMembers {
     final rawList = json['content'];
     final content = (rawList is List)
         ? rawList
-            .whereType<Map<String, dynamic>>()
-            .map(CreatorMemberItem.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(CreatorMemberItem.fromJson)
+              .toList()
         : <CreatorMemberItem>[];
 
     return PageCreatorMembers(
@@ -1528,4 +1573,3 @@ class PageCreatorMembers {
     );
   }
 }
-

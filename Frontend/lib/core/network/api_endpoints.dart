@@ -90,6 +90,17 @@ class ApiEndpoints {
       '/api/requests/$requestId/termination-request';
   static String milestoneDispute(String milestoneId) =>
       '/api/milestones/$milestoneId/disputes';
+  static String milestoneDisputeConfirm(String milestoneId, String disputeId) =>
+      '/api/milestones/$milestoneId/disputes/$disputeId/confirm';
+  static String milestoneDisputeWithdraw(
+    String milestoneId,
+    String disputeId,
+  ) => '/api/milestones/$milestoneId/disputes/$disputeId/withdraw';
+  static String contractDisputeConfirm(String disputeId) =>
+      '/api/disputes/$disputeId/confirm';
+  static String contractDisputeWithdraw(String disputeId) =>
+      '/api/disputes/$disputeId/withdraw';
+  static const String myContractDisputes = '/api/me/disputes';
 
   // Comments & Likes & History
   static String podcastComments(String podcastId) =>

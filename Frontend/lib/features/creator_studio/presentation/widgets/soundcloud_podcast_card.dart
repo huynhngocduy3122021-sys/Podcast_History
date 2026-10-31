@@ -382,7 +382,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                             const Icon(Icons.send_rounded, size: 16, color: AppColors.primaryLight),
                             const SizedBox(width: 8),
                             Text(
-                              widget.podcast.status == PodcastStatus.rejected ? 'Gửi lại Admin duyệt' : 'Chờ Admin duyệt',
+                              widget.podcast.status == PodcastStatus.rejected ? 'Gửi lại duyệt' : 'Chờ duyệt',
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ],

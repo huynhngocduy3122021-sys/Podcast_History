@@ -29,7 +29,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
   final List<String> _tabs = [
     'Tất cả',
     'Đã đăng',
-    'Chờ Admin duyệt',
+    'Chờ duyệt',
     'Nháp',
     'Bị từ chối',
   ];
@@ -574,7 +574,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
               // Podcast đã đăng chỉnh sửa -> chuyển qua mục Nháp (Tab 3)
               _tabController.animateTo(3);
             } else if (res == 'resubmitted' || res == 'submitted') {
-              // Bị từ chối hoặc gửi duyệt -> chuyển sang mục Chờ Admin duyệt (Tab 2)
+              // Bị từ chối hoặc gửi duyệt -> chuyển sang mục Chờ duyệt (Tab 2)
               _tabController.animateTo(2);
             }
           },
@@ -584,7 +584,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
               : null,
         ),
 
-        // Hiển thị nút "Chờ Admin duyệt" khi podcast đang ở trạng thái Nháp (DRAFT)
+        // Hiển thị nút "Chờ duyệt" khi podcast đang ở trạng thái Nháp (DRAFT)
         if (pod.status == PodcastStatus.draft) ...[
           const SizedBox(height: AppSpacing.xs),
           Container(
@@ -636,7 +636,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                         )
                       : const Icon(Icons.send_rounded, size: 14),
                   label: const Text(
-                    'Chờ Admin duyệt',
+                    'Chờ duyệt',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -654,7 +654,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
           ),
         ],
 
-        // Hiển thị trạng thái Chờ Admin duyệt
+        // Hiển thị trạng thái Chờ duyệt
         if (pod.status == PodcastStatus.pendingAdmin) ...[
           const SizedBox(height: AppSpacing.xs),
           Container(
@@ -672,7 +672,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'Đang chờ Admin duyệt nội dung trước khi xuất bản.',
+                    'Đang chờ duyệt nội dung trước khi xuất bản.',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? const Color(0xFFFFCA28) : AppColors.warning,

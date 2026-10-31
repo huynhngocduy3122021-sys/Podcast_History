@@ -516,8 +516,13 @@ class CreatorRequestsNotifier
   Future<void> requestTermination(
     String requestId, {
     required String reason,
+    String? listenerWinAction,
   }) async {
-    await _repo.requestTermination(requestId, reason: reason);
+    await _repo.requestTermination(
+      requestId,
+      reason: reason,
+      listenerWinAction: listenerWinAction,
+    );
     await loadRequests();
   }
 
@@ -530,8 +535,50 @@ class CreatorRequestsNotifier
   Future<void> disputeMilestone(
     String milestoneId, {
     required String reason,
+    String? listenerWinAction,
   }) async {
-    await _repo.disputeMilestone(milestoneId, reason: reason);
+    await _repo.disputeMilestone(
+      milestoneId,
+      reason: reason,
+      listenerWinAction: listenerWinAction,
+    );
+    await loadRequests();
+  }
+
+  Future<void> confirmContractDispute(
+    String disputeId, {
+    String? listenerWinAction,
+  }) async {
+    await _repo.confirmContractDispute(
+      disputeId,
+      listenerWinAction: listenerWinAction,
+    );
+    await loadRequests();
+  }
+
+  Future<void> withdrawContractDispute(String disputeId) async {
+    await _repo.withdrawContractDispute(disputeId);
+    await loadRequests();
+  }
+
+  Future<void> confirmMilestoneDispute(
+    String milestoneId,
+    String disputeId, {
+    String? listenerWinAction,
+  }) async {
+    await _repo.confirmMilestoneDispute(
+      milestoneId,
+      disputeId,
+      listenerWinAction: listenerWinAction,
+    );
+    await loadRequests();
+  }
+
+  Future<void> withdrawMilestoneDispute(
+    String milestoneId,
+    String disputeId,
+  ) async {
+    await _repo.withdrawMilestoneDispute(milestoneId, disputeId);
     await loadRequests();
   }
 

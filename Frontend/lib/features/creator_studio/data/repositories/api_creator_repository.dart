@@ -1116,12 +1116,20 @@ class ApiCreatorRepository implements CreatorRepository {
         _apiClient.get(ApiEndpoints.incomingRequests),
         _apiClient.get(ApiEndpoints.creatorContractRequests),
       ]);
-      final rawRequests = <Map<String, dynamic>>[];
+      final rawRequestsById = <String, Map<String, dynamic>>{};
       for (final response in responses) {
         if (response is List) {
-          rawRequests.addAll(response.whereType<Map<String, dynamic>>());
+          for (final item in response.whereType<Map<String, dynamic>>()) {
+            final requestId = item['requestId']?.toString() ?? '';
+            if (requestId.isEmpty) continue;
+            final existing = rawRequestsById[requestId];
+            if (existing == null || _isRicherRequest(item, existing)) {
+              rawRequestsById[requestId] = item;
+            }
+          }
         }
       }
+      final rawRequests = rawRequestsById.values.toList();
       if (rawRequests.isNotEmpty) {
         final list = <PodcastRequest>[];
         for (final item in rawRequests) {
@@ -1142,6 +1150,20 @@ class ApiCreatorRepository implements CreatorRepository {
     } catch (_) {}
 
     return List.unmodifiable(_cachedRequests);
+  }
+
+  bool _isRicherRequest(
+    Map<String, dynamic> candidate,
+    Map<String, dynamic> existing,
+  ) {
+    bool isEscrow(Map<String, dynamic> item) {
+      final flowType = item['flowType']?.toString().toUpperCase();
+      return flowType == 'ESCROW' ||
+          item['contractId'] != null ||
+          item['contractStatus'] != null;
+    }
+
+    return isEscrow(candidate) && !isEscrow(existing);
   }
 
   @override
@@ -1450,10 +1472,14 @@ class ApiCreatorRepository implements CreatorRepository {
   Future<void> requestTermination(
     String requestId, {
     required String reason,
+    String? listenerWinAction,
   }) async {
     await _apiClient.post(
       ApiEndpoints.contractTerminationRequest(requestId),
-      body: {'reason': reason.trim()},
+      body: {
+        'reason': reason.trim(),
+        if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+      },
     );
 
     // Refresh request in cache
@@ -1490,10 +1516,56 @@ class ApiCreatorRepository implements CreatorRepository {
   Future<void> disputeMilestone(
     String milestoneId, {
     required String reason,
+    String? listenerWinAction,
   }) async {
     await _apiClient.post(
       ApiEndpoints.milestoneDispute(milestoneId),
-      body: {'reason': reason.trim()},
+      body: {
+        'reason': reason.trim(),
+        if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+      },
+    );
+  }
+
+  @override
+  Future<void> confirmContractDispute(
+    String disputeId, {
+    String? listenerWinAction,
+  }) async {
+    await _apiClient.post(
+      ApiEndpoints.contractDisputeConfirm(disputeId),
+      body: {
+        if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+      },
+    );
+  }
+
+  @override
+  Future<void> withdrawContractDispute(String disputeId) async {
+    await _apiClient.post(ApiEndpoints.contractDisputeWithdraw(disputeId));
+  }
+
+  @override
+  Future<void> confirmMilestoneDispute(
+    String milestoneId,
+    String disputeId, {
+    String? listenerWinAction,
+  }) async {
+    await _apiClient.post(
+      ApiEndpoints.milestoneDisputeConfirm(milestoneId, disputeId),
+      body: {
+        if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+      },
+    );
+  }
+
+  @override
+  Future<void> withdrawMilestoneDispute(
+    String milestoneId,
+    String disputeId,
+  ) async {
+    await _apiClient.post(
+      ApiEndpoints.milestoneDisputeWithdraw(milestoneId, disputeId),
     );
   }
 

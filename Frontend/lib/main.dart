@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:intl/intl.dart';
 
 import 'core/services/session_storage/session_storage.dart';
 import 'core/package_features.dart';
@@ -4567,13 +4568,20 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   late Future<List<Map<String, dynamic>>> messages = _loadMessages();
   late Future<List<Map<String, dynamic>>> milestones = _loadMilestones();
   late Future<Map<String, dynamic>?> contract = _loadContract();
+  late Future<Map<String, dynamic>?> termination = _loadTermination();
   bool sending = false;
   bool signing = false;
   final Set<String> completedMilestones = <String>{};
   final Set<String> loadingMilestones = <String>{};
   AudioPlayer? _submissionPlayer;
   StreamSubscription<void>? _playerCompleteSubscription;
+  StreamSubscription<Duration>? _playerPositionSubscription;
+  StreamSubscription<Duration>? _playerDurationSubscription;
   String? _playingMilestoneId;
+  String? _activeMilestoneId;
+  String? _submissionUrl;
+  Duration _submissionPosition = Duration.zero;
+  Duration _submissionDuration = Duration.zero;
   late final String _requestTopic;
   static const _contractChatQueue = '/user/queue/contract-chat';
   void Function()? _removeChatReconnectListener;
@@ -4585,6 +4593,14 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       widget.api.requestMilestones(requestId);
   Future<Map<String, dynamic>?> _loadContract() =>
       widget.api.contractAgreement(requestId);
+  Future<Map<String, dynamic>?> _loadTermination() async {
+    try {
+      return await widget.api.contractTermination(requestId);
+    } on ApiException catch (error) {
+      if (error.statusCode == 404 || error.statusCode == 409) return null;
+      rethrow;
+    }
+  }
 
   @override
   void initState() {
@@ -4596,6 +4612,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
         messages = _loadMessages();
         milestones = _loadMilestones();
         contract = _loadContract();
+        termination = _loadTermination();
       });
     });
     widget.socket.listen(_contractChatQueue, (event) {
@@ -4633,6 +4650,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     widget.socket.unlisten(_contractChatQueue);
     _removeChatReconnectListener?.call();
     _playerCompleteSubscription?.cancel();
+    _playerPositionSubscription?.cancel();
+    _playerDurationSubscription?.cancel();
     _submissionPlayer?.dispose();
     messageController.dispose();
     super.dispose();
@@ -5062,6 +5081,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
             },
           ),
           _buildDisputeCard(),
+          _buildDisputeStatusCard(),
           _buildChatCard(),
           const SizedBox(height: 22),
           Row(
@@ -5130,47 +5150,168 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     );
   }
 
+  Widget _buildDisputeStatusCard() {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: termination,
+      builder: (context, snapshot) {
+        final dispute = snapshot.data;
+        if (dispute == null) return const SizedBox.shrink();
+        final status = dispute['status']?.toString().toUpperCase() ?? '';
+        final awaiting = status == 'AWAITING_RESPONSE';
+        return Card(
+          elevation: 0,
+          color: const Color(0xFFFFF7F6),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Trạng thái tranh chấp: ${_disputeStatusLabel(status)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                _disputeField('Mã tranh chấp', dispute['disputeId']),
+                _disputeField(
+                  'Hạn xác nhận',
+                  dispute['negotiationEndsAt'] ?? dispute['responseDeadlineAt'],
+                ),
+                _disputeField(
+                  'Đối phương đã xác nhận',
+                  dispute['opponentConfirmedAt'],
+                ),
+                _disputeField(
+                  'Phương án Listener thắng',
+                  dispute['listenerWinAction'],
+                ),
+                _disputeField('Quyết định', dispute['decision']),
+                if (awaiting)
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      FilledButton(
+                        onPressed: () => _confirmContractDispute(dispute),
+                        child: const Text('Xác nhận tranh chấp'),
+                      ),
+                      OutlinedButton(
+                        onPressed: () => _withdrawContractDispute(dispute),
+                        child: const Text('Rút tranh chấp'),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _disputeField(String label, dynamic value) {
+    final text = value?.toString() ?? '';
+    if (text.isEmpty || text == 'null') return const SizedBox.shrink();
+    final display = _formatDisputeValue(label, text);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text('$label: $display', style: const TextStyle(fontSize: 12)),
+    );
+  }
+
+  String _disputeStatusLabel(String status) => switch (status) {
+    'AWAITING_RESPONSE' => 'Chờ bên kia xác nhận',
+    'OPEN' => 'Đang chờ Staff xử lý',
+    'RESOLVED' => 'Đã xử lý',
+    'WITHDRAWN' => 'Đã rút',
+    _ => status,
+  };
+
+  String _formatDisputeValue(String label, String value) {
+    if (label == 'Hạn xác nhận' || label == 'Đối phương đã xác nhận') {
+      final date = DateTime.tryParse(value);
+      if (date != null)
+        return DateFormat('dd/MM/yyyy HH:mm').format(date.toLocal());
+    }
+    if (label == 'Phương án Listener thắng') {
+      return switch (value) {
+        'REFUND_STAGE_CONTINUE' => 'Hoàn đợt này, tiếp tục hợp đồng',
+        'CANCEL_CONTRACT' => 'Hoàn tiền, hủy hợp đồng',
+        _ => value,
+      };
+    }
+    if (label == 'Quyết định') {
+      return switch (value) {
+        'LISTENER_WINS' => 'Listener thắng',
+        'CREATOR_WINS' => 'CC thắng',
+        _ => value,
+      };
+    }
+    return value;
+  }
+
+  Future<void> _withdrawContractDispute(Map<String, dynamic> dispute) async {
+    final disputeId = dispute['disputeId']?.toString();
+    if (disputeId == null || disputeId.isEmpty) return;
+    try {
+      await widget.api.withdrawContractDispute(disputeId);
+      if (mounted) setState(() => termination = _loadTermination());
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể rút tranh chấp: $error')),
+        );
+    }
+  }
+
+  Future<void> _confirmContractDispute(Map<String, dynamic> dispute) async {
+    final disputeId = dispute['disputeId']?.toString();
+    if (disputeId == null || disputeId.isEmpty) return;
+    final action = await _chooseListenerWinAction();
+    if (action == null) return;
+    try {
+      await widget.api.confirmContractDispute(
+        disputeId,
+        listenerWinAction: action,
+      );
+      if (mounted) setState(() => termination = _loadTermination());
+    } catch (error) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể xác nhận tranh chấp: $error')),
+        );
+    }
+  }
+
+  Future<String?> _chooseListenerWinAction() => showDialog<String>(
+    context: context,
+    builder: (dialogContext) => SimpleDialog(
+      title: const Text('Nếu Listener thắng'),
+      children: [
+        SimpleDialogOption(
+          onPressed: () =>
+              Navigator.pop(dialogContext, 'REFUND_STAGE_CONTINUE'),
+          child: const Text('Hoàn đợt này, tiếp tục hợp đồng'),
+        ),
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(dialogContext, 'CANCEL_CONTRACT'),
+          child: const Text('Hoàn tiền, hủy hợp đồng'),
+        ),
+      ],
+    ),
+  );
+
   Future<void> _openDisputeDialog() async {
     final reasonController = TextEditingController();
-    var selectedMilestoneId = '';
-    final milestoneItems = await milestones;
     if (!mounted) {
       reasonController.dispose();
       return;
     }
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
           title: const Text('Tạo tranh chấp'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                DropdownButtonFormField<String>(
-                  initialValue: selectedMilestoneId,
-                  decoration: const InputDecoration(
-                    labelText: 'Phạm vi tranh chấp',
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: '',
-                      child: Text('Toàn bộ hợp đồng'),
-                    ),
-                    ...milestoneItems.map(
-                      (milestone) => DropdownMenuItem(
-                        value: '${milestone['milestoneId'] ?? ''}',
-                        child: Text(
-                          '${milestone['name'] ?? milestone['title'] ?? 'Đợt bàn giao'}',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) =>
-                      setDialogState(() => selectedMilestoneId = value ?? ''),
-                ),
-                const SizedBox(height: 12),
                 TextField(
                   controller: reasonController,
                   minLines: 3,
@@ -5197,22 +5338,49 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                 final reason = reasonController.text.trim();
                 if (reason.isEmpty) return;
                 try {
-                  if (selectedMilestoneId.isEmpty) {
-                    await widget.api.requestContractTermination(
-                      requestId,
-                      reason: reason,
-                    );
-                  } else {
-                    await widget.api.disputeMilestone(
-                      selectedMilestoneId,
-                      reason: reason,
-                    );
+                  final agreement = await contract;
+                  final snapshot = agreement?['contentSnapshot']?.toString() ?? '';
+                  if (snapshot.isEmpty) {
+                    throw Exception('Không có template hợp đồng để xác nhận.');
                   }
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  if (!mounted) return;
+                  final accepted = await showDialog<bool>(
+                    context: context,
+                    builder: (previewContext) => AlertDialog(
+                      title: const Text('Xác nhận gửi tranh chấp'),
+                      content: SizedBox(
+                        width: 560,
+                        height: 480,
+                        child: SingleChildScrollView(
+                          child: Text(
+                            snapshot,
+                            style: const TextStyle(height: 1.45),
+                          ),
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(previewContext, false),
+                          child: const Text('Quay lại'),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(previewContext, true),
+                          child: const Text('Đồng ý gửi'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (accepted != true || !mounted) return;
+                  await widget.api.requestContractTermination(
+                    requestId,
+                    reason: reason,
+                  );
                   if (mounted) {
                     setState(() {
                       contract = _loadContract();
                       milestones = _loadMilestones();
+                      termination = _loadTermination();
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -5233,7 +5401,6 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
               child: const Text('Gửi yêu cầu'),
             ),
           ],
-        ),
       ),
     );
     reasonController.dispose();
@@ -5564,7 +5731,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                 ],
               ),
             ),
-            if (status == 'SUBMITTED') ...[
+            if (status == 'SUBMITTED' || status == 'APPROVED') ...[
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: widget.api.milestoneSubmissions(id),
                 builder: (_, snapshot) {
@@ -5576,27 +5743,29 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                   );
                 },
               ),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: completedMilestones.contains(id)
-                        ? () => _requestRevision(id)
-                        : null,
-                    child: const Text('Yêu cầu làm lại'),
-                  ),
-                  FilledButton(
-                    onPressed: completedMilestones.contains(id)
-                        ? () => _approve(id)
-                        : null,
-                    child: const Text('Đồng ý & trả tiền'),
-                  ),
-                ],
-              ),
-              if (!completedMilestones.contains(id))
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Nhấn phát podcast để mở khóa thao tác.'),
+              if (status == 'SUBMITTED') ...[
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: completedMilestones.contains(id)
+                          ? () => _requestRevision(id)
+                          : null,
+                      child: const Text('Yêu cầu làm lại'),
+                    ),
+                    FilledButton(
+                      onPressed: completedMilestones.contains(id)
+                          ? () => _approve(id)
+                          : null,
+                      child: const Text('Đồng ý & trả tiền'),
+                    ),
+                  ],
                 ),
+                if (!completedMilestones.contains(id))
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Nhấn phát podcast để mở khóa thao tác.'),
+                  ),
+              ],
             ],
           ],
         ),
@@ -5608,25 +5777,143 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     final submissionId =
         '${submission['submissionId'] ?? submission['milestoneSubmissionId'] ?? ''}';
     final isPlaying = _playingMilestoneId == milestoneId;
+    final isCurrent = _submissionUrl != null &&
+        _activeMilestoneId == milestoneId;
     final isLoading = loadingMilestones.contains(milestoneId);
-    return Row(
-      children: [
-        IconButton(
-          tooltip: isPlaying ? 'Tạm dừng podcast' : 'Nghe podcast',
-          onPressed: isLoading || submissionId.isEmpty
-              ? null
-              : () => isPlaying
-                    ? _pauseSubmission()
-                    : _handleSubmissionPlay(milestoneId, submissionId),
-          icon: Icon(isPlaying ? Icons.pause_circle : Icons.play_circle),
-        ),
-        Expanded(
-          child: Text(
-            'Bản thu podcast${completedMilestones.contains(milestoneId) ? ' • Đã mở khóa' : ''}\n${submission['note'] ?? ''}',
+    final canControl = isCurrent && _submissionDuration > Duration.zero;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1E9DC),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: isPlaying ? 'Tạm dừng podcast' : 'Nghe podcast',
+                color: const Color(0xFFC62828),
+                iconSize: 28,
+                onPressed: isLoading || submissionId.isEmpty
+                    ? null
+                    : () => isPlaying
+                          ? _pauseSubmission()
+                          : _handleSubmissionPlay(milestoneId, submissionId),
+                icon: Icon(
+                  isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.play_circle_filled,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isPlaying
+                          ? 'Đang phát âm thanh...'
+                          : 'Nghe thử bản ghi âm R2',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    if ('${submission['note'] ?? ''}'.isNotEmpty)
+                      Text(
+                        '${submission['note']}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+          if (isCurrent) ...[
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 6,
+                ),
+                overlayShape: const RoundSliderOverlayShape(
+                  overlayRadius: 12,
+                ),
+              ),
+              child: Slider(
+                min: 0,
+                max: 1,
+                value: _submissionDuration.inMilliseconds > 0
+                    ? (_submissionPosition.inMilliseconds /
+                              _submissionDuration.inMilliseconds)
+                          .clamp(0.0, 1.0)
+                          .toDouble()
+                    : 0,
+                activeColor: const Color(0xFFC62828),
+                onChanged: canControl
+                    ? (value) => _submissionPlayer?.seek(Duration(
+                          milliseconds:
+                              (value * _submissionDuration.inMilliseconds)
+                                  .round(),
+                        ))
+                    : null,
+              ),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatSubmissionDuration(_submissionPosition),
+                  style: const TextStyle(fontSize: 10),
+                ),
+                Text(
+                  _formatSubmissionDuration(_submissionDuration),
+                  style: const TextStyle(fontSize: 10),
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  tooltip: 'Tua lùi 10 giây',
+                  icon: const Icon(Icons.replay_10_rounded),
+                  onPressed: canControl ? () => _skipSubmission(-10) : null,
+                ),
+                IconButton(
+                  tooltip: 'Tạm dừng',
+                  color: const Color(0xFFC62828),
+                  iconSize: 34,
+                  icon: const Icon(Icons.pause_circle_filled),
+                  onPressed: isPlaying ? _pauseSubmission : null,
+                ),
+                IconButton(
+                  tooltip: 'Tua tới 10 giây',
+                  icon: const Icon(Icons.forward_10_rounded),
+                  onPressed: canControl ? () => _skipSubmission(10) : null,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
+  }
+
+  String _formatSubmissionDuration(Duration value) {
+    final minutes = value.inMinutes.toString().padLeft(2, '0');
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Future<void> _skipSubmission(int seconds) async {
+    final player = _submissionPlayer;
+    if (player == null) return;
+    final target = _submissionPosition + Duration(seconds: seconds);
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > _submissionDuration ? _submissionDuration : target);
+    await player.seek(clamped);
   }
 
   Future<void> _playSubmission(String milestoneId, String submissionId) async {
@@ -5643,14 +5930,30 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       await _playerCompleteSubscription?.cancel();
       final player = _submissionPlayer ??= AudioPlayer();
       _playingMilestoneId = milestoneId;
+      _activeMilestoneId = milestoneId;
+      _submissionUrl = url;
+      _submissionPosition = Duration.zero;
+      _submissionDuration = Duration.zero;
+      await _playerPositionSubscription?.cancel();
+      await _playerDurationSubscription?.cancel();
+      _playerPositionSubscription = player.onPositionChanged.listen((value) {
+        if (mounted) setState(() => _submissionPosition = value);
+      });
+      _playerDurationSubscription = player.onDurationChanged.listen((value) {
+        if (mounted) setState(() => _submissionDuration = value);
+      });
       _playerCompleteSubscription = player.onPlayerComplete.listen((_) {
         if (!mounted) return;
         setState(() {
           completedMilestones.add(milestoneId);
           _playingMilestoneId = null;
+          _activeMilestoneId = null;
         });
       });
-      await player.play(UrlSource(url));
+      await player.play(UrlSource(
+        url,
+        mimeType: media['contentType']?.toString(),
+      ));
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {
@@ -5667,6 +5970,12 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     String milestoneId,
     String submissionId,
   ) async {
+    if (_activeMilestoneId == milestoneId &&
+        _submissionPlayer?.state == PlayerState.paused) {
+      await _submissionPlayer?.resume();
+      if (mounted) setState(() => _playingMilestoneId = milestoneId);
+      return;
+    }
     if (!completedMilestones.contains(milestoneId)) {
       setState(() => completedMilestones.add(milestoneId));
     }

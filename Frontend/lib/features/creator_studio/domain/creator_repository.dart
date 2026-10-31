@@ -118,9 +118,28 @@ abstract class CreatorRepository {
     String milestoneId,
   );
   Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId);
-  Future<void> requestTermination(String requestId, {required String reason});
+  Future<void> requestTermination(
+    String requestId, {
+    required String reason,
+    String? listenerWinAction,
+  });
   Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
-  Future<void> disputeMilestone(String milestoneId, {required String reason});
+  Future<void> confirmContractDispute(
+    String disputeId, {
+    String? listenerWinAction,
+  });
+  Future<void> withdrawContractDispute(String disputeId);
+  Future<void> disputeMilestone(
+    String milestoneId, {
+    required String reason,
+    String? listenerWinAction,
+  });
+  Future<void> confirmMilestoneDispute(
+    String milestoneId,
+    String disputeId, {
+    String? listenerWinAction,
+  });
+  Future<void> withdrawMilestoneDispute(String milestoneId, String disputeId);
   Future<List<Map<String, dynamic>>> getChatMessages(
     String requestId, {
     int page = 0,

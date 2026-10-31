@@ -42,8 +42,8 @@ public class MyAdminCaseController {
   @PostMapping("/disputes/{disputeId}/confirm")
   @Operation(summary = "Bên còn lại xác nhận tranh chấp hợp đồng trong 3 ngày")
   public DisputeItem confirm(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID disputeId,
-      @RequestBody ConfirmDisputeRequest body) {
-    return disputes.confirm(id(jwt), disputeId, body.listenerWinAction());
+      @RequestBody(required = false) ConfirmDisputeRequest body) {
+    return disputes.confirm(id(jwt), disputeId, body == null ? null : body.listenerWinAction());
   }
 
   @PostMapping("/disputes/{disputeId}/withdraw")

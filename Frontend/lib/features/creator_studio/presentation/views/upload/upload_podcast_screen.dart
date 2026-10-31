@@ -502,10 +502,10 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             message = 'Đã gửi lại tập "${resultPodcast.title}" cho Admin duyệt thành công!';
             popResult = 'resubmitted';
           } else if (wasPublished) {
-            message = 'Tập podcast đã được chuyển về mục Bản nháp. Hãy bấm "Chờ Admin duyệt" để gửi Admin kiểm duyệt lại.';
+            message = 'Tập podcast đã được chuyển về mục Bản nháp. Hãy bấm "Chờ duyệt" để gửi kiểm duyệt lại.';
             popResult = 'published_to_draft';
           } else if (wasPending) {
-            message = 'Đã cập nhật tập "${resultPodcast.title}" (vẫn ở mục Chờ Admin duyệt)!';
+            message = 'Đã cập nhật tập "${resultPodcast.title}" (vẫn ở mục Chờ duyệt)!';
             popResult = 'pending_updated';
           } else if (wasDraft) {
             message = 'Đã cập nhật Bản nháp "${resultPodcast.title}" thành công!';
@@ -625,7 +625,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Đã lưu podcast vào mục Bản nháp! Hãy bấm "Chờ Admin duyệt" ở danh sách để gửi kiểm duyệt.',
+                'Đã lưu podcast vào mục Bản nháp! Hãy bấm "Chờ duyệt" ở danh sách để gửi kiểm duyệt.',
               ),
               backgroundColor: AppColors.success,
               duration: Duration(seconds: 4),
