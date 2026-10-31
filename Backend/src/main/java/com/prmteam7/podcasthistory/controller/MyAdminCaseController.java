@@ -46,6 +46,12 @@ public class MyAdminCaseController {
     return disputes.confirm(id(jwt), disputeId, body.listenerWinAction());
   }
 
+  @PostMapping("/disputes/{disputeId}/withdraw")
+  @Operation(summary = "Người mở rút tranh chấp hợp đồng trước khi bên kia xác nhận")
+  public DisputeItem withdraw(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID disputeId) {
+    return disputes.withdraw(id(jwt), disputeId);
+  }
+
   @GetMapping("/me/disputes")
   @Operation(summary = "Các tranh chấp của hợp đồng mình tham gia")
   public Page<DisputeItem> mine(

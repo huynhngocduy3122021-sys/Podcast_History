@@ -11,6 +11,7 @@ import com.prmteam7.podcasthistory.dto.response.DisputeResponse;
 import com.prmteam7.podcasthistory.enums.MilestoneDisputeDecision;
 import com.prmteam7.podcasthistory.enums.ListenerWinAction;
 import com.prmteam7.podcasthistory.exception.ResourceConflictException;
+import com.prmteam7.podcasthistory.exception.PodcastWorkflowException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import com.prmteam7.podcasthistory.model.*;
@@ -167,6 +168,88 @@ class StaffDisputeWorkflowTest {
         assertEquals("OPEN", result.status());
         assertEquals("DISPUTED", contract.getStatus());
         verify(notifier).notifyOpen("hợp đồng", result.disputeId());
+    }
+
+    @Test
+    void openerCanWithdrawPendingContractDisputeOnlyOnce() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        contract.setProducerProfile(profile);
+        contract.setStatus("DISPUTED");
+        ContractDispute dispute = new ContractDispute();
+        UUID disputeId = UUID.randomUUID();
+        ReflectionTestUtils.setField(dispute, "disputeId", disputeId);
+        ReflectionTestUtils.setField(dispute, "createdAt", Instant.now());
+        dispute.setContract(contract);
+        dispute.setOpenedBy(listener);
+        dispute.setReason("Nhầm");
+        dispute.setPreviousContractStatus("IN_PROGRESS");
+        dispute.setStatus("AWAITING_RESPONSE");
+        when(support.user(listener.getUserId())).thenReturn(listener);
+        when(contractDisputes.findById(disputeId)).thenReturn(Optional.of(dispute));
+        when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(contractDisputes.lockById(disputeId)).thenReturn(Optional.of(dispute));
+        AdminDisputeService queue = new AdminDisputeService(support, contracts, stages,
+                contractDisputes, null, contractEscrows, notifier, escrows);
+
+        assertEquals("WITHDRAWN", queue.withdraw(listener.getUserId(), disputeId).status());
+        assertEquals("IN_PROGRESS", contract.getStatus());
+        assertEquals("WITHDRAWN", queue.withdraw(listener.getUserId(), disputeId).status());
+        verify(notifier).notifyWithdrawn(creator, "hợp đồng", disputeId);
+        org.mockito.Mockito.verify(contractDisputes, org.mockito.Mockito.times(1)).save(dispute);
+        org.mockito.Mockito.verify(escrows, org.mockito.Mockito.never()).resolveListenerWin(
+                any(), any(), any());
+    }
+
+    @Test
+    void openerCanWithdrawPendingMilestoneWithoutPayment() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        contract.setProducerProfile(profile);
+        contract.setStatus("IN_PROGRESS");
+        ContractStage stage = new ContractStage();
+        stage.setContractStageId(UUID.randomUUID());
+        stage.setContract(contract);
+        stage.setStatus("DISPUTED");
+        MilestoneDispute dispute = new MilestoneDispute();
+        dispute.setMilestoneDisputeId(UUID.randomUUID());
+        dispute.setContractStage(stage);
+        dispute.setRaisedBy(listener);
+        dispute.setStatus("AWAITING_RESPONSE");
+        dispute.setPreviousStageStatus("SUBMITTED");
+        ReflectionTestUtils.setField(dispute, "createdAt", Instant.now());
+        when(users.findById(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(stages.findById(stage.getContractStageId())).thenReturn(Optional.of(stage));
+        when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(stages.findByIdForUpdate(stage.getContractStageId())).thenReturn(Optional.of(stage));
+        when(disputes.findByIdForUpdate(dispute.getMilestoneDisputeId()))
+                .thenReturn(Optional.of(dispute));
+
+        DisputeResponse result = service.withdrawMilestoneDispute(listener.getUserId(),
+                stage.getContractStageId(), dispute.getMilestoneDisputeId());
+
+        assertEquals("WITHDRAWN", result.status());
+        assertEquals("SUBMITTED", stage.getStatus());
+        verify(notifier).notifyWithdrawn(creator, "đợt", dispute.getMilestoneDisputeId());
+        org.mockito.Mockito.verify(escrows, org.mockito.Mockito.never()).settle(any());
+        assertEquals("WITHDRAWN", service.withdrawMilestoneDispute(listener.getUserId(),
+                stage.getContractStageId(), dispute.getMilestoneDisputeId()).status());
+        org.mockito.Mockito.verify(disputes, org.mockito.Mockito.times(1)).save(dispute);
+
+        dispute.setStatus("OPEN");
+        stage.setStatus("DISPUTED");
+        assertThrows(PodcastWorkflowException.class, () -> service.withdrawMilestoneDispute(
+                listener.getUserId(), stage.getContractStageId(), dispute.getMilestoneDisputeId()));
     }
 
     @Test

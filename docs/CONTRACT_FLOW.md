@@ -51,6 +51,8 @@ Khi đợt `SUBMITTED`, Listener chọn:
 2. **Từ chối bản bàn giao hoặc yêu cầu sửa:** Phải có lý do; đợt `REVISION_REQUESTED`, tiền vẫn giữ. CC làm lại, upload bản mới, chờ AI duyệt rồi bấm bàn giao; đồng hồ 3 ngày bắt đầu lại từ lần bàn giao mới. Tổng cộng tối đa 3 lượt Listener yêu cầu trên mỗi đợt. Từ chối bản nộp không tự chấm dứt hợp đồng hay trả đền công.
 3. **Tranh chấp:** Listener hoặc CC mở cho một đợt. Đợt `DISPUTED`, không tự nghiệm thu. Bên kia nhận thông báo realtime và có 3 ngày xác nhận. Không xác nhận thì người mở thắng; xác nhận thì Staff quyết định, Admin cũng xem được. Listener thắng được hoàn đợt rồi tiếp tục hoặc hủy hợp đồng theo lựa chọn đã ghi lúc mở/xác nhận. CC thắng thì đợt quay về trạng thái trước tranh chấp, tiếp tục nghiệm thu thường lệ.
 
+Người mở có thể rút tranh chấp khi bên kia chưa xác nhận và chưa hết 3 ngày. Khi rút, Backend khôi phục trạng thái hợp đồng/đợt trước tranh chấp, không động đến tiền và thông báo cho bên kia. Hồ sơ đã xác nhận hoặc đã kết luận không thể tự rút.
+
 Nếu Listener đã chọn `autoAcceptEnabled=true` từ lúc tạo request, job Backend kiểm tra mỗi phút. Job chỉ tự duyệt sau **3 ngày** kể từ bản nộp mới nhất khi đợt vẫn `SUBMITTED`, hợp đồng đang hiệu lực, không có phản hồi/từ chối/sửa hay tranh chấp. Nếu `false`, không tự duyệt.
 
 Ví dụ đợt **20.000 VND** được duyệt: CC nhận **16.000 VND**, app nhận **4.000 VND**. Tiền VND nguyên được làm tròn phí theo `HALF_UP`; phần CC bằng tiền gộp trừ phí, nên tổng luôn khớp.

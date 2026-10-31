@@ -32,6 +32,11 @@ public class DisputeStaffNotifier {
                 "Hồ sơ đã chuyển Staff: " + disputeId);
     }
 
+    public void notifyWithdrawn(AppUser opponent, String kind, UUID disputeId) {
+        support.notify(opponent, "DISPUTE_WITHDRAWN", "Tranh chấp đã được rút",
+                "Người mở đã rút tranh chấp " + kind + ": " + disputeId);
+    }
+
     public void notifyResult(AppUser listener, AppUser creator, UUID disputeId, String result) {
         support.notify(listener, "DISPUTE_RESULT", "Kết quả tranh chấp", result + ": " + disputeId);
         support.notify(creator, "DISPUTE_RESULT", "Kết quả tranh chấp", result + ": " + disputeId);
