@@ -254,6 +254,7 @@ public class AiModerationService {
 
     private void finish(AiModerationResult result, String status, String label, String recommendation,
             String reason, JsonNode raw, String error) {
+        boolean claimedJob = "PROCESSING".equals(result.getStatus());
         result.setStatus(status);
         result.setOverallLabel(label);
         result.setRecommendation(recommendation);
@@ -262,6 +263,33 @@ public class AiModerationService {
         result.setErrorMessage(error);
         result.setProcessedAt(Instant.now());
         results.save(result);
+        if (claimedJob && ("FAILED".equals(status)
+                || ("SKIPPED".equals(status) && ("NO_SPEECH".equals(label) || "UNAVAILABLE".equals(label)))
+                || ("COMPLETED".equals(status) && !isAutoApproveEligible(result, autoApproveConfidenceThreshold)))) {
+            notifyCreatorPendingManualReview(result);
+        }
+    }
+
+    private void notifyCreatorPendingManualReview(AiModerationResult result) {
+        Podcast podcast = podcasts.findByPodcastId(result.getPodcast().getPodcastId()).orElse(null);
+        if (podcast == null || !"PENDING_REVIEW".equalsIgnoreCase(podcast.getStatus())
+                || !Objects.equals(result.getSourceHash(), hash(podcast))
+                || !Objects.equals(result.getMediaKey(), podcast.getMediaUrl())) return;
+        PodcastTranscript transcript = transcripts
+                .findByPodcast_PodcastIdAndMediaKey(podcast.getPodcastId(), podcast.getMediaUrl()).orElse(null);
+        if (transcript == null || result.getTranscript() == null
+                || !Objects.equals(result.getTranscript().getTranscriptId(), transcript.getTranscriptId())
+                || (result.getTranscriptHash() != null
+                    && !Objects.equals(result.getTranscriptHash(), hashText(transcript.getFullText())))) return;
+        try {
+            support.notify(podcast.getProducerProfile().getUser(), "PODCAST_REVIEW",
+                    "AI chưa thể duyệt podcast: " + podcast.getTitle(),
+                    podcast.getTitle() + ": " + result.getReason() + " Podcast đang chờ Admin/Staff xem xét.");
+        } catch (RuntimeException notificationFailure) {
+            org.slf4j.LoggerFactory.getLogger(AiModerationService.class)
+                    .warn("Không thể thông báo kết quả AI cho Creator của podcast {}", podcast.getPodcastId(),
+                            notificationFailure);
+        }
     }
 
     private void resetForRetry(AiModerationResult result, Podcast podcast, PodcastTranscript transcript,

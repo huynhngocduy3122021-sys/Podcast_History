@@ -53,6 +53,8 @@ class StaffDisputeWorkflowTest {
 
         assertEquals(1, result.size());
         assertEquals(dispute.getMilestoneDisputeId(), result.get(0).disputeId());
+        assertEquals("Đợt bàn giao", result.get(0).milestoneName());
+        assertEquals("Kênh lịch sử", result.get(0).creatorChannelName());
     }
 
     @Test
@@ -140,6 +142,56 @@ class StaffDisputeWorkflowTest {
         assertEquals(0, queue.disputes(adminId, "OPEN", 0, 20).getTotalElements());
         verify(support).actor(staffId, false);
         verify(support).actor(adminId, false);
+    }
+
+    @Test
+    void staffAndAdminContractResponsesIncludeParticipantNamesAndRequestTitle() {
+        AppUser staff = user("STAFF");
+        AppUser admin = user("ADMIN");
+        AppUser listener = user("LISTENER");
+        listener.setDisplayName("Nguyễn Văn A");
+        listener.setAvatarUrl("https://example.test/listener.png");
+        AppUser creator = user("CREATOR");
+        creator.setDisplayName("Trần Văn B");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        profile.setChannelName("Kênh lịch sử");
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setRequestedTitle("Podcast lịch sử Việt Nam");
+        RequestResponse response = new RequestResponse();
+        response.setSeriesRequest(request);
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        contract.setProducerProfile(profile);
+        contract.setSeriesResponse(response);
+        contract.setStatus("DISPUTED");
+        ContractDispute dispute = new ContractDispute();
+        dispute.setContract(contract);
+        dispute.setOpenedBy(listener);
+        dispute.setStatus("OPEN");
+        when(contracts.findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(contract)));
+        when(contractDisputes.findAll(any(org.springframework.data.jpa.domain.Specification.class),
+                any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(dispute)));
+        AdminDisputeService queue = new AdminDisputeService(support, contracts, stages,
+                contractDisputes, null, contractEscrows, notifier, escrows);
+
+        var staffContract = queue.contracts(staff.getUserId(), "DISPUTED", 0, 20).getContent().get(0);
+        var adminDispute = queue.disputes(admin.getUserId(), "OPEN", 0, 20).getContent().get(0);
+
+        assertEquals("Nguyễn Văn A", staffContract.listenerName());
+        assertEquals("Trần Văn B", staffContract.creatorName());
+        assertEquals("Kênh lịch sử", staffContract.creatorChannelName());
+        assertEquals("Podcast lịch sử Việt Nam", staffContract.requestTitle());
+        assertEquals("Nguyễn Văn A", adminDispute.openedByName());
+        assertEquals("Podcast lịch sử Việt Nam", adminDispute.requestTitle());
+        verify(support).actor(staff.getUserId(), false);
+        verify(support).actor(admin.getUserId(), false);
     }
 
     @Test
@@ -304,14 +356,14 @@ class StaffDisputeWorkflowTest {
         assertEquals("RESOLVED", resolved.status());
         assertEquals("LISTENER_WINS", resolved.decision());
         verify(escrows).resolveListenerWin(contract.getContractId(),
-                ListenerWinAction.REFUND_STAGE_CONTINUE, null);
+                ListenerWinAction.CANCEL_CONTRACT, null);
         assertEquals("RESOLVED", queue.resolveTimeout(opened.disputeId()).status());
         org.mockito.Mockito.verify(escrows, org.mockito.Mockito.times(1)).resolveListenerWin(
-                contract.getContractId(), ListenerWinAction.REFUND_STAGE_CONTINUE, null);
+                contract.getContractId(), ListenerWinAction.CANCEL_CONTRACT, null);
     }
 
     @Test
-    void creatorWinByTimeoutRestoresStageWithoutPaying() {
+    void creatorWinByTimeoutSettlesRemainingEscrowAndTerminates() {
         AppUser listener = user("LISTENER");
         AppUser creator = user("CREATOR");
         Contract contract = new Contract();
@@ -346,7 +398,7 @@ class StaffDisputeWorkflowTest {
         DisputeResponse result = service.resolveMilestoneDisputeTimeout(dispute.getMilestoneDisputeId());
 
         assertEquals("CREATOR_WINS", result.decision());
-        assertEquals("SUBMITTED", stage.getStatus());
+        verify(escrows).resolveCreatorWin(contract.getContractId());
         org.mockito.Mockito.verify(escrows, org.mockito.Mockito.never()).settle(any());
         verify(notifier).notifyResult(listener, creator, dispute.getMilestoneDisputeId(), "CREATOR_WINS");
     }
@@ -383,9 +435,15 @@ class StaffDisputeWorkflowTest {
     private MilestoneDispute dispute() {
         Contract contract = new Contract();
         contract.setContractId(UUID.randomUUID());
+        contract.setUser(user("LISTENER"));
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(user("CREATOR"));
+        profile.setChannelName("Kênh lịch sử");
+        contract.setProducerProfile(profile);
         ContractStage stage = new ContractStage();
         stage.setContractStageId(UUID.randomUUID());
         stage.setContract(contract);
+        stage.setStageName("Đợt bàn giao");
         stage.setStatus("DISPUTED");
         MilestoneDispute dispute = new MilestoneDispute();
         dispute.setMilestoneDisputeId(UUID.randomUUID());

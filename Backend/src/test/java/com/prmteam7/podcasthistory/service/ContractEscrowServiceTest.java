@@ -42,7 +42,7 @@ class ContractEscrowServiceTest {
     @InjectMocks ContractEscrowService service;
 
     @Test
-    void listenerWinRefundsCurrentStageOnlyAndCannotRefundTwice() {
+    void listenerWinRefundsAllRemainingEscrowAndTerminatesContract() {
         AppUser listener = user("LISTENER");
         Contract contract = new Contract();
         contract.setContractId(UUID.randomUUID());
@@ -55,6 +55,10 @@ class ContractEscrowServiceTest {
         stage.setStatus("DISPUTED");
         ContractEscrow escrow = new ContractEscrow();
         escrow.setContract(contract);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        escrow.setRequest(request);
         escrow.setRemaining(new BigDecimal("100000"));
         escrow.setFundsHeld(true);
         UserWallet wallet = wallet(listener, "0", "100000");
@@ -67,14 +71,70 @@ class ContractEscrowServiceTest {
         BigDecimal refunded = service.resolveListenerWin(contract.getContractId(),
                 ListenerWinAction.REFUND_STAGE_CONTINUE, stage.getContractStageId());
 
-        assertEquals(0, refunded.compareTo(new BigDecimal("40000")));
-        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("40000")));
-        assertEquals(0, wallet.getHeldBalance().compareTo(new BigDecimal("60000")));
-        assertEquals(0, escrow.getRemaining().compareTo(new BigDecimal("60000")));
-        assertEquals("SKIPPED_REFUNDED", stage.getStatus());
+        assertEquals(0, refunded.compareTo(new BigDecimal("100000")));
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("100000")));
+        assertEquals(0, wallet.getHeldBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0, escrow.getRemaining().compareTo(BigDecimal.ZERO));
+        assertEquals("CANCELLED", stage.getStatus());
+        assertEquals("TERMINATED", contract.getStatus());
+        verify(transactions).save(argThat(t -> "CONTRACT_REFUND".equals(t.getTransactionType())));
         assertThrows(PodcastWorkflowException.class, () -> service.resolveListenerWin(
                 contract.getContractId(), ListenerWinAction.REFUND_STAGE_CONTINUE,
                 stage.getContractStageId()));
+    }
+
+    @Test
+    void creatorWinReceivesAllRemainingEscrowMinusTwentyPercentFee() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        contract.setProducerProfile(profile);
+        contract.setStatus("DISPUTED");
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setContract(contract);
+        escrow.setRequest(request);
+        escrow.setFundsHeld(true);
+        escrow.setRemaining(new BigDecimal("70000"));
+        ContractStage paid = new ContractStage();
+        paid.setStatus("APPROVED");
+        ContractStage disputed = new ContractStage();
+        disputed.setStatus("DISPUTED");
+        UserWallet listenerWallet = wallet(listener, "0", "70000");
+        UserWallet creatorWallet = wallet(creator, "0", "0");
+        when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(escrows.lockByContractId(contract.getContractId())).thenReturn(Optional.of(escrow));
+        when(stages.lockAllByContractId(contract.getContractId())).thenReturn(List.of(paid, disputed));
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(listenerWallet);
+        when(wallets.findByUserIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creatorWallet));
+        when(payments.saveAndFlush(any(Payment.class))).thenAnswer(call -> {
+            Payment saved = call.getArgument(0);
+            saved.setPaymentId(UUID.randomUUID());
+            return saved;
+        });
+
+        BigDecimal released = service.resolveCreatorWin(contract.getContractId());
+
+        assertEquals(0, released.compareTo(new BigDecimal("70000")));
+        assertEquals(0, creatorWallet.getBalance().compareTo(new BigDecimal("56000")));
+        assertEquals(0, listenerWallet.getHeldBalance().compareTo(BigDecimal.ZERO));
+        assertEquals(0, escrow.getRemaining().compareTo(BigDecimal.ZERO));
+        assertEquals("TERMINATED", contract.getStatus());
+        assertEquals("APPROVED", paid.getStatus());
+        assertEquals("CANCELLED", disputed.getStatus());
+        verify(transactions).save(argThat(t -> "PLATFORM_FEE".equals(t.getTransactionType())
+                && t.getAmount().compareTo(new BigDecimal("14000")) == 0));
+        verify(payments).saveAndFlush(argThat(p -> p.getAmount().compareTo(new BigDecimal("70000")) == 0
+                && "WALLET_ESCROW_DISPUTE".equals(p.getPaymentMethod())));
+        assertThrows(PodcastWorkflowException.class, () -> service.resolveCreatorWin(contract.getContractId()));
     }
 
     @Test
@@ -100,6 +160,9 @@ class ContractEscrowServiceTest {
                 "AUDIO", "MP3", "10 phút", "Âm thanh rõ", false));
 
         assertEquals(0, result.heldAmount().compareTo(BigDecimal.ZERO));
+        assertEquals("Audio lịch sử", result.requestedTitle());
+        assertEquals(profile.getProducerProfileId(), result.creatorProfileId());
+        assertEquals(listener.getUserId(), result.listenerId());
         assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("150000")));
         assertEquals(0, wallet.getHeldBalance().compareTo(BigDecimal.ZERO));
         verify(escrows).save(argThat(e -> !e.isFundsHeld()));
@@ -165,10 +228,14 @@ class ContractEscrowServiceTest {
     @Test
     void creatorCanReadRequirementsBeforeMakingProposal() {
         AppUser listener = user("LISTENER");
+        listener.setDisplayName("Người đặt hàng");
+        listener.setAvatarUrl("https://example.test/listener.png");
         AppUser creator = user("CREATOR");
         ProducerProfile profile = new ProducerProfile();
         profile.setProducerProfileId(UUID.randomUUID());
         profile.setUser(creator);
+        profile.setChannelName("Kênh lịch sử");
+        profile.setAvatarUrl("https://example.test/channel.png");
         SeriesRequest request = new SeriesRequest();
         request.setSeriesRequestId(UUID.randomUUID());
         request.setUser(listener);
@@ -196,6 +263,10 @@ class ContractEscrowServiceTest {
         assertEquals("Âm thanh rõ", detail.acceptanceCriteria());
         assertEquals(0, detail.remainingHeld().compareTo(BigDecimal.ZERO));
         assertFalse(detail.fundsHeld());
+        assertEquals(listener.getUserId(), detail.listenerId());
+        assertEquals("Người đặt hàng", detail.listenerName());
+        assertEquals("Kênh lịch sử", detail.creatorChannelName());
+        assertEquals("https://example.test/channel.png", detail.creatorAvatarUrl());
     }
 
     @Test
@@ -221,11 +292,13 @@ class ContractEscrowServiceTest {
     @Test
     void creatorCanFindContractRequestAfterItLeavesIncomingInbox() {
         AppUser creator = user("CREATOR");
+        AppUser listener = user("LISTENER");
         ProducerProfile profile = new ProducerProfile();
         profile.setProducerProfileId(UUID.randomUUID());
         profile.setUser(creator);
         SeriesRequest request = new SeriesRequest();
         request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
         request.setProducerProfile(profile);
         request.setStatus("ACCEPTED");
         request.setRequestedTitle("Audio lịch sử");
@@ -429,6 +502,9 @@ class ContractEscrowServiceTest {
         SeriesRequest request = new SeriesRequest();
         request.setSeriesRequestId(UUID.randomUUID());
         request.setUser(listener);
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        request.setProducerProfile(profile);
         request.setStatus("PENDING");
         ContractEscrow escrow = new ContractEscrow();
         escrow.setRequest(request);
@@ -501,7 +577,7 @@ class ContractEscrowServiceTest {
                 new ContractWorkflowRequests.Proposal("Tôi nhận làm", offers));
 
         assertEquals(4, agreement.milestones().size());
-        assertEquals(4, agreement.contractVersion());
+        assertEquals(6, agreement.contractVersion());
         assertTrue(escrow.isFundsHeld());
         assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("50000")));
         assertEquals(0, wallet.getHeldBalance().compareTo(new BigDecimal("100000")));
@@ -511,6 +587,10 @@ class ContractEscrowServiceTest {
         assertTrue(agreement.contentSnapshot().contains("tạm giữ toàn bộ ngân sách từ ví Bên A"));
         assertFalse(agreement.contentSnapshot().contains("AI chỉ đánh giá hình ảnh"));
         assertTrue(agreement.contentSnapshot().contains("AI không đánh giá hình ảnh"));
+        assertTrue(agreement.contentSnapshot().contains("CC nhận 80%, nền tảng ghi nhận phí 20%"));
+        assertTrue(agreement.contentSnapshot().contains("Listener thắng, toàn bộ số tiền còn giữ"));
+        assertTrue(agreement.contentSnapshot().contains("CC thắng, toàn bộ số tiền còn giữ"));
+        assertFalse(agreement.contentSnapshot().contains("khoản đền công có thể bằng 30%"));
         assertFalse(agreement.contentSnapshot().contains("[MILESTONE_ROWS]"));
         assertEquals(64, agreement.contentHash().length());
         assertEquals("PENDING_SIGNATURE", agreement.contractStatus());
@@ -592,6 +672,9 @@ class ContractEscrowServiceTest {
         SeriesRequest request = new SeriesRequest();
         request.setSeriesRequestId(UUID.randomUUID());
         request.setUser(listener);
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        request.setProducerProfile(profile);
         request.setStatus("ACCEPTED");
         Contract contract = new Contract();
         contract.setContractId(UUID.randomUUID());

@@ -15,5 +15,8 @@ public record SeriesRequestResponse(
         String currency,
         String status,
         Instant createdAt,
-        Instant respondedAt) {
+        Instant respondedAt,
+        String listenerName,
+        String listenerAvatarUrl,
+        String creatorAvatarUrl) {
 }

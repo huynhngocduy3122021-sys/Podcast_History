@@ -90,7 +90,18 @@ public final class AdminResponses {
       Instant resolvedAt,
       Instant responseDeadlineAt,
       Instant opponentConfirmedAt,
-      String listenerWinAction) {}
+      String listenerWinAction,
+      UUID listenerId,
+      String listenerName,
+      String listenerAvatarUrl,
+      UUID creatorId,
+      String creatorName,
+      String creatorChannelName,
+      String creatorAvatarUrl,
+      UUID requestId,
+      String requestTitle,
+      String openedByName,
+      String reviewerName) {}
 
   public record StageItem(UUID stageId, String name, int order, String status) {}
 
@@ -100,7 +111,15 @@ public final class AdminResponses {
       UUID creatorId,
       String status,
       Instant createdAt,
-      List<StageItem> stages) {}
+      List<StageItem> stages,
+      UUID requestId,
+      String requestTitle,
+      String listenerName,
+      String listenerAvatarUrl,
+      UUID creatorUserId,
+      String creatorName,
+      String creatorChannelName,
+      String creatorAvatarUrl) {}
 
   public record PaymentItem(
       UUID paymentId,

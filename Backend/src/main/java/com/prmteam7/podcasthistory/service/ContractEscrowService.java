@@ -87,9 +87,7 @@ public class ContractEscrowService {
                     || !saved.getAcceptanceCriteria().equals(input.acceptanceCriteria().trim())
                     || saved.isAutoAcceptEnabled() != input.autoAcceptEnabled())
                 throw new PodcastWorkflowException("Mã yêu cầu đã dùng cho nội dung khác.");
-            return new ContractWorkflowResponses.Request(saved.getRequest().getSeriesRequestId(),
-                    saved.getRequest().getStatus(), saved.getBudget(),
-                    saved.isFundsHeld() ? saved.getRemaining() : ZERO, "VND");
+            return requestSummary(saved.getRequest(), saved);
         }
         ProducerProfile creator = creators.findById(input.creatorProfileId())
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy kênh CC."));
@@ -121,7 +119,7 @@ public class ContractEscrowService {
         escrow.setAcceptanceCriteria(input.acceptanceCriteria().trim());
         escrow.setAutoAcceptEnabled(input.autoAcceptEnabled());
         escrows.save(escrow);
-        return new ContractWorkflowResponses.Request(request.getSeriesRequestId(), request.getStatus(), budget, ZERO, "VND");
+        return requestSummary(request, escrow);
     }
 
     @Transactional
@@ -191,7 +189,7 @@ public class ContractEscrowService {
         }
 
         escrow.setContract(contract);
-        escrow.setContractVersion(4);
+        escrow.setContractVersion(6);
         escrow.setContentSnapshot(renderSnapshot(escrow, input.milestones()));
         escrow.setContentHash(sha256(escrow.getContentSnapshot()));
         escrows.save(escrow);
@@ -226,7 +224,25 @@ public class ContractEscrowService {
                 escrow.isFundsHeld() ? escrow.getRemaining() : ZERO,
                 escrow.isFundsHeld(), "VND", escrow.getProductType(), escrow.getFileFormat(),
                 escrow.getDurationDescription(), escrow.getAcceptanceCriteria(),
-                escrow.isAutoAcceptEnabled(), request.getCreatedAt());
+                escrow.isAutoAcceptEnabled(), request.getCreatedAt(),
+                request.getUser().getUserId(), displayName(request.getUser()),
+                request.getUser().getAvatarUrl(), request.getProducerProfile().getChannelName(),
+                request.getProducerProfile().getAvatarUrl(),
+                escrow.getContract() == null ? null : escrow.getContract().getContractId(),
+                escrow.getContract() == null ? null : escrow.getContract().getStatus());
+    }
+
+    private ContractWorkflowResponses.Request requestSummary(SeriesRequest request, ContractEscrow escrow) {
+        return new ContractWorkflowResponses.Request(request.getSeriesRequestId(), request.getStatus(),
+                escrow.getBudget(), escrow.isFundsHeld() ? escrow.getRemaining() : ZERO, "VND",
+                request.getRequestedTitle(), request.getUser().getUserId(), displayName(request.getUser()),
+                request.getProducerProfile().getProducerProfileId(), request.getProducerProfile().getChannelName());
+    }
+
+    private String displayName(AppUser user) {
+        if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) return user.getDisplayName();
+        if (user.getUsername() != null && !user.getUsername().isBlank()) return user.getUsername();
+        return user.getEmail();
     }
 
     @Transactional(readOnly = true)
@@ -299,7 +315,7 @@ public class ContractEscrowService {
         }
         request.setStatus("CANCELLED");
         requests.save(request);
-        return new ContractWorkflowResponses.Request(requestId, request.getStatus(), escrow.getBudget(), ZERO, "VND");
+        return requestSummary(request, escrow);
     }
 
     @Transactional
@@ -544,53 +560,82 @@ public class ContractEscrowService {
 
     @Transactional
     public BigDecimal resolveListenerWin(UUID contractId, ListenerWinAction action, UUID stageId) {
-        if (action == null) throw new PodcastWorkflowException("Listener chưa chọn cách xử lý khi thắng.");
         Contract contract = contracts.lockById(contractId)
                 .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy hợp đồng."));
         ContractEscrow escrow = escrows.lockByContractId(contractId)
                 .orElseThrow(() -> new PodcastWorkflowException("Hợp đồng không có ngân sách giữ."));
         if (!escrow.isFundsHeld()) throw new PodcastWorkflowException("Ngân sách chưa được giữ.");
+        if (escrow.getTerminatedAt() != null)
+            throw new PodcastWorkflowException("Tranh chấp đã được quyết toán.");
         List<ContractStage> all = stages.lockAllByContractId(contractId);
-        if (action == ListenerWinAction.CANCEL_CONTRACT) {
-            BigDecimal refund = escrow.getRemaining();
-            refundAll(escrow, "CONTRACT_DISPUTE_REFUND:");
-            all.stream().filter(s -> !ContractStageStatus.APPROVED.name().equals(s.getStatus()))
-                    .forEach(s -> s.setStatus("CANCELLED"));
-            stages.saveAll(all);
-            contract.setStatus("TERMINATED");
-            escrow.setTerminatedAt(Instant.now());
-            contracts.save(contract);
-            escrows.save(escrow);
-            return refund;
-        }
-        ContractStage current = all.stream()
-                .filter(s -> stageId == null || stageId.equals(s.getContractStageId()))
-                .filter(s -> !ContractStageStatus.APPROVED.name().equals(s.getStatus())
-                        && !ContractStageStatus.SKIPPED_REFUNDED.name().equals(s.getStatus()))
-                .findFirst().orElseThrow(() -> new PodcastWorkflowException("Không tìm thấy đợt có thể hoàn tiền."));
-        if (payments.findFirstByContractStage_ContractStageId(current.getContractStageId()).isPresent())
-            throw new PodcastWorkflowException("Đợt này đã được thanh toán; không thể hoàn lần nữa.");
-        BigDecimal refund = current.getAmount();
-        if (escrow.getRemaining().compareTo(refund) < 0)
-            throw new PodcastWorkflowException("Tiền giữ của hợp đồng không đủ để hoàn đợt.");
-        AppUser listener = lockedActiveUser(contract.getUser().getUserId(), "LISTENER");
-        UserWallet wallet = listenerWallets.walletForLockedUser(listener);
-        if (wallet.getHeldBalance().compareTo(refund) < 0)
-            throw new PodcastWorkflowException("Số dư đang giữ không đủ để hoàn đợt.");
-        wallet.setHeldBalance(wallet.getHeldBalance().subtract(refund));
-        wallet.setBalance(wallet.getBalance().add(refund));
-        escrow.setRemaining(escrow.getRemaining().subtract(refund));
-        current.setStatus(ContractStageStatus.SKIPPED_REFUNDED.name());
-        wallets.save(wallet);
-        stages.save(current);
-        escrows.save(escrow);
-        record(wallet, null, "CONTRACT_STAGE_REFUND", "CREDIT", refund,
-                "CONTRACT_STAGE_REFUND:" + current.getContractStageId());
-        boolean finished = all.stream().allMatch(s -> ContractStageStatus.APPROVED.name().equals(s.getStatus())
-                || ContractStageStatus.SKIPPED_REFUNDED.name().equals(s.getStatus()));
-        contract.setStatus(finished ? "COMPLETED" : "IN_PROGRESS");
+        BigDecimal refund = escrow.getRemaining();
+        refundAll(escrow, "CONTRACT_DISPUTE_REFUND:");
+        all.stream().filter(s -> !ContractStageStatus.APPROVED.name().equals(s.getStatus()))
+                .forEach(s -> s.setStatus("CANCELLED"));
+        stages.saveAll(all);
+        contract.setStatus("TERMINATED");
+        escrow.setTerminatedAt(Instant.now());
         contracts.save(contract);
+        escrows.save(escrow);
         return refund;
+    }
+
+    @Transactional
+    public BigDecimal resolveCreatorWin(UUID contractId) {
+        Contract contract = contracts.lockById(contractId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy hợp đồng."));
+        ContractEscrow escrow = escrows.lockByContractId(contractId)
+                .orElseThrow(() -> new PodcastWorkflowException("Hợp đồng không có ngân sách giữ."));
+        if (!escrow.isFundsHeld() || escrow.getTerminatedAt() != null
+                || !("DISPUTED".equals(contract.getStatus()) || "IN_PROGRESS".equals(contract.getStatus())))
+            throw new PodcastWorkflowException("Hợp đồng không còn tiền giữ hoặc đã kết thúc tranh chấp.");
+        List<ContractStage> all = stages.lockAllByContractId(contractId);
+        BigDecimal gross = escrow.getRemaining();
+        if (gross.signum() > 0) {
+            AppUser listener = lockedActiveUser(contract.getUser().getUserId(), "LISTENER");
+            UserWallet listenerWallet = listenerWallets.walletForLockedUser(listener);
+            if (listenerWallet.getHeldBalance().compareTo(gross) < 0)
+                throw new PodcastWorkflowException("Số dư đang giữ không khớp khoản cần giải ngân.");
+            AppUser creator = lockedActiveUser(contract.getProducerProfile().getUser().getUserId(), "CREATOR");
+            UserWallet creatorWallet = creatorWallet(creator);
+            BigDecimal fee = gross.multiply(PLATFORM_RATE).setScale(0, RoundingMode.HALF_UP).setScale(2);
+            BigDecimal net = gross.subtract(fee);
+            Payment payment = new Payment();
+            payment.setUser(listener);
+            payment.setSeriesRequest(escrow.getRequest());
+            payment.setAmount(gross);
+            payment.setCurrency("VND");
+            payment.setPaymentMethod("WALLET_ESCROW_DISPUTE");
+            payment.setStatus("PAID");
+            payment.setPaidAt(Instant.now());
+            payment = payments.saveAndFlush(payment);
+            PaymentMethod method = new PaymentMethod();
+            method.setPayment(payment);
+            method.setMethodCode("WALLET_ESCROW_DISPUTE");
+            method.setDisplayName("Contract dispute settlement");
+            method.setIsActive(true);
+            paymentMethods.save(method);
+            listenerWallet.setHeldBalance(listenerWallet.getHeldBalance().subtract(gross));
+            creatorWallet.setBalance(creatorWallet.getBalance().add(net));
+            escrow.setRemaining(ZERO);
+            wallets.save(listenerWallet);
+            wallets.save(creatorWallet);
+            record(listenerWallet, payment, "CONTRACT_DISPUTE_DEBIT", "DEBIT", gross,
+                    "CONTRACT_DISPUTE:" + contractId);
+            record(creatorWallet, payment, "RELEASE_FUNDS", "CREDIT", net,
+                    "CONTRACT_DISPUTE_CREATOR:" + contractId);
+            if (fee.signum() > 0)
+                record(null, payment, "PLATFORM_FEE", "CREDIT", fee,
+                        "CONTRACT_DISPUTE_FEE:" + contractId);
+        }
+        all.stream().filter(s -> !ContractStageStatus.APPROVED.name().equals(s.getStatus()))
+                .forEach(s -> s.setStatus("CANCELLED"));
+        stages.saveAll(all);
+        contract.setStatus("TERMINATED");
+        escrow.setTerminatedAt(Instant.now());
+        contracts.save(contract);
+        escrows.save(escrow);
+        return gross;
     }
 
     private void refundAll(ContractEscrow escrow, String prefix) {
@@ -661,7 +706,7 @@ public class ContractEscrowService {
     }
 
     private String renderSnapshot(ContractEscrow escrow, List<ContractWorkflowRequests.Stage> offers) {
-        try (var input = new ClassPathResource("contracts/contract-v4.md").getInputStream()) {
+        try (var input = new ClassPathResource("contracts/contract-v6.md").getInputStream()) {
             String text = new String(input.readAllBytes(), StandardCharsets.UTF_8);
             SeriesRequest request = escrow.getRequest();
             Contract contract = escrow.getContract();

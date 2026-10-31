@@ -42,6 +42,8 @@ class CreatorRequestListTest {
         profile = new ProducerProfile();
         profile.setProducerProfileId(UUID.randomUUID());
         profile.setUser(creator);
+        profile.setChannelName("Kênh lịch sử");
+        profile.setAvatarUrl("https://example.test/channel.png");
     }
 
     @Test
@@ -69,6 +71,9 @@ class CreatorRequestListTest {
         assertEquals("ESCROW", page.getContent().get(1).flowType());
         assertEquals("IN_PROGRESS", page.getContent().get(1).contractStatus());
         assertEquals(contract.getContractId(), page.getContent().get(1).contractId());
+        assertEquals("Người đặt hàng", page.getContent().get(0).listenerName());
+        assertEquals("https://example.test/listener.png", page.getContent().get(1).listenerAvatarUrl());
+        assertEquals("Kênh lịch sử", page.getContent().get(1).creatorChannelName());
     }
 
     @Test
@@ -86,6 +91,22 @@ class CreatorRequestListTest {
     }
 
     @Test
+    void incomingRequestIncludesListenerNameAndChannelAvatar() {
+        SeriesRequest pending = request("PENDING");
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(profiles.findByUser_UserId(creator.getUserId())).thenReturn(Optional.of(profile));
+        when(requests.findAllByProducerProfile_User_UserIdAndStatusOrderByCreatedAtAsc(
+                creator.getUserId(), "PENDING")).thenReturn(List.of(pending));
+
+        var item = service.getCreatorInbox(creator.getUserId()).get(0);
+
+        assertEquals("Người đặt hàng", item.listenerName());
+        assertEquals("https://example.test/listener.png", item.listenerAvatarUrl());
+        assertEquals("Kênh lịch sử", item.creatorChannelName());
+        assertEquals("https://example.test/channel.png", item.creatorAvatarUrl());
+    }
+
+    @Test
     void invalidStatusIsRejected() {
         when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
         when(profiles.findByUser_UserId(creator.getUserId())).thenReturn(Optional.of(profile));
@@ -98,6 +119,8 @@ class CreatorRequestListTest {
     private SeriesRequest request(String status) {
         AppUser listener = new AppUser();
         listener.setUserId(UUID.randomUUID());
+        listener.setDisplayName("Người đặt hàng");
+        listener.setAvatarUrl("https://example.test/listener.png");
         SeriesRequest request = new SeriesRequest();
         request.setSeriesRequestId(UUID.randomUUID());
         request.setUser(listener);

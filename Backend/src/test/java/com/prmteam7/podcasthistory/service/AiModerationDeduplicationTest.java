@@ -34,7 +34,7 @@ class AiModerationDeduplicationTest {
         service.enqueue(fixture.podcast);
         service.enqueue(fixture.podcast);
         assertEquals(1, fixture.saved.size());
-        verify(fixture.events, times(1)).publishEvent(any());
+        verify(fixture.events, times(1)).publishEvent(any(AiModerationService.Requested.class));
 
         AiModerationResult job = fixture.saved.get(0);
         job.setStatus("PROCESSING");
@@ -59,7 +59,7 @@ class AiModerationDeduplicationTest {
 
         assertEquals(1, fixture.saved.size());
         assertEquals("PENDING", job.getStatus());
-        verify(fixture.events, times(2)).publishEvent(any());
+        verify(fixture.events, times(2)).publishEvent(any(AiModerationService.Requested.class));
     }
 
     @Test

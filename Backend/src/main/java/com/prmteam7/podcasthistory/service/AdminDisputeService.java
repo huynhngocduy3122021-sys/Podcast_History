@@ -45,13 +45,15 @@ public class AdminDisputeService {
     this.escrowService = escrowService;
   }
 
+  @Transactional(readOnly = true)
   public Page<ContractItem> contracts(UUID actor, String status, int page, int size) {
-    support.actor(actor, true);
+    support.actor(actor, false);
     return contracts
         .findAll(AdminSupportService.status(status), AdminSupportService.page(page, size))
         .map(c -> contractItem(c, false));
   }
 
+  @Transactional(readOnly = true)
   public ContractItem contract(UUID actor, UUID id) {
     support.actor(actor, false);
     return contractItem(
@@ -61,6 +63,7 @@ public class AdminDisputeService {
         true);
   }
 
+  @Transactional(readOnly = true)
   public Page<DisputeItem> disputes(UUID actor, String status, int page, int size) {
     support.actor(actor, false);
     return disputes
@@ -68,6 +71,7 @@ public class AdminDisputeService {
         .map(this::item);
   }
 
+  @Transactional(readOnly = true)
   public DisputeItem dispute(UUID actor, UUID id) {
     support.actor(actor, false);
     return item(requireDispute(id));
@@ -112,8 +116,6 @@ public class AdminDisputeService {
     if (escrow && !"IN_PROGRESS".equals(contract.getStatus()))
       throw new ResourceConflictException("Chỉ tranh chấp hợp đồng giữ tiền đang có hiệu lực.");
     boolean listenerOpened = contract.getUser().getUserId().equals(actor);
-    if (escrow && listenerOpened && action == null)
-      throw new ResourceConflictException("Listener cần chọn cách xử lý khi thắng tranh chấp.");
     ContractDispute d = new ContractDispute();
     d.setContract(contract);
     d.setOpenedBy(user);
@@ -151,7 +153,6 @@ public class AdminDisputeService {
     if (!dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now()))
       throw new ResourceConflictException("Đã hết hạn 3 ngày xác nhận tranh chấp.");
     if (contract.getUser().getUserId().equals(actor)) {
-      if (action == null) throw new ResourceConflictException("Listener cần chọn cách xử lý khi thắng.");
       dispute.setListenerWinAction(action);
     }
     dispute.setOpponentConfirmedAt(Instant.now());
@@ -189,6 +190,7 @@ public class AdminDisputeService {
     return item(dispute);
   }
 
+  @Transactional(readOnly = true)
   public Page<DisputeItem> mine(UUID actor, int page, int size) {
     support.user(actor);
     return disputes
@@ -278,10 +280,9 @@ public class AdminDisputeService {
   private void finishConfirmed(AppUser reviewer, ContractDispute dispute, Contract contract,
       DisputeDecision winner, String note) {
     if (winner == DisputeDecision.LISTENER_WINS) {
-      escrowService.resolveListenerWin(contract.getContractId(), dispute.getListenerWinAction(), null);
+      escrowService.resolveListenerWin(contract.getContractId(), ListenerWinAction.CANCEL_CONTRACT, null);
     } else {
-      contract.setStatus(dispute.getPreviousContractStatus());
-      contracts.save(contract);
+      escrowService.resolveCreatorWin(contract.getContractId());
     }
     dispute.setStatus("RESOLVED");
     dispute.setDecision(winner.name());
@@ -300,6 +301,8 @@ public class AdminDisputeService {
   }
 
   private ContractItem contractItem(Contract c, boolean detail) {
+    SeriesRequest request = c.getSeriesResponse() == null ? null : c.getSeriesResponse().getSeriesRequest();
+    AppUser creator = c.getProducerProfile().getUser();
     return new ContractItem(
         c.getContractId(),
         c.getUser().getUserId(),
@@ -316,10 +319,18 @@ public class AdminDisputeService {
                             s.getStageOrder(),
                             s.getStatus()))
                 .toList()
-            : List.of());
+            : List.of(),
+        request == null ? null : request.getSeriesRequestId(),
+        request == null ? null : request.getRequestedTitle(),
+        displayName(c.getUser()), c.getUser().getAvatarUrl(),
+        creator.getUserId(), displayName(creator),
+        c.getProducerProfile().getChannelName(), c.getProducerProfile().getAvatarUrl());
   }
 
   private DisputeItem item(ContractDispute d) {
+    Contract contract = d.getContract();
+    SeriesRequest request = contract.getSeriesResponse() == null
+        ? null : contract.getSeriesResponse().getSeriesRequest();
     return new DisputeItem(
         d.getDisputeId(),
         d.getContract().getContractId(),
@@ -334,6 +345,21 @@ public class AdminDisputeService {
         d.getResolvedAt(),
         d.getCreatedAt() == null ? null : d.getCreatedAt().plus(3, ChronoUnit.DAYS),
         d.getOpponentConfirmedAt(),
-        d.getListenerWinAction() == null ? null : d.getListenerWinAction().name());
+        d.getListenerWinAction() == null ? null : d.getListenerWinAction().name(),
+        contract.getUser().getUserId(), displayName(contract.getUser()),
+        contract.getUser().getAvatarUrl(),
+        contract.getProducerProfile().getProducerProfileId(),
+        displayName(contract.getProducerProfile().getUser()),
+        contract.getProducerProfile().getChannelName(),
+        contract.getProducerProfile().getAvatarUrl(),
+        request == null ? null : request.getSeriesRequestId(),
+        request == null ? null : request.getRequestedTitle(),
+        displayName(d.getOpenedBy()), d.getReviewer() == null ? null : displayName(d.getReviewer()));
+  }
+
+  private String displayName(AppUser user) {
+    if (user.getDisplayName() != null && !user.getDisplayName().isBlank()) return user.getDisplayName();
+    if (user.getUsername() != null && !user.getUsername().isBlank()) return user.getUsername();
+    return user.getEmail();
   }
 }

@@ -49,7 +49,7 @@ Khi đợt `SUBMITTED`, Listener chọn:
 
 1. **Duyệt:** Backend trừ tiền gộp của đợt khỏi ngân sách giữ một lần, cộng phần ròng vào ví CC, ghi phí nền tảng và các bút toán; `Payment PAID`. Listener không trả thêm.
 2. **Từ chối bản bàn giao hoặc yêu cầu sửa:** Phải có lý do; đợt `REVISION_REQUESTED`, tiền vẫn giữ. CC làm lại, upload bản mới, chờ AI duyệt rồi bấm bàn giao; đồng hồ 3 ngày bắt đầu lại từ lần bàn giao mới. Tổng cộng tối đa 3 lượt Listener yêu cầu trên mỗi đợt. Từ chối bản nộp không tự chấm dứt hợp đồng hay trả đền công.
-3. **Tranh chấp:** Listener hoặc CC mở cho một đợt. Đợt `DISPUTED`, không tự nghiệm thu. Bên kia nhận thông báo realtime và có 3 ngày xác nhận. Không xác nhận thì người mở thắng; xác nhận thì Staff quyết định, Admin cũng xem được. Listener thắng được hoàn đợt rồi tiếp tục hoặc hủy hợp đồng theo lựa chọn đã ghi lúc mở/xác nhận. CC thắng thì đợt quay về trạng thái trước tranh chấp, tiếp tục nghiệm thu thường lệ.
+3. **Tranh chấp:** Listener hoặc CC mở cho một đợt. Đợt `DISPUTED`, không tự nghiệm thu. Bên kia nhận thông báo realtime và có 3 ngày xác nhận. Không xác nhận thì người mở thắng; xác nhận thì Staff quyết định, Admin cũng xem được. Dù bên nào thắng, hợp đồng chấm dứt. Listener thắng được hoàn toàn bộ escrow còn giữ; CC thắng nhận 80% toàn bộ escrow còn giữ, app ghi phí 20%.
 
 Người mở có thể rút tranh chấp khi bên kia chưa xác nhận và chưa hết 3 ngày. Khi rút, Backend khôi phục trạng thái hợp đồng/đợt trước tranh chấp, không động đến tiền và thông báo cho bên kia. Hồ sơ đã xác nhận hoặc đã kết luận không thể tự rút.
 
@@ -59,7 +59,7 @@ Ví dụ đợt **20.000 VND** được duyệt: CC nhận **16.000 VND**, app n
 
 ### Dừng hợp đồng, đền công, hoàn tiền
 
-Listener hoặc CC mở tranh chấp toàn hợp đồng. Hợp đồng chuyển `DISPUTED`, các bước nghiệm thu/giải ngân bị chặn, tiền còn lại ở ví giữ. Bên kia được thông báo realtime và có **3 ngày** để xác nhận. Nếu không xác nhận, người mở thắng tự động. Nếu xác nhận, Staff quyết định `LISTENER_WINS` hoặc `CREATOR_WINS`; Admin cũng xem và xử lý được. Listener chọn trước `CANCEL_CONTRACT` (hoàn toàn bộ tiền còn giữ, chấm dứt) hoặc `REFUND_STAGE_CONTINUE` (hoàn đợt hiện tại, tiếp tục). Nếu CC thắng, hợp đồng quay về `IN_PROGRESS`; không tự giải ngân đợt đang tranh chấp. Mọi kết quả gửi thông báo hai bên và ghi giao dịch hoàn ví.
+Listener hoặc CC mở tranh chấp toàn hợp đồng. Hợp đồng chuyển `DISPUTED`, các bước nghiệm thu/giải ngân bị chặn, tiền còn lại ở ví giữ. Bên kia được thông báo realtime và có **3 ngày** để xác nhận. Nếu không xác nhận, người mở thắng tự động. Nếu xác nhận, Staff quyết định `LISTENER_WINS` hoặc `CREATOR_WINS`; Admin cũng xem và xử lý được. Khi có bên thắng, hợp đồng thành `TERMINATED`, các đợt chưa hoàn thành thành `CANCELLED`. Listener thắng được hoàn **100% số dư escrow còn lại**; CC thắng nhận **80% số dư escrow còn lại**, app ghi **20% phí**. Các khoản đã giải ngân trước đó không bị chi hoặc hoàn lại lần nữa. Mọi kết quả gửi thông báo hai bên và ghi lịch sử ví/thanh toán.
 
 **Luồng chấm dứt cũ** đã mở trước thay đổi này vẫn dùng quyết định đền công sau 3 ngày:
 
