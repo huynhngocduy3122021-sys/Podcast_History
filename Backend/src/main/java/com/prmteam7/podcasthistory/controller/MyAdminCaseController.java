@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.controller;
 
-import com.prmteam7.podcasthistory.dto.request.AdminRequests.Note;
+import com.prmteam7.podcasthistory.dto.request.ConfirmDisputeRequest;
+import com.prmteam7.podcasthistory.dto.request.OpenContractDisputeRequest;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
 import com.prmteam7.podcasthistory.service.*;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,8 +35,15 @@ public class MyAdminCaseController {
   public DisputeItem open(
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID contractId,
-      @Valid @RequestBody Note body) {
-    return disputes.open(id(jwt), contractId, body.note());
+      @Valid @RequestBody OpenContractDisputeRequest body) {
+    return disputes.open(id(jwt), contractId, body.note(), body.listenerWinAction());
+  }
+
+  @PostMapping("/disputes/{disputeId}/confirm")
+  @Operation(summary = "Bên còn lại xác nhận tranh chấp hợp đồng trong 3 ngày")
+  public DisputeItem confirm(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID disputeId,
+      @RequestBody ConfirmDisputeRequest body) {
+    return disputes.confirm(id(jwt), disputeId, body.listenerWinAction());
   }
 
   @GetMapping("/me/disputes")

@@ -22,4 +22,9 @@ public class RealtimeEventPublisher {
     messaging.convertAndSendToUser(
         userId.toString(), "/queue/realtime", Map.of("type", type, "data", data));
   }
+
+  public void publishApiChange(UUID userId, String type, Object data) {
+    messaging.convertAndSendToUser(
+        userId.toString(), "/queue/api-changes", Map.of("type", type, "data", data));
+  }
 }

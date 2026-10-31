@@ -49,5 +49,11 @@ public class CreatorMilestoneDraftController {
         return drafts.deliver(userId(jwt), milestoneId, draftId);
     }
 
+    @PostMapping("/{draftId}/cancel")
+    public MilestoneDraftResponse cancel(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID milestoneId, @PathVariable UUID draftId) {
+        return drafts.cancel(userId(jwt), milestoneId, draftId);
+    }
+
     private UUID userId(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("user_id")); }
 }

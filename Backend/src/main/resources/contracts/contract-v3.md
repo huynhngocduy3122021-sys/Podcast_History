@@ -1,7 +1,5 @@
 # HỢP ĐỒNG CUNG CẤP VÀ SẢN XUẤT NỘI DUNG SỐ
 
-> Bản đối chiếu với hợp đồng người dùng cung cấp. Backend đóng gói nội dung phiên bản 2 tại `src/main/resources/contracts/contract-v2.md` để tạo snapshot và lưu hai lần ký riêng. Bản mẫu này chưa phải một hợp đồng đã ký; bản ký cụ thể lấy từ `GET /api/requests/{requestId}/contract`. Các hợp đồng đã tạo vẫn giữ bản nội dung và hash đã lưu.
-
 **Mã hợp đồng:** [CONTRACT_ID]  
 **Ngày lập:** [CREATED_AT]  
 **Hình thức giao kết:** Hợp đồng điện tử thông qua nền tảng [APP_NAME]
@@ -28,7 +26,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 2.1. Bên A thuê Bên B thực hiện sản phẩm nội dung số theo yêu cầu đã thống nhất.
 
 - Tên dự án: [PROJECT_NAME]
-- Loại sản phẩm: [AUDIO]
+- Loại sản phẩm: [AUDIO/VIDEO]
 - Mô tả yêu cầu: [REQUEST_DESCRIPTION]
 - Định dạng bàn giao: [FILE_FORMAT]
 - Thời lượng hoặc khối lượng: [DURATION]
@@ -44,7 +42,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 
 3.2. Bên A tự lựa chọn ngân sách và dành toàn bộ ngân sách này cho hợp đồng.
 
-3.3. Khi yêu cầu được tạo thành công, nền tảng tạm giữ ngân sách từ ví Bên A để xử lý yêu cầu. Khoản này chỉ được giải ngân hoặc hoàn trả theo hợp đồng.
+3.3. Khi Bên B chấp nhận yêu cầu bằng cách gửi đề xuất các đợt, nền tảng tạm giữ toàn bộ ngân sách từ ví Bên A trong cùng giao dịch tạo đề xuất. Nếu số dư khả dụng không đủ, đề xuất không được tạo và yêu cầu tiếp tục chờ. Khoản đã giữ chỉ được giải ngân hoặc hoàn trả theo hợp đồng.
 
 3.4. Tổng giá trị các đợt phải bằng đúng ngân sách đã giữ.
 
@@ -66,7 +64,7 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 5.2. Bên A có **03 ngày** kể từ bàn giao hợp lệ để phản hồi.
 
-5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt sẽ tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
+5.3. Bên A có thể chấp thuận và giải ngân; từ chối lần bàn giao hiện tại kèm lý do để Bên B làm lại trong phạm vi 03 lượt sửa mỗi đợt, tiền của đợt tiếp tục được giữ; hoặc yêu cầu dừng để thương lượng hay tranh chấp. Từ chối một lần bàn giao không tự động chấm dứt hợp đồng.
 
 5.4. Bên A được yêu cầu chỉnh sửa tối đa **03 lần** cho mỗi đợt trên hệ thống. Khi hết lượt, hai bên có thể mở tranh chấp để xử lý bất đồng.
 
@@ -122,7 +120,7 @@ Bên B chỉ bắt đầu sau khi Bên A xác nhận toàn bộ đề xuất.
 
 9.3. Quyền sử dụng quy định tại khoản 9.2 phát sinh sau khi đợt tương ứng được nghiệm thu và thanh toán đủ.
 
-9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán phải tuân theo thỏa thuận riêng và quy định pháp luật.
+9.4. Sản phẩm chưa nghiệm thu hoặc chưa thanh toán tuân theo thỏa thuận riêng và quy định pháp luật.
 
 ## ĐIỀU 10. TRÁCH NHIỆM
 

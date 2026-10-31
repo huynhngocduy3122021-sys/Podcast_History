@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 
 import com.prmteam7.podcasthistory.dto.request.ContractWorkflowRequests;
 import com.prmteam7.podcasthistory.enums.ContractStageStatus;
+import com.prmteam7.podcasthistory.enums.ListenerWinAction;
 import com.prmteam7.podcasthistory.exception.PodcastWorkflowException;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
@@ -41,7 +42,43 @@ class ContractEscrowServiceTest {
     @InjectMocks ContractEscrowService service;
 
     @Test
-    void creatingContractRequestMovesBudgetToHeldBalance() {
+    void listenerWinRefundsCurrentStageOnlyAndCannotRefundTwice() {
+        AppUser listener = user("LISTENER");
+        Contract contract = new Contract();
+        contract.setContractId(UUID.randomUUID());
+        contract.setUser(listener);
+        contract.setStatus("IN_PROGRESS");
+        ContractStage stage = new ContractStage();
+        stage.setContractStageId(UUID.randomUUID());
+        stage.setContract(contract);
+        stage.setAmount(new BigDecimal("40000"));
+        stage.setStatus("DISPUTED");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setContract(contract);
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setFundsHeld(true);
+        UserWallet wallet = wallet(listener, "0", "100000");
+        when(contracts.lockById(contract.getContractId())).thenReturn(Optional.of(contract));
+        when(escrows.lockByContractId(contract.getContractId())).thenReturn(Optional.of(escrow));
+        when(stages.lockAllByContractId(contract.getContractId())).thenReturn(List.of(stage));
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet);
+
+        BigDecimal refunded = service.resolveListenerWin(contract.getContractId(),
+                ListenerWinAction.REFUND_STAGE_CONTINUE, stage.getContractStageId());
+
+        assertEquals(0, refunded.compareTo(new BigDecimal("40000")));
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("40000")));
+        assertEquals(0, wallet.getHeldBalance().compareTo(new BigDecimal("60000")));
+        assertEquals(0, escrow.getRemaining().compareTo(new BigDecimal("60000")));
+        assertEquals("SKIPPED_REFUNDED", stage.getStatus());
+        assertThrows(PodcastWorkflowException.class, () -> service.resolveListenerWin(
+                contract.getContractId(), ListenerWinAction.REFUND_STAGE_CONTINUE,
+                stage.getContractStageId()));
+    }
+
+    @Test
+    void creatingContractRequestDoesNotHoldBudget() {
         AppUser listener = user("LISTENER");
         AppUser creator = user("CREATOR");
         ProducerProfile profile = new ProducerProfile();
@@ -51,7 +88,6 @@ class ContractEscrowServiceTest {
         UserWallet wallet = wallet(listener, "150000", "0");
         when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
         when(creators.findById(profile.getProducerProfileId())).thenReturn(Optional.of(profile));
-        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet);
         when(requests.saveAndFlush(any(SeriesRequest.class))).thenAnswer(call -> {
             SeriesRequest request = call.getArgument(0);
             request.setSeriesRequestId(UUID.randomUUID());
@@ -63,12 +99,11 @@ class ContractEscrowServiceTest {
                 profile.getProducerProfileId(), "Audio lịch sử", "Mô tả", new BigDecimal("100000"),
                 "AUDIO", "MP3", "10 phút", "Âm thanh rõ", false));
 
-        assertEquals(0, result.heldAmount().compareTo(new BigDecimal("100000")));
-        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("50000")));
-        assertEquals(0, wallet.getHeldBalance().compareTo(new BigDecimal("100000")));
-        verify(escrows).save(any(ContractEscrow.class));
-        verify(transactions).save(argThat(t -> "CONTRACT_HOLD".equals(t.getTransactionType())
-                && "DEBIT".equals(t.getDirection())));
+        assertEquals(0, result.heldAmount().compareTo(BigDecimal.ZERO));
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("150000")));
+        assertEquals(0, wallet.getHeldBalance().compareTo(BigDecimal.ZERO));
+        verify(escrows).save(argThat(e -> !e.isFundsHeld()));
+        verifyNoInteractions(listenerWallets, wallets, transactions);
     }
 
     @Test
@@ -89,6 +124,7 @@ class ContractEscrowServiceTest {
         existing.setRequest(request);
         existing.setBudget(new BigDecimal("100000"));
         existing.setRemaining(new BigDecimal("100000"));
+        existing.setFundsHeld(false);
         existing.setProductType("AUDIO");
         existing.setFileFormat("MP3");
         existing.setDurationDescription("10 phút");
@@ -102,6 +138,7 @@ class ContractEscrowServiceTest {
                 new BigDecimal("100000"), "AUDIO", "MP3", "10 phút", "Âm thanh rõ", false));
 
         assertEquals(request.getSeriesRequestId(), result.requestId());
+        assertEquals(0, result.heldAmount().compareTo(BigDecimal.ZERO));
         verify(listenerWallets, never()).walletForLockedUser(any());
         verify(transactions, never()).save(any());
     }
@@ -143,6 +180,7 @@ class ContractEscrowServiceTest {
         escrow.setRequest(request);
         escrow.setBudget(new BigDecimal("100000"));
         escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setFundsHeld(false);
         escrow.setProductType("AUDIO");
         escrow.setFileFormat("MP3");
         escrow.setDurationDescription("10 phút");
@@ -156,7 +194,8 @@ class ContractEscrowServiceTest {
         assertEquals("AUDIO", detail.productType());
         assertEquals("MP3", detail.fileFormat());
         assertEquals("Âm thanh rõ", detail.acceptanceCriteria());
-        assertEquals(0, detail.remainingHeld().compareTo(new BigDecimal("100000")));
+        assertEquals(0, detail.remainingHeld().compareTo(BigDecimal.ZERO));
+        assertFalse(detail.fundsHeld());
     }
 
     @Test
@@ -195,6 +234,7 @@ class ContractEscrowServiceTest {
         escrow.setRequest(request);
         escrow.setBudget(new BigDecimal("100000"));
         escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setFundsHeld(false);
         escrow.setProductType("AUDIO");
         escrow.setFileFormat("MP3");
         escrow.setDurationDescription("10 phút");
@@ -349,6 +389,63 @@ class ContractEscrowServiceTest {
     }
 
     @Test
+    void proposalWithInsufficientListenerBalanceDoesNotCreateContractOrHold() {
+        AppUser listener = user("LISTENER");
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setProducerProfile(profile);
+        request.setStatus("PENDING");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setFundsHeld(false);
+        UserWallet wallet = wallet(listener, "90000", "0");
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
+        when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet);
+
+        var input = new ContractWorkflowRequests.Proposal("Tôi nhận làm", List.of(
+                new ContractWorkflowRequests.Stage("Đợt 1", "Bản audio",
+                        Instant.now().plusSeconds(86400), new BigDecimal("100000"))));
+        assertThrows(PodcastWorkflowException.class,
+                () -> service.propose(creator.getUserId(), request.getSeriesRequestId(), input));
+
+        assertEquals("PENDING", request.getStatus());
+        assertFalse(escrow.isFundsHeld());
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("90000")));
+        verifyNoInteractions(wallets, transactions, contracts, responses, stages);
+    }
+
+    @Test
+    void cancelBeforeProposalDoesNotTouchWallet() {
+        AppUser listener = user("LISTENER");
+        SeriesRequest request = new SeriesRequest();
+        request.setSeriesRequestId(UUID.randomUUID());
+        request.setUser(listener);
+        request.setStatus("PENDING");
+        ContractEscrow escrow = new ContractEscrow();
+        escrow.setRequest(request);
+        escrow.setBudget(new BigDecimal("100000"));
+        escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setFundsHeld(false);
+        when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
+        when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+
+        var result = service.cancel(listener.getUserId(), request.getSeriesRequestId());
+
+        assertEquals("CANCELLED", result.status());
+        assertEquals(0, escrow.getRemaining().compareTo(BigDecimal.ZERO));
+        verifyNoInteractions(users, listenerWallets, wallets, transactions);
+    }
+
+    @Test
     void creatorCanChooseFourStagesAndAllAppearInSignedSnapshot() {
         AppUser listener = user("LISTENER");
         AppUser creator = user("CREATOR");
@@ -366,6 +463,7 @@ class ContractEscrowServiceTest {
         escrow.setRequest(request);
         escrow.setBudget(new BigDecimal("100000"));
         escrow.setRemaining(new BigDecimal("100000"));
+        escrow.setFundsHeld(false);
         escrow.setProductType("AUDIO");
         escrow.setFileFormat("MP3");
         escrow.setDurationDescription("10 phút");
@@ -374,6 +472,9 @@ class ContractEscrowServiceTest {
         when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
         when(requests.findByIdForUpdate(request.getSeriesRequestId())).thenReturn(Optional.of(request));
         when(escrows.lockByRequestId(request.getSeriesRequestId())).thenReturn(Optional.of(escrow));
+        UserWallet wallet = wallet(listener, "150000", "0");
+        when(users.findByIdForUpdate(listener.getUserId())).thenReturn(Optional.of(listener));
+        when(listenerWallets.walletForLockedUser(listener)).thenReturn(wallet);
         when(responses.save(any(RequestResponse.class))).thenAnswer(call -> call.getArgument(0));
         when(contracts.saveAndFlush(any(Contract.class))).thenAnswer(call -> {
             Contract contract = call.getArgument(0);
@@ -400,10 +501,14 @@ class ContractEscrowServiceTest {
                 new ContractWorkflowRequests.Proposal("Tôi nhận làm", offers));
 
         assertEquals(4, agreement.milestones().size());
-        assertEquals(2, agreement.contractVersion());
+        assertEquals(4, agreement.contractVersion());
+        assertTrue(escrow.isFundsHeld());
+        assertEquals(0, wallet.getBalance().compareTo(new BigDecimal("50000")));
+        assertEquals(0, wallet.getHeldBalance().compareTo(new BigDecimal("100000")));
+        verify(transactions, times(1)).save(argThat(t -> "CONTRACT_HOLD".equals(t.getTransactionType())));
         assertTrue(agreement.contentSnapshot().contains("Hợp đồng có 4 đợt"));
         assertTrue(agreement.contentSnapshot().contains("| 4 | Bản hoàn chỉnh | Bản hoàn chỉnh |"));
-        assertTrue(agreement.contentSnapshot().contains("nền tảng tạm giữ ngân sách từ ví Bên A"));
+        assertTrue(agreement.contentSnapshot().contains("tạm giữ toàn bộ ngân sách từ ví Bên A"));
         assertFalse(agreement.contentSnapshot().contains("AI chỉ đánh giá hình ảnh"));
         assertTrue(agreement.contentSnapshot().contains("AI không đánh giá hình ảnh"));
         assertFalse(agreement.contentSnapshot().contains("[MILESTONE_ROWS]"));

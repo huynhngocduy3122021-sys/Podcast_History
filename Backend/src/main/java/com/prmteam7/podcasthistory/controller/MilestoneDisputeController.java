@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prmteam7.podcasthistory.dto.request.CreateDisputeRequest;
+import com.prmteam7.podcasthistory.dto.request.ConfirmDisputeRequest;
 import com.prmteam7.podcasthistory.dto.response.DisputeResponse;
 import com.prmteam7.podcasthistory.dto.response.MilestoneSubmissionResponse;
 import com.prmteam7.podcasthistory.dto.response.ContractWorkflowResponses;
@@ -60,7 +61,15 @@ public class MilestoneDisputeController {
             @PathVariable UUID milestoneId,
             @Valid @RequestBody CreateDisputeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(podcastRequestService.raiseDispute(userId(jwt), milestoneId, request.reason()));
+                .body(podcastRequestService.raiseDispute(userId(jwt), milestoneId, request.reason(), request.listenerWinAction()));
+    }
+
+    @PostMapping("/{milestoneId}/disputes/{disputeId}/confirm")
+    @Operation(summary = "Bên còn lại xác nhận tranh chấp trong 3 ngày")
+    public DisputeResponse confirm(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID milestoneId,
+            @PathVariable UUID disputeId, @RequestBody(required = false) ConfirmDisputeRequest request) {
+        return podcastRequestService.confirmMilestoneDispute(userId(jwt), milestoneId, disputeId,
+                request == null ? null : request.listenerWinAction());
     }
 
     private UUID userId(Jwt jwt) {

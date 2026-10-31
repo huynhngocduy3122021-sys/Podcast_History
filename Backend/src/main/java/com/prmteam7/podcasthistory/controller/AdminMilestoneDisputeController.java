@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prmteam7.podcasthistory.dto.request.ResolveDisputeRequest;
@@ -36,6 +37,13 @@ public class AdminMilestoneDisputeController {
     @Operation(summary = "Staff/Admin xem các tranh chấp đợt đang chờ")
     public List<DisputeResponse> getOpen(@AuthenticationPrincipal Jwt jwt) {
         return podcastRequestService.getOpenDisputes(userId(jwt));
+    }
+
+    @GetMapping
+    @Operation(summary = "Staff/Admin xem tranh chấp đợt theo trạng thái")
+    public List<DisputeResponse> list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "OPEN") String status) {
+        return podcastRequestService.getDisputes(userId(jwt), status);
     }
 
     @PostMapping("/{disputeId}/resolve")

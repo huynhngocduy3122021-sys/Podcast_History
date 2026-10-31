@@ -3,6 +3,7 @@ package com.prmteam7.podcasthistory.service;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.NotificationItem;
 import com.prmteam7.podcasthistory.model.Notification;
 import java.util.UUID;
+import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -16,11 +17,14 @@ public class NotificationRealtimePublisher {
 
   private final ApplicationEventPublisher events;
   private final SimpMessagingTemplate messaging;
+  private final RealtimeEventPublisher apiChanges;
 
   public NotificationRealtimePublisher(
-      ApplicationEventPublisher events, SimpMessagingTemplate messaging) {
+      ApplicationEventPublisher events, SimpMessagingTemplate messaging,
+      RealtimeEventPublisher apiChanges) {
     this.events = events;
     this.messaging = messaging;
+    this.apiChanges = apiChanges;
   }
 
   public void publish(Notification notification) {
@@ -48,6 +52,9 @@ public class NotificationRealtimePublisher {
   public void send(NotificationRealtimeEvent event) {
     messaging.convertAndSendToUser(
         event.userId().toString(), DESTINATION, event.notification());
+    apiChanges.publishApiChange(event.userId(), "NOTIFICATION_CHANGED", Map.of(
+        "notificationId", event.notification().notificationId(),
+        "notificationType", event.notification().type()));
   }
 
   public record NotificationRealtimeEvent(UUID userId, NotificationItem notification) {}

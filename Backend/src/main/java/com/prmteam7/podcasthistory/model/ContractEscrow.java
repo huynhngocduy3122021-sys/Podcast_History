@@ -33,6 +33,10 @@ public class ContractEscrow extends BaseEntity {
     @Column(name = "remaining", nullable = false, precision = 12, scale = 2)
     private BigDecimal remaining;
 
+    // Null represents records created before this field existed; those budgets were already held.
+    @Column(name = "funds_held")
+    private Boolean fundsHeld;
+
     @Column(name = "product_type", nullable = false, length = 8)
     private String productType;
 
@@ -80,6 +84,8 @@ public class ContractEscrow extends BaseEntity {
     public void setBudget(BigDecimal value) { budget = value; }
     public BigDecimal getRemaining() { return remaining; }
     public void setRemaining(BigDecimal value) { remaining = value; }
+    public boolean isFundsHeld() { return fundsHeld == null || fundsHeld; }
+    public void setFundsHeld(boolean value) { fundsHeld = value; }
     public String getProductType() { return productType; }
     public void setProductType(String value) { productType = value; }
     public String getFileFormat() { return fileFormat; }
