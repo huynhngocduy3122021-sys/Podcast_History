@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS contract_escrow (
     idempotency_key uuid NOT NULL UNIQUE,
     budget numeric(12,2) NOT NULL CHECK (budget > 0),
     remaining numeric(12,2) NOT NULL CHECK (remaining >= 0 AND remaining <= budget),
+    funds_held boolean,
     product_type varchar(8) NOT NULL CHECK (product_type IN ('AUDIO', 'VIDEO')),
     file_format varchar(60) NOT NULL,
     duration_description varchar(120) NOT NULL,
@@ -22,3 +23,7 @@ CREATE TABLE IF NOT EXISTS contract_escrow (
     terminated_at timestamptz,
     created_at timestamptz NOT NULL
 );
+
+-- Existing rows used the old create-time hold; NULL means already held for compatibility.
+ALTER TABLE contract_escrow ADD COLUMN IF NOT EXISTS funds_held boolean;
+

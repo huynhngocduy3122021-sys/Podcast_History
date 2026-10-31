@@ -13,7 +13,8 @@ public final class ContractWorkflowResponses {
 
     public record RequestDetail(UUID requestId, UUID creatorProfileId, String status,
                                 String requestedTitle, String description,
-                                BigDecimal budgetAmount, BigDecimal remainingHeld, String currency,
+                                BigDecimal budgetAmount, BigDecimal remainingHeld,
+                                boolean fundsHeld, String currency,
                                 String productType, String fileFormat, String duration,
                                 String acceptanceCriteria, boolean autoAcceptEnabled,
                                 Instant createdAt) {}
@@ -37,7 +38,8 @@ public final class ContractWorkflowResponses {
 
     public record TerminationRequestStatus(UUID disputeId, UUID contractId, String status,
                                            String decision, Instant createdAt,
-                                           Instant negotiationEndsAt, Instant resolvedAt) {}
+                                           Instant negotiationEndsAt, Instant resolvedAt,
+                                           Instant opponentConfirmedAt, String listenerWinAction) {}
 
     public record MediaUrl(UUID submissionId, String url, Instant expiresAt) {}
 }

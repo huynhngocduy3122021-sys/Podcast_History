@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.repository;
 
 import java.util.List;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -15,9 +16,13 @@ import com.prmteam7.podcasthistory.model.MilestoneDispute;
 public interface MilestoneDisputeRepository extends JpaRepository<MilestoneDispute, UUID> {
 
     List<MilestoneDispute> findAllByStatusOrderByCreatedAtAsc(String status);
+    List<MilestoneDispute> findAllByStatusAndCreatedAtBefore(String status, Instant deadline);
 
     Optional<MilestoneDispute> findFirstByContractStage_ContractStageIdAndStatus(
             UUID stageId, String status);
+
+    Optional<MilestoneDispute> findFirstByContractStage_ContractStageIdAndDecisionOrderByResolvedAtDesc(
+            UUID stageId, String decision);
 
     @Query("select dispute.contractStage.contract.contractId from MilestoneDispute dispute where dispute.milestoneDisputeId = :disputeId")
     Optional<UUID> findContractIdByDisputeId(@Param("disputeId") UUID disputeId);

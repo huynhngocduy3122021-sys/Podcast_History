@@ -3,10 +3,12 @@ package com.prmteam7.podcasthistory.service;
 import com.prmteam7.podcasthistory.dto.request.AdminRequests.ResolveDispute;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
 import com.prmteam7.podcasthistory.enums.DisputeDecision;
+import com.prmteam7.podcasthistory.enums.ListenerWinAction;
 import com.prmteam7.podcasthistory.exception.*;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ public class AdminDisputeService {
   private final PaymentRepository payments;
   private final ContractEscrowRepository escrows;
   private final DisputeStaffNotifier staffNotifier;
+  private final ContractEscrowService escrowService;
 
   public AdminDisputeService(
       AdminSupportService support,
@@ -30,7 +33,8 @@ public class AdminDisputeService {
       ContractDisputeRepository disputes,
       PaymentRepository payments,
       ContractEscrowRepository escrows,
-      DisputeStaffNotifier staffNotifier) {
+      DisputeStaffNotifier staffNotifier,
+      ContractEscrowService escrowService) {
     this.support = support;
     this.contracts = contracts;
     this.stages = stages;
@@ -38,6 +42,7 @@ public class AdminDisputeService {
     this.payments = payments;
     this.escrows = escrows;
     this.staffNotifier = staffNotifier;
+    this.escrowService = escrowService;
   }
 
   public Page<ContractItem> contracts(UUID actor, String status, int page, int size) {
@@ -70,34 +75,92 @@ public class AdminDisputeService {
 
   @Transactional
   public DisputeItem open(UUID actor, UUID contractId, String reason) {
+    return open(actor, contractId, reason, null);
+  }
+
+  @Transactional
+  public DisputeItem openForRequest(UUID actor, UUID requestId, String reason, ListenerWinAction action) {
+    ContractEscrow escrow = escrows.findByRequest_SeriesRequestId(requestId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu hợp đồng giữ tiền."));
+    if (escrow.getContract() == null)
+      throw new ResourceConflictException("CC chưa gửi đề xuất hợp đồng.");
+    return open(actor, escrow.getContract().getContractId(), reason, action);
+  }
+
+  @Transactional
+  public DisputeItem open(UUID actor, UUID contractId, String reason, ListenerWinAction action) {
     var user = support.user(actor);
     var contract =
         contracts
             .lockById(contractId)
             .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hợp đồng."));
-    boolean admin = "ADMIN".equals(user.getRole().getRoleCode());
+    boolean escrow = escrows.findByContract_ContractId(contractId).isPresent();
+    boolean admin = "ADMIN".equals(user.getRole().getRoleCode()) && !escrow;
     if (!admin
         && !contract.getUser().getUserId().equals(actor)
         && !contract.getProducerProfile().getUser().getUserId().equals(actor))
       throw new ResourceForbiddenException("Không phải bên tham gia hợp đồng.");
     if (disputes.existsByContract_ContractIdAndStatus(contractId, "OPEN"))
       throw new ResourceConflictException("Hợp đồng đang có tranh chấp mở.");
+    if (disputes.existsByContract_ContractIdAndStatus(contractId, "AWAITING_RESPONSE"))
+      throw new ResourceConflictException("Hợp đồng đang chờ bên kia xác nhận tranh chấp.");
+    if (stages.findAllByContract_ContractIdOrderByStageOrderAsc(contractId).stream()
+        .anyMatch(s -> "DISPUTED".equals(s.getStatus())))
+      throw new ResourceConflictException("Một đợt của hợp đồng đang có tranh chấp.");
     AdminSupportService.state(
         contract.getStatus(), "PENDING", "ACTIVE", "IN_PROGRESS", "ACCEPTED", "SIGNED", "CREATED");
+    if (escrow && !"IN_PROGRESS".equals(contract.getStatus()))
+      throw new ResourceConflictException("Chỉ tranh chấp hợp đồng giữ tiền đang có hiệu lực.");
+    boolean listenerOpened = contract.getUser().getUserId().equals(actor);
+    if (escrow && listenerOpened && action == null)
+      throw new ResourceConflictException("Listener cần chọn cách xử lý khi thắng tranh chấp.");
     ContractDispute d = new ContractDispute();
     d.setContract(contract);
     d.setOpenedBy(user);
     d.setReason(reason);
     d.setPreviousContractStatus(contract.getStatus());
-    d.setStatus("OPEN");
+    d.setStatus(escrow ? "AWAITING_RESPONSE" : "OPEN");
+    if (escrow && listenerOpened) d.setListenerWinAction(action);
     contract.setStatus("DISPUTED");
     d = disputes.save(d);
-    staffNotifier.notifyOpen("hợp đồng", d.getDisputeId());
+    if (escrow) {
+      AppUser opponent = listenerOpened ? contract.getProducerProfile().getUser() : contract.getUser();
+      staffNotifier.notifyCounterparty(opponent, "hợp đồng", d.getDisputeId());
+    } else staffNotifier.notifyOpen("hợp đồng", d.getDisputeId());
     support.audit(user, "OPEN_DISPUTE", "CONTRACT", contractId, reason);
-    support.notify(contract.getUser(), "CONTRACT_DISPUTE", "Tranh chấp hợp đồng", reason);
-    support.notify(
-        contract.getProducerProfile().getUser(), "CONTRACT_DISPUTE", "Tranh chấp hợp đồng", reason);
+    if (!escrow) {
+      support.notify(contract.getUser(), "CONTRACT_DISPUTE", "Tranh chấp hợp đồng", reason);
+      support.notify(contract.getProducerProfile().getUser(), "CONTRACT_DISPUTE", "Tranh chấp hợp đồng", reason);
+    }
     return item(d);
+  }
+
+  @Transactional
+  public DisputeItem confirm(UUID actor, UUID id, ListenerWinAction action) {
+    AppUser user = support.user(actor);
+    ContractDispute snapshot = requireDispute(id);
+    Contract contract = contracts.lockById(snapshot.getContract().getContractId()).orElseThrow();
+    ContractDispute dispute = disputes.lockById(id).orElseThrow();
+    if (!"AWAITING_RESPONSE".equals(dispute.getStatus()))
+      throw new ResourceConflictException("Tranh chấp không còn chờ xác nhận.");
+    if (!contract.getUser().getUserId().equals(actor)
+        && !contract.getProducerProfile().getUser().getUserId().equals(actor))
+      throw new ResourceForbiddenException("Không phải bên tham gia hợp đồng.");
+    if (dispute.getOpenedBy().getUserId().equals(actor))
+      throw new ResourceForbiddenException("Người mở không thể tự xác nhận tranh chấp.");
+    if (!dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now()))
+      throw new ResourceConflictException("Đã hết hạn 3 ngày xác nhận tranh chấp.");
+    if (contract.getUser().getUserId().equals(actor)) {
+      if (action == null) throw new ResourceConflictException("Listener cần chọn cách xử lý khi thắng.");
+      dispute.setListenerWinAction(action);
+    }
+    dispute.setOpponentConfirmedAt(Instant.now());
+    dispute.setStatus("OPEN");
+    staffNotifier.notifyOpen("hợp đồng", id);
+    support.audit(user, "CONFIRM_DISPUTE", "CONTRACT_DISPUTE", id, "Đã xác nhận tranh chấp");
+    support.notify(dispute.getOpenedBy(), "DISPUTE_CONFIRMED", "Tranh chấp đã được xác nhận",
+        "Hồ sơ đã chuyển Staff: " + id);
+    return item(disputes.save(dispute));
   }
 
   public Page<DisputeItem> mine(UUID actor, int page, int size) {
@@ -121,6 +184,16 @@ public class AdminDisputeService {
     var d = disputes.lockById(id).orElseThrow();
     AdminSupportService.state(d.getStatus(), "OPEN");
     AdminSupportService.state(contract.getStatus(), "DISPUTED");
+    if (d.getOpponentConfirmedAt() != null) {
+      if (body.decision() != DisputeDecision.LISTENER_WINS
+          && body.decision() != DisputeDecision.CREATOR_WINS)
+        throw new ResourceConflictException("Chọn bên thắng cho tranh chấp đã xác nhận.");
+      finishConfirmed(admin, d, contract, body.decision(), body.note());
+      return item(disputes.save(d));
+    }
+    if (body.decision() == DisputeDecision.LISTENER_WINS
+        || body.decision() == DisputeDecision.CREATOR_WINS)
+      throw new ResourceConflictException("Quyết định thắng/thua chỉ dùng cho tranh chấp đã xác nhận.");
     var contractStages =
         stages.findAllByContract_ContractIdOrderByStageOrderAsc(contract.getContractId());
     if (body.decision() == DisputeDecision.CANCEL_CONTRACT) {
@@ -161,6 +234,39 @@ public class AdminDisputeService {
     return item(disputes.save(d));
   }
 
+  @Transactional
+  public DisputeItem resolveTimeout(UUID id) {
+    ContractDispute snapshot = requireDispute(id);
+    Contract contract = contracts.lockById(snapshot.getContract().getContractId()).orElseThrow();
+    ContractDispute dispute = disputes.lockById(id).orElseThrow();
+    if (!"AWAITING_RESPONSE".equals(dispute.getStatus())
+        || dispute.getCreatedAt().plus(3, ChronoUnit.DAYS).isAfter(Instant.now()))
+      return item(dispute);
+    AdminSupportService.state(contract.getStatus(), "DISPUTED");
+    DisputeDecision winner = contract.getUser().getUserId().equals(dispute.getOpenedBy().getUserId())
+        ? DisputeDecision.LISTENER_WINS : DisputeDecision.CREATOR_WINS;
+    finishConfirmed(null, dispute, contract, winner, "Bên còn lại không xác nhận trong 3 ngày.");
+    return item(disputes.save(dispute));
+  }
+
+  private void finishConfirmed(AppUser reviewer, ContractDispute dispute, Contract contract,
+      DisputeDecision winner, String note) {
+    if (winner == DisputeDecision.LISTENER_WINS) {
+      escrowService.resolveListenerWin(contract.getContractId(), dispute.getListenerWinAction(), null);
+    } else {
+      contract.setStatus(dispute.getPreviousContractStatus());
+      contracts.save(contract);
+    }
+    dispute.setStatus("RESOLVED");
+    dispute.setDecision(winner.name());
+    dispute.setReviewer(reviewer);
+    dispute.setNote(note);
+    dispute.setResolvedAt(Instant.now());
+    support.notify(contract.getUser(), "DISPUTE_RESULT", "Kết quả tranh chấp", winner + ": " + note);
+    support.notify(contract.getProducerProfile().getUser(), "DISPUTE_RESULT", "Kết quả tranh chấp",
+        winner + ": " + note);
+  }
+
   private ContractDispute requireDispute(UUID id) {
     return disputes
         .findById(id)
@@ -199,6 +305,9 @@ public class AdminDisputeService {
         d.getNote(),
         d.getReviewer() == null ? null : d.getReviewer().getUserId(),
         d.getCreatedAt(),
-        d.getResolvedAt());
+        d.getResolvedAt(),
+        d.getCreatedAt() == null ? null : d.getCreatedAt().plus(3, ChronoUnit.DAYS),
+        d.getOpponentConfirmedAt(),
+        d.getListenerWinAction() == null ? null : d.getListenerWinAction().name());
   }
 }

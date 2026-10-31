@@ -6,6 +6,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +20,7 @@ import com.prmteam7.podcasthistory.dto.response.PayoutAccountResponse;
 import com.prmteam7.podcasthistory.dto.response.AdminWithdrawalResponse;
 import com.prmteam7.podcasthistory.dto.response.ReleaseFundsResponse;
 import com.prmteam7.podcasthistory.dto.response.WalletBalanceResponse;
+import com.prmteam7.podcasthistory.dto.response.CreatorWalletTransactionItem;
 import com.prmteam7.podcasthistory.dto.response.WithdrawalResponse;
 import com.prmteam7.podcasthistory.enums.PayoutResult;
 import com.prmteam7.podcasthistory.enums.UserRole;
@@ -66,6 +71,21 @@ public class CreatorWalletService {
         this.withdrawalRepository = withdrawalRepository;
         this.transactionRepository = transactionRepository;
         this.payoutPaymentRepository = payoutPaymentRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CreatorWalletTransactionItem> transactions(UUID creatorUserId, String status, int page, int size) {
+        requireCreator(creatorUserId);
+        String normalizedStatus = status == null || status.isBlank() ? null : status.trim();
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, size)),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        return transactionRepository.findForUser(creatorUserId, normalizedStatus, pageable)
+                .map(transaction -> new CreatorWalletTransactionItem(
+                        transaction.getWalletTransactionId(), transaction.getTransactionType(),
+                        transaction.getDirection(), transaction.getAmount(), transaction.getCurrency(),
+                        transaction.getStatus(), transaction.getReferenceCode(),
+                        transaction.getBalanceAfter(), transaction.getHeldBalanceAfter(),
+                        transaction.getCreatedAt()));
     }
 
     @Transactional

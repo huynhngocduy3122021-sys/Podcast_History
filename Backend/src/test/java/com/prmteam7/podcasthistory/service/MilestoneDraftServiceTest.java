@@ -9,6 +9,7 @@ import com.prmteam7.podcasthistory.exception.PodcastWorkflowException;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,7 +87,8 @@ class MilestoneDraftServiceTest {
     void cannotDeliverDraftBeforeAiApproval() {
         allowStage();
         MilestoneDraft draft = draft("PROCESSING");
-        when(drafts.findFirstByStage_ContractStageIdOrderByDraftNumberDesc(stage.getContractStageId()))
+        when(drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                stage.getContractStageId(), List.of("CANCELLED", "DELIVERED")))
                 .thenReturn(Optional.of(draft));
         when(drafts.lockById(draft.getId())).thenReturn(Optional.of(draft));
 
@@ -101,7 +103,8 @@ class MilestoneDraftServiceTest {
     void approvedOldDraftCannotBypassReviewOfNewerDraft() {
         allowStage();
         MilestoneDraft latest = draft("PENDING");
-        when(drafts.findFirstByStage_ContractStageIdOrderByDraftNumberDesc(stage.getContractStageId()))
+        when(drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                stage.getContractStageId(), List.of("CANCELLED", "DELIVERED")))
                 .thenReturn(Optional.of(latest));
 
         assertThrows(PodcastWorkflowException.class, () -> service.deliver(
@@ -117,7 +120,8 @@ class MilestoneDraftServiceTest {
         MilestoneDraft draft = draft("APPROVED");
         draft.setAiLabel("SAFE");
         draft.setAiRecommendation("APPROVE");
-        when(drafts.findFirstByStage_ContractStageIdOrderByDraftNumberDesc(stage.getContractStageId()))
+        when(drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                stage.getContractStageId(), List.of("CANCELLED", "DELIVERED")))
                 .thenReturn(Optional.of(draft));
         when(drafts.lockById(draft.getId())).thenReturn(Optional.of(draft));
         when(submissions.saveAndFlush(any(MilestoneSubmission.class))).thenAnswer(call -> {
@@ -134,6 +138,55 @@ class MilestoneDraftServiceTest {
         assertEquals("DELIVERED", draft.getStatus());
         assertNotNull(draft.getDeliveredAt());
         verify(submissions).saveAndFlush(any());
+    }
+
+    @Test
+    void cancellingProcessingLatestDraftAllowsEarlierApprovedDraftToBeDelivered() {
+        allowStage();
+        MilestoneDraft newest = draft("PROCESSING");
+        newest.setDraftNumber(2);
+        newest.setAttemptToken(UUID.randomUUID());
+        MilestoneDraft earlier = draft("APPROVED");
+        earlier.setDraftNumber(1);
+        earlier.setAiLabel("SAFE");
+        earlier.setAiRecommendation("APPROVE");
+        when(drafts.lockById(newest.getId())).thenReturn(Optional.of(newest));
+        when(drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                stage.getContractStageId(), List.of("CANCELLED", "DELIVERED")))
+                .thenReturn(Optional.of(newest), Optional.of(earlier));
+        when(drafts.save(newest)).thenReturn(newest);
+        when(drafts.lockById(earlier.getId())).thenReturn(Optional.of(earlier));
+        when(submissions.saveAndFlush(any(MilestoneSubmission.class))).thenAnswer(call -> {
+            MilestoneSubmission submission = call.getArgument(0);
+            submission.setMilestoneSubmissionId(UUID.randomUUID());
+            submission.setSubmittedAt(Instant.now());
+            return submission;
+        });
+
+        var cancelled = service.cancel(creator.getUserId(), stage.getContractStageId(), newest.getId());
+        var delivered = service.deliver(creator.getUserId(), stage.getContractStageId(), earlier.getId());
+
+        assertEquals("CANCELLED", cancelled.status());
+        assertNull(newest.getAttemptToken());
+        assertEquals("DELIVERED", earlier.getStatus());
+        assertNotNull(delivered.submissionId());
+        assertEquals("SUBMITTED", stage.getStatus());
+    }
+
+    @Test
+    void cannotCancelOlderDraftWhileNewerOneIsActive() {
+        allowStage();
+        MilestoneDraft older = draft("APPROVED");
+        MilestoneDraft newer = draft("PROCESSING");
+        when(drafts.lockById(older.getId())).thenReturn(Optional.of(older));
+        when(drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                stage.getContractStageId(), List.of("CANCELLED", "DELIVERED")))
+                .thenReturn(Optional.of(newer));
+
+        assertThrows(PodcastWorkflowException.class,
+                () -> service.cancel(creator.getUserId(), stage.getContractStageId(), older.getId()));
+        assertEquals("APPROVED", older.getStatus());
+        verify(drafts, never()).save(any());
     }
 
     private MilestoneDraft draft(String status) {

@@ -4,6 +4,7 @@ import com.prmteam7.podcasthistory.dto.request.ContractWorkflowRequests;
 import com.prmteam7.podcasthistory.dto.response.ContractWorkflowResponses;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses;
 import com.prmteam7.podcasthistory.service.ContractEscrowService;
+import com.prmteam7.podcasthistory.service.AdminDisputeService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -19,8 +20,12 @@ import org.springframework.web.bind.annotation.*;
 @SecurityRequirement(name = "bearerAuth")
 public class ContractWorkflowController {
     private final ContractEscrowService service;
+    private final AdminDisputeService disputes;
 
-    public ContractWorkflowController(ContractEscrowService service) { this.service = service; }
+    public ContractWorkflowController(ContractEscrowService service, AdminDisputeService disputes) {
+        this.service = service;
+        this.disputes = disputes;
+    }
 
     @PostMapping("/api/requests/contract")
     @ResponseStatus(HttpStatus.CREATED)
@@ -68,7 +73,7 @@ public class ContractWorkflowController {
     @ResponseStatus(HttpStatus.CREATED)
     public AdminResponses.DisputeItem requestTermination(@AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID requestId, @Valid @RequestBody ContractWorkflowRequests.Dispute input) {
-        return service.requestTermination(userId(jwt), requestId, input.reason());
+        return disputes.openForRequest(userId(jwt), requestId, input.reason(), input.listenerWinAction());
     }
 
     @GetMapping("/api/requests/{requestId}/termination-request")

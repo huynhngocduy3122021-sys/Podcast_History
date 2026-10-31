@@ -1,7 +1,5 @@
 # HỢP ĐỒNG CUNG CẤP VÀ SẢN XUẤT NỘI DUNG SỐ
 
-> Bản đối chiếu với hợp đồng người dùng cung cấp. Backend đóng gói nội dung phiên bản 2 tại `src/main/resources/contracts/contract-v2.md` để tạo snapshot và lưu hai lần ký riêng. Bản mẫu này chưa phải một hợp đồng đã ký; bản ký cụ thể lấy từ `GET /api/requests/{requestId}/contract`. Các hợp đồng đã tạo vẫn giữ bản nội dung và hash đã lưu.
-
 **Mã hợp đồng:** [CONTRACT_ID]  
 **Ngày lập:** [CREATED_AT]  
 **Hình thức giao kết:** Hợp đồng điện tử thông qua nền tảng [APP_NAME]
@@ -44,7 +42,7 @@ Hai bên tự nguyện thống nhất giao kết hợp đồng với các điề
 
 3.2. Bên A tự lựa chọn ngân sách và dành toàn bộ ngân sách này cho hợp đồng.
 
-3.3. Khi yêu cầu được tạo thành công, nền tảng tạm giữ ngân sách từ ví Bên A để xử lý yêu cầu. Khoản này chỉ được giải ngân hoặc hoàn trả theo hợp đồng.
+3.3. Khi Bên B chấp nhận yêu cầu bằng cách gửi đề xuất các đợt, nền tảng tạm giữ toàn bộ ngân sách từ ví Bên A trong cùng giao dịch tạo đề xuất. Nếu số dư khả dụng không đủ, đề xuất không được tạo và yêu cầu tiếp tục chờ. Khoản đã giữ chỉ được giải ngân hoặc hoàn trả theo hợp đồng.
 
 3.4. Tổng giá trị các đợt phải bằng đúng ngân sách đã giữ.
 

@@ -4,6 +4,7 @@ import com.prmteam7.podcasthistory.model.MilestoneDraft;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.List;
+import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
@@ -13,7 +14,8 @@ import org.springframework.data.repository.query.Param;
 public interface MilestoneDraftRepository extends JpaRepository<MilestoneDraft, UUID> {
     long countByStage_ContractStageId(UUID stageId);
     List<MilestoneDraft> findAllByStage_ContractStageIdOrderByDraftNumberDesc(UUID stageId);
-    Optional<MilestoneDraft> findFirstByStage_ContractStageIdOrderByDraftNumberDesc(UUID stageId);
+    Optional<MilestoneDraft> findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+            UUID stageId, Collection<String> excludedStatuses);
 
     @Query("select d.id from MilestoneDraft d where d.status = 'PENDING' or "
             + "(d.status = 'PROCESSING' and d.processingStartedAt < :staleBefore) order by d.createdAt")

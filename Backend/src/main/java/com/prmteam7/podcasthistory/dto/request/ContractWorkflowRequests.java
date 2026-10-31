@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.dto.request;
 
 import jakarta.validation.Valid;
+import com.prmteam7.podcasthistory.enums.ListenerWinAction;
 import jakarta.validation.constraints.*;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -43,5 +44,6 @@ public final class ContractWorkflowRequests {
             UUID qualifyingSubmissionId,
             @Size(max = 5000) String evidenceNote) {}
 
-    public record Dispute(@NotBlank @Size(max = 5000) String reason) {}
+    public record Dispute(@NotBlank @Size(max = 5000) String reason,
+                          ListenerWinAction listenerWinAction) {}
 }

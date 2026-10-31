@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class MilestoneDraftService {
+    private static final List<String> INACTIVE_DRAFT_STATUSES = List.of("CANCELLED", "DELIVERED");
     private final AppUserRepository users;
     private final ContractRepository contracts;
     private final ContractStageRepository stages;
@@ -87,7 +88,8 @@ public class MilestoneDraftService {
         activeCreator(creatorId);
         ContractStage stage = lockedOwnedStage(creatorId, stageId);
         requireDraftable(stage);
-        MilestoneDraft latest = drafts.findFirstByStage_ContractStageIdOrderByDraftNumberDesc(stageId)
+        MilestoneDraft latest = drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                        stageId, INACTIVE_DRAFT_STATUSES)
                 .orElseThrow(() -> new PodcastWorkflowException("CC chưa upload bản nháp."));
         if (!latest.getId().equals(draftId))
             throw new PodcastWorkflowException("Chỉ bản nháp mới nhất được bàn giao.");
@@ -116,6 +118,28 @@ public class MilestoneDraftService {
         return new MilestoneSubmissionResponse(submission.getMilestoneSubmissionId(), stageId,
                 submission.getRevisionNumber(), submission.getObjectKey(), null,
                 submission.getContentType(), submission.getSubmissionNote(), submission.getSubmittedAt());
+    }
+
+    @Transactional
+    public MilestoneDraftResponse cancel(UUID creatorId, UUID stageId, UUID draftId) {
+        activeCreator(creatorId);
+        ContractStage stage = lockedOwnedStage(creatorId, stageId);
+        requireDraftable(stage);
+        MilestoneDraft draft = drafts.lockById(draftId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy bản nháp."));
+        if (!stageId.equals(draft.getStage().getContractStageId())
+                || !creatorId.equals(draft.getCreator().getUserId()))
+            throw new PodcastWorkflowNotFoundException("Bản nháp không thuộc đợt này.");
+        if ("CANCELLED".equals(draft.getStatus())) return toResponse(draft);
+        MilestoneDraft latest = drafts.findFirstByStage_ContractStageIdAndStatusNotInOrderByDraftNumberDesc(
+                        stageId, INACTIVE_DRAFT_STATUSES)
+                .orElseThrow(() -> new PodcastWorkflowException("Không có bản nháp để hủy."));
+        if (!latest.getId().equals(draftId))
+            throw new PodcastWorkflowException("Chỉ hủy được bản nháp mới nhất chưa bàn giao.");
+        draft.setStatus("CANCELLED");
+        draft.setAttemptToken(null);
+        draft.setProcessingStartedAt(null);
+        return toResponse(drafts.save(draft));
     }
 
     private ContractStage lockedOwnedStage(UUID creatorId, UUID stageId) {

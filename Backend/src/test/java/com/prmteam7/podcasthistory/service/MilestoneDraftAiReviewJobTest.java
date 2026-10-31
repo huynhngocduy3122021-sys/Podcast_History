@@ -106,4 +106,23 @@ class MilestoneDraftAiReviewJobTest {
         assertEquals("PROCESSING", draft.getStatus());
         verify(drafts, never()).save(any());
     }
+
+    @Test
+    void workerCannotRestoreCancelledDraftAfterReviewFinishes() {
+        UUID id = UUID.randomUUID();
+        UUID token = UUID.randomUUID();
+        MilestoneDraft draft = new MilestoneDraft();
+        draft.setId(id);
+        draft.setStatus("CANCELLED");
+        when(drafts.lockById(id)).thenReturn(Optional.of(draft));
+        MilestoneDraftStateService states = new MilestoneDraftStateService(drafts);
+
+        boolean updated = states.finish(new MilestoneDraftStateService.ReviewJob(id, token,
+                "private/media"), "APPROVED", "SAFE", "APPROVE",
+                new BigDecimal("0.99"), "An toàn", null);
+
+        assertFalse(updated);
+        assertEquals("CANCELLED", draft.getStatus());
+        verify(drafts, never()).save(any());
+    }
 }

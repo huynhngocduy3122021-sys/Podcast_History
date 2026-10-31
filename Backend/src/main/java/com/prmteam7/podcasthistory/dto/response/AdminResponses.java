@@ -87,7 +87,10 @@ public final class AdminResponses {
       String note,
       UUID reviewerId,
       Instant createdAt,
-      Instant resolvedAt) {}
+      Instant resolvedAt,
+      Instant responseDeadlineAt,
+      Instant opponentConfirmedAt,
+      String listenerWinAction) {}
 
   public record StageItem(UUID stageId, String name, int order, String status) {}
 

@@ -686,7 +686,7 @@ public class ListenerFlowService {
         .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu podcast."));
     assertOwner(userId, seriesRequest.getUser().getUserId(), "Bạn không có quyền truy cập yêu cầu này.");
     if (contractEscrowService.isEscrowRequest(requestId)) {
-      throw new ResourceConflictException("Yêu cầu đã giữ ngân sách không thể sửa trực tiếp; hãy hủy để hoàn tiền rồi tạo lại.");
+      throw new ResourceConflictException("Yêu cầu hợp đồng không thể sửa trực tiếp; hãy hủy rồi tạo lại. Nếu ngân sách đã giữ, Backend sẽ hoàn tiền khi hủy.");
     }
     requirePending(seriesRequest.getStatus(), "Chỉ sửa được yêu cầu đang chờ creator phản hồi.");
     seriesRequest.setRequestedTitle(request.requestedTitle().trim());
