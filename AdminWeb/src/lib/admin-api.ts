@@ -1,6 +1,6 @@
 import type { AxiosInstance } from 'axios'
-import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, creatorSystemPlanSchema, creatorSystemPlansSchema, creatorSystemPlanWriteSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema } from './admin-contracts.ts'
-import type { ApproveWithdrawal, CategoryForm, CompleteWithdrawal, CreatorStatus, AdminUserRole, PaymentReconcile, PaymentRefund, PaymentStatus, PlanWrite, WithdrawalNote, WithdrawalStatus } from './admin-contracts.ts'
+import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, creatorSystemPlanSchema, creatorSystemPlansSchema, creatorSystemPlanWriteSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema, payoutAccountSchema, payoutAccountWriteSchema, payoutResultWriteSchema, payoutWithdrawalSchema, payoutWithdrawalsSchema, milestoneDisputeSchema, milestoneDisputesSchema, resolveMilestoneDisputeSchema, milestoneSubmissionsSchema, mediaUrlSchema } from './admin-contracts.ts'
+import type { ApproveWithdrawal, CategoryForm, CompleteWithdrawal, CreatorStatus, AdminUserRole, PaymentReconcile, PaymentRefund, PaymentStatus, PlanWrite, WithdrawalNote, WithdrawalStatus, PayoutAccountWrite, PayoutResultWrite } from './admin-contracts.ts'
 import { confirmedMutation } from './api-mutation.ts'
 
 // Inject the existing authenticated transport; tests use an Axios adapter, not a second runtime client.
@@ -75,7 +75,7 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
     },
     async plans(params: { creatorId?: string; status?: 'ACTIVE' | 'INACTIVE' | ''; page: number; size: number }, signal?: AbortSignal) {
       const creatorId = uuidFilterSchema.parse(params.creatorId || '')
-      return plansPageSchema.parse((await client.get('/api/admin/membership-plans', { params: { ...params, creatorId: creatorId || undefined, status: params.status || undefined }, signal })).data)
+      return plansPageSchema.parse((await client.get('/api/admin/membership-plans', { params: { creatorId: creatorId || undefined, page: params.page, size: params.size }, signal })).data)
     },
     async plan(planId: string, signal?: AbortSignal) {
       return planSchema.parse((await client.get(`/api/admin/membership-plans/${encodeURIComponent(planId)}`, { signal })).data)
@@ -198,6 +198,33 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
     async walletTransactions(params: { walletId?: string; status?: string; page: number; size: number }, signal?: AbortSignal) {
       const walletId = uuidFilterSchema.parse(params.walletId || '')
       return transactionsPageSchema.parse((await client.get('/api/admin/wallet-transactions', { params: { walletId: walletId || undefined, status: params.status || undefined, page: params.page, size: params.size }, signal })).data)
+    },
+    async pendingPayouts(signal?: AbortSignal) {
+      return payoutWithdrawalsSchema.parse((await client.get('/api/admin/payouts/withdrawals/pending', { signal })).data)
+    },
+    async recordPayoutResult(withdrawalId: string, values: PayoutResultWrite) {
+      const body = payoutResultWriteSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/payouts/withdrawals/${encodeURIComponent(withdrawalId)}/result`, body), payoutWithdrawalSchema, 200,
+        data => data.withdrawalRequestId === withdrawalId && data.status === (body.result === 'SUCCESS' ? 'COMPLETED' : 'FAILED'))
+    },
+    async registerPayoutAccount(creatorProfileId: string, values: PayoutAccountWrite) {
+      const body = payoutAccountWriteSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/payouts/creators/${encodeURIComponent(creatorProfileId)}/accounts`, body), payoutAccountSchema, 201,
+        data => data.creatorProfileId === creatorProfileId && data.verified && data.active)
+    },
+    async milestoneDisputes(status = 'OPEN', signal?: AbortSignal) {
+      return milestoneDisputesSchema.parse((await client.get('/api/admin/milestone-disputes', { params: { status }, signal })).data)
+    },
+    async milestoneDisputeSubmissions(milestoneId: string, signal?: AbortSignal) {
+      return milestoneSubmissionsSchema.parse((await client.get(`/api/milestones/${encodeURIComponent(milestoneId)}/submissions`, { signal })).data)
+    },
+    async milestoneSubmissionMedia(milestoneId: string, submissionId: string) {
+      return mediaUrlSchema.parse((await client.get(`/api/milestones/${encodeURIComponent(milestoneId)}/submissions/${encodeURIComponent(submissionId)}/media`)).data)
+    },
+    async resolveMilestoneDispute(disputeId: string, values: unknown) {
+      const body = resolveMilestoneDisputeSchema.parse(values)
+      return confirmedMutation(() => client.post(`/api/admin/milestone-disputes/${encodeURIComponent(disputeId)}/resolve`, body), milestoneDisputeSchema, 200,
+        data => data.disputeId === disputeId && data.status === 'RESOLVED' && data.decision === body.decision)
     },
   }
 }

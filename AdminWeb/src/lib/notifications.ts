@@ -23,3 +23,7 @@ export function markNotificationReadInCache(page: NotificationsPage | undefined,
   if (!page) return page
   return { ...page, content: page.content.map(item => item.notificationId === notificationId ? { ...item, read: true, readAt: item.readAt || new Date().toISOString() } : item) }
 }
+
+export function countUnreadNotifications(page: NotificationsPage | undefined) {
+  return page?.content.reduce((count, item) => count + (item.read ? 0 : 1), 0) || 0
+}

@@ -1,12 +1,12 @@
 import axios, { AxiosHeaders } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
-import { tokenSchema, meSchema } from './contracts'
-import type { Tokens, User } from './contracts'
-import { isRole } from './permissions'
-import { singleFlight, needsRefresh } from './refresh'
-import { apiHeaders } from './api-config'
-import { errorMessage } from './api-error'
-export { errorMessage } from './api-error'
+import { tokenSchema, meSchema } from './contracts.ts'
+import type { Tokens, User } from './contracts.ts'
+import { isRole } from './permissions.ts'
+import { singleFlight, needsRefresh } from './refresh.ts'
+import { apiHeaders } from './api-config.ts'
+import { errorMessage } from './api-error.ts'
+export { errorMessage } from './api-error.ts'
 
 const baseURL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8081').replace(/\/$/, '')
 const headers = apiHeaders(baseURL)
@@ -102,6 +102,7 @@ api.interceptors.response.use(response => response, async (error: unknown) => {
 
 export const session = {
   getUser: () => user,
+  getAccessToken: () => tokens?.accessToken || null,
   getError: () => sessionError,
   subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
   async initialize() {

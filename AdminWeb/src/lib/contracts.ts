@@ -37,6 +37,7 @@ export const notificationSchema = z.object({
   read: z.boolean(),
   createdAt: z.string().nullable(),
   readAt: z.string().nullable(),
+  payload: z.unknown().nullable().optional(),
 })
 export const notificationsPageSchema = pageSchema(notificationSchema)
 export type Notification = z.infer<typeof notificationSchema>

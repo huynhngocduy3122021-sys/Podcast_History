@@ -11,7 +11,11 @@ export const adminKeys = {
   userDetail: (userId: string | undefined, targetId: string | null) => ['admin-users', userId, 'detail', targetId] as const,
   staff: (userId: string | undefined, page: number, size: number) => ['admin-staff', userId, page, size] as const,
   plans: (userId: string | undefined) => ['membership-plans', userId] as const,
-  planList: (userId: string | undefined, creatorId: string, status: string, page: number, size: number) => ['membership-plans', userId, 'list', creatorId, status, page, size] as const,
+  planList: (userId: string | undefined, creatorId: string, pageOrLegacyStatus: number | string, sizeOrPage: number, legacySize?: number) => {
+    const page = typeof pageOrLegacyStatus === 'number' ? pageOrLegacyStatus : sizeOrPage
+    const size = typeof pageOrLegacyStatus === 'number' ? sizeOrPage : legacySize || 20
+    return ['membership-plans', userId, 'list', creatorId, page, size] as const
+  },
   planDetail: (userId: string | undefined, planId: string | null) => ['membership-plans', userId, 'detail', planId] as const,
   creatorSystemPlans: (userId: string | undefined) => ['creator-system-plans', userId] as const,
   creatorSystemPlanDetail: (userId: string | undefined, planId: string | null) => ['creator-system-plans', userId, 'detail', planId] as const,
@@ -24,6 +28,7 @@ export const adminKeys = {
   withdrawalList: (userId: string | undefined, status: string, page: number, size: number) => ['withdrawals', userId, 'list', status, page, size] as const,
   withdrawalDetail: (userId: string | undefined, withdrawalId: string | null) => ['withdrawals', userId, 'detail', withdrawalId] as const,
   withdrawalReviews: (userId: string | undefined, withdrawalId: string | null, page: number, size: number) => ['withdrawals', userId, 'reviews', withdrawalId, page, size] as const,
+  payouts: (userId: string | undefined) => ['payouts', userId] as const,
   wallets: (userId: string | undefined) => ['wallets', userId] as const,
   walletList: (userId: string | undefined, qOrPage: string | number, roleOrSize: string | number, page?: number, size?: number) => typeof qOrPage === 'number'
     ? ['wallets', userId, 'list', qOrPage, roleOrSize] as const
@@ -35,6 +40,8 @@ export const adminKeys = {
   disputes: (userId: string | undefined) => ['disputes', userId] as const,
   disputeList: (userId: string | undefined, status: string, page: number, size: number) => ['disputes', userId, 'list', status, page, size] as const,
   disputeDetail: (userId: string | undefined, disputeId: string | null) => ['disputes', userId, 'detail', disputeId] as const,
+  milestoneDisputeList: (userId: string | undefined, status: string) => ['milestone-disputes', userId, 'list', status] as const,
+  milestoneSubmissions: (userId: string | undefined, milestoneId: string) => ['milestone-submissions', userId, milestoneId] as const,
 }
 
 export async function creatorReviewConfirmed(client: QueryClient, userId: string | undefined, application: CreatorApplication) {
@@ -97,6 +104,15 @@ export async function financeChangeConfirmed(client: QueryClient, userId: string
     client.invalidateQueries({ queryKey: ['dashboard', userId] }),
     withdrawal ? client.invalidateQueries({ queryKey: adminKeys.withdrawalDetail(userId, withdrawal.withdrawalId) }) : Promise.resolve(),
     withdrawal ? client.invalidateQueries({ queryKey: ['withdrawals', userId, 'reviews', withdrawal.withdrawalId] }) : Promise.resolve(),
+  ])
+}
+
+export async function payoutChangeConfirmed(client: QueryClient, userId: string) {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: adminKeys.payouts(userId) }),
+    client.invalidateQueries({ queryKey: adminKeys.wallets(userId) }),
+    client.invalidateQueries({ queryKey: ['wallet-transactions', userId] }),
+    client.invalidateQueries({ queryKey: ['dashboard', userId] }),
   ])
 }
 

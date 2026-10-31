@@ -10,16 +10,16 @@ test('only ADMIN and STAFF enter the workspace', () => {
   assert.equal(canAccess('ADMIN'), true)
   assert.equal(canAccess('STAFF'), true)
 })
-test('STAFF has only supported moderation routes and personal notifications', () => {
+test('STAFF has supported moderation, dispute and personal notification routes', () => {
   const paths = sections.filter(s => canAccess('STAFF', 'adminOnly' in s && s.adminOnly)).map(s => s.path)
-  assert.deepEqual(paths, ['/dashboard', '/podcast-moderation', '/reports', '/appeals', '/notifications'])
+  assert.deepEqual(paths, ['/dashboard', '/podcast-moderation', '/reports', '/appeals', '/disputes', '/milestone-disputes', '/notifications'])
   assert.equal(canAccess('STAFF', true), false)
   assert.equal(canAccess('ADMIN', true), true)
 })
-test('ADMIN has all 17 unique destinations', () => {
+test('ADMIN has all workspace destinations', () => {
   const paths = sections.filter(s => canAccess('ADMIN', 'adminOnly' in s && s.adminOnly)).map(s => s.path)
-  assert.equal(paths.length, 17)
-  assert.equal(new Set(paths).size, 17)
+  assert.equal(paths.length, 18)
+  assert.equal(new Set(paths).size, 18)
 })
 test('shared moderation routes use the admin prefix for both roles', () => {
   assert.equal(apiPrefix('ADMIN'), '/api/admin')

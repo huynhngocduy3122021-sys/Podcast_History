@@ -25,7 +25,8 @@ export const sections = [
   { path: '/withdrawals', label: 'Rút tiền', group: 'Tài chính & hợp đồng', icon: 'withdrawal', adminOnly: true },
   { path: '/wallets', label: 'Ví', group: 'Tài chính & hợp đồng', icon: 'wallet', adminOnly: true },
   { path: '/contracts', label: 'Hợp đồng', group: 'Tài chính & hợp đồng', icon: 'contract', adminOnly: true },
-  { path: '/disputes', label: 'Tranh chấp', group: 'Tài chính & hợp đồng', icon: 'dispute', adminOnly: true },
+  { path: '/disputes', label: 'Tranh chấp', group: 'Tài chính & hợp đồng', icon: 'dispute' },
+  { path: '/milestone-disputes', label: 'Tranh chấp milestone', group: 'Tài chính & hợp đồng', icon: 'dispute', sidebarHidden: true },
   { path: '/notifications', label: 'Thông báo', group: 'Hệ thống', icon: 'notification' },
   { path: '/audit-logs', label: 'Nhật ký quản trị', group: 'Hệ thống', icon: 'audit', adminOnly: true },
-] satisfies { path: string; label: string; group: string; icon: string; adminOnly?: boolean }[]
+] satisfies { path: string; label: string; group: string; icon: string; adminOnly?: boolean; sidebarHidden?: boolean }[]
