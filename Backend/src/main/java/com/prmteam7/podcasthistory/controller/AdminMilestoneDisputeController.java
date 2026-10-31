@@ -22,7 +22,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/admin/milestone-disputes")
-@Tag(name = "Admin - podcast milestone disputes")
+@Tag(name = "Staff/Admin - podcast milestone disputes")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminMilestoneDisputeController {
 
@@ -33,13 +33,13 @@ public class AdminMilestoneDisputeController {
     }
 
     @GetMapping("/open")
-    @Operation(summary = "Admin xem các tranh chấp đang chờ")
+    @Operation(summary = "Staff/Admin xem các tranh chấp đợt đang chờ")
     public List<DisputeResponse> getOpen(@AuthenticationPrincipal Jwt jwt) {
         return podcastRequestService.getOpenDisputes(userId(jwt));
     }
 
     @PostMapping("/{disputeId}/resolve")
-    @Operation(summary = "Admin duyệt mốc hoặc yêu cầu Creator chỉnh sửa")
+    @Operation(summary = "Staff/Admin duyệt đợt hoặc yêu cầu Creator chỉnh sửa")
     public DisputeResponse resolve(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID disputeId,

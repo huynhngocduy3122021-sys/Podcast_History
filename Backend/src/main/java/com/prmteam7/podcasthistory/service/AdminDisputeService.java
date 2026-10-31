@@ -21,6 +21,7 @@ public class AdminDisputeService {
   private final ContractDisputeRepository disputes;
   private final PaymentRepository payments;
   private final ContractEscrowRepository escrows;
+  private final DisputeStaffNotifier staffNotifier;
 
   public AdminDisputeService(
       AdminSupportService support,
@@ -28,13 +29,15 @@ public class AdminDisputeService {
       ContractStageRepository stages,
       ContractDisputeRepository disputes,
       PaymentRepository payments,
-      ContractEscrowRepository escrows) {
+      ContractEscrowRepository escrows,
+      DisputeStaffNotifier staffNotifier) {
     this.support = support;
     this.contracts = contracts;
     this.stages = stages;
     this.disputes = disputes;
     this.payments = payments;
     this.escrows = escrows;
+    this.staffNotifier = staffNotifier;
   }
 
   public Page<ContractItem> contracts(UUID actor, String status, int page, int size) {
@@ -45,7 +48,7 @@ public class AdminDisputeService {
   }
 
   public ContractItem contract(UUID actor, UUID id) {
-    support.actor(actor, true);
+    support.actor(actor, false);
     return contractItem(
         contracts
             .findById(id)
@@ -54,14 +57,14 @@ public class AdminDisputeService {
   }
 
   public Page<DisputeItem> disputes(UUID actor, String status, int page, int size) {
-    support.actor(actor, true);
+    support.actor(actor, false);
     return disputes
         .findAll(AdminSupportService.status(status), AdminSupportService.page(page, size))
         .map(this::item);
   }
 
   public DisputeItem dispute(UUID actor, UUID id) {
-    support.actor(actor, true);
+    support.actor(actor, false);
     return item(requireDispute(id));
   }
 
@@ -89,6 +92,7 @@ public class AdminDisputeService {
     d.setStatus("OPEN");
     contract.setStatus("DISPUTED");
     d = disputes.save(d);
+    staffNotifier.notifyOpen("hợp đồng", d.getDisputeId());
     support.audit(user, "OPEN_DISPUTE", "CONTRACT", contractId, reason);
     support.notify(contract.getUser(), "CONTRACT_DISPUTE", "Tranh chấp hợp đồng", reason);
     support.notify(
@@ -111,7 +115,7 @@ public class AdminDisputeService {
 
   @Transactional
   public DisputeItem resolve(UUID actor, UUID id, ResolveDispute body) {
-    var admin = support.actor(actor, true);
+    var admin = support.actor(actor, false);
     var snapshot = requireDispute(id);
     var contract = contracts.lockById(snapshot.getContract().getContractId()).orElseThrow();
     var d = disputes.lockById(id).orElseThrow();

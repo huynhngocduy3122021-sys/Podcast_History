@@ -7,6 +7,7 @@ import com.prmteam7.podcasthistory.service.ContractEscrowService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,6 +33,17 @@ public class ContractWorkflowController {
     public ContractWorkflowResponses.Agreement propose(@AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID requestId, @Valid @RequestBody ContractWorkflowRequests.Proposal input) {
         return service.propose(userId(jwt), requestId, input);
+    }
+
+    @GetMapping("/api/requests/{requestId}/contract-request")
+    public ContractWorkflowResponses.RequestDetail requestDetail(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID requestId) {
+        return service.getRequestDetail(userId(jwt), requestId);
+    }
+
+    @GetMapping("/api/creator/requests/contracts")
+    public List<ContractWorkflowResponses.RequestDetail> creatorContractRequests(@AuthenticationPrincipal Jwt jwt) {
+        return service.getCreatorContractRequests(userId(jwt));
     }
 
     @GetMapping("/api/requests/{requestId}/contract")

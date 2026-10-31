@@ -11,6 +11,13 @@ public final class ContractWorkflowResponses {
     public record Request(UUID requestId, String status, BigDecimal budgetAmount,
                           BigDecimal heldAmount, String currency) {}
 
+    public record RequestDetail(UUID requestId, UUID creatorProfileId, String status,
+                                String requestedTitle, String description,
+                                BigDecimal budgetAmount, BigDecimal remainingHeld, String currency,
+                                String productType, String fileFormat, String duration,
+                                String acceptanceCriteria, boolean autoAcceptEnabled,
+                                Instant createdAt) {}
+
     public record Stage(UUID milestoneId, String name, String description, Instant dueAt,
                         BigDecimal amount, String status) {}
 

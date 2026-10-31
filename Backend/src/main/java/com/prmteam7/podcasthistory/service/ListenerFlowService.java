@@ -682,7 +682,12 @@ public class ListenerFlowService {
   @Transactional
   public SeriesRequestItem updateSeriesRequest(
       UUID userId, UUID requestId, SeriesRequestUpdate request) {
-    SeriesRequest seriesRequest = requireSeriesRequest(userId, requestId);
+    SeriesRequest seriesRequest = seriesRequestRepository.findByIdForUpdate(requestId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu podcast."));
+    assertOwner(userId, seriesRequest.getUser().getUserId(), "Bạn không có quyền truy cập yêu cầu này.");
+    if (contractEscrowService.isEscrowRequest(requestId)) {
+      throw new ResourceConflictException("Yêu cầu đã giữ ngân sách không thể sửa trực tiếp; hãy hủy để hoàn tiền rồi tạo lại.");
+    }
     requirePending(seriesRequest.getStatus(), "Chỉ sửa được yêu cầu đang chờ creator phản hồi.");
     seriesRequest.setRequestedTitle(request.requestedTitle().trim());
     seriesRequest.setDescription(request.description().trim());
@@ -691,7 +696,9 @@ public class ListenerFlowService {
 
   @Transactional
   public void cancelSeriesRequest(UUID userId, UUID requestId) {
-    SeriesRequest seriesRequest = requireSeriesRequest(userId, requestId);
+    SeriesRequest seriesRequest = seriesRequestRepository.findByIdForUpdate(requestId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu podcast."));
+    assertOwner(userId, seriesRequest.getUser().getUserId(), "Bạn không có quyền truy cập yêu cầu này.");
     requirePending(seriesRequest.getStatus(), "Chỉ hủy được yêu cầu đang chờ creator phản hồi.");
     if (contractEscrowService.isEscrowRequest(requestId)) {
       contractEscrowService.cancel(userId, requestId);

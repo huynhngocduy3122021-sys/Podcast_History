@@ -37,7 +37,7 @@ public class MilestoneDisputeController {
     }
 
     @GetMapping("/{milestoneId}/submissions")
-    @Operation(summary = "Listener hoặc Creator xem lịch sử bàn giao")
+    @Operation(summary = "Hai bên hoặc Staff/Admin xem lịch sử bàn giao")
     public List<MilestoneSubmissionResponse> getSubmissions(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId) {
@@ -45,7 +45,7 @@ public class MilestoneDisputeController {
     }
 
     @GetMapping("/{milestoneId}/submissions/{submissionId}/media")
-    @Operation(summary = "Cấp URL xem file bàn giao riêng tư trong 5 phút cho hai bên hoặc Admin")
+    @Operation(summary = "Cấp URL xem file bàn giao riêng tư trong 5 phút cho hai bên hoặc Staff/Admin")
     public ContractWorkflowResponses.MediaUrl media(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId,
@@ -54,7 +54,7 @@ public class MilestoneDisputeController {
     }
 
     @PostMapping("/{milestoneId}/disputes")
-    @Operation(summary = "Listener hoặc Creator mở tranh chấp để Admin xử lý")
+    @Operation(summary = "Listener hoặc Creator mở tranh chấp để Staff xử lý")
     public ResponseEntity<DisputeResponse> raiseDispute(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId,
