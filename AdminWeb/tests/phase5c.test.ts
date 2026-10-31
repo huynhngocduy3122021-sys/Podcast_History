@@ -83,9 +83,11 @@ test('dispute cache invalidation stays scoped to the acting admin and related re
   assert.equal(client.getQueryState(adminKeys.disputeList(creatorId, 'OPEN', 0, 20))?.isInvalidated, false)
 })
 
-test('contracts and disputes remain ADMIN-only', () => {
+test('contract list remains ADMIN-only while dispute workflows are shared with STAFF', () => {
   assert.equal(canAccess('ADMIN', true), true)
   assert.equal(canAccess('STAFF', true), false)
   assert.equal(sections.find(section => section.path === '/contracts')?.adminOnly, true)
-  assert.equal(sections.find(section => section.path === '/disputes')?.adminOnly, true)
+  assert.equal(sections.find(section => section.path === '/disputes')?.adminOnly, undefined)
+  assert.equal(sections.find(section => section.path === '/milestone-disputes')?.adminOnly, undefined)
+  assert.equal(canAccess('STAFF'), true)
 })

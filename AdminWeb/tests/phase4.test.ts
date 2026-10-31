@@ -82,6 +82,7 @@ test('membership plans preserve decimal text and implement CRUD/status contract'
   await tx.backend.deactivatePlan(planId, { note: 'Không còn bán' })
   assert.equal(tx.calls[0].url, '/api/admin/membership-plans')
   assert.equal(tx.calls[0].params.creatorId, creatorId)
+  assert.equal('status' in tx.calls[0].params, false)
   assert.equal(tx.calls[2].method, 'post')
   assert.equal(tx.calls[3].method, 'put')
   assert.equal(tx.calls[4].method, 'delete')

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import axios, { AxiosError } from 'axios'
 import { QueryClient } from '@tanstack/react-query'
-import { createNotificationApi, markNotificationReadInCache, notificationKeys } from '../src/lib/notifications.ts'
+import { countUnreadNotifications, createNotificationApi, markNotificationReadInCache, notificationKeys } from '../src/lib/notifications.ts'
 import { notificationsPageSchema } from '../src/lib/contracts.ts'
 import type { NotificationsPage } from '../src/lib/contracts.ts'
 import { UnconfirmedMutationError } from '../src/lib/api-error.ts'
@@ -56,4 +56,11 @@ test('notification cache updates read state only for the matching personal item'
   client.setQueryData(notificationKeys.page(actorId, 1, 20), parsed)
   assert.equal(client.getQueryData<NotificationsPage>(notificationKeys.page(otherId, 0, 20))?.content[0].read, false)
   client.clear()
+})
+
+test('unread notification count is derived from the authenticated page and becomes zero after read cache update', () => {
+  const parsed = notificationsPageSchema.parse(page)
+  assert.equal(countUnreadNotifications(parsed), 1)
+  assert.equal(countUnreadNotifications(markNotificationReadInCache(parsed, notificationId)), 0)
+  assert.equal(countUnreadNotifications(undefined), 0)
 })

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Activity, Bell, ChevronLeft, ChevronRight, CircleHelp, CreditCard, FileCheck, Folder, Gavel, Headphones, LayoutDashboard, LogOut, Menu, Mic, ScrollText, ShieldCheck, UserCheck, Users, Wallet } from 'lucide-react'
+import { Activity, Bell, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, CreditCard, FileCheck, Folder, Gavel, Headphones, LayoutDashboard, LogOut, Menu, Mic, ScrollText, ShieldCheck, UserCheck, Users, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuth } from '../auth'
 import { sections, canAccess } from '../lib/permissions'
@@ -11,11 +11,15 @@ import { ConfirmDialog } from './ui/confirm-dialog'
 import { useFeedback } from './feedback'
 import { NotificationDropdown } from './notification-dropdown'
 import { ThemeToggle } from './theme-toggle'
+import { useAdminRealtime } from '../lib/realtime'
 
 const icons: Record<string, LucideIcon> = { dashboard: LayoutDashboard, creator: UserCheck, podcast: Mic, report: ShieldCheck, appeal: CircleHelp, users: Users, staff: UserCheck, category: Folder, plan: FileCheck, payment: CreditCard, withdrawal: Wallet, wallet: Wallet, contract: ScrollText, dispute: Gavel, notification: Bell, audit: Activity }
 export function Layout() {
   const { user } = useAuth()
+  useAdminRealtime(user?.id)
+  const location = useLocation()
   const [expanded, setExpanded] = useState(false)
+  const [disputesExpanded, setDisputesExpanded] = useState(() => location.pathname === '/disputes' || location.pathname === '/milestone-disputes')
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('vietcast.admin.sidebar-collapsed') === 'true' } catch { return false }
   })
@@ -33,11 +37,14 @@ export function Layout() {
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [expanded])
-  const location = useLocation()
+  useEffect(() => {
+    if (location.pathname === '/disputes' || location.pathname === '/milestone-disputes') setDisputesExpanded(true)
+  }, [location.pathname])
   const queryClient = useQueryClient()
   const notify = useFeedback()
   const current = sections.find(s => s.path === location.pathname)
-  const visible = sections.filter(s => canAccess(user?.role, 'adminOnly' in s && s.adminOnly))
+  const visible = sections.filter(s => !s.sidebarHidden && canAccess(user?.role, 'adminOnly' in s && s.adminOnly))
+  const milestoneSection = sections.find(s => s.path === '/milestone-disputes')
   const groups = [...new Set(visible.map(s => s.group))]
   const logout = async () => {
     queryClient.clear()
@@ -52,6 +59,16 @@ export function Layout() {
       <Button variant="outline" className="absolute -right-4 top-8 hidden size-8 min-h-0 rounded-full p-0 shadow-sm lg:inline-flex" aria-label={collapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} title={collapsed ? 'Mở rộng sidebar' : 'Thu gọn sidebar'} aria-expanded={!collapsed} aria-controls="sidebar-links" onClick={() => setCollapsed(current => !current)}>{collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}</Button>
       <nav id="sidebar-links" className="flex-1 overflow-y-auto px-3 pb-4" aria-label="Điều hướng chính">{groups.map(group => <div key={group} className="mt-5"><p className={`px-3 pb-2 text-[10px] font-semibold tracking-wider text-muted-foreground uppercase ${collapsed ? 'lg:sr-only' : ''}`}>{group}</p>{visible.filter(s => s.group === group).map(s => {
         const Icon = icons[s.icon]
+        if (s.path === '/disputes') {
+          const disputeActive = location.pathname === '/disputes' || location.pathname === '/milestone-disputes'
+          return <div key={s.path}>
+            <button type="button" title={s.label} aria-expanded={disputesExpanded} className={`nav-item w-full ${disputeActive ? 'nav-item-active' : ''} ${collapsed ? 'lg:justify-center lg:px-2' : ''}`} onClick={() => setDisputesExpanded(current => !current)}><Icon className="size-[18px] shrink-0" aria-hidden="true" /><span className={`flex-1 text-left ${collapsed ? 'lg:sr-only' : ''}`}>{s.label}</span><ChevronDown className={`size-4 transition-transform ${disputesExpanded ? 'rotate-180' : ''} ${collapsed ? 'lg:hidden' : ''}`} aria-hidden="true" /></button>
+            {disputesExpanded && milestoneSection && <div className="ml-4 border-l border-border pl-2">
+              <NavLink to="/disputes" title="Tranh chấp hợp đồng" onClick={() => setExpanded(false)} className={({ isActive }) => `nav-item text-xs ${isActive ? 'nav-item-active' : ''} ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}><ScrollText className="size-4 shrink-0" aria-hidden="true" /><span className={collapsed ? 'lg:sr-only' : ''}>Hợp đồng</span></NavLink>
+              <NavLink to="/milestone-disputes" title="Tranh chấp milestone" onClick={() => setExpanded(false)} className={({ isActive }) => `nav-item text-xs ${isActive ? 'nav-item-active' : ''} ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}><Gavel className="size-4 shrink-0" aria-hidden="true" /><span className={collapsed ? 'lg:sr-only' : ''}>Milestone</span></NavLink>
+            </div>}
+          </div>
+        }
         return <NavLink key={s.path} to={s.path} title={s.label} onClick={() => setExpanded(false)} className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : ''} ${collapsed ? 'lg:justify-center lg:px-2' : ''}`}><Icon className="size-[18px] shrink-0" aria-hidden="true" /><span className={collapsed ? 'lg:sr-only' : ''}>{s.label}</span></NavLink>
       })}</div>)}</nav>
       <div className={`border-t border-border p-4 ${collapsed ? 'lg:px-3' : ''}`}><ThemeToggle collapsed={collapsed} /></div>
