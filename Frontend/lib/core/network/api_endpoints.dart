@@ -46,13 +46,31 @@ class ApiEndpoints {
   static String creatorDashboard({String period = '7d'}) =>
       '/api/creator/dashboard?period=$period';
 
-  // Creator Requests (Podcast theo yêu cầu)
+  // Creator Requests (Podcast theo yêu cầu & Hợp đồng Escrow)
   static const String incomingRequests = '/api/creator/requests/incoming';
   static String acceptRequest(String id) => '/api/creator/requests/$id/accept';
   static String rejectRequest(String id) => '/api/creator/requests/$id/reject';
+  static String creatorProposal(String requestId) =>
+      '/api/creator/requests/$requestId/proposal';
+  static String requestContract(String requestId) =>
+      '/api/requests/$requestId/contract';
+  static String signContract(String requestId) =>
+      '/api/requests/$requestId/contract/sign';
+  static String cancelContract(String requestId) =>
+      '/api/requests/$requestId/contract/cancel';
   static String requestMilestones(String id) => '/api/requests/$id/milestones';
   static String submitMilestone(String milestoneId) =>
       '/api/creator/milestones/$milestoneId/submissions';
+  static String milestoneSubmissions(String milestoneId) =>
+      '/api/milestones/$milestoneId/submissions';
+  static String milestoneMedia(String milestoneId, String submissionId) =>
+      '/api/milestones/$milestoneId/submissions/$submissionId/media';
+  static String contractTerminationRequest(String requestId) =>
+      '/api/requests/$requestId/termination-requests';
+  static String getContractTerminationRequest(String requestId) =>
+      '/api/requests/$requestId/termination-request';
+  static String milestoneDispute(String milestoneId) =>
+      '/api/milestones/$milestoneId/disputes';
 
   // Comments & Likes & History
   static String podcastComments(String podcastId) =>
@@ -114,6 +132,8 @@ class ApiEndpoints {
       '/api/creator/membership-plans/templates/$code/select';
   static String updateMembershipPlanPrice(String planId) =>
       '/api/creator/membership-plans/$planId/price';
+  static String creatorMemberships({String status = 'ACTIVE', int page = 0, int size = 20}) =>
+      '/api/creator/memberships?status=$status&page=$page&size=$size';
 
   // Notifications
   static const String notifications = '/api/me/notifications';

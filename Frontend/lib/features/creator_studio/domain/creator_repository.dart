@@ -86,18 +86,39 @@ abstract class CreatorRepository {
     required String filename,
   });
 
-  // Custom Requests (Podcast theo yêu cầu)
+  // Custom Requests (Podcast theo yêu cầu & Hợp đồng Escrow)
   Future<List<PodcastRequest>> getRequests();
   Future<PodcastRequest?> getRequestById(String id);
-  Future<void> acceptRequest(String id);
+  Future<void> acceptRequest(
+    String id, {
+    String? responseText,
+    List<Map<String, dynamic>>? milestones,
+  });
   Future<void> rejectRequest(String id, String reason);
+  Future<ContractAgreement> proposeContract(
+    String requestId, {
+    required String responseText,
+    required List<ContractProposalStageInput> milestones,
+  });
+  Future<ContractAgreement?> getContractAgreement(String requestId);
+  Future<ContractAgreement> signContract(
+    String requestId, {
+    required int contractVersion,
+    required String contentHash,
+  });
   Future<void> deliverWork(
     String id,
     String fileUrl,
     String note, {
     List<int>? fileBytes,
     String? filename,
+    String? milestoneId,
   });
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(String milestoneId);
+  Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId);
+  Future<void> requestTermination(String requestId, {required String reason});
+  Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
+  Future<void> disputeMilestone(String milestoneId, {required String reason});
   Future<void> sendChatMessage(String requestId, String message);
 
   // Wallet & Withdraw
@@ -196,6 +217,7 @@ abstract class CreatorRepository {
   Future<List<CreatorPlanTemplate>> getMembershipPlanTemplates();
   Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode);
   Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price);
+  Future<PageCreatorMembers> getCreatorMemberships({String status = 'ACTIVE', int page = 0, int size = 20});
 
   // Notifications
   Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30});
