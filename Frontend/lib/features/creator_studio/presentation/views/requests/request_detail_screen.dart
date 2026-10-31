@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +14,7 @@ import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
+import 'package:podcast_history/features/notifications/notification_socket.dart';
 
 class RequestDetailScreen extends ConsumerStatefulWidget {
   final String requestId;
@@ -19,13 +22,16 @@ class RequestDetailScreen extends ConsumerStatefulWidget {
   const RequestDetailScreen({super.key, required this.requestId});
 
   @override
-  ConsumerState<RequestDetailScreen> createState() => _RequestDetailScreenState();
+  ConsumerState<RequestDetailScreen> createState() =>
+      _RequestDetailScreenState();
 }
 
 class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   // Local audio player for previewing submitted audio files
   late final AudioPlayer _audioPlayer;
   String? _currentlyPlayingUrl;
+  NotificationSocket? _chatSocket;
+  void Function()? _removeChatReconnectListener;
   bool _isPlaying = false;
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
@@ -33,6 +39,17 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _chatSocket = ref.read(creatorNotificationSocketProvider);
+    if (_chatSocket != null) {
+      _chatSocket!.listen('/user/queue/contract-chat', (event) {
+        if ('${event['type'] ?? ''}' == 'CONTRACT_CHAT_MESSAGE' && mounted) {
+          setState(() {});
+        }
+      });
+      _removeChatReconnectListener = _chatSocket!.addReconnectListener(() {
+        if (mounted) setState(() {});
+      });
+    }
     _audioPlayer = AudioPlayer();
     _audioPlayer.onPlayerStateChanged.listen((state) {
       if (mounted) {
@@ -63,6 +80,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
   @override
   void dispose() {
+    _removeChatReconnectListener?.call();
+    _chatSocket?.unlisten('/user/queue/contract-chat');
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -79,7 +98,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi phát âm thanh: $e'), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text('Lỗi phát âm thanh: $e'),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     }
@@ -99,7 +121,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         appBar: AppBar(title: const Text('Chi tiết đơn yêu cầu')),
         body: requestsAsync.isLoading
             ? const Center(child: CircularProgressIndicator())
-            : const Center(child: Text('Không tìm thấy thông tin đơn đặt podcast.')),
+            : const Center(
+                child: Text('Không tìm thấy thông tin đơn đặt podcast.'),
+              ),
       );
     }
 
@@ -108,11 +132,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         title: const Text('Hợp đồng & Đơn đặt podcast'),
         actions: [
           IconButton(
+            tooltip: 'Nhắn tin với người nghe',
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            onPressed: () => _openChat(req),
+          ),
+          IconButton(
             tooltip: 'Tải lại',
             icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
+            onPressed: () =>
+                ref.read(creatorRequestsProvider.notifier).loadRequests(),
           ),
-          if (req.hasEscrow && req.contract != null && (req.contract!.isInProgress || req.contract!.isDisputed))
+          if (req.hasEscrow &&
+              req.contract != null &&
+              (req.contract!.isInProgress || req.contract!.isDisputed))
             IconButton(
               tooltip: 'Tranh chấp / Chấm dứt',
               icon: const Icon(Icons.gavel_rounded, color: AppColors.error),
@@ -124,7 +156,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         children: [
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
+              onRefresh: () =>
+                  ref.read(creatorRequestsProvider.notifier).loadRequests(),
               child: ListView(
                 padding: const EdgeInsets.all(AppSpacing.screenMargin),
                 children: [
@@ -151,13 +184,15 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   const SizedBox(height: AppSpacing.md),
 
                   // 6. Lịch sử bàn giao & Phát âm thanh preview
-                  if (req.submissions.isNotEmpty || req.deliveryFileUrl != null) ...[
+                  if (req.submissions.isNotEmpty ||
+                      req.deliveryFileUrl != null) ...[
                     _buildSubmissionsHistory(req, isDark),
                     const SizedBox(height: AppSpacing.md),
                   ],
 
                   // 7. Thông tin tranh chấp / chấm dứt nếu có
-                  if (req.termination != null || (req.contract != null && req.contract!.isDisputed)) ...[
+                  if (req.termination != null ||
+                      (req.contract != null && req.contract!.isDisputed)) ...[
                     _buildDisputeSection(req, isDark),
                     const SizedBox(height: AppSpacing.md),
                   ],
@@ -171,6 +206,259 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openChat(PodcastRequest req) async {
+    final controller = TextEditingController();
+    final chatScrollController = ScrollController();
+    var chatFuture = ref
+        .read(creatorRepositoryProvider)
+        .getChatMessages(req.id);
+    var sending = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            MediaQuery.viewInsetsOf(context).bottom + 16,
+          ),
+          child: SizedBox(
+            height: MediaQuery.sizeOf(context).height * .68,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Nhắn tin với ${req.listenerName}',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: chatFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Không thể tải tin nhắn: ${snapshot.error}',
+                          ),
+                        );
+                      }
+                      final items = List<Map<String, dynamic>>.from(
+                        snapshot.data ?? const [],
+                      )..sort(_compareChatMessages);
+                      if (items.isEmpty) {
+                        return const Center(child: Text('Chưa có tin nhắn.'));
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (chatScrollController.hasClients) {
+                          chatScrollController.jumpTo(
+                            chatScrollController.position.maxScrollExtent,
+                          );
+                        }
+                      });
+                      return ListView.separated(
+                        controller: chatScrollController,
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (_, index) {
+                          final item = items[index];
+                          final isMine = _isCreatorChatMessage(item);
+                          final content =
+                              item['content'] ?? item['message'] ?? '';
+                          return Align(
+                            alignment: isMine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              constraints: const BoxConstraints(maxWidth: 290),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isMine
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context)
+                                          .colorScheme
+                                          .surfaceContainerHighest,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(16),
+                                  topRight: const Radius.circular(16),
+                                  bottomLeft: Radius.circular(isMine ? 16 : 4),
+                                  bottomRight: Radius.circular(isMine ? 4 : 16),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (!isMine)
+                                    Text(
+                                      'Người nghe',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  Text(
+                                    '$content',
+                                    style: TextStyle(
+                                      color: isMine
+                                          ? Theme.of(context)
+                                                .colorScheme
+                                                .onPrimary
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: controller,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) async {
+                          await _sendChatMessage(
+                            req.id,
+                            controller,
+                            setSheetState,
+                            () => sending,
+                            (value) => sending = value,
+                            (future) => chatFuture = future,
+                          );
+                        },
+                        decoration: const InputDecoration(
+                          hintText: 'Nhập tin nhắn',
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Gửi tin nhắn',
+                      onPressed: sending
+                          ? null
+                          : () async {
+                              await _sendChatMessage(
+                                req.id,
+                                controller,
+                                setSheetState,
+                                () => sending,
+                                (value) => sending = value,
+                                (future) => chatFuture = future,
+                              );
+                            },
+                      icon: const Icon(Icons.send_rounded),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    controller.dispose();
+    chatScrollController.dispose();
+  }
+
+  bool _isCreatorChatMessage(Map<String, dynamic> item) {
+    final senderId = item['senderId']?.toString();
+    final currentUserId = _currentCreatorUserId;
+    if (senderId != null &&
+        senderId.isNotEmpty &&
+        currentUserId != null &&
+        senderId == currentUserId) {
+      return true;
+    }
+    if (item['isMine'] == true ||
+        item['mine'] == true ||
+        item['isCreator'] == true) {
+      return true;
+    }
+    final role = '${item['senderRole'] ?? item['senderType'] ?? ''}'
+        .toUpperCase();
+    return role == 'CREATOR' || role == 'CC';
+  }
+
+  int _compareChatMessages(
+    Map<String, dynamic> first,
+    Map<String, dynamic> second,
+  ) {
+    final firstDate = DateTime.tryParse(
+      '${first['createdAt'] ?? first['sentAt'] ?? ''}',
+    );
+    final secondDate = DateTime.tryParse(
+      '${second['createdAt'] ?? second['sentAt'] ?? ''}',
+    );
+    if (firstDate == null || secondDate == null) return 0;
+    return firstDate.compareTo(secondDate);
+  }
+
+  String? get _currentCreatorUserId {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map<String, dynamic>) {
+        return '${payload['userId'] ?? payload['user_id'] ?? payload['sub'] ?? ''}'
+            .trim();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _sendChatMessage(
+    String requestId,
+    TextEditingController controller,
+    StateSetter setSheetState,
+    bool Function() isSending,
+    void Function(bool) setSending,
+    void Function(Future<List<Map<String, dynamic>>>) setFuture,
+  ) async {
+    final content = controller.text.trim();
+    if (content.isEmpty || isSending()) return;
+    setSheetState(() => setSending(true));
+    try {
+      await ref
+          .read(creatorRepositoryProvider)
+          .sendChatMessage(requestId, content);
+      controller.clear();
+      setSheetState(
+        () => setFuture(
+          ref.read(creatorRepositoryProvider).getChatMessages(requestId),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
+        );
+      }
+    } finally {
+      setSheetState(() => setSending(false));
+    }
   }
 
   // ==========================================
@@ -234,7 +522,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           nextAction = 'Đơn đã bị từ chối.';
           break;
         case CustomRequestStatus.disputed:
-          nextAction = 'Đơn đang trong diện khiếu nại. Admin đang tiến hành đối soát.';
+          nextAction =
+              'Đơn đang trong diện khiếu nại. Admin đang tiến hành đối soát.';
           break;
         default:
           nextAction = '';
@@ -247,10 +536,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         color: req.statusType == StatusType.success
             ? AppColors.successContainer
             : (req.statusType == StatusType.warning
-                ? AppColors.warningContainer
-                : (req.statusType == StatusType.error
-                    ? AppColors.errorContainer
-                    : AppColors.surfaceVariantLight)),
+                  ? AppColors.warningContainer
+                  : (req.statusType == StatusType.error
+                        ? AppColors.errorContainer
+                        : AppColors.surfaceVariantLight)),
         borderRadius: AppSpacing.roundedMd,
       ),
       child: Column(
@@ -262,7 +551,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               Row(
                 children: [
                   if (req.hasEscrow) ...[
-                    const Icon(Icons.shield_rounded, size: 16, color: AppColors.primaryLight),
+                    const Icon(
+                      Icons.shield_rounded,
+                      size: 16,
+                      color: AppColors.primaryLight,
+                    ),
                     const SizedBox(width: 4),
                     const Text(
                       'ESCROW BẢO ĐẢM',
@@ -280,22 +573,25 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.5,
-                        color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                        color: isDark
+                            ? AppColors.onSurfaceMutedDark
+                            : AppColors.onSurfaceMutedLight,
                       ),
                     ),
                   ],
                 ],
               ),
-              StatusChip(
-                label: req.statusDisplay,
-                type: req.statusType,
-              ),
+              StatusChip(label: req.statusDisplay, type: req.statusType),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             nextAction,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.35),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
           ),
         ],
       ),
@@ -306,7 +602,13 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   // 2. WORKFLOW STEPPER
   // ==========================================
   Widget _buildWorkflowStepper(PodcastRequest req, bool isDark) {
-    final steps = ['Gửi đơn', 'Đề xuất mốc', 'Ký hợp đồng', 'Sản xuất', 'Nghiệm thu'];
+    final steps = [
+      'Gửi đơn',
+      'Đề xuất mốc',
+      'Ký hợp đồng',
+      'Sản xuất',
+      'Nghiệm thu',
+    ];
     int activeIndex = 0;
 
     final contract = req.contract;
@@ -317,7 +619,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     } else if (contract.isInProgress) {
       activeIndex = 3;
     } else if (contract.isCompleted ||
-        (req.milestones.isNotEmpty && req.milestones.every((m) => m.isApproved))) {
+        (req.milestones.isNotEmpty &&
+            req.milestones.every((m) => m.isApproved))) {
       activeIndex = 4;
     }
 
@@ -326,12 +629,17 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         borderRadius: AppSpacing.roundedMd,
-        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+        border: Border.all(
+          color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Tiến trình hợp đồng Escrow', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+          const Text(
+            'Tiến trình hợp đồng Escrow',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
           const SizedBox(height: AppSpacing.md),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -343,13 +651,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   CircleAvatar(
                     radius: 12,
                     backgroundColor: isPassed
-                        ? (isDark ? AppColors.primaryDark : AppColors.primaryLight)
-                        : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
+                        ? (isDark
+                              ? AppColors.primaryDark
+                              : AppColors.primaryLight)
+                        : (isDark
+                              ? AppColors.outlineDark
+                              : AppColors.outlineLight),
                     child: isPassed && !isCurrent
                         ? const Icon(Icons.check, size: 14, color: Colors.white)
                         : Text(
                             '${index + 1}',
-                            style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                   ),
                   const SizedBox(height: 4),
@@ -358,7 +674,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                      color: isCurrent ? (isDark ? AppColors.primaryDark : AppColors.primaryLight) : null,
+                      color: isCurrent
+                          ? (isDark
+                                ? AppColors.primaryDark
+                                : AppColors.primaryLight)
+                          : null,
                     ),
                   ),
                 ],
@@ -379,7 +699,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         borderRadius: AppSpacing.roundedMd,
-        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+        border: Border.all(
+          color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,8 +710,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundImage: req.listenerAvatar.isNotEmpty ? NetworkImage(req.listenerAvatar) : null,
-                onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                backgroundImage: req.listenerAvatar.isNotEmpty
+                    ? NetworkImage(req.listenerAvatar)
+                    : null,
+                onBackgroundImageError: req.listenerAvatar.isNotEmpty
+                    ? (_, _) {}
+                    : null,
                 child: const Icon(Icons.person, size: 20),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -399,17 +725,26 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   children: [
                     Text(
                       req.listenerName,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.lock_clock_outlined, size: 12, color: AppColors.success),
+                        const Icon(
+                          Icons.lock_clock_outlined,
+                          size: 12,
+                          color: AppColors.success,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           'Ngân sách đã giữ an toàn trong ví',
                           style: TextStyle(
                             fontSize: 11,
-                            color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                            color: isDark
+                                ? AppColors.onSurfaceMutedDark
+                                : AppColors.onSurfaceMutedLight,
                           ),
                         ),
                       ],
@@ -430,7 +765,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               req.description,
               style: TextStyle(
                 fontSize: 13,
-                color: isDark ? AppColors.onSurfaceDark : AppColors.onSurfaceLight,
+                color: isDark
+                    ? AppColors.onSurfaceDark
+                    : AppColors.onSurfaceLight,
                 height: 1.4,
               ),
             ),
@@ -441,8 +778,16 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetaItem('Ngày tạo', AppFormatters.formatDate(req.createdAt), Icons.calendar_today_outlined),
-              _buildMetaItem('Phân chia', '80% CC • 20% App', Icons.pie_chart_outline),
+              _buildMetaItem(
+                'Ngày tạo',
+                AppFormatters.formatDate(req.createdAt),
+                Icons.calendar_today_outlined,
+              ),
+              _buildMetaItem(
+                'Phân chia',
+                '80% CC • 20% App',
+                Icons.pie_chart_outline,
+              ),
               _buildMetaItem(
                 'Ngân sách giữ',
                 AppFormatters.formatVND(req.totalBudget),
@@ -456,7 +801,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
-  Widget _buildMetaItem(String label, String value, IconData icon, {bool isHighlight = false}) {
+  Widget _buildMetaItem(
+    String label,
+    String value,
+    IconData icon, {
+    bool isHighlight = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -464,7 +814,13 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           children: [
             Icon(icon, size: 12, color: AppColors.tertiaryLight),
             const SizedBox(width: 3),
-            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.onSurfaceMutedLight)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.onSurfaceMutedLight,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 2),
@@ -505,7 +861,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.description_outlined, color: AppColors.primaryLight, size: 18),
+                  const Icon(
+                    Icons.description_outlined,
+                    color: AppColors.primaryLight,
+                    size: 18,
+                  ),
                   const SizedBox(width: 6),
                   const Text(
                     'Hợp đồng điện tử (v1)',
@@ -519,8 +879,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   color: contract.isInProgress
                       ? AppColors.success.withValues(alpha: 0.12)
                       : (contract.isPendingSignature
-                          ? AppColors.warning.withValues(alpha: 0.12)
-                          : AppColors.info.withValues(alpha: 0.12)),
+                            ? AppColors.warning.withValues(alpha: 0.12)
+                            : AppColors.info.withValues(alpha: 0.12)),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -530,7 +890,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     fontWeight: FontWeight.w700,
                     color: contract.isInProgress
                         ? AppColors.success
-                        : (contract.isPendingSignature ? AppColors.warning : AppColors.info),
+                        : (contract.isPendingSignature
+                              ? AppColors.warning
+                              : AppColors.info),
                   ),
                 ),
               ),
@@ -539,7 +901,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             'Mã băm SHA-256: ${contract.contentHash.length > 20 ? "${contract.contentHash.substring(0, 10)}...${contract.contentHash.substring(contract.contentHash.length - 8)}" : contract.contentHash}',
-            style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.grey),
+            style: const TextStyle(
+              fontSize: 11,
+              fontFamily: 'monospace',
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           const Divider(height: 1),
@@ -611,10 +977,14 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       decoration: BoxDecoration(
         color: isSigned
             ? AppColors.success.withValues(alpha: 0.08)
-            : (isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight),
+            : (isDark
+                  ? AppColors.surfaceVariantDark
+                  : AppColors.surfaceVariantLight),
         borderRadius: AppSpacing.roundedSm,
         border: Border.all(
-          color: isSigned ? AppColors.success.withValues(alpha: 0.3) : Colors.transparent,
+          color: isSigned
+              ? AppColors.success.withValues(alpha: 0.3)
+              : Colors.transparent,
         ),
       ),
       child: Column(
@@ -631,7 +1001,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -662,7 +1035,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       decoration: BoxDecoration(
         color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
         borderRadius: AppSpacing.roundedMd,
-        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+        border: Border.all(
+          color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -679,7 +1054,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   '${req.milestones.length} đợt',
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                    color: isDark
+                        ? AppColors.onSurfaceMutedDark
+                        : AppColors.onSurfaceMutedLight,
                   ),
                 ),
             ],
@@ -698,7 +1075,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     style: TextStyle(
                       fontSize: 12,
                       fontStyle: FontStyle.italic,
-                      color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                      color: isDark
+                          ? AppColors.onSurfaceMutedDark
+                          : AppColors.onSurfaceMutedLight,
                     ),
                   ),
                 ],
@@ -738,23 +1117,29 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               }
 
               // Creator can submit when contract is IN_PROGRESS and this milestone is NOT_STARTED or REVISION_REQUESTED
-              final canSubmitThis = (req.contract?.isInProgress == true ||
+              final canSubmitThis =
+                  (req.contract?.isInProgress == true ||
                       req.status == CustomRequestStatus.inProduction ||
                       req.status == CustomRequestStatus.accepted) &&
-                  (m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED');
+                  (m.status == 'NOT_STARTED' ||
+                      m.status == 'REVISION_REQUESTED');
 
               return Container(
                 margin: const EdgeInsets.only(bottom: AppSpacing.xs),
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                  color: isDark
+                      ? AppColors.surfaceVariantDark
+                      : AppColors.surfaceVariantLight,
                   borderRadius: AppSpacing.roundedSm,
                   border: Border.all(
                     color: m.isApproved
                         ? AppColors.success.withValues(alpha: 0.3)
                         : (m.isSubmitted
-                            ? AppColors.warning.withValues(alpha: 0.3)
-                            : (isDark ? AppColors.outlineDark : AppColors.outlineLight)),
+                              ? AppColors.warning.withValues(alpha: 0.3)
+                              : (isDark
+                                    ? AppColors.outlineDark
+                                    : AppColors.outlineLight)),
                   ),
                 ),
                 child: Column(
@@ -770,15 +1155,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             children: [
                               Text(
                                 'Đợt ${m.order}: ${m.title}',
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                              if (m.description != null && m.description!.isNotEmpty) ...[
+                              if (m.description != null &&
+                                  m.description!.isNotEmpty) ...[
                                 const SizedBox(height: 2),
                                 Text(
                                   m.description!,
                                   style: TextStyle(
                                     fontSize: 11,
-                                    color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                                    color: isDark
+                                        ? AppColors.onSurfaceMutedDark
+                                        : AppColors.onSurfaceMutedLight,
                                   ),
                                 ),
                               ],
@@ -799,7 +1190,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             ),
                             const SizedBox(height: 2),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: statusColor.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(4),
@@ -817,22 +1211,35 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         ),
                       ],
                     ),
+                    if (req.hasEscrow) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildDraftsForMilestone(m.id, isDark),
+                    ],
                     if (canSubmitThis) ...[
                       const SizedBox(height: AppSpacing.xs),
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton.icon(
                           style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             minimumSize: Size.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
                           icon: const Icon(Icons.upload_file_rounded, size: 14),
                           label: Text(
-                            m.status == 'REVISION_REQUESTED' ? 'Nộp lại bài chỉnh sửa' : 'Nộp bài cho đợt này',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                            m.status == 'REVISION_REQUESTED'
+                                ? 'Nộp lại bài chỉnh sửa'
+                                : 'Nộp bài cho đợt này',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                          onPressed: () => _handleDeliver(req, milestoneId: m.id),
+                          onPressed: () =>
+                              _handleDeliver(req, milestoneId: m.id),
                         ),
                       ),
                     ],
@@ -840,6 +1247,183 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 ),
               );
             }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDraftsForMilestone(String milestoneId, bool isDark) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: ref
+          .read(creatorRequestsProvider.notifier)
+          .getMilestoneDrafts(milestoneId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: LinearProgressIndicator(minHeight: 2),
+          );
+        }
+        final drafts = snapshot.data ?? const [];
+        if (drafts.isEmpty) {
+          return Text(
+            'Chưa có bản nháp. Bản upload mới sẽ hiển thị ở đây để theo dõi AI.',
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark
+                  ? AppColors.onSurfaceMutedDark
+                  : AppColors.onSurfaceMutedLight,
+            ),
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bản nháp AI (${drafts.length})',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            ...drafts.map((draft) => _draftTile(milestoneId, draft, isDark)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _draftTile(
+    String milestoneId,
+    Map<String, dynamic> draft,
+    bool isDark,
+  ) {
+    final status = '${draft['status'] ?? 'PENDING'}'.toUpperCase();
+    final confidence = (draft['aiConfidence'] as num?)?.toDouble();
+    final statusColor = switch (status) {
+      'APPROVED' => AppColors.success,
+      'REJECTED' || 'FAILED' => AppColors.error,
+      'REVIEW_REQUIRED' => AppColors.warning,
+      _ => AppColors.info,
+    };
+    final draftId = draft['draftId']?.toString() ?? '';
+    final canDeliver = status == 'APPROVED' && draftId.isNotEmpty;
+    final canCancel =
+        draftId.isNotEmpty && status != 'DELIVERED' && status != 'CANCELLED';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.surfaceDark.withValues(alpha: 0.55)
+            : Colors.white.withValues(alpha: 0.72),
+        borderRadius: AppSpacing.roundedSm,
+        border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.audio_file_outlined, size: 18, color: statusColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Bản nháp #${draft['draftNumber'] ?? '-'} • $status',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+                if (confidence != null)
+                  Text(
+                    'Confidence: ${(confidence * 100).toStringAsFixed(0)}% • ${draft['aiLabel'] ?? 'Chưa có kết quả'}',
+                    style: const TextStyle(fontSize: 10),
+                  ),
+                if (draft['aiReason'] != null &&
+                    '${draft['aiReason']}'.isNotEmpty)
+                  Text(
+                    '${draft['aiReason']}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                  ),
+                if (draft['errorMessage'] != null &&
+                    '${draft['errorMessage']}'.isNotEmpty)
+                  Text(
+                    '${draft['errorMessage']}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 10, color: AppColors.error),
+                  ),
+              ],
+            ),
+          ),
+          if (canDeliver || canCancel)
+            PopupMenuButton<String>(
+              tooltip: 'Thao tác draft',
+              onSelected: (action) async {
+                try {
+                  if (action == 'deliver') {
+                    await ref
+                        .read(creatorRequestsProvider.notifier)
+                        .deliverMilestoneDraft(milestoneId, draftId);
+                  } else {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: const Text('Hủy bản nháp?'),
+                        content: const Text(
+                          'Bản nháp sẽ được đánh dấu hủy và không thể bàn giao.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Không'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            child: const Text('Hủy draft'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    await ref
+                        .read(creatorRequestsProvider.notifier)
+                        .cancelMilestoneDraft(milestoneId, draftId);
+                  }
+                  if (mounted) setState(() {});
+                } catch (error) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Không thể thực hiện thao tác draft: $error',
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
+              itemBuilder: (_) => [
+                if (canDeliver)
+                  const PopupMenuItem(
+                    value: 'deliver',
+                    child: Text('Bàn giao draft'),
+                  ),
+                if (canCancel)
+                  const PopupMenuItem(
+                    value: 'cancel',
+                    child: Text('Hủy draft'),
+                  ),
+              ],
+            ),
         ],
       ),
     );
@@ -865,19 +1449,26 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               SizedBox(width: AppSpacing.xs),
               Text(
                 'Lịch sử bàn giao sản phẩm',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.info),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: AppColors.info,
+                ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           if (req.submissions.isNotEmpty)
             ...req.submissions.map((sub) {
-              final isCurrentSubPlaying = _currentlyPlayingUrl == sub.mediaUrl && _isPlaying;
+              final isCurrentSubPlaying =
+                  _currentlyPlayingUrl == sub.mediaUrl && _isPlaying;
               return Container(
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                  color: isDark
+                      ? AppColors.surfaceVariantDark
+                      : AppColors.surfaceVariantLight,
                   borderRadius: AppSpacing.roundedSm,
                 ),
                 child: Column(
@@ -888,17 +1479,27 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       children: [
                         Text(
                           'Lần nộp #${sub.revisionNumber}',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
                         ),
                         Text(
-                          DateFormat('HH:mm dd/MM/yyyy').format(sub.submittedAt.toLocal()),
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          DateFormat('HH:mm dd/MM/yyyy')
+                              .format(sub.submittedAt.toLocal()),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey,
+                          ),
                         ),
                       ],
                     ),
                     if (sub.note != null && sub.note!.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      Text('Ghi chú: ${sub.note}', style: const TextStyle(fontSize: 12)),
+                      Text(
+                        'Ghi chú: ${sub.note}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ],
                     if (sub.mediaUrl != null && sub.mediaUrl!.isNotEmpty) ...[
                       const SizedBox(height: 8),
@@ -908,7 +1509,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             iconSize: 28,
                             color: AppColors.primaryLight,
                             icon: Icon(
-                              isCurrentSubPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                              isCurrentSubPlaying
+                                  ? Icons.pause_circle_filled
+                                  : Icons.play_circle_fill,
                             ),
                             onPressed: () => _playAudio(sub.mediaUrl!),
                           ),
@@ -918,16 +1521,26 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  isCurrentSubPlaying ? 'Đang phát âm thanh...' : 'Nghe thử bản ghi âm R2',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  isCurrentSubPlaying
+                                      ? 'Đang phát âm thanh...'
+                                      : 'Nghe thử bản ghi âm R2',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                                 if (isCurrentSubPlaying)
                                   LinearProgressIndicator(
                                     value: _totalDuration.inMilliseconds > 0
-                                        ? _currentPosition.inMilliseconds / _totalDuration.inMilliseconds
+                                        ? _currentPosition.inMilliseconds /
+                                              _totalDuration.inMilliseconds
                                         : 0.0,
-                                    backgroundColor: Colors.grey.withValues(alpha: 0.2),
-                                    valueColor: const AlwaysStoppedAnimation(AppColors.primaryLight),
+                                    backgroundColor: Colors.grey.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    valueColor: const AlwaysStoppedAnimation(
+                                      AppColors.primaryLight,
+                                    ),
                                   ),
                               ],
                             ),
@@ -941,7 +1554,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             })
           else ...[
             if (req.deliveryNote != null) Text('Ghi chú: ${req.deliveryNote}'),
-            if (req.deliveryFileUrl != null) Text('Tệp: ${req.deliveryFileUrl}', style: const TextStyle(color: Colors.grey, fontSize: 11)),
+            if (req.deliveryFileUrl != null)
+              Text(
+                'Tệp: ${req.deliveryFileUrl}',
+                style: const TextStyle(color: Colors.grey, fontSize: 11),
+              ),
           ],
         ],
       ),
@@ -969,7 +1586,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               SizedBox(width: 6),
               Text(
                 'Yêu cầu chấm dứt & Tranh chấp hợp đồng',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppColors.error),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  color: AppColors.error,
+                ),
               ),
             ],
           ),
@@ -1002,14 +1623,18 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     final contract = req.contract;
 
     // Completed
-    if (contract?.isCompleted == true || req.status == CustomRequestStatus.completed) {
+    if (contract?.isCompleted == true ||
+        req.status == CustomRequestStatus.completed) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
         color: AppColors.successContainer,
         child: const Center(
           child: Text(
             '✓ Hợp đồng đã hoàn tất và tất toán toàn bộ thù lao vào ví.',
-            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.success),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AppColors.success,
+            ),
           ),
         ),
       );
@@ -1023,7 +1648,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         child: const Center(
           child: Text(
             'Đơn yêu cầu này đã bị từ chối.',
-            style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.onSurfaceMutedLight),
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.onSurfaceMutedLight,
+            ),
           ),
         ),
       );
@@ -1035,7 +1663,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          border: Border(top: BorderSide(color: isDark ? AppColors.outlineDark : AppColors.outlineLight)),
+          border: Border(
+            top: BorderSide(
+              color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+            ),
+          ),
         ),
         child: Row(
           children: [
@@ -1067,7 +1699,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-            border: Border(top: BorderSide(color: isDark ? AppColors.outlineDark : AppColors.outlineLight)),
+            border: Border(
+              top: BorderSide(
+                color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+              ),
+            ),
           ),
           child: AppButton(
             label: 'Xem & Ký hợp đồng điện tử',
@@ -1081,7 +1717,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           child: const Center(
             child: Text(
               'Bạn đã ký hợp đồng. Đang chờ người nghe ký kết...',
-              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.warning),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.warning,
+              ),
             ),
           ),
         );
@@ -1097,7 +1736,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-          border: Border(top: BorderSide(color: isDark ? AppColors.outlineDark : AppColors.outlineLight)),
+          border: Border(
+            top: BorderSide(
+              color: isDark ? AppColors.outlineDark : AppColors.outlineLight,
+            ),
+          ),
         ),
         child: AppButton(
           label: 'Nộp bài / Gửi bản audio hoàn chỉnh',
@@ -1120,29 +1763,68 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       text: 'Tôi đồng ý sản xuất podcast theo yêu cầu và đề xuất các đợt bàn giao như dưới đây.',
     );
 
-    // Stage inputs
-    final nameControllers = [
+    // Stage inputs. The backend accepts any number of milestones (up to 30).
+    final nameControllers = <TextEditingController>[
       TextEditingController(text: 'Đợt 1: Bản nháp podcast & demo giọng'),
       TextEditingController(text: 'Đợt 2: Bản hoàn thiện audio & hậu kỳ'),
       TextEditingController(text: 'Đợt 3: Master audio & nghiệm thu'),
     ];
-    final descControllers = [
-      TextEditingController(text: 'Phác thảo kịch bản chi tiết và thu âm demo 3 phút đầu.'),
-      TextEditingController(text: 'Hoàn thiện toàn bộ bản ghi âm kèm nhạc nền và hiệu ứng.'),
-      TextEditingController(text: 'Chỉnh sửa âm lượng master chuẩn 320kbps và nghiệm thu.'),
+    final descControllers = <TextEditingController>[
+      TextEditingController(
+        text: 'Phác thảo kịch bản chi tiết và thu âm demo 3 phút đầu.',
+      ),
+      TextEditingController(
+        text: 'Hoàn thiện toàn bộ bản ghi âm kèm nhạc nền và hiệu ứng.',
+      ),
+      TextEditingController(
+        text: 'Chỉnh sửa âm lượng master chuẩn 320kbps và nghiệm thu.',
+      ),
     ];
     final initialP1 = (totalBudget * 0.4).toInt();
     final initialP2 = totalBudget - initialP1;
-    final amountControllers = [
+    final amountControllers = <TextEditingController>[
       TextEditingController(text: totalBudget > 0 ? '$initialP1' : '0'),
       TextEditingController(text: totalBudget > 0 ? '$initialP2' : '0'),
       TextEditingController(text: '0'),
     ];
-    final dueDates = [
+    final dueDates = <DateTime>[
       DateTime.now().add(const Duration(days: 3)),
       DateTime.now().add(const Duration(days: 7)),
       DateTime.now().add(const Duration(days: 10)),
     ];
+
+    void resizeStages(int requestedCount, StateSetter update) {
+      final count = requestedCount.clamp(1, 30);
+      while (nameControllers.length < count) {
+        final index = nameControllers.length + 1;
+        nameControllers.add(TextEditingController(text: 'Đợt $index'));
+        descControllers.add(
+          TextEditingController(
+            text: 'Bàn giao sản phẩm đợt $index theo cam kết.',
+          ),
+        );
+        amountControllers.add(TextEditingController(text: '0'));
+        dueDates.add(
+          dueDates.isEmpty
+              ? DateTime.now().add(const Duration(days: 3))
+              : dueDates.last.add(const Duration(days: 3)),
+        );
+      }
+      while (nameControllers.length > count) {
+        nameControllers.removeLast().dispose();
+        descControllers.removeLast().dispose();
+        amountControllers.removeLast().dispose();
+        dueDates.removeLast();
+      }
+
+      final share = count == 0 ? 0 : totalBudget ~/ count;
+      final remainder = totalBudget - (share * count);
+      for (var index = 0; index < count; index++) {
+        amountControllers[index].text =
+            '${share + (index == count - 1 ? remainder : 0)}';
+      }
+      update(() => stageCount = count);
+    }
 
     bool isSubmitting = false;
 
@@ -1153,12 +1835,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         builder: (ctx, setDialogState) {
           int currentTotal = 0;
           for (int i = 0; i < stageCount; i++) {
-            currentTotal += int.tryParse(amountControllers[i].text.replaceAll('.', '').replaceAll(',', '')) ?? 0;
+            currentTotal +=
+                int.tryParse(
+                  amountControllers[i].text
+                      .replaceAll('.', '')
+                      .replaceAll(',', ''),
+                ) ??
+                0;
           }
           final isBudgetMatching = currentTotal == totalBudget;
 
           return AlertDialog(
-            title: const Text('Lập đề xuất đợt bàn giao (1 - 3 đợt)', style: TextStyle(fontWeight: FontWeight.w700)),
+            title: const Text(
+              'Lập đề xuất đợt bàn giao (1 - 3 đợt)',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             content: SizedBox(
               width: 500,
               child: SingleChildScrollView(
@@ -1175,8 +1866,13 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Ngân sách hợp đồng: ${AppFormatters.formatVND(totalBudget)}',
-                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                          Text(
+                            'Ngân sách hợp đồng: ${AppFormatters.formatVND(totalBudget)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             'Tổng các đợt: ${AppFormatters.formatVND(currentTotal)} '
@@ -1184,7 +1880,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: isBudgetMatching ? AppColors.success : AppColors.error,
+                              color: isBudgetMatching
+                                  ? AppColors.success
+                                  : AppColors.error,
                             ),
                           ),
                         ],
@@ -1205,19 +1903,17 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     // Chọn số đợt
                     Row(
                       children: [
-                        const Text('Số đợt bàn giao: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Số đợt bàn giao: ',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                         const SizedBox(width: 8),
                         ChoiceChip(
                           label: const Text('1 đợt'),
                           selected: stageCount == 1,
                           onSelected: isSubmitting
                               ? null
-                              : (_) {
-                                  setDialogState(() {
-                                    stageCount = 1;
-                                    amountControllers[0].text = '$totalBudget';
-                                  });
-                                },
+                              : (_) => resizeStages(1, setDialogState),
                         ),
                         const SizedBox(width: 6),
                         ChoiceChip(
@@ -1225,13 +1921,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           selected: stageCount == 2,
                           onSelected: isSubmitting
                               ? null
-                              : (_) {
-                                  setDialogState(() {
-                                    stageCount = 2;
-                                    amountControllers[0].text = '${(totalBudget * 0.4).toInt()}';
-                                    amountControllers[1].text = '${totalBudget - (totalBudget * 0.4).toInt()}';
-                                  });
-                                },
+                              : (_) => resizeStages(2, setDialogState),
                         ),
                         const SizedBox(width: 6),
                         ChoiceChip(
@@ -1239,16 +1929,33 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           selected: stageCount == 3,
                           onSelected: isSubmitting
                               ? null
-                              : (_) {
-                                  setDialogState(() {
-                                    stageCount = 3;
-                                    final p1 = (totalBudget * 0.3).toInt();
-                                    final p2 = (totalBudget * 0.4).toInt();
-                                    amountControllers[0].text = '$p1';
-                                    amountControllers[1].text = '$p2';
-                                    amountControllers[2].text = '${totalBudget - p1 - p2}';
-                                  });
-                                },
+                              : (_) => resizeStages(3, setDialogState),
+                        ),
+                        const SizedBox(width: 6),
+                        if (stageCount > 3)
+                          Text(
+                            '$stageCount đợt',
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        IconButton(
+                          tooltip: 'Bớt một đợt',
+                          onPressed: isSubmitting || stageCount <= 1
+                              ? null
+                              : () => resizeStages(
+                                  stageCount - 1,
+                                  setDialogState,
+                                ),
+                          icon: const Icon(Icons.remove_circle_outline),
+                        ),
+                        IconButton(
+                          tooltip: 'Thêm một đợt',
+                          onPressed: isSubmitting || stageCount >= 30
+                              ? null
+                              : () => resizeStages(
+                                  stageCount + 1,
+                                  setDialogState,
+                                ),
+                          icon: const Icon(Icons.add_circle_outline),
                         ),
                       ],
                     ),
@@ -1262,12 +1969,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         decoration: BoxDecoration(
                           color: Colors.grey.withValues(alpha: 0.08),
                           borderRadius: AppSpacing.roundedSm,
-                          border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: Colors.grey.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Đợt ${i + 1}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                            Text(
+                              'Đợt ${i + 1}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                              ),
+                            ),
                             const SizedBox(height: 6),
                             AppTextField(
                               label: 'Tên đợt',
@@ -1300,21 +2015,41 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                         ? null
                                         : () async {
                                             final minDate = i == 0
-                                                ? DateTime.now().add(const Duration(days: 1))
-                                                : dueDates[i - 1].add(const Duration(days: 1));
-                                            final initial = dueDates[i].isAfter(minDate) ? dueDates[i] : minDate;
+                                                ? DateTime.now().add(
+                                                    const Duration(days: 1),
+                                                  )
+                                                : dueDates[i - 1].add(
+                                                    const Duration(days: 1),
+                                                  );
+                                            final initial =
+                                                dueDates[i].isAfter(minDate)
+                                                ? dueDates[i]
+                                                : minDate;
                                             final picked = await showDatePicker(
                                               context: context,
                                               initialDate: initial,
                                               firstDate: minDate,
-                                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                                              lastDate: DateTime.now().add(
+                                                const Duration(days: 365),
+                                              ),
                                             );
                                             if (picked != null) {
                                               setDialogState(() {
                                                 dueDates[i] = picked;
-                                                for (int j = i + 1; j < 3; j++) {
-                                                  if (!dueDates[j].isAfter(dueDates[j - 1])) {
-                                                    dueDates[j] = dueDates[j - 1].add(const Duration(days: 3));
+                                                for (
+                                                  int j = i + 1;
+                                                  j < dueDates.length;
+                                                  j++
+                                                ) {
+                                                  if (!dueDates[j].isAfter(
+                                                    dueDates[j - 1],
+                                                  )) {
+                                                    dueDates[j] =
+                                                        dueDates[j - 1].add(
+                                                          const Duration(
+                                                            days: 3,
+                                                          ),
+                                                        );
                                                   }
                                                 }
                                               });
@@ -1325,7 +2060,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                         labelText: 'Hạn nộp (Deadline)',
                                         isDense: true,
                                       ),
-                                      child: Text(DateFormat('dd/MM/yyyy').format(dueDates[i])),
+                                      child: Text(
+                                        DateFormat('dd/MM/yyyy')
+                                            .format(dueDates[i]),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1341,7 +2079,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogCtx).pop(),
                 child: const Text('Hủy'),
               ),
               AppButton(
@@ -1353,8 +2093,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         final respText = responseTextController.text.trim();
                         if (respText.isEmpty) {
                           messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text('Vui lòng nhập lời nhắn phản hồi gửi người nghe.'),
+                            SnackBar(
+                              content: Text(
+                                'Vui lòng nhập lời nhắn phản hồi gửi người nghe.',
+                              ),
                               backgroundColor: AppColors.error,
                             ),
                           );
@@ -1368,7 +2110,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           if (!dueDates[i].isAfter(prev)) {
                             messenger.showSnackBar(
                               SnackBar(
-                                content: Text('Hạn nộp đợt ${i + 1} phải lớn hơn hạn nộp đợt trước và ở tương lai.'),
+                                content: Text(
+                                  'Hạn nộp đợt ${i + 1} phải lớn hơn hạn nộp đợt trước và ở tương lai.',
+                                ),
                                 backgroundColor: AppColors.error,
                               ),
                             );
@@ -1380,11 +2124,17 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         setDialogState(() => isSubmitting = true);
                         try {
                           final stages = List.generate(stageCount, (i) {
-                            final amt = int.parse(amountControllers[i].text.replaceAll('.', '').replaceAll(',', ''));
-                            final name = nameControllers[i].text.trim().isNotEmpty
+                            final amt = int.parse(
+                              amountControllers[i].text
+                                  .replaceAll('.', '')
+                                  .replaceAll(',', ''),
+                            );
+                            final name =
+                                nameControllers[i].text.trim().isNotEmpty
                                 ? nameControllers[i].text.trim()
                                 : 'Đợt ${i + 1}';
-                            final desc = descControllers[i].text.trim().isNotEmpty
+                            final desc =
+                                descControllers[i].text.trim().isNotEmpty
                                 ? descControllers[i].text.trim()
                                 : 'Bàn giao sản phẩm đợt ${i + 1} theo cam kết.';
                             return ContractProposalStageInput(
@@ -1395,7 +2145,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             );
                           });
 
-                          await ref.read(creatorRequestsProvider.notifier).proposeContract(
+                          await ref
+                              .read(creatorRequestsProvider.notifier)
+                              .proposeContract(
                                 req.id,
                                 responseText: respText,
                                 milestones: stages,
@@ -1403,15 +2155,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text('Đã gửi đề xuất hợp đồng thành công!'),
+                            SnackBar(
+                              content: Text(
+                                'Đã gửi đề xuất hợp đồng thành công!',
+                              ),
                               backgroundColor: AppColors.success,
                             ),
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
-                            SnackBar(content: Text('Lỗi gửi đề xuất: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                              content: Text('Lỗi gửi đề xuất: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
                           );
                         }
                       },
@@ -1443,7 +2200,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           return AlertDialog(
             title: Row(
               children: [
-                const Icon(Icons.verified_user_rounded, color: AppColors.primaryLight, size: 22),
+                const Icon(
+                  Icons.verified_user_rounded,
+                  color: AppColors.primaryLight,
+                  size: 22,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
@@ -1459,19 +2220,31 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                      color: isDark
+                          ? AppColors.surfaceVariantDark
+                          : AppColors.surfaceVariantLight,
                       borderRadius: AppSpacing.roundedSm,
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.fingerprint_rounded, size: 16, color: Colors.grey),
+                        const Icon(
+                          Icons.fingerprint_rounded,
+                          size: 16,
+                          color: Colors.grey,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
                             'SHA-256: ${contract.contentHash}',
-                            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace'),
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontFamily: 'monospace',
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -1487,7 +2260,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       decoration: BoxDecoration(
                         color: isDark ? AppColors.surfaceDark : Colors.white,
                         borderRadius: AppSpacing.roundedSm,
-                        border: Border.all(color: isDark ? AppColors.outlineDark : AppColors.outlineLight),
+                        border: Border.all(
+                          color: isDark
+                              ? AppColors.outlineDark
+                              : AppColors.outlineLight,
+                        ),
                       ),
                       child: SingleChildScrollView(
                         child: SelectableText(
@@ -1516,7 +2293,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         const Expanded(
                           child: Text(
                             'Tôi đã đọc, hiểu rõ và đồng ý toàn bộ điều khoản trong hợp đồng điện tử này.',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -1527,11 +2307,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       color: AppColors.successContainer,
                       child: Row(
                         children: [
-                          const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: AppColors.success,
+                            size: 16,
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             'Bạn đã ký hợp đồng lúc ${contract.creatorSignedAt != null ? DateFormat('HH:mm dd/MM/yyyy').format(contract.creatorSignedAt!.toLocal()) : ''}',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.success,
+                            ),
                           ),
                         ],
                       ),
@@ -1542,7 +2330,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogCtx).pop(),
                 child: const Text('Đóng'),
               ),
               if (!contract.isCreatorSigned)
@@ -1554,22 +2344,30 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       : () async {
                           setDialogState(() => isSubmitting = true);
                           try {
-                            await ref.read(creatorRequestsProvider.notifier).signContract(
+                            await ref
+                                .read(creatorRequestsProvider.notifier)
+                                .signContract(
                                   req.id,
                                   contractVersion: contract.contractVersion,
                                   contentHash: contract.contentHash,
                                 );
-                            if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
+                            if (dialogCtx.mounted)
+                              Navigator.of(dialogCtx).pop();
                             messenger.showSnackBar(
                               const SnackBar(
-                                content: Text('Đã ký hợp đồng điện tử thành công!'),
+                                content: Text(
+                                  'Đã ký hợp đồng điện tử thành công!',
+                                ),
                                 backgroundColor: AppColors.success,
                               ),
                             );
                           } catch (e) {
                             setDialogState(() => isSubmitting = false);
                             messenger.showSnackBar(
-                              SnackBar(content: Text('Lỗi ký hợp đồng: $e'), backgroundColor: AppColors.error),
+                              SnackBar(
+                                content: Text('Lỗi ký hợp đồng: $e'),
+                                backgroundColor: AppColors.error,
+                              ),
                             );
                           }
                         },
@@ -1595,7 +2393,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     String? selectedMilestoneId = milestoneId;
     if (selectedMilestoneId == null || selectedMilestoneId.isEmpty) {
       final pending = req.milestones
-          .where((m) => m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED')
+          .where(
+            (m) =>
+                m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED',
+          )
           .toList();
       selectedMilestoneId = pending.isNotEmpty
           ? pending.first.id
@@ -1609,16 +2410,23 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         builder: (dialogCtx, setDialogState) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           final byteCount = pickedBytes?.length ?? 0;
-          final selectedMilestone = req.milestones.where((m) => m.id == selectedMilestoneId).firstOrNull;
+          final selectedMilestone = req.milestones
+              .where((m) => m.id == selectedMilestoneId)
+              .firstOrNull;
 
           return AlertDialog(
-            title: const Text('Nộp bài cho người nghe', style: TextStyle(fontWeight: FontWeight.w700)),
+            title: const Text(
+              'Nộp bài cho người nghe',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Chọn tệp âm thanh/video hoàn thiện để nộp cho người nghe nghiệm thu.'),
+                  const Text(
+                    'Chọn tệp âm thanh/video hoàn thiện để nộp cho người nghe nghiệm thu.',
+                  ),
                   const SizedBox(height: AppSpacing.sm),
                   if (req.milestones.length > 1) ...[
                     DropdownButtonFormField<String>(
@@ -1630,7 +2438,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       items: req.milestones.map((m) {
                         return DropdownMenuItem<String>(
                           value: m.id,
-                          child: Text('Đợt ${m.order}: ${m.title} (${AppFormatters.formatVND(m.amount)})'),
+                          child: Text(
+                            'Đợt ${m.order}: ${m.title} (${AppFormatters.formatVND(m.amount)})',
+                          ),
                         );
                       }).toList(),
                       onChanged: isSubmitting
@@ -1642,24 +2452,40 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     const SizedBox(height: AppSpacing.md),
                   ] else if (selectedMilestone != null) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
-                        color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
+                        color: isDark
+                            ? AppColors.surfaceVariantDark
+                            : AppColors.surfaceVariantLight,
                         borderRadius: AppSpacing.roundedSm,
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.layers_outlined, size: 16, color: AppColors.primaryLight),
+                          const Icon(
+                            Icons.layers_outlined,
+                            size: 16,
+                            color: AppColors.primaryLight,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'Đợt ${selectedMilestone.order}: ${selectedMilestone.title}',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                           Text(
                             AppFormatters.formatVND(selectedMilestone.amount),
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.success),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.success,
+                            ),
                           ),
                         ],
                       ),
@@ -1677,10 +2503,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               try {
                                 file = await FilePicker.pickFile(
                                   type: FileType.custom,
-                                  allowedExtensions: ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'mp4'],
+                                  allowedExtensions: [
+                                    'mp3',
+                                    'wav',
+                                    'm4a',
+                                    'aac',
+                                    'ogg',
+                                    'mp4',
+                                  ],
                                 );
                               } catch (_) {
-                                file = await FilePicker.pickFile(type: FileType.audio);
+                                file = await FilePicker.pickFile(
+                                  type: FileType.audio,
+                                );
                               }
                               if (file != null && file.name.isNotEmpty) {
                                 final bytes = await file.readAsBytes();
@@ -1691,25 +2526,45 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               }
                             } catch (e) {
                               messenger.showSnackBar(
-                                SnackBar(content: Text('Lỗi chọn tệp: $e'), backgroundColor: AppColors.error),
+                                SnackBar(
+                                  content: Text('Lỗi chọn tệp: $e'),
+                                  backgroundColor: AppColors.error,
+                                ),
                               );
                             }
                           },
                     borderRadius: AppSpacing.roundedSm,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
-                        color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.08),
+                        color:
+                            (isDark
+                                    ? AppColors.primaryDark
+                                    : AppColors.primaryLight)
+                                .withValues(alpha: 0.08),
                         border: Border.all(
-                          color: pickedFile != null ? AppColors.success : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
+                          color: pickedFile != null
+                              ? AppColors.success
+                              : (isDark
+                                    ? AppColors.outlineDark
+                                    : AppColors.outlineLight),
                         ),
                         borderRadius: AppSpacing.roundedSm,
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            pickedFile != null ? Icons.check_circle_rounded : Icons.audio_file_rounded,
-                            color: pickedFile != null ? AppColors.success : (isDark ? AppColors.primaryDark : AppColors.primaryLight),
+                            pickedFile != null
+                                ? Icons.check_circle_rounded
+                                : Icons.audio_file_rounded,
+                            color: pickedFile != null
+                                ? AppColors.success
+                                : (isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -1717,9 +2572,13 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  pickedFile != null ? pickedFile!.name : 'Chọn tệp âm thanh (.mp3, .wav, .m4a)',
+                                  pickedFile != null
+                                      ? pickedFile!.name
+                                      : 'Chọn tệp âm thanh (.mp3, .wav, .m4a)',
                                   style: TextStyle(
-                                    fontWeight: pickedFile != null ? FontWeight.bold : FontWeight.normal,
+                                    fontWeight: pickedFile != null
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                     fontSize: 13,
                                   ),
                                   maxLines: 1,
@@ -1728,7 +2587,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 if (byteCount > 0)
                                   Text(
                                     '${(byteCount / 1024).toStringAsFixed(1)} KB',
-                                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey,
+                                    ),
                                   ),
                               ],
                             ),
@@ -1751,7 +2613,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogCtx).pop(),
                 child: const Text('Hủy'),
               ),
               AppButton(
@@ -1763,14 +2627,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     : () async {
                         if (pickedBytes == null || pickedFile == null) {
                           messenger.showSnackBar(
-                            const SnackBar(content: Text('Vui lòng chọn tệp âm thanh trước khi nộp.')),
+                            const SnackBar(
+                              content: Text(
+                                'Vui lòng chọn tệp âm thanh trước khi nộp.',
+                              ),
+                            ),
                           );
                           return;
                         }
                         final note = noteController.text.trim();
                         setDialogState(() => isSubmitting = true);
                         try {
-                          await ref.read(creatorRequestsProvider.notifier).deliverWork(
+                          await ref
+                              .read(creatorRequestsProvider.notifier)
+                              .deliverWork(
                                 req.id,
                                 pickedFile!.name,
                                 note.isNotEmpty ? note : 'Bản thu âm hoàn thiện cho đơn đặt podcast.',
@@ -1780,15 +2650,22 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               );
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
-                            const SnackBar(
-                              content: Text('Đã nộp bài thành công! Người nghe có 3 ngày để nghiệm thu.'),
+                            SnackBar(
+                              content: Text(
+                                req.hasEscrow
+                                    ? 'Đã tải bản nháp. Hệ thống sẽ kiểm duyệt AI trước khi bạn bàn giao.'
+                                    : 'Đã nộp bài thành công! Người nghe có 3 ngày để nghiệm thu.',
+                              ),
                               backgroundColor: AppColors.success,
                             ),
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
-                            SnackBar(content: Text('Lỗi nộp bài: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                              content: Text('Lỗi nộp bài: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
                           );
                         }
                       },
@@ -1814,7 +2691,13 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            title: const Text('Yêu cầu chấm dứt hợp đồng', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.error)),
+            title: const Text(
+              'Yêu cầu chấm dứt hợp đồng',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.error,
+              ),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1837,7 +2720,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogCtx).pop(),
                 child: const Text('Hủy'),
               ),
               AppButton(
@@ -1850,13 +2735,17 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         final reason = reasonController.text.trim();
                         if (reason.isEmpty) {
                           messenger.showSnackBar(
-                            const SnackBar(content: Text('Vui lòng nhập lý do chấm dứt.')),
+                            const SnackBar(
+                              content: Text('Vui lòng nhập lý do chấm dứt.'),
+                            ),
                           );
                           return;
                         }
                         setDialogState(() => isSubmitting = true);
                         try {
-                          await ref.read(creatorRequestsProvider.notifier).requestTermination(req.id, reason: reason);
+                          await ref
+                              .read(creatorRequestsProvider.notifier)
+                              .requestTermination(req.id, reason: reason);
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
                             const SnackBar(
@@ -1867,7 +2756,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
-                            SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                              content: Text('Lỗi: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
                           );
                         }
                       },
@@ -1893,13 +2785,18 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       builder: (dialogCtx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            title: const Text('Từ chối đơn yêu cầu', style: TextStyle(fontWeight: FontWeight.w700)),
+            title: const Text(
+              'Từ chối đơn yêu cầu',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Ngân sách đang giữ sẽ được hoàn trả lại ví của người nghe. Vui lòng cung cấp lý do từ chối:'),
+                  const Text(
+                    'Ngân sách đang giữ sẽ được hoàn trả lại ví của người nghe. Vui lòng cung cấp lý do từ chối:',
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   AppTextField(
                     label: 'Lý do từ chối',
@@ -1913,7 +2810,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isSubmitting ? null : () => Navigator.of(dialogCtx).pop(),
+                onPressed: isSubmitting
+                    ? null
+                    : () => Navigator.of(dialogCtx).pop(),
                 child: const Text('Hủy'),
               ),
               AppButton(
@@ -1927,21 +2826,32 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         final reason = reasonController.text.trim();
                         if (reason.isEmpty) {
                           messenger.showSnackBar(
-                            const SnackBar(content: Text('Vui lòng nhập lý do từ chối.')),
+                            const SnackBar(
+                              content: Text('Vui lòng nhập lý do từ chối.'),
+                            ),
                           );
                           return;
                         }
                         setDialogState(() => isSubmitting = true);
                         try {
-                          await ref.read(creatorRequestsProvider.notifier).rejectRequest(req.id, reason);
+                          await ref
+                              .read(creatorRequestsProvider.notifier)
+                              .rejectRequest(req.id, reason);
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
                           messenger.showSnackBar(
-                            const SnackBar(content: Text('Đã từ chối đơn yêu cầu và hoàn tiền giữ cho thính giả.')),
+                            const SnackBar(
+                              content: Text(
+                                'Đã từ chối đơn yêu cầu và hoàn tiền giữ cho thính giả.',
+                              ),
+                            ),
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
                           messenger.showSnackBar(
-                            SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
+                            SnackBar(
+                              content: Text('Lỗi: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
                           );
                         }
                       },

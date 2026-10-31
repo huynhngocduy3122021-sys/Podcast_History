@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:podcast_history/api_service.dart';
 import 'package:podcast_history/core/network/api_client.dart';
+import 'package:podcast_history/features/notifications/notification_socket.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_livestream_model.dart';
 import 'package:podcast_history/features/creator_studio/data/repositories/api_creator_repository.dart';
@@ -10,8 +12,27 @@ import 'package:podcast_history/features/creator_studio/domain/creator_repositor
 final creatorAccessTokenProvider = Provider<String?>((ref) => null);
 final creatorRefreshTokenProvider = Provider<String?>((ref) => null);
 final creatorSessionRefreshCallbackProvider =
-    Provider<void Function(String newAccessToken, String newRefreshToken)?>((ref) => null);
-final creatorSessionExpiredCallbackProvider = Provider<VoidCallback?>((ref) => null);
+    Provider<void Function(String newAccessToken, String newRefreshToken)?>(
+      (ref) => null,
+    );
+final creatorSessionExpiredCallbackProvider = Provider<VoidCallback?>(
+  (ref) => null,
+);
+
+final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
+  final token = ref.watch(creatorAccessTokenProvider);
+  if (token == null || token.isEmpty) return null;
+  final socket = NotificationSocket(
+    url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
+    accessToken: token,
+    onNotification: (_) {},
+    onRealtime: (_) {},
+    onReconnected: () {},
+  );
+  ref.onDispose(socket.dispose);
+  socket.connect();
+  return socket;
+});
 
 // API Client Provider
 final apiClientProvider = Provider<ApiClient>((ref) {
@@ -91,8 +112,9 @@ final creatorProfileProvider =
     );
 
 // Creator System Plans Provider
-final creatorSystemPlansProvider =
-    FutureProvider<List<CreatorSystemPlan>>((ref) async {
+final creatorSystemPlansProvider = FutureProvider<List<CreatorSystemPlan>>((
+  ref,
+) async {
   final token = ref.watch(creatorAccessTokenProvider);
   if (token == null || token.isEmpty) {
     return const [];
@@ -131,11 +153,11 @@ class CreatorSubscriptionNotifier
   }
 }
 
-final creatorSubscriptionProvider = NotifierProvider<
-    CreatorSubscriptionNotifier,
-    AsyncValue<CreatorSystemSubscription?>>(
-  CreatorSubscriptionNotifier.new,
-);
+final creatorSubscriptionProvider =
+    NotifierProvider<
+      CreatorSubscriptionNotifier,
+      AsyncValue<CreatorSystemSubscription?>
+    >(CreatorSubscriptionNotifier.new);
 
 // Categories Controller
 class CreatorCategoriesNotifier
@@ -159,22 +181,22 @@ class CreatorCategoriesNotifier
   }
 }
 
-final categoriesProvider = NotifierProvider<
-    CreatorCategoriesNotifier,
-    AsyncValue<List<CreatorCategory>>>(
-  CreatorCategoriesNotifier.new,
-);
+final categoriesProvider =
+    NotifierProvider<
+      CreatorCategoriesNotifier,
+      AsyncValue<List<CreatorCategory>>
+    >(CreatorCategoriesNotifier.new);
 
 // Creator Dashboard Provider
 final creatorDashboardProvider =
     FutureProvider.family<CreatorDashboardData, String>((ref, period) async {
-  final token = ref.watch(creatorAccessTokenProvider);
-  if (token == null || token.isEmpty) {
-    return const CreatorDashboardData();
-  }
-  final repo = ref.watch(creatorRepositoryProvider);
-  return repo.getDashboard(period: period);
-});
+      final token = ref.watch(creatorAccessTokenProvider);
+      if (token == null || token.isEmpty) {
+        return const CreatorDashboardData();
+      }
+      final repo = ref.watch(creatorRepositoryProvider);
+      return repo.getDashboard(period: period);
+    });
 
 // Podcasts Controller
 class CreatorPodcastsNotifier
@@ -322,7 +344,8 @@ class CreatorPodcastsNotifier
         orElse: () => null,
       );
 
-      final isPublished = currentPod == null || currentPod.status == PodcastStatus.published;
+      final isPublished =
+          currentPod == null || currentPod.status == PodcastStatus.published;
       final likesRes = isPublished
           ? await _repo.getPodcastLikes(podcastId)
           : {'likeCount': 0, 'likedByMe': false};
@@ -445,7 +468,11 @@ class CreatorRequestsNotifier
     String? responseText,
     List<Map<String, dynamic>>? milestones,
   }) async {
-    await _repo.acceptRequest(id, responseText: responseText, milestones: milestones);
+    await _repo.acceptRequest(
+      id,
+      responseText: responseText,
+      milestones: milestones,
+    );
     await loadRequests();
   }
 
@@ -486,26 +513,53 @@ class CreatorRequestsNotifier
     return agreement;
   }
 
-  Future<void> requestTermination(String requestId, {required String reason}) async {
+  Future<void> requestTermination(
+    String requestId, {
+    required String reason,
+  }) async {
     await _repo.requestTermination(requestId, reason: reason);
     await loadRequests();
   }
 
-  Future<ContractTerminationStatus?> getTerminationRequest(String requestId) async {
+  Future<ContractTerminationStatus?> getTerminationRequest(
+    String requestId,
+  ) async {
     return _repo.getTerminationRequest(requestId);
   }
 
-  Future<void> disputeMilestone(String milestoneId, {required String reason}) async {
+  Future<void> disputeMilestone(
+    String milestoneId, {
+    required String reason,
+  }) async {
     await _repo.disputeMilestone(milestoneId, reason: reason);
     await loadRequests();
   }
 
-  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(String milestoneId) async {
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(
+    String milestoneId,
+  ) async {
     return _repo.getMilestoneSubmissions(milestoneId);
   }
 
-  Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId) async {
+  Future<String?> getMilestoneMediaUrl(
+    String milestoneId,
+    String submissionId,
+  ) async {
     return _repo.getMilestoneMediaUrl(milestoneId, submissionId);
+  }
+
+  Future<List<Map<String, dynamic>>> getMilestoneDrafts(String milestoneId) {
+    return _repo.getMilestoneDrafts(milestoneId);
+  }
+
+  Future<void> deliverMilestoneDraft(String milestoneId, String draftId) async {
+    await _repo.deliverMilestoneDraft(milestoneId, draftId);
+    await loadRequests();
+  }
+
+  Future<void> cancelMilestoneDraft(String milestoneId, String draftId) async {
+    await _repo.cancelMilestoneDraft(milestoneId, draftId);
+    await loadRequests();
   }
 
   Future<void> deliverWork(
@@ -720,10 +774,7 @@ class CreatorCommentsNotifier
 
     // Optimistic update
     final updated = List<StudioComment>.from(current);
-    updated[index] = target.copyWith(
-      likedByMe: newLiked,
-      likesCount: newCount,
-    );
+    updated[index] = target.copyWith(likedByMe: newLiked, likesCount: newCount);
     state = AsyncValue.data(updated);
 
     try {
@@ -785,10 +836,12 @@ class CreatorCommentsNotifier
             orElse: () => null,
           );
           if (pod != null) {
-            ref.read(creatorPodcastsProvider.notifier).updatePodcastStats(
-              podcastId: targetPodcastId,
-              commentsCount: pod.commentsCount + 1,
-            );
+            ref
+                .read(creatorPodcastsProvider.notifier)
+                .updatePodcastStats(
+                  podcastId: targetPodcastId,
+                  commentsCount: pod.commentsCount + 1,
+                );
           }
         }
         return created;
@@ -987,9 +1040,10 @@ class CreatorLivestreamsNotifier
 }
 
 final creatorLivestreamsProvider =
-    NotifierProvider<CreatorLivestreamsNotifier, AsyncValue<List<CreatorLivestreamItem>>>(
-      CreatorLivestreamsNotifier.new,
-    );
+    NotifierProvider<
+      CreatorLivestreamsNotifier,
+      AsyncValue<List<CreatorLivestreamItem>>
+    >(CreatorLivestreamsNotifier.new);
 
 // Channel Membership Plans
 class CreatorChannelPlansNotifier
@@ -1030,22 +1084,24 @@ class CreatorChannelPlansNotifier
   }
 }
 
-final creatorChannelPlansProvider = NotifierProvider<
-    CreatorChannelPlansNotifier, AsyncValue<List<CreatorChannelPlan>>>(
-  CreatorChannelPlansNotifier.new,
-);
+final creatorChannelPlansProvider =
+    NotifierProvider<
+      CreatorChannelPlansNotifier,
+      AsyncValue<List<CreatorChannelPlan>>
+    >(CreatorChannelPlansNotifier.new);
 
-final creatorPlanTemplatesProvider =
-    FutureProvider<List<CreatorPlanTemplate>>((ref) async {
+final creatorPlanTemplatesProvider = FutureProvider<List<CreatorPlanTemplate>>((
+  ref,
+) async {
   final repo = ref.watch(creatorRepositoryProvider);
   return repo.getMembershipPlanTemplates();
 });
 
 final creatorMembershipsProvider =
     FutureProvider.family<PageCreatorMembers, String>((ref, status) async {
-  final repo = ref.watch(creatorRepositoryProvider);
-  return repo.getCreatorMemberships(status: status, page: 0, size: 50);
-});
+      final repo = ref.watch(creatorRepositoryProvider);
+      return repo.getCreatorMemberships(status: status, page: 0, size: 50);
+    });
 
 // Studio Notifications
 class CreatorNotificationsNotifier
@@ -1083,22 +1139,20 @@ class CreatorNotificationsNotifier
 
   Future<void> markAllAsRead() async {
     final current = state.value ?? [];
-    state = AsyncValue.data([
-      for (final n in current) n.copyWith(read: true),
-    ]);
+    state = AsyncValue.data([for (final n in current) n.copyWith(read: true)]);
     for (final n in current.where((item) => !item.read)) {
       await _repo.markNotificationAsRead(n.id);
     }
   }
 }
 
-final creatorNotificationsProvider = NotifierProvider<
-    CreatorNotificationsNotifier, AsyncValue<List<CreatorStudioNotification>>>(
-  CreatorNotificationsNotifier.new,
-);
+final creatorNotificationsProvider =
+    NotifierProvider<
+      CreatorNotificationsNotifier,
+      AsyncValue<List<CreatorStudioNotification>>
+    >(CreatorNotificationsNotifier.new);
 
 final unreadCreatorNotificationsCountProvider = Provider<int>((ref) {
   final notifs = ref.watch(creatorNotificationsProvider).value ?? [];
   return notifs.where((n) => !n.read).length;
 });
-

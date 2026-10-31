@@ -114,11 +114,18 @@ abstract class CreatorRepository {
     String? filename,
     String? milestoneId,
   });
-  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(String milestoneId);
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(
+    String milestoneId,
+  );
   Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId);
   Future<void> requestTermination(String requestId, {required String reason});
   Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
   Future<void> disputeMilestone(String milestoneId, {required String reason});
+  Future<List<Map<String, dynamic>>> getChatMessages(
+    String requestId, {
+    int page = 0,
+    int size = 20,
+  });
   Future<void> sendChatMessage(String requestId, String message);
 
   // Wallet & Withdraw
@@ -130,6 +137,18 @@ abstract class CreatorRepository {
     String accountNumber,
     String accountHolder,
   );
+  Future<List<Map<String, dynamic>>> getMilestoneDrafts(String milestoneId);
+  Future<Map<String, dynamic>> uploadMilestoneDraft(
+    String milestoneId, {
+    required List<int> fileBytes,
+    required String filename,
+    String? note,
+  });
+  Future<Map<String, dynamic>> deliverMilestoneDraft(
+    String milestoneId,
+    String draftId,
+  );
+  Future<void> cancelMilestoneDraft(String milestoneId, String draftId);
   Future<void> deleteBankAccount(String id);
   Future<WalletTransaction> withdrawMoney(
     int amount,
@@ -150,7 +169,11 @@ abstract class CreatorRepository {
 
   // Comments
   Future<List<StudioComment>> getComments();
-  Future<List<StudioComment>> getPodcastComments(String podcastId, {int page = 0, int size = 50});
+  Future<List<StudioComment>> getPodcastComments(
+    String podcastId, {
+    int page = 0,
+    int size = 50,
+  });
   Future<int> getPodcastCommentsCount(String podcastId);
   Future<StudioComment?> addCommentToPodcast({
     required String podcastId,
@@ -216,10 +239,20 @@ abstract class CreatorRepository {
   Future<List<CreatorChannelPlan>> getMyChannelMembershipPlans();
   Future<List<CreatorPlanTemplate>> getMembershipPlanTemplates();
   Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode);
-  Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price);
-  Future<PageCreatorMembers> getCreatorMemberships({String status = 'ACTIVE', int page = 0, int size = 20});
+  Future<CreatorChannelPlan> updateMembershipPlanPrice(
+    String planId,
+    double price,
+  );
+  Future<PageCreatorMembers> getCreatorMemberships({
+    String status = 'ACTIVE',
+    int page = 0,
+    int size = 20,
+  });
 
   // Notifications
-  Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30});
+  Future<List<CreatorStudioNotification>> getNotifications({
+    int page = 0,
+    int size = 30,
+  });
   Future<void> markNotificationAsRead(String notificationId);
 }

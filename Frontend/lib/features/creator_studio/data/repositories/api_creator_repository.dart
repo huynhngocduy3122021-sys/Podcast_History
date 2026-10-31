@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
+
 import 'package:flutter/foundation.dart';
 
 import 'package:uuid/uuid.dart';
@@ -159,7 +160,8 @@ class ApiCreatorRepository implements CreatorRepository {
       final plans = await getSystemPlans();
       final paidPlan = plans.firstWhere(
         (p) => p.isPaid && p.isActive,
-        orElse: () => plans.firstWhere((p) => p.isPaid, orElse: () => plans.first),
+        orElse: () =>
+            plans.firstWhere((p) => p.isPaid, orElse: () => plans.first),
       );
       if (paidPlan.planId.isNotEmpty) {
         await subscribeSystemPlan(paidPlan.planId);
@@ -411,7 +413,8 @@ class ApiCreatorRepository implements CreatorRepository {
           if (dashRes is Map<String, dynamic> &&
               dashRes['metrics'] is Map<String, dynamic>) {
             final m = dashRes['metrics'] as Map<String, dynamic>;
-            totalCreatorListens = (m['totalListens'] as num?)?.toInt() ??
+            totalCreatorListens =
+                (m['totalListens'] as num?)?.toInt() ??
                 (m['views'] as num?)?.toInt() ??
                 0;
           }
@@ -533,7 +536,8 @@ class ApiCreatorRepository implements CreatorRepository {
       'categoryId': effectiveCategoryId,
       'title': title,
       'description': description.isNotEmpty ? description : null,
-      'thumbnailUrl': (effectiveCoverUrl != null && effectiveCoverUrl.length <= 2000)
+      'thumbnailUrl':
+          (effectiveCoverUrl != null && effectiveCoverUrl.length <= 2000)
           ? effectiveCoverUrl
           : null,
       'durationSeconds': durationSecs,
@@ -563,7 +567,9 @@ class ApiCreatorRepository implements CreatorRepository {
         mimeType: coverUpload.mimeType,
       );
       if (withCover == null) {
-        throw Exception('Upload ảnh bìa thất bại; podcast vẫn được lưu ở dạng nháp.');
+        throw Exception(
+          'Upload ảnh bìa thất bại; podcast vẫn được lưu ở dạng nháp.',
+        );
       }
       createdPodcast = withCover;
     }
@@ -697,7 +703,8 @@ class ApiCreatorRepository implements CreatorRepository {
       'categoryId': effectiveCategoryId,
       'title': title,
       'description': description.isNotEmpty ? description : null,
-      'thumbnailUrl': (effectiveCoverUrl != null && effectiveCoverUrl.length <= 2000)
+      'thumbnailUrl':
+          (effectiveCoverUrl != null && effectiveCoverUrl.length <= 2000)
           ? effectiveCoverUrl
           : null,
       'durationSeconds': durationSecs,
@@ -718,10 +725,7 @@ class ApiCreatorRepository implements CreatorRepository {
     } catch (_) {}
 
     if (seriesId != null && seriesId.isNotEmpty) {
-      await assignPodcastToSeries(
-        podcastId: id,
-        seriesId: seriesId,
-      );
+      await assignPodcastToSeries(podcastId: id, seriesId: seriesId);
     } else {
       await removePodcastFromSeries(podcastId: id);
     }
@@ -754,7 +758,9 @@ class ApiCreatorRepository implements CreatorRepository {
         mimeType: mimeType,
       );
       if (!uploaded) {
-        throw Exception('Không thể tải tệp âm thanh lên máy chủ. Vui lòng kiểm tra dung lượng tệp (< 10MB) và thử lại.');
+        throw Exception(
+          'Không thể tải tệp âm thanh lên máy chủ. Vui lòng kiểm tra dung lượng tệp (< 10MB) và thử lại.',
+        );
       }
     }
 
@@ -763,15 +769,17 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     final existingIndex = _cachedPodcasts.indexWhere((p) => p.id == id);
-    final existingPodcast = existingIndex != -1 ? _cachedPodcasts[existingIndex] : null;
+    final existingPodcast = existingIndex != -1
+        ? _cachedPodcasts[existingIndex]
+        : null;
 
     // Quy tắc: Nếu podcast trước đó đang là PUBLISHED, khi chỉnh sửa nó PHẢI chuyển sang DRAFT.
     // Nếu đang là PENDING_REVIEW (pendingAdmin), nó vẫn giữ nguyên PENDING_REVIEW.
     // Nếu đang là DRAFT, nó vẫn giữ nguyên DRAFT.
     final targetFallbackStatus = existingPodcast != null
         ? (existingPodcast.status == PodcastStatus.published
-            ? PodcastStatus.draft
-            : existingPodcast.status)
+              ? PodcastStatus.draft
+              : existingPodcast.status)
         : PodcastStatus.draft;
 
     final fallbackPodcast = existingPodcast != null
@@ -807,7 +815,8 @@ class ApiCreatorRepository implements CreatorRepository {
             seriesId: seriesId,
           );
 
-    final finalPodcast = updatedPodcast?.copyWith(
+    final finalPodcast =
+        updatedPodcast?.copyWith(
           audioFileName: audioFileName,
           sources: sources,
           eraTag: eraTag,
@@ -832,10 +841,8 @@ class ApiCreatorRepository implements CreatorRepository {
       headers: const {'ngrok-skip-browser-warning': '1'},
     );
     if (res is Map<String, dynamic>) {
-      final updated = _mapBackendPodcastToModel(res).copyWith(
-        status: PodcastStatus.pendingAdmin,
-        rejectReason: null,
-      );
+      final updated = _mapBackendPodcastToModel(res)
+          .copyWith(status: PodcastStatus.pendingAdmin, rejectReason: null);
       final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
       if (idx != -1) {
         _cachedPodcasts[idx] = updated;
@@ -888,7 +895,9 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     final mapped = _mapBackendPodcastToModel(res);
-    final index = _cachedPodcasts.indexWhere((podcast) => podcast.id == podcastId);
+    final index = _cachedPodcasts.indexWhere(
+      (podcast) => podcast.id == podcastId,
+    );
     if (index == -1) {
       _cachedPodcasts.add(mapped);
     } else {
@@ -957,12 +966,14 @@ class ApiCreatorRepository implements CreatorRepository {
     required String filename,
     String mimeType = 'video/mp4',
   }) async {
-    const maxAllowedBytes = 100 * 1024 * 1024; // Giới hạn theo cấu hình hệ thống: 100MB
+    const maxAllowedBytes =
+        100 * 1024 * 1024; // Giới hạn theo cấu hình hệ thống: 100MB
     if (fileBytes.length > maxAllowedBytes) {
       final sizeMb = (fileBytes.length / (1024 * 1024)).toStringAsFixed(1);
       throw ApiException(
         statusCode: 413,
-        message: 'Tệp tải lên (${sizeMb}MB) vượt quá giới hạn tối đa của hệ thống (100MB). Vui lòng chọn tệp nhỏ hơn 100MB.',
+        message:
+            'Tệp tải lên (${sizeMb}MB) vượt quá giới hạn tối đa của hệ thống (100MB). Vui lòng chọn tệp nhỏ hơn 100MB.',
       );
     }
 
@@ -978,7 +989,8 @@ class ApiCreatorRepository implements CreatorRepository {
       if (res != null) {
         if (res is Map<String, dynamic>) {
           final media = res['media'] as Map<String, dynamic>?;
-          final objKey = media?['objectKey']?.toString() ?? res['mediaUrl']?.toString();
+          final objKey =
+              media?['objectKey']?.toString() ?? res['mediaUrl']?.toString();
           final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
           if (idx != -1 && objKey != null && objKey.isNotEmpty) {
             _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
@@ -1100,15 +1112,20 @@ class ApiCreatorRepository implements CreatorRepository {
       return const [];
     }
     try {
-      // Call GET /api/creator/requests/incoming
-      final response = await _apiClient.get(ApiEndpoints.incomingRequests);
-      if (response is List) {
+      final responses = await Future.wait<dynamic>([
+        _apiClient.get(ApiEndpoints.incomingRequests),
+        _apiClient.get(ApiEndpoints.creatorContractRequests),
+      ]);
+      final rawRequests = <Map<String, dynamic>>[];
+      for (final response in responses) {
+        if (response is List) {
+          rawRequests.addAll(response.whereType<Map<String, dynamic>>());
+        }
+      }
+      if (rawRequests.isNotEmpty) {
         final list = <PodcastRequest>[];
-        for (final item in response) {
-          if (item is Map<String, dynamic>) {
-            final req = await _mapBackendRequestToModel(item);
-            list.add(req);
-          }
+        for (final item in rawRequests) {
+          list.add(await _mapBackendRequestToModel(item));
         }
         // Preserve any processed requests (accepted, inProduction, delivered, completed, rejected)
         final nonPending = _cachedRequests
@@ -1150,13 +1167,16 @@ class ApiCreatorRepository implements CreatorRepository {
     final req = await getRequestById(id);
     final totalBudget = req?.totalBudget ?? 0;
 
-    final defaultMilestones = milestones ?? [
-      {
-        'name': 'Bản thu âm podcast hoàn chỉnh',
-        'description': 'Sản xuất và bàn giao bản audio theo đúng chủ đề yêu cầu.',
-        'amount': totalBudget.toDouble(),
-      },
-    ];
+    final defaultMilestones =
+        milestones ??
+        [
+          {
+            'name': 'Bản thu âm podcast hoàn chỉnh',
+            'description':
+                'Sản xuất và bàn giao bản audio theo đúng chủ đề yêu cầu.',
+            'amount': totalBudget.toDouble(),
+          },
+        ];
 
     final body = {
       'responseText': responseText?.trim().isNotEmpty == true
@@ -1167,24 +1187,31 @@ class ApiCreatorRepository implements CreatorRepository {
 
     List<RequestMilestone> realMilestones = [];
     try {
-      final res = await _apiClient.post(ApiEndpoints.acceptRequest(id), body: body);
+      final res = await _apiClient.post(
+        ApiEndpoints.acceptRequest(id),
+        body: body,
+      );
       if (res is Map<String, dynamic>) {
         final milestonesJson = res['milestones'];
         if (milestonesJson is List) {
           for (final m in milestonesJson) {
             if (m is Map<String, dynamic>) {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
-              final statusStr = (m['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+              final statusStr = (m['status'] as String? ?? 'NOT_STARTED')
+                  .toUpperCase();
               realMilestones.add(
                 RequestMilestone(
                   id: m['milestoneId']?.toString() ?? '',
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
                   order: (m['order'] as num?)?.toInt() ?? 1,
-                  percentage: totalBudget > 0 ? ((mAmount / totalBudget) * 100).toInt() : 100,
+                  percentage: totalBudget > 0
+                      ? ((mAmount / totalBudget) * 100).toInt()
+                      : 100,
                   amount: mAmount,
                   status: statusStr,
-                  isCompleted: statusStr == 'APPROVED' || statusStr == 'SUBMITTED',
+                  isCompleted:
+                      statusStr == 'APPROVED' || statusStr == 'SUBMITTED',
                   isApproved: statusStr == 'APPROVED',
                 ),
               );
@@ -1204,17 +1231,21 @@ class ApiCreatorRepository implements CreatorRepository {
           for (final m in res) {
             if (m is Map<String, dynamic>) {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
-              final statusStr = (m['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+              final statusStr = (m['status'] as String? ?? 'NOT_STARTED')
+                  .toUpperCase();
               realMilestones.add(
                 RequestMilestone(
                   id: m['milestoneId']?.toString() ?? '',
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
                   order: (m['order'] as num?)?.toInt() ?? 1,
-                  percentage: totalBudget > 0 ? ((mAmount / totalBudget) * 100).toInt() : 100,
+                  percentage: totalBudget > 0
+                      ? ((mAmount / totalBudget) * 100).toInt()
+                      : 100,
                   amount: mAmount,
                   status: statusStr,
-                  isCompleted: statusStr == 'APPROVED' || statusStr == 'SUBMITTED',
+                  isCompleted:
+                      statusStr == 'APPROVED' || statusStr == 'SUBMITTED',
                   isApproved: statusStr == 'APPROVED',
                 ),
               );
@@ -1229,7 +1260,9 @@ class ApiCreatorRepository implements CreatorRepository {
       final existing = _cachedRequests[index];
       _cachedRequests[index] = existing.copyWith(
         status: CustomRequestStatus.accepted,
-        milestones: realMilestones.isNotEmpty ? realMilestones : existing.milestones,
+        milestones: realMilestones.isNotEmpty
+            ? realMilestones
+            : existing.milestones,
       );
     }
   }
@@ -1414,7 +1447,10 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> requestTermination(String requestId, {required String reason}) async {
+  Future<void> requestTermination(
+    String requestId, {
+    required String reason,
+  }) async {
     await _apiClient.post(
       ApiEndpoints.contractTerminationRequest(requestId),
       body: {'reason': reason.trim()},
@@ -1434,7 +1470,9 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<ContractTerminationStatus?> getTerminationRequest(String requestId) async {
+  Future<ContractTerminationStatus?> getTerminationRequest(
+    String requestId,
+  ) async {
     try {
       final res = await _apiClient.get(
         ApiEndpoints.getContractTerminationRequest(requestId),
@@ -1449,7 +1487,10 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<void> disputeMilestone(String milestoneId, {required String reason}) async {
+  Future<void> disputeMilestone(
+    String milestoneId, {
+    required String reason,
+  }) async {
     await _apiClient.post(
       ApiEndpoints.milestoneDispute(milestoneId),
       body: {'reason': reason.trim()},
@@ -1465,13 +1506,15 @@ class ApiCreatorRepository implements CreatorRepository {
     String? filename,
     String? milestoneId,
   }) async {
+    var uploadedDraft = false;
     try {
       final req = await getRequestById(id);
       String? targetMilestoneId = milestoneId;
       if (targetMilestoneId == null || targetMilestoneId.isEmpty) {
         if (req != null && req.milestones.isNotEmpty) {
           final pendingMilestone = req.milestones.firstWhere(
-            (m) => m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED',
+            (m) =>
+                m.status == 'NOT_STARTED' || m.status == 'REVISION_REQUESTED',
             orElse: () => req.milestones.first,
           );
           targetMilestoneId = pendingMilestone.id;
@@ -1480,13 +1523,25 @@ class ApiCreatorRepository implements CreatorRepository {
 
       if (targetMilestoneId != null && targetMilestoneId.isNotEmpty) {
         if (fileBytes != null && fileBytes.isNotEmpty) {
-          await _apiClient.uploadMultipart(
-            ApiEndpoints.submitMilestone(targetMilestoneId),
-            fileFieldName: 'file',
-            filename: filename ?? 'delivery.mp3',
-            fileBytes: fileBytes,
-            fields: {'note': note},
-          );
+          if (req?.hasEscrow == true) {
+            // Escrow contracts require AI review before delivery. Uploading a
+            // file must not start the listener's 3-day acceptance window.
+            await uploadMilestoneDraft(
+              targetMilestoneId,
+              fileBytes: fileBytes,
+              filename: filename ?? 'draft.mp3',
+              note: note,
+            );
+            uploadedDraft = true;
+          } else {
+            await _apiClient.uploadMultipart(
+              ApiEndpoints.submitMilestone(targetMilestoneId),
+              fileFieldName: 'file',
+              filename: filename ?? 'delivery.mp3',
+              fileBytes: fileBytes,
+              fields: {'note': note},
+            );
+          }
         }
       }
     } catch (e) {
@@ -1494,17 +1549,22 @@ class ApiCreatorRepository implements CreatorRepository {
       rethrow;
     }
 
+    if (uploadedDraft) return;
+
     // Refresh request milestones from backend
     final index = _cachedRequests.indexWhere((r) => r.id == id);
     if (index != -1) {
       final updatedMilestones = <RequestMilestone>[];
       try {
-        final milestonesRes = await _apiClient.get(ApiEndpoints.requestMilestones(id));
+        final milestonesRes = await _apiClient.get(
+          ApiEndpoints.requestMilestones(id),
+        );
         if (milestonesRes is List && milestonesRes.isNotEmpty) {
           for (final m in milestonesRes) {
             if (m is Map<String, dynamic>) {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
-              final mStatus = (m['status'] as String? ?? 'SUBMITTED').toUpperCase();
+              final mStatus = (m['status'] as String? ?? 'SUBMITTED')
+                  .toUpperCase();
               updatedMilestones.add(
                 RequestMilestone(
                   id: m['milestoneId']?.toString() ?? '',
@@ -1512,7 +1572,8 @@ class ApiCreatorRepository implements CreatorRepository {
                   description: m['description'] as String?,
                   order: (m['order'] as num?)?.toInt() ?? 1,
                   percentage: _cachedRequests[index].totalBudget > 0
-                      ? ((mAmount / _cachedRequests[index].totalBudget) * 100).toInt()
+                      ? ((mAmount / _cachedRequests[index].totalBudget) * 100)
+                            .toInt()
                       : 100,
                   amount: mAmount,
                   status: mStatus,
@@ -1531,14 +1592,90 @@ class ApiCreatorRepository implements CreatorRepository {
         status: CustomRequestStatus.delivered,
         deliveryFileUrl: fileUrl,
         deliveryNote: note,
-        milestones: updatedMilestones.isNotEmpty ? updatedMilestones : _cachedRequests[index].milestones,
+        milestones: updatedMilestones.isNotEmpty
+            ? updatedMilestones
+            : _cachedRequests[index].milestones,
       );
     }
   }
 
   @override
+  Future<List<Map<String, dynamic>>> getMilestoneDrafts(
+    String milestoneId,
+  ) async {
+    final res = await _apiClient.get(ApiEndpoints.milestoneDrafts(milestoneId));
+    return res is List
+        ? res.whereType<Map<String, dynamic>>().toList(growable: false)
+        : const [];
+  }
+
+  @override
+  Future<Map<String, dynamic>> uploadMilestoneDraft(
+    String milestoneId, {
+    required List<int> fileBytes,
+    required String filename,
+    String? note,
+  }) async {
+    final res = await _apiClient.uploadMultipart(
+      ApiEndpoints.milestoneDrafts(milestoneId),
+      fileFieldName: 'file',
+      filename: filename,
+      fileBytes: fileBytes,
+      fields: {if (note != null && note.trim().isNotEmpty) 'note': note.trim()},
+    );
+    if (res is Map<String, dynamic>) return res;
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi bản nháp không hợp lệ.',
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> deliverMilestoneDraft(
+    String milestoneId,
+    String draftId,
+  ) async {
+    final res = await _apiClient.post(
+      ApiEndpoints.deliverMilestoneDraft(milestoneId, draftId),
+    );
+    if (res is Map<String, dynamic>) return res;
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi bàn giao không hợp lệ.',
+    );
+  }
+
+  @override
+  Future<void> cancelMilestoneDraft(String milestoneId, String draftId) async {
+    await _apiClient.post(
+      ApiEndpoints.cancelMilestoneDraft(milestoneId, draftId),
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getChatMessages(
+    String requestId, {
+    int page = 0,
+    int size = 20,
+  }) async {
+    final res = await _apiClient.get(
+      ApiEndpoints.requestChatMessages(requestId),
+      queryParams: {'page': page, 'size': size},
+    );
+    final items = res is List
+        ? res
+        : res is Map<String, dynamic> && res['content'] is List
+        ? res['content'] as List
+        : const [];
+    return items.whereType<Map<String, dynamic>>().toList();
+  }
+
+  @override
   Future<void> sendChatMessage(String requestId, String message) async {
-    // Chat endpoint is not supported by backend for SeriesRequest
+    await _apiClient.post(
+      ApiEndpoints.requestChatMessages(requestId),
+      body: {'clientMessageId': _uuid.v4(), 'content': message.trim()},
+    );
   }
 
   // ==========================================
@@ -1575,34 +1712,103 @@ class ApiCreatorRepository implements CreatorRepository {
     };
   }
 
+  String _walletTransactionTitle(dynamic rawType) {
+    switch ('${rawType ?? ''}'.toUpperCase()) {
+      case 'REQUEST_EARNING':
+      case 'CONTRACT_PAYMENT':
+      case 'MILESTONE_RELEASE':
+        return 'Thu nhập từ hợp đồng';
+      case 'MEMBERSHIP':
+        return 'Thu nhập hội viên';
+      case 'WALLET_TOPUP':
+      case 'TOP_UP':
+        return 'Nạp tiền vào ví';
+      case 'REFUND':
+        return 'Hoàn tiền';
+      case 'WITHDRAWAL':
+        return 'Yêu cầu rút tiền';
+      default:
+        return 'Giao dịch ví';
+    }
+  }
+
+  TransactionType _walletTransactionType(dynamic rawType) {
+    switch ('${rawType ?? ''}'.toUpperCase()) {
+      case 'REQUEST_EARNING':
+      case 'CONTRACT_PAYMENT':
+      case 'MILESTONE_RELEASE':
+        return TransactionType.requestEarning;
+      case 'MEMBERSHIP':
+        return TransactionType.membership;
+      case 'REFUND':
+        return TransactionType.refund;
+      default:
+        return TransactionType.withdrawal;
+    }
+  }
+
+  int _walletTransactionAmount(Map<String, dynamic> item) {
+    final rawAmount = (item['amount'] as num?)?.toInt() ?? 0;
+    final direction = '${item['direction'] ?? ''}'.toUpperCase();
+    if (direction == 'DEBIT' || direction == 'OUT') {
+      return -rawAmount.abs();
+    }
+    if (direction == 'CREDIT' || direction == 'IN') {
+      return rawAmount.abs();
+    }
+    return rawAmount;
+  }
+
   @override
   Future<List<WalletTransaction>> getTransactions() async {
     if (!_apiClient.isAuthenticated) {
       return const [];
     }
     try {
-      final res = await _apiClient.get(ApiEndpoints.creatorTransactions);
-      if (res is List) {
-        final transactions = res.whereType<Map<String, dynamic>>().map((item) {
-          final status = (item['status']?.toString() ?? '').toUpperCase();
-          final transactionStatus = switch (status) {
-            'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
-            'FAILED' || 'REJECTED' || 'CANCELLED' => TransactionStatus.failed,
-            'PENDING' => TransactionStatus.holding,
-            _ => TransactionStatus.processing,
-          };
-          return WalletTransaction(
-            id: item['withdrawalRequestId']?.toString() ?? _uuid.v4(),
-            title: 'Yêu cầu rút tiền',
-            type: TransactionType.withdrawal,
-            amount: -((item['amount'] as num?)?.toInt() ?? 0),
-            status: transactionStatus,
-            createdAt:
-                DateTime.tryParse(item['requestedAt']?.toString() ?? '') ??
-                DateTime.now(),
-            note: item['note']?.toString(),
-          );
-        }).toList();
+      final res = await _apiClient.get(
+        ApiEndpoints.creatorTransactions,
+        queryParams: const {'page': 0, 'size': 20},
+      );
+      final rawTransactions = res is List
+          ? res
+          : res is Map<String, dynamic> && res['content'] is List
+          ? res['content'] as List
+          : const [];
+      if (rawTransactions.isNotEmpty) {
+        final transactions = rawTransactions
+            .whereType<Map<String, dynamic>>()
+            .map((item) {
+              final status = (item['status']?.toString() ?? '').toUpperCase();
+              final transactionStatus = switch (status) {
+                'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
+                'FAILED' ||
+                'REJECTED' ||
+                'CANCELLED' => TransactionStatus.failed,
+                'PENDING' => TransactionStatus.holding,
+                _ => TransactionStatus.processing,
+              };
+              return WalletTransaction(
+                id:
+                    item['transactionId']?.toString() ??
+                    item['walletTransactionId']?.toString() ??
+                    item['withdrawalRequestId']?.toString() ??
+                    _uuid.v4(),
+                title: _walletTransactionTitle(item['type']),
+                type: _walletTransactionType(item['type']),
+                amount: _walletTransactionAmount(item),
+                status: transactionStatus,
+                createdAt:
+                    DateTime.tryParse(
+                      item['createdAt']?.toString() ??
+                          item['occurredAt']?.toString() ??
+                          item['requestedAt']?.toString() ??
+                          '',
+                    ) ??
+                    DateTime.now(),
+                note: item['note']?.toString(),
+              );
+            })
+            .toList();
         _cachedTransactions
           ..clear()
           ..addAll(transactions);
@@ -1787,7 +1993,11 @@ class ApiCreatorRepository implements CreatorRepository {
         likedByMe: true,
       );
     }
-    return {'podcastId': podcastId, 'likeCount': fallbackCount, 'likedByMe': true};
+    return {
+      'podcastId': podcastId,
+      'likeCount': fallbackCount,
+      'likedByMe': true,
+    };
   }
 
   @override
@@ -1802,7 +2012,8 @@ class ApiCreatorRepository implements CreatorRepository {
         final likedByMe = res['likedByMe'] == true;
         final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
         if (idx != -1) {
-          final resolvedCount = count ??
+          final resolvedCount =
+              count ??
               (_cachedPodcasts[idx].likesCount > 0
                   ? _cachedPodcasts[idx].likesCount - 1
                   : 0);
@@ -1817,8 +2028,8 @@ class ApiCreatorRepository implements CreatorRepository {
     final idx = _cachedPodcasts.indexWhere((p) => p.id == podcastId);
     final fallbackCount = idx != -1
         ? (_cachedPodcasts[idx].likesCount > 0
-            ? _cachedPodcasts[idx].likesCount - 1
-            : 0)
+              ? _cachedPodcasts[idx].likesCount - 1
+              : 0)
         : 0;
     if (idx != -1) {
       _cachedPodcasts[idx] = _cachedPodcasts[idx].copyWith(
@@ -1826,7 +2037,11 @@ class ApiCreatorRepository implements CreatorRepository {
         likedByMe: false,
       );
     }
-    return {'podcastId': podcastId, 'likeCount': fallbackCount, 'likedByMe': false};
+    return {
+      'podcastId': podcastId,
+      'likeCount': fallbackCount,
+      'likedByMe': false,
+    };
   }
 
   @override
@@ -1838,10 +2053,7 @@ class ApiCreatorRepository implements CreatorRepository {
     try {
       await _apiClient.put(
         ApiEndpoints.podcastListeningProgress(podcastId),
-        body: {
-          'progressSeconds': progressSeconds,
-          'completed': completed,
-        },
+        body: {'progressSeconds': progressSeconds, 'completed': completed},
         headers: const {'ngrok-skip-browser-warning': '1'},
       );
     } catch (_) {}
@@ -1973,12 +2185,12 @@ class ApiCreatorRepository implements CreatorRepository {
       orElse: () => null,
     );
     if (cached != null && cached.status != PodcastStatus.published) {
-      throw Exception('Tập podcast chỉ có thể nhận bình luận sau khi đã được xuất bản.');
+      throw Exception(
+        'Tập podcast chỉ có thể nhận bình luận sau khi đã được xuất bản.',
+      );
     }
     try {
-      final body = <String, dynamic>{
-        'content': content,
-      };
+      final body = <String, dynamic>{'content': content};
       if (timestampSeconds != null && timestampSeconds >= 0) {
         body['timestampSeconds'] = timestampSeconds;
       }
@@ -2083,7 +2295,11 @@ class ApiCreatorRepository implements CreatorRepository {
         likedByMe: true,
       );
     }
-    return {'commentId': commentId, 'likeCount': fallbackCount, 'likedByMe': true};
+    return {
+      'commentId': commentId,
+      'likeCount': fallbackCount,
+      'likedByMe': true,
+    };
   }
 
   @override
@@ -2099,7 +2315,8 @@ class ApiCreatorRepository implements CreatorRepository {
         final idx = _cachedComments.indexWhere((c) => c.id == commentId);
         if (idx != -1) {
           _cachedComments[idx] = _cachedComments[idx].copyWith(
-            likesCount: count ??
+            likesCount:
+                count ??
                 (_cachedComments[idx].likesCount > 0
                     ? _cachedComments[idx].likesCount - 1
                     : 0),
@@ -2112,8 +2329,8 @@ class ApiCreatorRepository implements CreatorRepository {
     final idx = _cachedComments.indexWhere((c) => c.id == commentId);
     final fallbackCount = idx != -1
         ? (_cachedComments[idx].likesCount > 0
-            ? _cachedComments[idx].likesCount - 1
-            : 0)
+              ? _cachedComments[idx].likesCount - 1
+              : 0)
         : 0;
     if (idx != -1) {
       _cachedComments[idx] = _cachedComments[idx].copyWith(
@@ -2121,7 +2338,11 @@ class ApiCreatorRepository implements CreatorRepository {
         likedByMe: false,
       );
     }
-    return {'commentId': commentId, 'likeCount': fallbackCount, 'likedByMe': false};
+    return {
+      'commentId': commentId,
+      'likeCount': fallbackCount,
+      'likedByMe': false,
+    };
   }
 
   // ==========================================
@@ -2469,7 +2690,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
     final mediaKeyStr = json['mediaKey'] as String?;
     String? resolvedAudioName = json['audioFileName'] as String?;
-    if (resolvedAudioName == null && mediaKeyStr != null && mediaKeyStr.isNotEmpty) {
+    if (resolvedAudioName == null &&
+        mediaKeyStr != null &&
+        mediaKeyStr.isNotEmpty) {
       resolvedAudioName = mediaKeyStr.split('/').last;
     }
     String? resolvedMediaType = json['mediaType'] as String?;
@@ -2496,14 +2719,17 @@ class ApiCreatorRepository implements CreatorRepository {
       eraTag: json['categoryName'] as String? ?? '',
       sources: '',
       isExclusive: isExclusive,
-      listensCount: (json['listenCount'] as num?)?.toInt() ??
+      listensCount:
+          (json['listenCount'] as num?)?.toInt() ??
           (json['listensCount'] as num?)?.toInt() ??
           0,
-      likesCount: (json['likeCount'] as num?)?.toInt() ??
+      likesCount:
+          (json['likeCount'] as num?)?.toInt() ??
           (json['likesCount'] as num?)?.toInt() ??
           0,
       likedByMe: json['likedByMe'] == true,
-      commentsCount: (json['commentCount'] as num?)?.toInt() ??
+      commentsCount:
+          (json['commentCount'] as num?)?.toInt() ??
           (json['commentsCount'] as num?)?.toInt() ??
           0,
       status: status,
@@ -2548,7 +2774,15 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     final requestId = json['requestId']?.toString() ?? _uuid.v4();
-    final budgetNum = json['proposedBudget'] as num? ?? 0;
+
+    // The escrow list uses RequestDetail field names, while the legacy inbox
+    // uses SeriesRequestResponse names. Normalize both before rendering UI.
+    final detail = await _loadContractRequestDetail(requestId);
+    final source = <String, dynamic>{...json, ...?detail};
+    final budgetNum =
+        (source['budgetAmount'] as num?) ??
+        (source['proposedBudget'] as num?) ??
+        0;
     final totalBudget = budgetNum.toInt();
 
     final milestones = <RequestMilestone>[];
@@ -2593,9 +2827,13 @@ class ApiCreatorRepository implements CreatorRepository {
                 var sub = MilestoneSubmissionItem.fromJson(sItem);
                 try {
                   final mediaRes = await _apiClient.get(
-                    ApiEndpoints.milestoneMedia(stage.milestoneId, sub.submissionId),
+                    ApiEndpoints.milestoneMedia(
+                      stage.milestoneId,
+                      sub.submissionId,
+                    ),
                   );
-                  if (mediaRes is Map<String, dynamic> && mediaRes['url'] != null) {
+                  if (mediaRes is Map<String, dynamic> &&
+                      mediaRes['url'] != null) {
                     sub = sub.copyWith(mediaUrl: mediaRes['url'] as String);
                   }
                 } catch (_) {}
@@ -2655,7 +2893,8 @@ class ApiCreatorRepository implements CreatorRepository {
           for (final m in milestonesRes) {
             if (m is Map<String, dynamic>) {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
-              final mStatus = (m['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+              final mStatus = (m['status'] as String? ?? 'NOT_STARTED')
+                  .toUpperCase();
               final milestoneId = m['milestoneId']?.toString() ?? '';
 
               String? subUrl;
@@ -2710,14 +2949,17 @@ class ApiCreatorRepository implements CreatorRepository {
         ? 'Người nghe #${listenerIdStr.substring(0, 6)}'
         : 'Người nghe';
 
-    final hasEscrow = agreement != null || totalBudget > 0;
+    final hasEscrow = agreement != null || detail != null;
 
     return PodcastRequest(
       id: requestId,
       listenerName: listenerDisplay,
       listenerAvatar: '',
-      topic: json['title'] as String? ?? 'Yêu cầu podcast',
-      description: json['description'] as String? ?? '',
+      topic:
+          source['requestedTitle'] as String? ??
+          source['title'] as String? ??
+          'Yêu cầu podcast',
+      description: source['description'] as String? ?? '',
       totalBudget: agreement?.budgetAmount ?? totalBudget,
       milestones: milestones,
       status: status,
@@ -2727,8 +2969,26 @@ class ApiCreatorRepository implements CreatorRepository {
       hasEscrow: hasEscrow,
       contract: agreement,
       termination: termStatus,
+      productType: source['productType'] as String?,
+      fileFormat: source['fileFormat'] as String?,
+      duration: source['duration'] as String?,
+      acceptanceCriteria: source['acceptanceCriteria'] as String?,
+      autoAcceptEnabled: source['autoAcceptEnabled'] as bool? ?? false,
       submissions: allSubmissions,
     );
+  }
+
+  Future<Map<String, dynamic>?> _loadContractRequestDetail(
+    String requestId,
+  ) async {
+    try {
+      final detail = await _apiClient.get(
+        ApiEndpoints.contractRequestDetail(requestId),
+      );
+      return detail is Map<String, dynamic> ? detail : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   // Livestreams (Agora RTC)
@@ -2750,7 +3010,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<CreatorLivestreamItem> getLivestreamById(String livestreamId) async {
-    final res = await _apiClient.get(ApiEndpoints.creatorLivestreamById(livestreamId));
+    final res = await _apiClient.get(
+      ApiEndpoints.creatorLivestreamById(livestreamId),
+    );
     if (res is Map<String, dynamic>) {
       return CreatorLivestreamItem.fromJson(res);
     }
@@ -2770,7 +3032,10 @@ class ApiCreatorRepository implements CreatorRepository {
           : null,
       'scheduledAt': scheduledAt?.toUtc().toIso8601String(),
     };
-    final res = await _apiClient.post(ApiEndpoints.creatorLivestreams, body: body);
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorLivestreams,
+      body: body,
+    );
     if (res is Map<String, dynamic>) {
       return CreatorLivestreamItem.fromJson(res);
     }
@@ -2779,7 +3044,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<AgoraJoinResponse> startLivestream(String livestreamId) async {
-    final res = await _apiClient.post(ApiEndpoints.creatorLivestreamStart(livestreamId));
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorLivestreamStart(livestreamId),
+    );
     if (res is Map<String, dynamic>) {
       return AgoraJoinResponse.fromJson(res);
     }
@@ -2788,7 +3055,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<AgoraJoinResponse> renewLivestreamToken(String livestreamId) async {
-    final res = await _apiClient.post(ApiEndpoints.creatorLivestreamToken(livestreamId));
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorLivestreamToken(livestreamId),
+    );
     if (res is Map<String, dynamic>) {
       return AgoraJoinResponse.fromJson(res);
     }
@@ -2797,7 +3066,9 @@ class ApiCreatorRepository implements CreatorRepository {
 
   @override
   Future<CreatorLivestreamItem> endLivestream(String livestreamId) async {
-    final res = await _apiClient.post(ApiEndpoints.creatorLivestreamEnd(livestreamId));
+    final res = await _apiClient.post(
+      ApiEndpoints.creatorLivestreamEnd(livestreamId),
+    );
     if (res is Map<String, dynamic>) {
       return CreatorLivestreamItem.fromJson(res);
     }
@@ -2844,7 +3115,9 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode) async {
+  Future<CreatorChannelPlan> selectMembershipTemplate(
+    String templateCode,
+  ) async {
     final res = await _apiClient.put(
       ApiEndpoints.selectMembershipTemplate(templateCode),
       headers: const {'ngrok-skip-browser-warning': '1'},
@@ -2856,7 +3129,10 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price) async {
+  Future<CreatorChannelPlan> updateMembershipPlanPrice(
+    String planId,
+    double price,
+  ) async {
     final res = await _apiClient.put(
       ApiEndpoints.updateMembershipPlanPrice(planId),
       body: {'price': price},
@@ -2896,7 +3172,10 @@ class ApiCreatorRepository implements CreatorRepository {
 
   // Notifications
   @override
-  Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30}) async {
+  Future<List<CreatorStudioNotification>> getNotifications({
+    int page = 0,
+    int size = 30,
+  }) async {
     try {
       final res = await _apiClient.get(
         '${ApiEndpoints.notifications}?page=$page&size=$size',

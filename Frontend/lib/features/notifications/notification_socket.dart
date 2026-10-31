@@ -34,6 +34,7 @@ class NotificationSocket {
   final _topicHandlers = <String, NotificationMessageHandler>{};
   final _topicSubscriptions = <String, StompUnsubscribe>{};
   final _realtimeListeners = <NotificationMessageHandler>[];
+  final _reconnectListeners = <void Function()>[];
   bool _connectedOnce = false;
 
   void connect() => _client.activate();
@@ -52,6 +53,11 @@ class NotificationSocket {
   void Function() addRealtimeListener(NotificationMessageHandler handler) {
     _realtimeListeners.add(handler);
     return () => _realtimeListeners.remove(handler);
+  }
+
+  void Function() addReconnectListener(void Function() handler) {
+    _reconnectListeners.add(handler);
+    return () => _reconnectListeners.remove(handler);
   }
 
   void unlisten(String destination) {
@@ -96,7 +102,12 @@ class NotificationSocket {
     for (final destination in _topicHandlers.keys) {
       _subscribeTopic(destination);
     }
-    if (_connectedOnce) onReconnected();
+    if (_connectedOnce) {
+      onReconnected();
+      for (final listener in List.of(_reconnectListeners)) {
+        listener();
+      }
+    }
     _connectedOnce = true;
   }
 

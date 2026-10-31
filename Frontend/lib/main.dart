@@ -1293,6 +1293,14 @@ class _ShellState extends State<Shell> {
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
         onWallet: _openWallet,
+        onMessages: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ListenerCreatorContactsPage(
+              api: api,
+              socket: _notificationSocket,
+            ),
+          ),
+        ),
         hasUnreadNotifications: notifications.any((item) => !item.read),
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
@@ -2238,6 +2246,7 @@ class Home extends StatelessWidget {
     required this.onOpen,
     required this.onSearch,
     required this.onWallet,
+    required this.onMessages,
     required this.hasUnreadNotifications,
     required this.onNotifications,
     required this.onProfile,
@@ -2246,7 +2255,7 @@ class Home extends StatelessWidget {
   final List<Map<String, dynamic>> categories;
   final ValueChanged<Show> onPlay;
   final ValueChanged<Show> onOpen;
-  final VoidCallback onSearch, onWallet, onNotifications, onProfile;
+  final VoidCallback onSearch, onWallet, onMessages, onNotifications, onProfile;
   final bool hasUnreadNotifications;
   @override
   Widget build(BuildContext context) => CustomScrollView(
@@ -2293,6 +2302,11 @@ class Home extends StatelessWidget {
                 onPressed: onWallet,
                 tooltip: 'Ví',
                 icon: const Icon(Icons.account_balance_wallet_outlined),
+              ),
+              IconButton(
+                onPressed: onMessages,
+                tooltip: 'Nhắn tin',
+                icon: const Icon(Icons.chat_bubble_outline),
               ),
               IconButton(
                 onPressed: onNotifications,
@@ -4310,6 +4324,153 @@ class Profile extends StatelessWidget {
   );
 }
 
+class ListenerCreatorContactsPage extends StatefulWidget {
+  const ListenerCreatorContactsPage({
+    super.key,
+    required this.api,
+    required this.socket,
+  });
+  final ListenerApi api;
+  final NotificationSocket socket;
+
+  @override
+  State<ListenerCreatorContactsPage> createState() =>
+      _ListenerCreatorContactsPageState();
+}
+
+class _ListenerCreatorContactsPageState
+    extends State<ListenerCreatorContactsPage> {
+  late Future<List<Map<String, dynamic>>> future = widget.api
+      .requestFlowRequests();
+
+  Future<void> _openContact(
+    BuildContext context,
+    String creatorName,
+    List<Map<String, dynamic>> contracts,
+  ) async {
+    Map<String, dynamic>? selected;
+    if (contracts.length == 1) {
+      selected = contracts.first;
+    } else {
+      selected = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              Text(
+                'Chọn hợp đồng với $creatorName',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...contracts.map(
+                (contract) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined),
+                  title: Text('${contract['title'] ?? 'Hợp đồng sản xuất'}'),
+                  subtitle: Text('${contract['status'] ?? 'IN_PROGRESS'}'),
+                  onTap: () => Navigator.pop(sheetContext, contract),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (!mounted || selected == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ListenerRequestDetailPage(
+          api: widget.api,
+          socket: widget.socket,
+          request: selected!,
+          openChat: true,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Nhắn tin với CC')),
+    body: FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text('Không thể tải danh sách CC: ${snapshot.error}'),
+          );
+        }
+        final grouped = <String, List<Map<String, dynamic>>>{};
+        for (final request in snapshot.data ?? const []) {
+          final status = '${request['status'] ?? ''}'.toUpperCase();
+          if (!{
+            'ACCEPTED',
+            'PENDING_SIGNATURE',
+            'IN_PROGRESS',
+            'DISPUTED',
+            'COMPLETED',
+          }.contains(status))
+            continue;
+          final key =
+              request['creatorProfileId']?.toString() ??
+              '${request['creatorChannelName'] ?? 'creator'}';
+          grouped.putIfAbsent(key, () => []).add(request);
+        }
+        final contacts = grouped.entries.toList();
+        if (contacts.isEmpty) {
+          return const Center(child: Text('Chưa có CC nào trong hợp đồng.'));
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: contacts.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemBuilder: (_, index) {
+            final requests = contacts[index].value;
+            final first = requests.first;
+            final creatorName =
+                '${first['creatorChannelName'] ?? 'Content Creator'}';
+            return Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.black.withAlpha(24)),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
+                ),
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFC92822),
+                  child: Icon(Icons.headphones_rounded, color: Colors.white),
+                ),
+                title: Text(
+                  creatorName,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  '${requests.length} hợp đồng • Nhắn tin trực tiếp',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _openContact(context, creatorName, requests),
+              ),
+            );
+          },
+        );
+      },
+    ),
+  );
+}
+
 class ListenerRequestsPage extends StatefulWidget {
   const ListenerRequestsPage({
     super.key,
@@ -4389,10 +4550,12 @@ class ListenerRequestDetailPage extends StatefulWidget {
     required this.api,
     required this.socket,
     required this.request,
+    this.openChat = false,
   });
   final ListenerApi api;
   final NotificationSocket socket;
   final Map<String, dynamic> request;
+  final bool openChat;
 
   @override
   State<ListenerRequestDetailPage> createState() =>
@@ -4403,19 +4566,25 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   final messageController = TextEditingController();
   late Future<List<Map<String, dynamic>>> messages = _loadMessages();
   late Future<List<Map<String, dynamic>>> milestones = _loadMilestones();
+  late Future<Map<String, dynamic>?> contract = _loadContract();
   bool sending = false;
+  bool signing = false;
   final Set<String> completedMilestones = <String>{};
   final Set<String> loadingMilestones = <String>{};
   AudioPlayer? _submissionPlayer;
   StreamSubscription<void>? _playerCompleteSubscription;
   String? _playingMilestoneId;
   late final String _requestTopic;
+  static const _contractChatQueue = '/user/queue/contract-chat';
+  void Function()? _removeChatReconnectListener;
 
   String get requestId => '${widget.request['requestId']}';
   Future<List<Map<String, dynamic>>> _loadMessages() =>
       widget.api.requestMessages(requestId);
   Future<List<Map<String, dynamic>>> _loadMilestones() =>
       widget.api.requestMilestones(requestId);
+  Future<Map<String, dynamic>?> _loadContract() =>
+      widget.api.contractAgreement(requestId);
 
   @override
   void initState() {
@@ -4426,13 +4595,43 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       setState(() {
         messages = _loadMessages();
         milestones = _loadMilestones();
+        contract = _loadContract();
       });
     });
+    widget.socket.listen(_contractChatQueue, (event) {
+      if ('${event['type'] ?? ''}' != 'CONTRACT_CHAT_MESSAGE') return;
+      final data = event['data'] is Map
+          ? Map<String, dynamic>.from(event['data'] as Map)
+          : event;
+      final eventRequestId =
+          data['requestId']?.toString() ??
+          data['contractRequestId']?.toString();
+      if (eventRequestId != null && eventRequestId != requestId) return;
+      if (!mounted) return;
+      final refreshedMessages = _loadMessages();
+      setState(() {
+        messages = refreshedMessages;
+      });
+    });
+    _removeChatReconnectListener = widget.socket.addReconnectListener(() {
+      if (!mounted) return;
+      final refreshedMessages = _loadMessages();
+      setState(() {
+        messages = refreshedMessages;
+      });
+    });
+    if (widget.openChat) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openChatDialog();
+      });
+    }
   }
 
   @override
   void dispose() {
     widget.socket.unlisten(_requestTopic);
+    widget.socket.unlisten(_contractChatQueue);
+    _removeChatReconnectListener?.call();
     _playerCompleteSubscription?.cancel();
     _submissionPlayer?.dispose();
     messageController.dispose();
@@ -4446,7 +4645,10 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     try {
       await widget.api.sendRequestMessage(requestId, text);
       messageController.clear();
-      setState(() => messages = _loadMessages());
+      final refreshedMessages = _loadMessages();
+      setState(() {
+        messages = refreshedMessages;
+      });
     } catch (error) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
@@ -4455,6 +4657,197 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     } finally {
       if (mounted) setState(() => sending = false);
     }
+  }
+
+  Future<void> _openChatDialog() async {
+    final chatScrollController = ScrollController();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              MediaQuery.viewInsetsOf(context).bottom + 16,
+            ),
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.62,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.chat_bubble_outline),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Nhắn tin với CC',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const Divider(),
+                  Expanded(
+                    child: FutureBuilder<List<Map<String, dynamic>>>(
+                      future: messages,
+                      builder: (_, snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+                        final items = List<Map<String, dynamic>>.from(
+                          snapshot.data ?? const [],
+                        )..sort(_compareChatMessages);
+                        if (items.isEmpty) {
+                          return const Center(child: Text('Chưa có tin nhắn.'));
+                        }
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (chatScrollController.hasClients) {
+                            chatScrollController.jumpTo(
+                              chatScrollController.position.maxScrollExtent,
+                            );
+                          }
+                        });
+                        return ListView.builder(
+                          controller: chatScrollController,
+                          itemCount: items.length,
+                          itemBuilder: (_, index) {
+                            final item = items[index];
+                            final isMine = _isListenerChatMessage(item);
+                            return Align(
+                              alignment: isMine
+                                  ? Alignment.centerRight
+                                  : Alignment.centerLeft,
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 290,
+                                ),
+                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isMine
+                                      ? const Color(0xFFC92822)
+                                      : const Color(0xFFF0F0F0),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft: Radius.circular(
+                                      isMine ? 16 : 4,
+                                    ),
+                                    bottomRight: Radius.circular(
+                                      isMine ? 4 : 16,
+                                    ),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    if (!isMine)
+                                      Text(
+                                        'Người sáng tạo',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    Text(
+                                      '${item['content'] ?? item['message'] ?? ''}',
+                                      style: TextStyle(
+                                        color: isMine
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: messageController,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) async {
+                            await _sendMessage();
+                            if (mounted) setSheetState(() {});
+                          },
+                          decoration: const InputDecoration(
+                            hintText: 'Nhập tin nhắn cho CC',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Gửi tin nhắn',
+                        onPressed: sending
+                            ? null
+                            : () async {
+                                await _sendMessage();
+                                if (mounted) setSheetState(() {});
+                              },
+                        icon: const Icon(Icons.send),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    chatScrollController.dispose();
+  }
+
+  bool _isListenerChatMessage(Map<String, dynamic> item) {
+    final senderId = item['senderId']?.toString();
+    if (senderId != null &&
+        senderId.isNotEmpty &&
+        senderId == widget.api.currentUserId) {
+      return true;
+    }
+    if (item['isMine'] == true ||
+        item['mine'] == true ||
+        item['isListener'] == true) {
+      return true;
+    }
+    final role = '${item['senderRole'] ?? item['senderType'] ?? ''}'
+        .toUpperCase();
+    return role == 'LISTENER' || role == 'CLIENT';
+  }
+
+  int _compareChatMessages(
+    Map<String, dynamic> first,
+    Map<String, dynamic> second,
+  ) {
+    final firstDate = DateTime.tryParse(
+      '${first['createdAt'] ?? first['sentAt'] ?? ''}',
+    );
+    final secondDate = DateTime.tryParse(
+      '${second['createdAt'] ?? second['sentAt'] ?? ''}',
+    );
+    if (firstDate == null || secondDate == null) return 0;
+    return firstDate.compareTo(secondDate);
   }
 
   Future<void> _requestRevision(String milestoneId) async {
@@ -4516,97 +4909,660 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text('${widget.request['title'] ?? 'Chi tiết yêu cầu'}'),
-    ),
-    body: ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text('${widget.request['description'] ?? ''}'),
-        const SizedBox(height: 18),
-        const Text(
-          'Trao đổi với Creator',
-          style: TextStyle(fontWeight: FontWeight.bold),
+  Future<void> _signContract(Map<String, dynamic> agreement) async {
+    final version = (agreement['contractVersion'] as num?)?.toInt();
+    final hash = agreement['contentHash']?.toString();
+    if (version == null || hash == null || hash.isEmpty) return;
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Ký hợp đồng điện tử'),
+        content: SizedBox(
+          width: 520,
+          height: 420,
+          child: SingleChildScrollView(
+            child: Text(
+              agreement['contentSnapshot']?.toString() ??
+                  'Không có nội dung hợp đồng để hiển thị.',
+              style: const TextStyle(height: 1.45),
+            ),
+          ),
         ),
-        const SizedBox(height: 8),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: messages,
-          builder: (_, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done)
-              return const LinearProgressIndicator();
-            final items = snapshot.data ?? const [];
-            return Column(
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Tôi đồng ý và ký'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || signing) return;
+
+    setState(() => signing = true);
+    try {
+      await widget.api.signContract(
+        requestId,
+        contractVersion: version,
+        contentHash: hash,
+      );
+      if (!mounted) return;
+      setState(() => contract = _loadContract());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã ký hợp đồng thành công.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không thể ký hợp đồng: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => signing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = '${widget.request['title'] ?? 'Chi tiết yêu cầu'}';
+    final description = '${widget.request['description'] ?? ''}';
+    final status = '${widget.request['status'] ?? 'PENDING'}'.toUpperCase();
+    final budget =
+        widget.request['budgetAmount'] ??
+        widget.request['proposedBudget'] ??
+        widget.request['totalBudget'];
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF8F5EF),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF8F5EF),
+        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        actions: [
+          TextButton.icon(
+            onPressed: _openChatDialog,
+            icon: const Icon(Icons.chat_bubble_outline, size: 18),
+            label: const Text('Nhắn tin'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          Card(
+            elevation: 0,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: Colors.black.withAlpha(18)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF0D0),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.headphones_rounded,
+                          color: Color(0xFFB67A00),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      _requestStatusChip(status),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    description,
+                    style: TextStyle(color: Colors.grey.shade700, height: 1.45),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _infoPill(
+                        Icons.account_balance_wallet_outlined,
+                        '${budget ?? '--'} VND',
+                      ),
+                      _infoPill(Icons.mic_none_rounded, 'Audio'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FutureBuilder<Map<String, dynamic>?>(
+            future: contract,
+            builder: (_, snapshot) {
+              final agreement = snapshot.data;
+              if (agreement == null) return const SizedBox.shrink();
+              return _contractCard(agreement);
+            },
+          ),
+          _buildDisputeCard(),
+          _buildChatCard(),
+          const SizedBox(height: 22),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Các đợt bàn giao',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                'Tiến độ sản xuất',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: milestones,
+            builder: (_, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final items = snapshot.data ?? const [];
+              if (items.isEmpty) {
+                return _emptyCard('Creator chưa tạo các đợt bàn giao.');
+              }
+              return Column(
+                children: items.asMap().entries.map((entry) {
+                  return _milestoneCard(
+                    entry.value,
+                    index: entry.key,
+                    total: items.length,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisputeCard() {
+    return Card(
+      elevation: 0,
+      color: const Color(0xFFFFF7F6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: const Color(0xFFC92822).withAlpha(80)),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.gavel_rounded, color: Color(0xFFC92822)),
+        title: const Text(
+          'Tranh chấp',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        subtitle: const Text(
+          'Báo vấn đề với một đợt hoặc yêu cầu chấm dứt hợp đồng.',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: _openDisputeDialog,
+      ),
+    );
+  }
+
+  Future<void> _openDisputeDialog() async {
+    final reasonController = TextEditingController();
+    var selectedMilestoneId = '';
+    final milestoneItems = await milestones;
+    if (!mounted) {
+      reasonController.dispose();
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Tạo tranh chấp'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (items.isEmpty)
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Chưa có tin nhắn.'),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedMilestoneId,
+                  decoration: const InputDecoration(
+                    labelText: 'Phạm vi tranh chấp',
                   ),
-                ...items.map(
-                  (item) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.chat_bubble_outline),
-                    title: Text('${item['senderName'] ?? 'Người dùng'}'),
-                    subtitle: Text('${item['content'] ?? ''}'),
-                  ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: messageController,
-                        decoration: const InputDecoration(
-                          hintText: 'Nhập tin nhắn',
+                  items: [
+                    const DropdownMenuItem(
+                      value: '',
+                      child: Text('Toàn bộ hợp đồng'),
+                    ),
+                    ...milestoneItems.map(
+                      (milestone) => DropdownMenuItem(
+                        value: '${milestone['milestoneId'] ?? ''}',
+                        child: Text(
+                          '${milestone['name'] ?? milestone['title'] ?? 'Đợt bàn giao'}',
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
-                    IconButton(
-                      onPressed: sending ? null : _sendMessage,
-                      icon: const Icon(Icons.send),
-                    ),
                   ],
+                  onChanged: (value) =>
+                      setDialogState(() => selectedMilestoneId = value ?? ''),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: reasonController,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Lý do',
+                    hintText: 'Mô tả vấn đề cần được xử lý',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
               ],
-            );
-          },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Hủy'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFC92822),
+              ),
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) return;
+                try {
+                  if (selectedMilestoneId.isEmpty) {
+                    await widget.api.requestContractTermination(
+                      requestId,
+                      reason: reason,
+                    );
+                  } else {
+                    await widget.api.disputeMilestone(
+                      selectedMilestoneId,
+                      reason: reason,
+                    );
+                  }
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  if (mounted) {
+                    setState(() {
+                      contract = _loadContract();
+                      milestones = _loadMilestones();
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Đã gửi yêu cầu tranh chấp.'),
+                      ),
+                    );
+                  }
+                } catch (error) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Không thể tạo tranh chấp: $error'),
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Gửi yêu cầu'),
+            ),
+          ],
         ),
-        const SizedBox(height: 18),
-        const Text(
-          'Sản phẩm theo từng giai đoạn',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        FutureBuilder<List<Map<String, dynamic>>>(
-          future: milestones,
-          builder: (_, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done)
-              return const LinearProgressIndicator();
-            final items = snapshot.data ?? const [];
-            return Column(
-              children: items.map((item) => _milestoneCard(item)).toList(),
-            );
-          },
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+    reasonController.dispose();
+  }
 
-  Widget _milestoneCard(Map<String, dynamic> milestone) {
-    final id = '${milestone['milestoneId']}';
-    final status = '${milestone['status'] ?? ''}'.toUpperCase();
+  Widget _contractCard(Map<String, dynamic> agreement) {
+    final status = '${agreement['contractStatus'] ?? ''}'.toUpperCase();
+    final listenerSignedAt = agreement['listenerSignedAt'];
+    final canSign = status == 'PENDING_SIGNATURE' && listenerSignedAt == null;
+    final snapshot = agreement['contentSnapshot']?.toString() ?? '';
     return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: const Color(0xFFB67A00).withAlpha(70)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '${milestone['name'] ?? 'Giai đoạn'}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                const Icon(
+                  Icons.verified_user_outlined,
+                  color: Color(0xFFB67A00),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Hợp đồng điện tử',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                _requestStatusChip(status),
+              ],
             ),
+            const SizedBox(height: 10),
             Text(
-              '${milestone['amount'] ?? ''} ${milestone['currency'] ?? 'VND'} • $status',
+              canSign
+                  ? 'Creator đã gửi đề xuất. Vui lòng đọc và ký cùng bản hợp đồng này.'
+                  : 'Phiên bản ${agreement['contractVersion'] ?? '--'} • Hash: ${agreement['contentHash']?.toString().substring(0, 8) ?? '--'}…',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(bottom: 8),
+              title: const Text('Xem nội dung hợp đồng'),
+              children: [
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6F4F0),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      snapshot,
+                      style: const TextStyle(fontSize: 12, height: 1.4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (canSign)
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: signing ? null : () => _signContract(agreement),
+                  icon: signing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.draw_outlined),
+                  label: Text(signing ? 'Đang ký...' : 'Đọc và ký hợp đồng'),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatCard() {
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.black.withAlpha(18)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.forum_outlined, color: Color(0xFFB67A00)),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'Trao đổi với Creator',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _openChatDialog,
+                  child: const Text('Mở rộng'),
+                ),
+              ],
+            ),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: messages,
+              builder: (_, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const LinearProgressIndicator(minHeight: 2);
+                }
+                final items = snapshot.data ?? const [];
+                return Column(
+                  children: [
+                    if (items.isEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Chưa có tin nhắn.',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ),
+                    if (items.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '${items.length} tin nhắn gần đây',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: messageController,
+                            onSubmitted: (_) => _sendMessage(),
+                            decoration: InputDecoration(
+                              hintText: 'Nhập tin nhắn...',
+                              filled: true,
+                              fillColor: const Color(0xFFF6F4F0),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        IconButton.filled(
+                          onPressed: sending ? null : _sendMessage,
+                          icon: const Icon(Icons.send_rounded, size: 19),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _requestStatusChip(String status) {
+    final (label, color) = switch (status) {
+      'APPROVED' || 'COMPLETED' => ('Hoàn tất', Colors.green),
+      'REJECTED' || 'CANCELLED' => ('Đã hủy', Colors.red),
+      'IN_PROGRESS' || 'ACCEPTED' => ('Đang làm', Colors.blue),
+      _ => ('Đang xử lý', const Color(0xFFB67A00)),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withAlpha(24),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _infoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F4F0),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.grey.shade700),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emptyCard(String text) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Center(
+          child: Text(text, style: TextStyle(color: Colors.grey.shade600)),
+        ),
+      ),
+    );
+  }
+
+  Widget _milestoneCard(
+    Map<String, dynamic> milestone, {
+    int index = 0,
+    int total = 1,
+  }) {
+    final id = '${milestone['milestoneId']}';
+    final status = '${milestone['status'] ?? ''}'.toUpperCase();
+    final statusColor = status == 'APPROVED'
+        ? Colors.green
+        : status == 'SUBMITTED'
+        ? Colors.orange
+        : Colors.grey.shade700;
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: Colors.black.withAlpha(18)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0D0),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${index + 1}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF9A6900),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '${milestone['name'] ?? 'Giai đoạn'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${milestone['amount'] ?? ''} ${milestone['currency'] ?? 'VND'}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(left: 46),
+              child: Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    status.isEmpty ? 'Chưa bắt đầu' : status,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
             if (status == 'SUBMITTED') ...[
               FutureBuilder<List<Map<String, dynamic>>>(
@@ -6674,11 +7630,16 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     }
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
-    final result = await showDialog<(String, String)>(
+    final budgetController = TextEditingController();
+    final durationController = TextEditingController(text: '10 phút');
+    final criteriaController = TextEditingController();
+    String productType = 'AUDIO';
+    bool autoAcceptEnabled = false;
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (_, setDialogState) => AlertDialog(
-          title: const Text('Yêu cầu audio'),
+          title: const Text('Yêu cầu sản xuất audio/video'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -6702,6 +7663,79 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                     hintText: 'Bạn muốn Creator làm nội dung gì?',
                   ),
                 ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: budgetController,
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Ngân sách (VND)',
+                    hintText: 'Ví dụ: 100000',
+                    prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Loại sản phẩm',
+                    prefixIcon: Icon(Icons.perm_media_outlined),
+                  ),
+                  child: const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Audio'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Định dạng file',
+                        ),
+                        child: const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('MP3'),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: durationController,
+                        onChanged: (_) => setDialogState(() {}),
+                        decoration: const InputDecoration(
+                          labelText: 'Thời lượng',
+                          hintText: '10 phút',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: criteriaController,
+                  minLines: 2,
+                  maxLines: 4,
+                  onChanged: (_) => setDialogState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Tiêu chí nghiệm thu',
+                    hintText: 'Ví dụ: âm thanh rõ, không rè, đúng chủ đề',
+                  ),
+                ),
+                const SizedBox(height: 4),
+                CheckboxListTile(
+                  value: autoAcceptEnabled,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  onChanged: (value) =>
+                      setDialogState(() => autoAcceptEnabled = value ?? false),
+                  title: const Text('Tự nghiệm thu sau 3 ngày im lặng'),
+                  subtitle: const Text(
+                    'Chỉ bật nếu bạn đồng ý tự duyệt bản bàn giao đủ điều kiện.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
               ],
             ),
           ),
@@ -6713,12 +7747,36 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
             FilledButton(
               onPressed:
                   titleController.text.trim().isEmpty ||
-                      descriptionController.text.trim().isEmpty
+                      descriptionController.text.trim().isEmpty ||
+                      int.tryParse(
+                            budgetController.text.replaceAll(
+                              RegExp(r'[^0-9]'),
+                              '',
+                            ),
+                          ) ==
+                          null ||
+                      int.parse(
+                            budgetController.text.replaceAll(
+                              RegExp(r'[^0-9]'),
+                              '',
+                            ),
+                          ) <=
+                          0 ||
+                      durationController.text.trim().isEmpty ||
+                      criteriaController.text.trim().isEmpty
                   ? null
-                  : () => Navigator.pop(context, (
-                      titleController.text.trim(),
-                      descriptionController.text.trim(),
-                    )),
+                  : () => Navigator.pop(context, {
+                      'title': titleController.text.trim(),
+                      'description': descriptionController.text.trim(),
+                      'budget': int.parse(
+                        budgetController.text.replaceAll(RegExp(r'[^0-9]'), ''),
+                      ),
+                      'productType': productType,
+                      'fileFormat': 'MP3',
+                      'duration': durationController.text.trim(),
+                      'criteria': criteriaController.text.trim(),
+                      'autoAcceptEnabled': autoAcceptEnabled,
+                    }),
               child: const Text('Gửi yêu cầu'),
             ),
           ],
@@ -6727,22 +7785,27 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     );
     titleController.dispose();
     descriptionController.dispose();
+    budgetController.dispose();
+    durationController.dispose();
+    criteriaController.dispose();
     if (!mounted || result == null) return;
-    if (result.$1.isEmpty || result.$2.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập đủ chủ đề và mô tả.')),
-      );
-      return;
-    }
     try {
-      await widget.api.createSeriesRequest(
-        creatorId,
-        requestedTitle: result.$1,
-        description: result.$2,
+      await widget.api.createContractRequest(
+        creatorProfileId: creatorId,
+        requestedTitle: result['title'] as String,
+        description: result['description'] as String,
+        budgetAmount: result['budget'] as int,
+        productType: result['productType'] as String,
+        fileFormat: result['fileFormat'] as String,
+        duration: result['duration'] as String,
+        acceptanceCriteria: result['criteria'] as String,
+        autoAcceptEnabled: result['autoAcceptEnabled'] as bool,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đã gửi yêu cầu audio tới Creator.')),
+        const SnackBar(
+          content: Text('Đã gửi yêu cầu và giữ ngân sách thành công.'),
+        ),
       );
     } catch (error) {
       if (!mounted) return;

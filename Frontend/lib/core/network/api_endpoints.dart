@@ -15,6 +15,13 @@ class ApiEndpoints {
   // Categories
   static const String categories = '/api/categories';
 
+  // Listener escrow contract flow
+  static const String createContractRequest = '/api/requests/contract';
+  static String contractRequestDetail(String requestId) =>
+      '/api/requests/$requestId/contract-request';
+  static String cancelContractRequest(String requestId) =>
+      '/api/requests/$requestId/contract/cancel';
+
   // Creator Applications
   static const String creatorApplications = '/api/creator-applications';
   static const String myCreatorApplication = '/api/creator-applications/me';
@@ -48,6 +55,8 @@ class ApiEndpoints {
 
   // Creator Requests (Podcast theo yêu cầu & Hợp đồng Escrow)
   static const String incomingRequests = '/api/creator/requests/incoming';
+  static const String creatorContractRequests =
+      '/api/creator/requests/contracts';
   static String acceptRequest(String id) => '/api/creator/requests/$id/accept';
   static String rejectRequest(String id) => '/api/creator/requests/$id/reject';
   static String creatorProposal(String requestId) =>
@@ -59,8 +68,18 @@ class ApiEndpoints {
   static String cancelContract(String requestId) =>
       '/api/requests/$requestId/contract/cancel';
   static String requestMilestones(String id) => '/api/requests/$id/milestones';
+  static String requestChatMessages(String id) =>
+      '/api/requests/$id/chat/messages';
   static String submitMilestone(String milestoneId) =>
       '/api/creator/milestones/$milestoneId/submissions';
+  static String milestoneDrafts(String milestoneId) =>
+      '/api/creator/milestones/$milestoneId/drafts';
+  static String milestoneDraftMedia(String milestoneId, String draftId) =>
+      '/api/creator/milestones/$milestoneId/drafts/$draftId/media';
+  static String deliverMilestoneDraft(String milestoneId, String draftId) =>
+      '/api/creator/milestones/$milestoneId/drafts/$draftId/deliver';
+  static String cancelMilestoneDraft(String milestoneId, String draftId) =>
+      '/api/creator/milestones/$milestoneId/drafts/$draftId/cancel';
   static String milestoneSubmissions(String milestoneId) =>
       '/api/milestones/$milestoneId/submissions';
   static String milestoneMedia(String milestoneId, String submissionId) =>
@@ -90,7 +109,7 @@ class ApiEndpoints {
 
   // Wallet & Bank (Contract endpoints - skipped or graceful fallback if BE not yet implemented)
   static const String creatorWallet = '/api/creator/wallet/balance';
-  static const String creatorTransactions = '/api/creator/wallet/withdrawals';
+  static const String creatorTransactions = '/api/creator/wallet/transactions';
   static const String creatorReleaseFunds = '/api/creator/wallet/release-funds';
   static const String creatorWithdraw = '/api/creator/wallet/withdrawals';
   static const String creatorBankAccounts =
@@ -119,10 +138,14 @@ class ApiEndpoints {
 
   // Creator Livestreams (Agora RTC)
   static const String creatorLivestreams = '/api/creator/livestreams';
-  static String creatorLivestreamById(String id) => '/api/creator/livestreams/$id';
-  static String creatorLivestreamStart(String id) => '/api/creator/livestreams/$id/start';
-  static String creatorLivestreamToken(String id) => '/api/creator/livestreams/$id/token';
-  static String creatorLivestreamEnd(String id) => '/api/creator/livestreams/$id/end';
+  static String creatorLivestreamById(String id) =>
+      '/api/creator/livestreams/$id';
+  static String creatorLivestreamStart(String id) =>
+      '/api/creator/livestreams/$id/start';
+  static String creatorLivestreamToken(String id) =>
+      '/api/creator/livestreams/$id/token';
+  static String creatorLivestreamEnd(String id) =>
+      '/api/creator/livestreams/$id/end';
 
   // Creator Channel Membership Plans
   static const String creatorMembershipPlans = '/api/creator/membership-plans';
@@ -132,8 +155,11 @@ class ApiEndpoints {
       '/api/creator/membership-plans/templates/$code/select';
   static String updateMembershipPlanPrice(String planId) =>
       '/api/creator/membership-plans/$planId/price';
-  static String creatorMemberships({String status = 'ACTIVE', int page = 0, int size = 20}) =>
-      '/api/creator/memberships?status=$status&page=$page&size=$size';
+  static String creatorMemberships({
+    String status = 'ACTIVE',
+    int page = 0,
+    int size = 20,
+  }) => '/api/creator/memberships?status=$status&page=$page&size=$size';
 
   // Notifications
   static const String notifications = '/api/me/notifications';
