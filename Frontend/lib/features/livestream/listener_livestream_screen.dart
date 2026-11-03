@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:podcast_history/api_service.dart';
 import 'package:podcast_history/features/livestream/livestream_chat_panel.dart';
 import 'package:podcast_history/features/notifications/notification_socket.dart';
@@ -558,7 +559,7 @@ class _ListenerLivestreamFeedPageState
                     (amount) => OutlinedButton(
                       onPressed: () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(this.context).showSnackBar(
+                        ScaffoldMessenger.of(this.context).showTopSnackBar(
                           SnackBar(
                             content: Text(
                               'Đã chọn ủng hộ ${amount ~/ 1000}K (chờ tích hợp thanh toán).',

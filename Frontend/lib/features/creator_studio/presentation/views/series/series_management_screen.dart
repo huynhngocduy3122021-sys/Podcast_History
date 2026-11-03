@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -362,7 +363,7 @@ class _SeriesManagementScreenState
 
                   if (ctx.mounted) Navigator.of(ctx).pop();
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       SnackBar(
                         content: Text('Đã tạo series "$title" thành công!'),
                         backgroundColor: AppColors.success,
@@ -489,7 +490,7 @@ class _SeriesManagementScreenState
 
                   if (ctx.mounted) Navigator.of(ctx).pop();
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       SnackBar(
                         content: Text(
                           updated != null
@@ -538,7 +539,7 @@ class _SeriesManagementScreenState
                   .deleteSeries(series.id);
               if (ctx.mounted) Navigator.of(ctx).pop();
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(context).showTopSnackBar(
                   SnackBar(
                     content: Text(
                       ok

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -230,7 +231,7 @@ class StudioCommentsScreen extends ConsumerWidget {
                       .read(creatorCommentsProvider.notifier)
                       .deleteComment(c.id);
                   if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       const SnackBar(content: Text('Đã xóa bình luận!')),
                     );
                   }
@@ -305,7 +306,7 @@ class StudioCommentsScreen extends ConsumerWidget {
                 );
               }
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                ScaffoldMessenger.of(context).showTopSnackBar(
                   const SnackBar(content: Text('Đã gửi phản hồi thành công!')),
                 );
               }

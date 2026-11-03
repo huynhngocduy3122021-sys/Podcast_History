@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/package_features.dart';
@@ -137,7 +138,7 @@ class CreatorMoreScreen extends ConsumerWidget {
                 title: 'Quy chuẩn kiểm duyệt tư liệu lịch sử',
                 subtitle: 'Hướng dẫn trích dẫn và tiêu chuẩn xác thực nội dung',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context).showTopSnackBar(
                     const SnackBar(content: Text('Quy chuẩn: Chỉ sử dụng các tài liệu xuất bản chính thức.')),
                   );
                 },
@@ -147,7 +148,7 @@ class CreatorMoreScreen extends ConsumerWidget {
                 title: 'Trung tâm trợ giúp Creator',
                 subtitle: 'Liên hệ đội ngũ hỗ trợ kỹ thuật VietCast',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context).showTopSnackBar(
                     const SnackBar(content: Text('Email hỗ trợ: creator@vietcast.vn')),
                   );
                 },

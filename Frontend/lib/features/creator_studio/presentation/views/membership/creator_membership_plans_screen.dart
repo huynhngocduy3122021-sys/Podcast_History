@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -30,7 +31,7 @@ class _CreatorMembershipPlansScreenState
           .read(creatorChannelPlansProvider.notifier)
           .selectTemplate(template.code);
       if (!mounted) return;
-      messenger.showSnackBar(
+      messenger.showTopSnackBar(
         const SnackBar(
           backgroundColor: AppColors.success,
           content: Text('Đã kích hoạt Gói thành viên cho kênh!'),
@@ -38,7 +39,7 @@ class _CreatorMembershipPlansScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
+      messenger.showTopSnackBar(
         SnackBar(
           backgroundColor: AppColors.error,
           content: Text('Không thể kích hoạt gói: $e'),
@@ -103,7 +104,7 @@ class _CreatorMembershipPlansScreenState
                   onPressed: () async {
                     final price = double.tryParse(controller.text.trim()) ?? 0.0;
                     if (price < 1000) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context).showTopSnackBar(
                         const SnackBar(content: Text('Giá gói tối thiểu là 1.000 VNĐ.')),
                       );
                       return;
@@ -116,7 +117,7 @@ class _CreatorMembershipPlansScreenState
                           .read(creatorChannelPlansProvider.notifier)
                           .updatePrice(plan.planId, price);
                       if (!mounted) return;
-                      messenger.showSnackBar(
+                      messenger.showTopSnackBar(
                         SnackBar(
                           backgroundColor: AppColors.success,
                           content: Text('Đã cập nhật giá Gói thành viên thành ${AppFormatters.formatVND(price.toInt())}!'),
@@ -124,7 +125,7 @@ class _CreatorMembershipPlansScreenState
                       );
                     } catch (e) {
                       if (!mounted) return;
-                      messenger.showSnackBar(
+                      messenger.showTopSnackBar(
                         SnackBar(
                           backgroundColor: AppColors.error,
                           content: Text('Cập nhật giá thất bại: $e'),

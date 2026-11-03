@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -121,7 +122,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
         _isUploadingAudio = false;
         _audioFileName = cleanName;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text('Đã cập nhật tệp âm thanh: $cleanName'),
           backgroundColor: AppColors.success,
@@ -154,7 +155,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Lỗi chọn tệp âm thanh: $e'), backgroundColor: AppColors.error),
         );
       }
@@ -233,7 +234,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
           }
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context).showTopSnackBar(
               const SnackBar(
                 content: Text('Đã tải ảnh bìa lên thành công!'),
                 backgroundColor: AppColors.success,
@@ -245,7 +246,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Lỗi tải ảnh: $e'), backgroundColor: AppColors.error),
         );
       }
@@ -301,7 +302,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã cập nhật ảnh bìa podcast thành công!'),
             backgroundColor: AppColors.success,
@@ -316,7 +317,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     final effectiveMedia = _audioFileName;
 
     if (effectiveMedia == null || effectiveMedia.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
           backgroundColor: AppColors.error,
@@ -329,7 +330,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     const maxUploadBytes = 100 * 1024 * 1024;
     if (_pickedMediaBytes != null && _pickedMediaBytes!.length > maxUploadBytes) {
       final sizeMb = (_pickedMediaBytes!.length / (1024 * 1024)).toStringAsFixed(1);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(
             'Tệp âm thanh ($sizeMb MB) vượt quá giới hạn tối đa của hệ thống (100MB). Vui lòng chọn tệp nhỏ hơn 100MB.',
@@ -345,7 +346,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       _step2FormKey.currentState?.validate();
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Vui lòng nhập tiêu đề tập podcast'),
           backgroundColor: AppColors.error,
@@ -358,7 +359,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     final desc = _descController.text.trim();
     if (desc.isEmpty) {
       _step2FormKey.currentState?.validate();
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Vui lòng nhập mô tả tóm tắt nội dung'),
           backgroundColor: AppColors.error,
@@ -369,7 +370,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     }
 
     if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Vui lòng chọn danh mục chủ đề'),
           backgroundColor: AppColors.error,
@@ -382,7 +383,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
     final sources = _sourcesController.text.trim();
     if (sources.isEmpty) {
       _step3FormKey.currentState?.validate();
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Vui lòng cung cấp nguồn tư liệu để đảm bảo tính xác thực'),
           backgroundColor: AppColors.error,
@@ -513,7 +514,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             popResult = 'draft_updated';
           }
 
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showTopSnackBar(
             SnackBar(
               content: Text(message),
               backgroundColor: AppColors.success,
@@ -623,7 +624,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
         await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showTopSnackBar(
             const SnackBar(
               content: Text(
                 'Đã lưu podcast vào mục Bản nháp! Hãy bấm "Chờ duyệt" ở danh sách để gửi kiểm duyệt.',
@@ -637,7 +638,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(
             content: Text('Lỗi: $e'),
             backgroundColor: AppColors.error,
@@ -736,7 +737,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                       if (_currentStep == 0) {
                         final hasMedia = _audioFileName != null && _audioFileName!.isNotEmpty;
                         if (!hasMedia) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context).showTopSnackBar(
                             const SnackBar(
                               content: Text('Vui lòng tải lên hoặc chọn tệp âm thanh (Audio)'),
                               backgroundColor: AppColors.error,
@@ -750,7 +751,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                         final title = _titleController.text.trim();
                         final desc = _descController.text.trim();
                         if (!isValid || title.isEmpty || desc.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context).showTopSnackBar(
                             const SnackBar(
                               content: Text('Vui lòng nhập đầy đủ tiêu đề và mô tả tập podcast'),
                               backgroundColor: AppColors.error,
@@ -759,7 +760,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                           return;
                         }
                         if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context).showTopSnackBar(
                             const SnackBar(
                               content: Text('Vui lòng chọn danh mục chủ đề'),
                               backgroundColor: AppColors.error,
@@ -1560,7 +1561,7 @@ class _AudioSourceSelectorSheetState extends State<_AudioSourceSelectorSheet> {
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context).showTopSnackBar(
                         SnackBar(content: Text('Lỗi chọn tệp: $e'), backgroundColor: AppColors.error),
                       );
                     }
@@ -1632,7 +1633,7 @@ class _CoverImagePickerSheetState extends State<_CoverImagePickerSheet> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Lỗi chọn ảnh: $e'), backgroundColor: AppColors.error),
         );
       }

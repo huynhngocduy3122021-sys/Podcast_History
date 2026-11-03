@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -112,7 +113,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           onPressed: () async {
                             final messenger = ScaffoldMessenger.of(context);
                             await ref.read(walletProvider.notifier).releaseFunds();
-                            messenger.showSnackBar(
+                            messenger.showTopSnackBar(
                               const SnackBar(
                                 content: Text('Đã giải phóng tiền chờ vào số dư khả dụng thành công!'),
                                 backgroundColor: AppColors.success,

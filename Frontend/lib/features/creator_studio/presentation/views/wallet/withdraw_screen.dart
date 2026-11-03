@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -33,24 +34,23 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   Future<void> _processWithdrawal(int available) async {
     final amount = int.tryParse(_amountController.text.replaceAll('.', '').replaceAll(' ', '')) ?? 0;
     if (amount < 50000) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Số tiền rút tối thiểu là 50.000 ₫')),
       );
       return;
     }
     if (amount > available) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Số tiền rút vượt quá số dư khả dụng')),
       );
       return;
     }
     if (_selectedBank == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Vui lòng chọn tài khoản ngân hàng nhận tiền')),
       );
       return;
     }
-
     final messenger = ScaffoldMessenger.of(context);
 
     setState(() {
@@ -77,7 +77,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         _isProcessing = false;
         _currentStepState = 'FORM';
       });
-      messenger.showSnackBar(
+      messenger.showTopSnackBar(
         SnackBar(content: Text('Không thể xác nhận yêu cầu rút tiền: $e. Vui lòng kiểm tra lại lịch sử và số dư ví.')),
       );
     }

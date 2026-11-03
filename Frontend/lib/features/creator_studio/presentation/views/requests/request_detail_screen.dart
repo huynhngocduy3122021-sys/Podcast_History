@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -102,7 +103,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(
             content: Text('Lỗi phát âm thanh: $e'),
             backgroundColor: AppColors.error,
@@ -482,7 +483,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
         );
       }
@@ -1431,7 +1432,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   if (mounted) setState(() {});
                 } catch (error) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       SnackBar(
                         content: Text(
                           'Không thể thực hiện thao tác draft: $error',
@@ -1757,14 +1758,14 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           .read(creatorRequestsProvider.notifier)
           .confirmContractDispute(disputeId);
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã xác nhận tranh chấp, hồ sơ chuyển Staff xử lý.'),
           ),
         );
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể xác nhận tranh chấp: $error')),
         );
     }
@@ -1797,11 +1798,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           .withdrawContractDispute(disputeId);
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Đã rút tranh chấp.')));
+            .showTopSnackBar(const SnackBar(content: Text('Đã rút tranh chấp.')));
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể rút tranh chấp: $error')),
         );
       }
@@ -2284,7 +2285,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     : () async {
                         final respText = responseTextController.text.trim();
                         if (respText.isEmpty) {
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text(
                                 'Vui lòng nhập lời nhắn phản hồi gửi người nghe.',
@@ -2300,7 +2301,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         DateTime prev = now;
                         for (int i = 0; i < stageCount; i++) {
                           if (!dueDates[i].isAfter(prev)) {
-                            messenger.showSnackBar(
+                            messenger.showTopSnackBar(
                               SnackBar(
                                 content: Text(
                                   'Hạn nộp đợt ${i + 1} phải lớn hơn hạn nộp đợt trước và ở tương lai.',
@@ -2346,7 +2347,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               );
 
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text(
                                 'Đã gửi đề xuất hợp đồng thành công!',
@@ -2355,7 +2356,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             ),
                           );
                         } catch (e) {
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text('Lỗi gửi đề xuất: $e'),
                               backgroundColor: AppColors.error,
@@ -2544,7 +2545,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 );
                             if (dialogCtx.mounted)
                               Navigator.of(dialogCtx).pop();
-                            messenger.showSnackBar(
+                            messenger.showTopSnackBar(
                               const SnackBar(
                                 content: Text(
                                   'Đã ký hợp đồng điện tử thành công!',
@@ -2554,7 +2555,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             );
                           } catch (e) {
                             setDialogState(() => isSubmitting = false);
-                            messenger.showSnackBar(
+                            messenger.showTopSnackBar(
                               SnackBar(
                                 content: Text('Lỗi ký hợp đồng: $e'),
                                 backgroundColor: AppColors.error,
@@ -2716,7 +2717,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 });
                               }
                             } catch (e) {
-                              messenger.showSnackBar(
+                              messenger.showTopSnackBar(
                                 SnackBar(
                                   content: Text('Lỗi chọn tệp: $e'),
                                   backgroundColor: AppColors.error,
@@ -2817,7 +2818,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     ? null
                     : () async {
                         if (pickedBytes == null || pickedFile == null) {
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             const SnackBar(
                               content: Text(
                                 'Vui lòng chọn tệp âm thanh trước khi nộp.',
@@ -2840,7 +2841,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 milestoneId: selectedMilestoneId,
                               );
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text(
                                 req.hasEscrow
@@ -2852,7 +2853,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text('Lỗi nộp bài: $e'),
                               backgroundColor: AppColors.error,
@@ -2958,7 +2959,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     : () async {
                         final reason = reasonController.text.trim();
                         if (reason.isEmpty) {
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             const SnackBar(
                               content: Text('Vui lòng nhập lý do chấm dứt.'),
                             ),
@@ -2976,7 +2977,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           await ref
                               .read(creatorRequestsProvider.notifier)
                               .requestTermination(req.id, reason: reason);
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             const SnackBar(
                               content: Text('Đã mở yêu cầu chấm dứt hợp đồng.'),
                               backgroundColor: AppColors.warning,
@@ -2984,7 +2985,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text('Lỗi: $e'),
                               backgroundColor: AppColors.error,
@@ -3054,7 +3055,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     : () async {
                         final reason = reasonController.text.trim();
                         if (reason.isEmpty) {
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             const SnackBar(
                               content: Text('Vui lòng nhập lý do từ chối.'),
                             ),
@@ -3067,7 +3068,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               .read(creatorRequestsProvider.notifier)
                               .rejectRequest(req.id, reason);
                           if (dialogCtx.mounted) Navigator.of(dialogCtx).pop();
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             const SnackBar(
                               content: Text(
                                 'Đã từ chối đơn yêu cầu và hoàn tiền giữ cho thính giả.',
@@ -3076,7 +3077,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           );
                         } catch (e) {
                           setDialogState(() => isSubmitting = false);
-                          messenger.showSnackBar(
+                          messenger.showTopSnackBar(
                             SnackBar(
                               content: Text('Lỗi: $e'),
                               backgroundColor: AppColors.error,
