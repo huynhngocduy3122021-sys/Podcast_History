@@ -1864,11 +1864,21 @@ class ApiCreatorRepository implements CreatorRepository {
             _ => TransactionStatus.processing,
           };
 
-          final (title, subtitle) = _walletTransactionTitleAndSubtitle(
+          final rawTitle = item['title']?.toString();
+          final rawDescription = item['description']?.toString();
+
+          final (fallbackTitle, fallbackSubtitle) = _walletTransactionTitleAndSubtitle(
             item['type'],
             item['referenceCode'],
             item['note'],
           );
+
+          final title = (rawTitle != null && rawTitle.trim().isNotEmpty)
+              ? rawTitle.trim()
+              : fallbackTitle;
+          final subtitle = (rawDescription != null && rawDescription.trim().isNotEmpty)
+              ? rawDescription.trim()
+              : fallbackSubtitle;
 
           return WalletTransaction(
             id: item['transactionId']?.toString() ??
@@ -1895,6 +1905,18 @@ class ApiCreatorRepository implements CreatorRepository {
                 ) ??
                 DateTime.now(),
             note: item['note']?.toString(),
+            movement: item['movement']?.toString(),
+            availableBalanceChange:
+                (item['availableBalanceChange'] as num?)?.toInt(),
+            heldBalanceChange:
+                (item['heldBalanceChange'] as num?)?.toInt(),
+            requestId: item['requestId']?.toString(),
+            requestTitle: item['requestTitle']?.toString(),
+            milestoneId: item['milestoneId']?.toString(),
+            milestoneName: item['milestoneName']?.toString(),
+            withdrawalId: item['withdrawalId']?.toString(),
+            payoutAccountMasked: item['payoutAccountMasked']?.toString(),
+            membershipPlanName: item['membershipPlanName']?.toString(),
           );
         })
         .toList();

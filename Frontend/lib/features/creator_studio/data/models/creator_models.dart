@@ -811,6 +811,18 @@ class WalletTransaction {
   final DateTime createdAt;
   final String? note;
 
+  // Trường mở rộng chi tiết theo CONTRACT_API_GUIDE & backend CreatorWalletTransactionItem:
+  final String? movement;
+  final int? availableBalanceChange;
+  final int? heldBalanceChange;
+  final String? requestId;
+  final String? requestTitle;
+  final String? milestoneId;
+  final String? milestoneName;
+  final String? withdrawalId;
+  final String? payoutAccountMasked;
+  final String? membershipPlanName;
+
   const WalletTransaction({
     required this.id,
     required this.title,
@@ -827,6 +839,16 @@ class WalletTransaction {
     this.heldBalanceAfter,
     required this.createdAt,
     this.note,
+    this.movement,
+    this.availableBalanceChange,
+    this.heldBalanceChange,
+    this.requestId,
+    this.requestTitle,
+    this.milestoneId,
+    this.milestoneName,
+    this.withdrawalId,
+    this.payoutAccountMasked,
+    this.membershipPlanName,
   });
 
   bool get isCredit =>

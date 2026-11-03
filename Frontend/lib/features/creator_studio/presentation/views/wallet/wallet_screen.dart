@@ -443,6 +443,21 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                     ],
                   ),
                   const SizedBox(height: 2),
+                  if (tx.requestTitle != null && tx.requestTitle!.isNotEmpty) ...[
+                    Text(
+                      '${tx.requestTitle}${tx.milestoneName != null ? ' • ${tx.milestoneName!}' : ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? AppColors.primaryDark
+                            : AppColors.primaryLight,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1),
+                  ],
                   if (tx.subtitle != null && tx.subtitle!.isNotEmpty) ...[
                     Text(
                       tx.subtitle!,
@@ -613,6 +628,28 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       ? 'Đợt nghiệm thu hợp đồng Escrow'
                       : null,
                   isSelectable: true,
+                ),
+              if (tx.requestTitle != null && tx.requestTitle!.isNotEmpty)
+                _buildDetailRow('Yêu cầu hợp đồng', tx.requestTitle!, isDark),
+              if (tx.milestoneName != null && tx.milestoneName!.isNotEmpty)
+                _buildDetailRow('Đợt nghiệm thu', tx.milestoneName!, isDark),
+              if (tx.membershipPlanName != null && tx.membershipPlanName!.isNotEmpty)
+                _buildDetailRow('Gói hội viên', tx.membershipPlanName!, isDark),
+              if (tx.payoutAccountMasked != null && tx.payoutAccountMasked!.isNotEmpty)
+                _buildDetailRow('Tài khoản nhận', tx.payoutAccountMasked!, isDark),
+              if (tx.movement != null && tx.movement!.isNotEmpty)
+                _buildDetailRow('Luồng biến động', tx.movement!, isDark),
+              if (tx.availableBalanceChange != null)
+                _buildDetailRow(
+                  'Biến động khả dụng',
+                  '${tx.availableBalanceChange! > 0 ? '+' : ''}${AppFormatters.formatVND(tx.availableBalanceChange!)}',
+                  isDark,
+                ),
+              if (tx.heldBalanceChange != null && tx.heldBalanceChange != 0)
+                _buildDetailRow(
+                  'Biến động tạm giữ',
+                  '${tx.heldBalanceChange! > 0 ? '+' : ''}${AppFormatters.formatVND(tx.heldBalanceChange!)}',
+                  isDark,
                 ),
               if (tx.balanceAfter != null)
                 _buildDetailRow(
