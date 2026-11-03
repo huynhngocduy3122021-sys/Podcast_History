@@ -116,7 +116,12 @@ class _LivestreamChatPanelState extends State<LivestreamChatPanel> {
         } catch (_) {
           // Ignore messages sent to this Agora channel in another format.
         }
-      });
+      }).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException(
+          'Kết nối Agora Chat quá thời gian chờ.',
+        ),
+      );
       if (!mounted) {
         await client.dispose();
         return;
