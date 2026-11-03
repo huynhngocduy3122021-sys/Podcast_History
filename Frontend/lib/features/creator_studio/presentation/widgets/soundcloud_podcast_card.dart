@@ -354,7 +354,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                           if (kPackagesEnabled && pod.isExclusive) ...[
                             const SizedBox(width: AppSpacing.xs),
                             const StatusChip(
-                              label: 'Độc quyền 🔒',
+                              label: 'Độc quyền',
                               type: StatusType.locked,
                             ),
                           ],
