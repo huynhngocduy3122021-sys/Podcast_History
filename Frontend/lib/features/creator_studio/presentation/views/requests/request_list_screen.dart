@@ -169,36 +169,44 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundImage: req.listenerAvatar.isNotEmpty
-                          ? NetworkImage(req.listenerAvatar)
-                          : null,
-                      onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
-                      child: const Icon(Icons.person, size: 16),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          req.listenerName,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundImage: req.listenerAvatar.isNotEmpty
+                            ? NetworkImage(req.listenerAvatar)
+                            : null,
+                        onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                        child: const Icon(Icons.person, size: 16),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              req.listenerName,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              AppFormatters.timeAgo(req.createdAt),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        Text(
-                          AppFormatters.timeAgo(req.createdAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (req.hasEscrow) ...[
                       Container(
@@ -263,25 +271,31 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.schedule_rounded, size: 14, color: AppColors.tertiaryLight),
-                    const SizedBox(width: 4),
-                    Text(
-                      AppFormatters.timeAgo(req.createdAt),
-                      style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMutedLight),
-                    ),
-                    if (req.milestones.isNotEmpty) ...[
-                      const SizedBox(width: AppSpacing.md),
-                      const Icon(Icons.layers_outlined, size: 14, color: AppColors.tertiaryLight),
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded, size: 14, color: AppColors.tertiaryLight),
                       const SizedBox(width: 4),
-                      Text(
-                        '${req.milestones.length} mốc',
-                        style: const TextStyle(fontSize: 12),
+                      Flexible(
+                        child: Text(
+                          AppFormatters.timeAgo(req.createdAt),
+                          style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMutedLight),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      if (req.milestones.isNotEmpty) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        const Icon(Icons.layers_outlined, size: 14, color: AppColors.tertiaryLight),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${req.milestones.length} mốc',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   AppFormatters.formatVND(req.totalBudget),
                   style: AppTypography.tabularNumbers(

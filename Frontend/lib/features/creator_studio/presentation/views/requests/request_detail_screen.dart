@@ -36,6 +36,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   bool _isPlaying = false;
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
+  final Set<String> _expandedDraftIds = {};
 
   @override
   void initState() {
@@ -769,13 +770,16 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           color: AppColors.success,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          'Ngân sách đã giữ an toàn trong ví',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark
-                                ? AppColors.onSurfaceMutedDark
-                                : AppColors.onSurfaceMutedLight,
+                        Expanded(
+                          child: Text(
+                            'Ngân sách đã giữ an toàn trong ví',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark
+                                  ? AppColors.onSurfaceMutedDark
+                                  : AppColors.onSurfaceMutedLight,
+                            ),
                           ),
                         ),
                       ],
@@ -807,23 +811,30 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           const Divider(height: 1),
           const SizedBox(height: AppSpacing.md),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildMetaItem(
-                'Ngày tạo',
-                AppFormatters.formatDate(req.createdAt),
-                Icons.calendar_today_outlined,
+              Expanded(
+                child: _buildMetaItem(
+                  'Ngày tạo',
+                  AppFormatters.formatDate(req.createdAt),
+                  Icons.calendar_today_outlined,
+                ),
               ),
-              _buildMetaItem(
-                'Phân chia',
-                '80% CC • 20% App',
-                Icons.pie_chart_outline,
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _buildMetaItem(
+                  'Phân chia',
+                  '80% CC • 20% App',
+                  Icons.pie_chart_outline,
+                ),
               ),
-              _buildMetaItem(
-                'Ngân sách giữ',
-                AppFormatters.formatVND(req.totalBudget),
-                Icons.account_balance_wallet_outlined,
-                isHighlight: true,
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _buildMetaItem(
+                  'Ngân sách giữ',
+                  AppFormatters.formatVND(req.totalBudget),
+                  Icons.account_balance_wallet_outlined,
+                  isHighlight: true,
+                ),
               ),
             ],
           ),
@@ -845,22 +856,30 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           children: [
             Icon(icon, size: 12, color: AppColors.tertiaryLight),
             const SizedBox(width: 3),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                color: AppColors.onSurfaceMutedLight,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: AppColors.onSurfaceMutedLight,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: isHighlight ? AppColors.success : null,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: isHighlight ? AppColors.success : null,
+            ),
           ),
         ),
       ],
@@ -890,20 +909,26 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.description_outlined,
-                    color: AppColors.primaryLight,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Hợp đồng điện tử (v1)',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                ],
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.description_outlined,
+                      color: AppColors.primaryLight,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    const Expanded(
+                      child: Text(
+                        'Hợp đồng điện tử (v1)',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -947,16 +972,16 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             children: [
               Expanded(
                 child: _buildSignatureStatus(
-                  title: 'Content Creator',
+                  title: 'Người sáng tạo',
                   isSigned: contract.isCreatorSigned,
                   signedAt: contract.creatorSignedAt,
                   isDark: isDark,
                 ),
               ),
-              const SizedBox(width: AppSpacing.md),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: _buildSignatureStatus(
-                  title: 'Người nghe (Listener)',
+                  title: 'Người nghe',
                   isSigned: contract.isListenerSigned,
                   signedAt: contract.listenerSignedAt,
                   isDark: isDark,
@@ -970,23 +995,53 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.visibility_outlined, size: 16),
-                  label: const Text('Xem văn bản hợp đồng'),
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  ),
                   onPressed: () => _showContractDialog(req),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.visibility_outlined, size: 16),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Xem hợp đồng',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               if (!contract.isCreatorSigned) ...[
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryLight,
                       foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                     ),
-                    icon: const Icon(Icons.edit_document, size: 16),
-                    label: const Text('Ký hợp đồng'),
                     onPressed: () => _showContractDialog(req, autoSign: true),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.edit_document, size: 16),
+                        SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            'Ký hợp đồng',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1042,14 +1097,18 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ],
           ),
           const SizedBox(height: 2),
-          Text(
-            isSigned
-                ? 'Đã ký lúc ${signedAt != null ? DateFormat('HH:mm dd/MM').format(signedAt.toLocal()) : ''}'
-                : 'Chưa ký xác nhận',
-            style: TextStyle(
-              fontSize: 10,
-              color: isSigned ? AppColors.success : Colors.grey,
-              fontWeight: isSigned ? FontWeight.w600 : FontWeight.normal,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              isSigned
+                  ? 'Đã ký ${signedAt != null ? DateFormat('HH:mm dd/MM').format(signedAt.toLocal()) : ''}'
+                  : 'Chưa ký xác nhận',
+              style: TextStyle(
+                fontSize: 10,
+                color: isSigned ? AppColors.success : Colors.grey,
+                fontWeight: isSigned ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ),
         ],
@@ -1340,26 +1399,29 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     final canDeliver = status == 'APPROVED' && draftId.isNotEmpty;
     final canCancel =
         draftId.isNotEmpty && status != 'DELIVERED' && status != 'CANCELLED';
+    final isExpanded = _expandedDraftIds.contains(draftId);
+    final aiReason = '${draft['aiReason'] ?? ''}'.trim();
+    final errorMessage = '${draft['errorMessage'] ?? ''}'.trim();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.all(8),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: isDark
             ? AppColors.surfaceDark.withValues(alpha: 0.55)
-            : Colors.white.withValues(alpha: 0.72),
+            : Colors.white.withValues(alpha: 0.85),
         borderRadius: AppSpacing.roundedSm,
         border: Border.all(color: statusColor.withValues(alpha: 0.35)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.audio_file_outlined, size: 18, color: statusColor),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              Icon(Icons.audio_file_outlined, size: 18, color: statusColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
                   'Bản nháp #${draft['draftNumber'] ?? '-'} • $status',
                   style: TextStyle(
                     fontSize: 11,
@@ -1367,97 +1429,192 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     color: statusColor,
                   ),
                 ),
-                if (confidence != null)
-                  Text(
-                    'Confidence: ${(confidence * 100).toStringAsFixed(0)}% • ${draft['aiLabel'] ?? 'Chưa có kết quả'}',
-                    style: const TextStyle(fontSize: 10),
+              ),
+              if (confidence != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                if (draft['aiReason'] != null &&
-                    '${draft['aiReason']}'.isNotEmpty)
-                  Text(
-                    '${draft['aiReason']}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  child: Text(
+                    '${(confidence * 100).toStringAsFixed(0)}% • ${draft['aiLabel'] ?? 'Đạt'}',
                     style: TextStyle(
                       fontSize: 10,
-                      color: isDark ? Colors.white70 : Colors.black54,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
                     ),
                   ),
-                if (draft['errorMessage'] != null &&
-                    '${draft['errorMessage']}'.isNotEmpty)
-                  Text(
-                    '${draft['errorMessage']}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 10, color: AppColors.error),
-                  ),
-              ],
-            ),
+                ),
+            ],
           ),
-          if (canDeliver || canCancel)
-            PopupMenuButton<String>(
-              tooltip: 'Thao tác draft',
-              onSelected: (action) async {
-                try {
-                  if (action == 'deliver') {
-                    await ref
-                        .read(creatorRequestsProvider.notifier)
-                        .deliverMilestoneDraft(milestoneId, draftId);
+          if (aiReason.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () {
+                setState(() {
+                  if (isExpanded) {
+                    _expandedDraftIds.remove(draftId);
                   } else {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (dialogContext) => AlertDialog(
-                        title: const Text('Hủy bản nháp?'),
-                        content: const Text(
-                          'Bản nháp sẽ được đánh dấu hủy và không thể bàn giao.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () =>
-                                Navigator.pop(dialogContext, false),
-                            child: const Text('Không'),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(dialogContext, true),
-                            child: const Text('Hủy draft'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true) return;
-                    await ref
-                        .read(creatorRequestsProvider.notifier)
-                        .cancelMilestoneDraft(milestoneId, draftId);
+                    _expandedDraftIds.add(draftId);
                   }
-                  if (mounted) setState(() {});
-                } catch (error) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showTopSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Không thể thực hiện thao tác draft: $error',
-                        ),
-                      ),
-                    );
-                  }
-                }
+                });
               },
-              itemBuilder: (_) => [
-                if (canDeliver)
-                  const PopupMenuItem(
-                    value: 'deliver',
-                    child: Text('Bàn giao draft'),
-                  ),
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      aiReason,
+                      maxLines: isExpanded ? null : 2,
+                      overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.35,
+                        color: isDark ? Colors.white70 : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      isExpanded ? 'Thu gọn' : 'Xem thêm',
+                      style: const TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (errorMessage.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              errorMessage,
+              maxLines: isExpanded ? null : 2,
+              overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 10.5, color: AppColors.error),
+            ),
+          ],
+          if (canDeliver || canCancel) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
                 if (canCancel)
-                  const PopupMenuItem(
-                    value: 'cancel',
-                    child: Text('Hủy draft'),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.close_rounded, size: 14),
+                    label: const Text(
+                      'Hủy draft',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    onPressed: () => _confirmCancelDraft(milestoneId, draftId),
+                  ),
+                if (canCancel && canDeliver) const SizedBox(width: 8),
+                if (canDeliver)
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.send_rounded, size: 14),
+                    label: const Text(
+                      'Bàn giao bản này',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                    ),
+                    onPressed: () => _deliverDraft(milestoneId, draftId),
                   ),
               ],
             ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _deliverDraft(String milestoneId, String draftId) async {
+    try {
+      await ref
+          .read(creatorRequestsProvider.notifier)
+          .deliverMilestoneDraft(milestoneId, draftId);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã bàn giao bản nháp thành công!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể bàn giao bản nháp: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmCancelDraft(String milestoneId, String draftId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Hủy bản nháp?'),
+        content: const Text(
+          'Bản nháp sẽ được đánh dấu hủy và không thể bàn giao.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Không'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Hủy draft'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref
+          .read(creatorRequestsProvider.notifier)
+          .cancelMilestoneDraft(milestoneId, draftId);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã hủy bản nháp.'),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Không thể hủy bản nháp: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   // ==========================================
@@ -1757,17 +1914,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
       await ref
           .read(creatorRequestsProvider.notifier)
           .confirmContractDispute(disputeId);
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã xác nhận tranh chấp, hồ sơ chuyển Staff xử lý.'),
           ),
         );
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể xác nhận tranh chấp: $error')),
         );
+      }
     }
   }
 
@@ -2505,12 +2664,15 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             size: 16,
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            'Bạn đã ký hợp đồng lúc ${contract.creatorSignedAt != null ? DateFormat('HH:mm dd/MM/yyyy').format(contract.creatorSignedAt!.toLocal()) : ''}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.success,
+                          Expanded(
+                            child: Text(
+                              'Bạn đã ký hợp đồng lúc ${contract.creatorSignedAt != null ? DateFormat('HH:mm dd/MM/yyyy').format(contract.creatorSignedAt!.toLocal()) : ''}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.success,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -2543,8 +2705,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                   contractVersion: contract.contractVersion,
                                   contentHash: contract.contentHash,
                                 );
-                            if (dialogCtx.mounted)
+                            if (dialogCtx.mounted) {
                               Navigator.of(dialogCtx).pop();
+                            }
                             messenger.showTopSnackBar(
                               const SnackBar(
                                 content: Text(
