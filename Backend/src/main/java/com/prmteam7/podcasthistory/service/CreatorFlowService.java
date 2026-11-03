@@ -180,11 +180,7 @@ public class CreatorFlowService {
 
         podcast.setCategory(category);
         applyPodcastWrite(podcast, request);
-        Podcast saved = podcastRepository.save(podcast);
-        if ("PENDING_REVIEW".equalsIgnoreCase(saved.getStatus())) {
-            aiModeration.enqueue(saved);
-        }
-        return toPodcastItem(saved);
+        return toPodcastItem(podcastRepository.save(podcast));
     }
 
     @Transactional
@@ -236,6 +232,10 @@ public class CreatorFlowService {
             });
         podcast.setMediaUrl(media.objectKey());
         podcast.setMediaType(media.contentType());
+        if (previousKey != null && !previousKey.isBlank()) {
+            podcast.setStatus("DRAFT");
+            podcast.setPublishedAt(null);
+        }
         podcastRepository.save(podcast);
         transcriptService.enqueue(podcast); // dùng để tạo transcript cho podcast,sẽ dùng Whisper để tạo transcript
         return new PodcastVideoItem(podcastId, podcast.getTitle(), podcast.getStatus(), media);
@@ -260,6 +260,10 @@ public class CreatorFlowService {
         ProducerProfile profile = approvedCreator(userId);
         Podcast podcast = ownedPodcast(podcastId, profile.getProducerProfileId());
         requireEditable(podcast);
+        if ("APPROVED".equalsIgnoreCase(podcast.getStatus())
+                || "PUBLISHED".equalsIgnoreCase(podcast.getStatus())) {
+            throw new ResourceConflictException("Podcast đã được duyệt; chỉ cần gửi duyệt lại khi thay video hoặc audio.");
+        }
         String mediaType = podcast.getMediaType();
         if ((mediaType == null || mediaType.isBlank()) && podcast.getMediaUrl() != null) {
             String lower = podcast.getMediaUrl().toLowerCase(Locale.ROOT);
@@ -365,8 +369,6 @@ public class CreatorFlowService {
     private void requireEditable(Podcast podcast) {
         String status = podcast.getStatus() == null ? "" : podcast.getStatus().toUpperCase(Locale.ROOT);
         if (status.equals("APPROVED") || status.equals("PUBLISHED")) {
-            podcast.setStatus("DRAFT");
-            podcast.setPublishedAt(null);
             return;
         }
         if (status.equals("PENDING_REVIEW")) {

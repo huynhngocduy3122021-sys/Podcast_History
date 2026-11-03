@@ -57,10 +57,12 @@ public final class AdminResponses {
       String reporterName,
       String targetType,
       UUID targetId,
+      String targetName,
       String reasonCode,
       String description,
       String status,
       UUID assigneeId,
+      String assigneeName,
       Instant createdAt,
       Instant resolvedAt,
       List<ReviewItem> reviews) {}

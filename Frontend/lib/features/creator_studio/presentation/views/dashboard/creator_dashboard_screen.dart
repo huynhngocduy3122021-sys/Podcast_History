@@ -168,9 +168,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
           final followersCount = (dashboardData != null && dashboardData.metrics.followers > 0)
               ? dashboardData.metrics.followers
               : profile.followersCount;
-          final monthlyRevenue = (dashboardData != null && dashboardData.metrics.earnings > 0)
-              ? dashboardData.metrics.earnings.toInt()
-              : (wallet?.available ?? 0);
+          final monthlyRevenue = dashboardData?.metrics.earnings.toInt() ?? 0;
 
           return RefreshIndicator(
             onRefresh: () async {
@@ -226,7 +224,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
                   children: [
                     Expanded(
                       child: MetricCard(
-                        title: 'Doanh thu',
+                        title: 'Doanh thu gộp tháng',
                         value: AppFormatters.formatVND(monthlyRevenue),
                         icon: Icons.account_balance_wallet_rounded,
                         iconColor: AppColors.success,

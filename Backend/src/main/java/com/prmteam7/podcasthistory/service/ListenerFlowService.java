@@ -101,6 +101,7 @@ public class ListenerFlowService {
   private final SeriesRequestRepository seriesRequestRepository;
   private final SepayService sepayService;
   private final ListenerWalletService listenerWalletService;
+  private final MembershipRevenueService membershipRevenueService;
   private final R2PlaybackUrlService playbackUrlService;
   private final CommentRealtimeHub commentRealtimeHub;
   private final PackageFeatures packageFeatures;
@@ -126,6 +127,7 @@ public class ListenerFlowService {
       SeriesRequestRepository seriesRequestRepository,
       SepayService sepayService,
       ListenerWalletService listenerWalletService,
+      MembershipRevenueService membershipRevenueService,
       R2PlaybackUrlService playbackUrlService,
       CommentRealtimeHub commentRealtimeHub,
       PackageFeatures packageFeatures,
@@ -149,6 +151,7 @@ public class ListenerFlowService {
     this.seriesRequestRepository = seriesRequestRepository;
     this.sepayService = sepayService;
     this.listenerWalletService = listenerWalletService;
+    this.membershipRevenueService = membershipRevenueService;
     this.playbackUrlService = playbackUrlService;
     this.commentRealtimeHub = commentRealtimeHub;
     this.packageFeatures = packageFeatures;
@@ -596,6 +599,7 @@ public class ListenerFlowService {
     payment = paymentRepository.save(payment);
     if ("WALLET".equals(method)) {
       listenerWalletService.debit(listenerWalletService.walletForLockedUser(buyer), payment);
+      membershipRevenueService.creditPaidMembership(payment);
     }
     return new MembershipCheckoutItem(
         subscription.getSubscriptionId(),

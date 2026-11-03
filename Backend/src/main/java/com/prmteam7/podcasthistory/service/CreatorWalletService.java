@@ -323,7 +323,7 @@ public class CreatorWalletService {
                     wallet.setUser(creator.getUser());
                     wallet.setBalance(ZERO);
                     wallet.setHeldBalance(ZERO);
-                    wallet.setCurrency("USD");
+                    wallet.setCurrency("VND");
                     wallet.setStatus("ACTIVE");
                     return walletRepository.saveAndFlush(wallet);
                 });

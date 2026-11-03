@@ -225,6 +225,18 @@ export const payoutWithdrawalSchema = z.object({
   note: z.string().nullable(),
 })
 export const payoutWithdrawalsSchema = z.array(payoutWithdrawalSchema)
+export const payoutResultResponseSchema = z.object({
+  withdrawalRequestId: uuid,
+  amount: decimalSchema,
+  currency: z.string().length(3),
+  payoutMethod: z.string(),
+  payoutAccountMasked: z.string(),
+  providerReference: z.string().nullable(),
+  status: payoutStatusSchema,
+  requestedAt: z.string(),
+  processedAt: z.string().nullable(),
+  note: z.string().nullable(),
+})
 export const payoutResultSchema = z.enum(['SUCCESS', 'FAILED'])
 export const payoutResultWriteSchema = z.object({
   result: payoutResultSchema,

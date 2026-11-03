@@ -426,7 +426,8 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
       }
 
       if (widget.editingPodcast != null) {
-        final bool shouldSubmit = submitForReview || _isResubmitting;
+        final bool replacedMedia = _pickedMediaBytes != null && _pickedMediaBytes!.isNotEmpty;
+        final bool shouldSubmit = submitForReview || _isResubmitting || replacedMedia;
 
         final resultPodcast =
             await ref.read(creatorPodcastsProvider.notifier).updatePodcast(
@@ -502,8 +503,8 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             message = 'Đã gửi lại tập "${resultPodcast.title}" cho Admin duyệt thành công!';
             popResult = 'resubmitted';
           } else if (wasPublished) {
-            message = 'Tập podcast đã được chuyển về mục Bản nháp. Hãy bấm "Chờ duyệt" để gửi kiểm duyệt lại.';
-            popResult = 'published_to_draft';
+            message = 'Đã cập nhật thông tin tập "${resultPodcast.title}"; podcast vẫn được xuất bản.';
+            popResult = 'updated';
           } else if (wasPending) {
             message = 'Đã cập nhật tập "${resultPodcast.title}" (vẫn ở mục Chờ duyệt)!';
             popResult = 'pending_updated';
@@ -674,7 +675,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                   _isResubmitting ? Icons.send_rounded : Icons.check_circle_outline_rounded,
                   size: 18,
                 ),
-                label: Text(_isResubmitting ? 'Gửi duyệt' : 'Lưu'),
+                label: Text(_isResubmitting || (_pickedMediaBytes?.isNotEmpty ?? false) ? 'Lưu & gửi duyệt' : 'Lưu'),
               ),
             ),
         ],
@@ -786,7 +787,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                             Expanded(
                               child: AppButton(
                                 label: _currentStep == 2
-                                    ? (_isResubmitting
+                                    ? (_isResubmitting || (_pickedMediaBytes?.isNotEmpty ?? false)
                                         ? 'Lưu & Gửi Admin duyệt'
                                         : (widget.editingPodcast != null ? 'Lưu thay đổi' : 'Lưu vào Bản nháp'))
                                     : 'Tiếp tục',

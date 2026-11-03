@@ -64,6 +64,7 @@ public class SepayService {
   private final PaymentMethodRepository paymentMethods;
   private final SepayProperties properties;
   private final RealtimeEventPublisher realtime;
+  private final MembershipRevenueService membershipRevenueService;
   private final SecureRandom secureRandom = new SecureRandom();
 
   public SepayService(
@@ -75,7 +76,8 @@ public class SepayService {
       WalletTransactionRepository walletTransactions,
       PaymentMethodRepository paymentMethods,
       SepayProperties properties,
-      RealtimeEventPublisher realtime) {
+      RealtimeEventPublisher realtime,
+      MembershipRevenueService membershipRevenueService) {
     this.paymentRepository = paymentRepository;
     this.subscriptionRepository = subscriptionRepository;
     this.checkoutRepository = checkoutRepository;
@@ -85,6 +87,7 @@ public class SepayService {
     this.paymentMethods = paymentMethods;
     this.properties = properties;
     this.realtime = realtime;
+    this.membershipRevenueService = membershipRevenueService;
   }
 
   public String generatePaymentCode() {
@@ -311,6 +314,7 @@ public class SepayService {
     method.setDisplayName("SePay transfer");
     method.setIsActive(true);
     paymentMethods.save(method);
+    membershipRevenueService.creditPaidMembership(payment);
     if (payment.getUser() != null) {
       realtime.publishUser(
           payment.getUser().getUserId(),

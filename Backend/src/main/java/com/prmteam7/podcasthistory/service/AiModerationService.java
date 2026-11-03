@@ -93,7 +93,12 @@ public class AiModerationService {
                 continue;
             }
             if (isActive(candidate)) return item(candidate, true);
-            if ("COMPLETED".equalsIgnoreCase(candidate.getStatus())) return item(candidate, true);
+            if ("COMPLETED".equalsIgnoreCase(candidate.getStatus())) {
+                if (isAutoApproveEligible(candidate, autoApproveConfidenceThreshold)) {
+                    events.publishEvent(new ReusedCompletion(candidate.getModerationResultId()));
+                }
+                return item(candidate, true);
+            }
             if ("FAILED".equalsIgnoreCase(candidate.getStatus())) {
                 resetForRetry(candidate, lockedPodcast, transcript, transcriptHash, sourceHash, mediaKey);
                 results.save(candidate);
@@ -137,6 +142,12 @@ public class AiModerationService {
     @Async
     public void onRequested(Requested event) {
         process(event.id());
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async
+    public void onReusedCompletion(ReusedCompletion event) {
+        podcastReviews.autoApprove(event.id());
     }
 
     @EventListener
@@ -347,9 +358,7 @@ public class AiModerationService {
 
     public static String hash(Podcast podcast) {
         String source = String.join("\u001f",
-                nullable(podcast.getTitle()), nullable(podcast.getDescription()),
-                nullable(podcast.getMediaUrl()), nullable(podcast.getMediaType()),
-                nullable(podcast.getThumbnailUrl()));
+                nullable(podcast.getMediaUrl()), nullable(podcast.getMediaType()));
         return hashText(source);
     }
 
@@ -379,4 +388,5 @@ public class AiModerationService {
     }
 
     public record Requested(UUID id) {}
+    public record ReusedCompletion(UUID id) {}
 }
