@@ -713,16 +713,15 @@ class ApiCreatorRepository implements CreatorRepository {
       'exclusive': isExclusive,
     };
 
-    try {
-      final res = await _apiClient.put(
-        ApiEndpoints.creatorPodcastById(id),
-        body: podcastPayload,
-        headers: const {'ngrok-skip-browser-warning': '1'},
-      );
-      if (res is Map<String, dynamic>) {
-        updatedPodcast = _mapBackendPodcastToModel(res);
-      }
-    } catch (_) {}
+    final res = await _apiClient.put(
+      ApiEndpoints.creatorPodcastById(id),
+      body: podcastPayload,
+      headers: const {'ngrok-skip-browser-warning': '1'},
+    );
+    if (res is! Map<String, dynamic>) {
+      throw Exception('Máy chủ không xác nhận cập nhật podcast.');
+    }
+    updatedPodcast = _mapBackendPodcastToModel(res);
 
     if (seriesId != null && seriesId.isNotEmpty) {
       await assignPodcastToSeries(podcastId: id, seriesId: seriesId);
@@ -769,61 +768,13 @@ class ApiCreatorRepository implements CreatorRepository {
     }
 
     final existingIndex = _cachedPodcasts.indexWhere((p) => p.id == id);
-    final existingPodcast = existingIndex != -1
-        ? _cachedPodcasts[existingIndex]
-        : null;
-
-    // Quy tắc: Nếu podcast trước đó đang là PUBLISHED, khi chỉnh sửa nó PHẢI chuyển sang DRAFT.
-    // Nếu đang là PENDING_REVIEW (pendingAdmin), nó vẫn giữ nguyên PENDING_REVIEW.
-    // Nếu đang là DRAFT, nó vẫn giữ nguyên DRAFT.
-    final targetFallbackStatus = existingPodcast != null
-        ? (existingPodcast.status == PodcastStatus.published
-              ? PodcastStatus.draft
-              : existingPodcast.status)
-        : PodcastStatus.draft;
-
-    final fallbackPodcast = existingPodcast != null
-        ? existingPodcast.copyWith(
-            title: title,
-            description: description,
-            eraTag: eraTag,
-            sources: sources,
-            isExclusive: isExclusive,
-            coverUrl: effectiveCoverUrl ?? coverUrl,
-            audioFileName: audioFileName,
-            duration: duration,
-            categoryId: effectiveCategoryId,
-            seriesId: seriesId,
-            status: targetFallbackStatus,
-          )
-        : CreatorPodcast(
-            id: id,
-            title: title,
-            description: description,
-            coverUrl: effectiveCoverUrl ?? coverUrl,
-            audioFileName: audioFileName,
-            duration: duration,
-            createdAt: DateTime.now(),
-            eraTag: eraTag,
-            sources: sources,
-            isExclusive: isExclusive,
-            listensCount: 0,
-            likesCount: 0,
-            commentsCount: 0,
-            status: PodcastStatus.draft,
-            categoryId: effectiveCategoryId,
-            seriesId: seriesId,
-          );
-
-    final finalPodcast =
-        updatedPodcast?.copyWith(
+    final finalPodcast = updatedPodcast.copyWith(
           audioFileName: audioFileName,
           sources: sources,
           eraTag: eraTag,
           categoryId: effectiveCategoryId,
           seriesId: seriesId,
-        ) ??
-        fallbackPodcast;
+        );
 
     if (existingIndex != -1) {
       _cachedPodcasts[existingIndex] = finalPodcast;
@@ -1757,24 +1708,20 @@ class ApiCreatorRepository implements CreatorRepository {
   @override
   Future<Map<String, int>> getWalletBalance() async {
     if (!_apiClient.isAuthenticated) {
-      return {
-        'available': _availableBalance,
-        'pending': _pendingRelease,
-        'holding': _holdingWithdraw,
-        'totalWithdrawn': _totalWithdrawn,
-      };
+      throw Exception('Vui lòng đăng nhập để xem số dư ví.');
     }
-    try {
-      final res = await _apiClient.get(ApiEndpoints.creatorWallet);
-      if (res is Map<String, dynamic>) {
-        _availableBalance =
-            (res['availableBalance'] as num?)?.toInt() ?? _availableBalance;
-        _holdingWithdraw =
-            (res['heldBalance'] as num?)?.toInt() ?? _holdingWithdraw;
-        _pendingRelease =
-            (res['pendingRelease'] as num?)?.toInt() ?? _pendingRelease;
+    final res = await _apiClient.get(ApiEndpoints.creatorWallet);
+    if (res is Map<String, dynamic>) {
+      if (res['availableBalance'] is! num || res['heldBalance'] is! num ||
+          res['pendingRelease'] is! num) {
+        throw Exception('Dữ liệu số dư ví từ máy chủ không đầy đủ.');
       }
-    } catch (_) {}
+      _availableBalance = (res['availableBalance'] as num).toInt();
+      _holdingWithdraw = (res['heldBalance'] as num).toInt();
+      _pendingRelease = (res['pendingRelease'] as num).toInt();
+    } else {
+      throw Exception('Dữ liệu số dư ví từ máy chủ không hợp lệ.');
+    }
 
     return {
       'available': _availableBalance,
@@ -1789,15 +1736,19 @@ class ApiCreatorRepository implements CreatorRepository {
       case 'REQUEST_EARNING':
       case 'CONTRACT_PAYMENT':
       case 'MILESTONE_RELEASE':
+      case 'RELEASE_FUNDS':
         return 'Thu nhập từ hợp đồng';
       case 'MEMBERSHIP':
+      case 'MEMBERSHIP_EARNING':
         return 'Thu nhập hội viên';
       case 'WALLET_TOPUP':
       case 'TOP_UP':
         return 'Nạp tiền vào ví';
       case 'REFUND':
+      case 'WITHDRAWAL_REFUND':
         return 'Hoàn tiền';
       case 'WITHDRAWAL':
+      case 'WITHDRAWAL_HOLD':
         return 'Yêu cầu rút tiền';
       default:
         return 'Giao dịch ví';
@@ -1809,10 +1760,13 @@ class ApiCreatorRepository implements CreatorRepository {
       case 'REQUEST_EARNING':
       case 'CONTRACT_PAYMENT':
       case 'MILESTONE_RELEASE':
+      case 'RELEASE_FUNDS':
         return TransactionType.requestEarning;
       case 'MEMBERSHIP':
+      case 'MEMBERSHIP_EARNING':
         return TransactionType.membership;
       case 'REFUND':
+      case 'WITHDRAWAL_REFUND':
         return TransactionType.refund;
       default:
         return TransactionType.withdrawal;
@@ -1834,19 +1788,20 @@ class ApiCreatorRepository implements CreatorRepository {
   @override
   Future<List<WalletTransaction>> getTransactions() async {
     if (!_apiClient.isAuthenticated) {
-      return const [];
+      throw Exception('Vui lòng đăng nhập để xem lịch sử ví.');
     }
-    try {
-      final res = await _apiClient.get(
+    final res = await _apiClient.get(
         ApiEndpoints.creatorTransactions,
         queryParams: const {'page': 0, 'size': 20},
       );
+      if (res is! List && !(res is Map<String, dynamic> && res['content'] is List)) {
+        throw Exception('Dữ liệu lịch sử ví từ máy chủ không hợp lệ.');
+      }
       final rawTransactions = res is List
           ? res
           : res is Map<String, dynamic> && res['content'] is List
           ? res['content'] as List
           : const [];
-      if (rawTransactions.isNotEmpty) {
         final transactions = rawTransactions
             .whereType<Map<String, dynamic>>()
             .map((item) {
@@ -1884,19 +1839,16 @@ class ApiCreatorRepository implements CreatorRepository {
         _cachedTransactions
           ..clear()
           ..addAll(transactions);
-      }
-    } catch (_) {}
     return List.unmodifiable(_cachedTransactions);
   }
 
   @override
   Future<List<BankAccount>> getBankAccounts() async {
     if (!_apiClient.isAuthenticated) {
-      return List.unmodifiable(_cachedBankAccounts);
+      throw Exception('Vui lòng đăng nhập để xem tài khoản nhận tiền.');
     }
-    try {
-      final res = await _apiClient.get(ApiEndpoints.creatorBankAccounts);
-      if (res is List) {
+    final res = await _apiClient.get(ApiEndpoints.creatorBankAccounts);
+    if (res is List) {
         final accounts = res.whereType<Map<String, dynamic>>().map((item) {
           return BankAccount(
             id: item['payoutAccountId']?.toString() ?? _uuid.v4(),
@@ -1909,8 +1861,9 @@ class ApiCreatorRepository implements CreatorRepository {
         _cachedBankAccounts
           ..clear()
           ..addAll(accounts);
-      }
-    } catch (_) {}
+    } else {
+      throw Exception('Danh sách tài khoản nhận tiền từ máy chủ không hợp lệ.');
+    }
     return List.unmodifiable(_cachedBankAccounts);
   }
 
@@ -1920,19 +1873,12 @@ class ApiCreatorRepository implements CreatorRepository {
     String accountNumber,
     String accountHolder,
   ) async {
-    final newAccount = BankAccount(
-      id: _uuid.v4(),
-      bankName: bankName,
-      accountNumber: accountNumber,
-      accountHolder: accountHolder,
-      isDefault: _cachedBankAccounts.isEmpty,
-    );
-    _cachedBankAccounts.add(newAccount);
+    throw UnsupportedError('Tài khoản nhận tiền cần được Admin xác minh và đăng ký trên hệ thống.');
   }
 
   @override
   Future<void> deleteBankAccount(String id) async {
-    _cachedBankAccounts.removeWhere((a) => a.id == id);
+    throw UnsupportedError('Chưa có API gỡ tài khoản nhận tiền đã xác minh.');
   }
 
   @override
@@ -1944,59 +1890,31 @@ class ApiCreatorRepository implements CreatorRepository {
     if (!_apiClient.isAuthenticated) {
       throw Exception('Vui lòng đăng nhập để thực hiện rút tiền.');
     }
-    try {
-      await _apiClient.post(
-        ApiEndpoints.creatorWithdraw,
-        body: {'amount': amount, 'payoutAccountId': bankAccountId},
-      );
-    } catch (_) {}
-
-    if (amount > _availableBalance) {
-      throw Exception('Số dư khả dụng không đủ để thực hiện rút tiền.');
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorWithdraw,
+      body: {'amount': amount, 'payoutAccountId': bankAccountId},
+    );
+    if (response is! Map<String, dynamic> || response['status'] != 'PENDING' ||
+        response['withdrawalRequestId'] == null) {
+      throw Exception('Cần kiểm tra lại trạng thái yêu cầu rút tiền trên máy chủ.');
     }
-    _availableBalance -= amount;
-    _holdingWithdraw += amount;
-
-    final tx = WalletTransaction(
-      id: 'tx_${_uuid.v4().substring(0, 8)}',
+    return WalletTransaction(
+      id: response['withdrawalRequestId'].toString(),
       title: 'Yêu cầu rút tiền về ngân hàng',
       type: TransactionType.withdrawal,
       amount: -amount,
-      status: TransactionStatus.processing,
-      createdAt: DateTime.now(),
-      note: 'Hệ thống đã tiếp nhận yêu cầu rút tiền $amount ₫.',
+      status: TransactionStatus.holding,
+      createdAt: DateTime.tryParse(response['requestedAt']?.toString() ?? '') ?? DateTime.now(),
+      note: 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
     );
-    _cachedTransactions.insert(0, tx);
-    return tx;
   }
 
   @override
   Future<void> releaseFunds() async {
     if (!_apiClient.isAuthenticated) {
-      return;
+      throw Exception('Vui lòng đăng nhập để giải ngân thu nhập.');
     }
-    try {
-      await _apiClient.post(ApiEndpoints.creatorReleaseFunds);
-    } catch (_) {}
-
-    if (_pendingRelease > 0) {
-      _availableBalance += _pendingRelease;
-      final released = _pendingRelease;
-      _pendingRelease = 0;
-
-      _cachedTransactions.insert(
-        0,
-        WalletTransaction(
-          id: 'tx_${_uuid.v4().substring(0, 8)}',
-          title: 'Giải phóng thu nhập hoàn tất',
-          type: TransactionType.requestEarning,
-          amount: released,
-          status: TransactionStatus.success,
-          createdAt: DateTime.now(),
-          note: 'Tiền đã chuyển từ Đang chờ release vào Số dư khả dụng.',
-        ),
-      );
-    }
+    await _apiClient.post(ApiEndpoints.creatorReleaseFunds);
   }
 
   // ==========================================

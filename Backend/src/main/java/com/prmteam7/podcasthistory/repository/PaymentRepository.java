@@ -54,12 +54,6 @@ public interface PaymentRepository
       where payment.subscription.membershipPlan.producerProfile.producerProfileId = :creatorId
         and upper(payment.status) in ('PAID', 'SUCCESS', 'COMPLETED')
         and upper(payment.currency) = upper(:currency)
-        and exists (
-            select paymentMethod.paymentMethodId
-            from PaymentMethod paymentMethod
-            where paymentMethod.payment = payment
-              and paymentMethod.isActive = true
-        )
         and payment.paidAt >= :from
         and payment.paidAt < :to
       """)

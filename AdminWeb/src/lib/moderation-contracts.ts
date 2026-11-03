@@ -15,7 +15,7 @@ export const resolveReportSchema = moderationNoteSchema.extend({ action: reportA
 export const resolveAppealSchema = moderationNoteSchema.extend({ decision: appealDecisionSchema })
 
 export const reviewSchema = z.object({
-  reviewId: z.uuid(), reviewerId: z.uuid(), reviewerName: nullableText,
+  reviewId: z.uuid(), reviewerId: z.uuid().nullable(), reviewerName: nullableText,
   decision: z.string(), note: nullableText, reviewedAt: instant,
 })
 export const reviewsPageSchema = pageSchema(reviewSchema)
@@ -59,9 +59,9 @@ export const previewSchema = z.object({ podcastId: z.uuid(), videoUrl: signedUrl
 export const referenceFileSchema = z.object({ referenceId: z.uuid(), downloadUrl: signedUrl, expiresAt: instant })
 export const reportSchema = z.object({
   reportId: z.uuid(), reporterId: z.uuid(), reporterName: nullableText,
-  targetType: z.enum(['PODCAST', 'COMMENT', 'LIVESTREAM']), targetId: z.uuid(),
+  targetType: z.enum(['PODCAST', 'COMMENT', 'LIVESTREAM']), targetId: z.uuid(), targetName: z.string(),
   reasonCode: nullableText, description: nullableText, status: reportStatusSchema,
-  assigneeId: z.uuid().nullable(), createdAt: instant, resolvedAt: instant.nullable(), reviews: z.array(reviewSchema),
+  assigneeId: z.uuid().nullable(), assigneeName: nullableText, createdAt: instant, resolvedAt: instant.nullable(), reviews: z.array(reviewSchema),
 })
 export const reportsPageSchema = pageSchema(reportSchema)
 export const appealSchema = z.object({

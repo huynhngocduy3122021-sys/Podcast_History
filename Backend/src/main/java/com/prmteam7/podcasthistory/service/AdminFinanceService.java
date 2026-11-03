@@ -7,7 +7,6 @@ import com.prmteam7.podcasthistory.enums.ManualPaymentResult;
 import com.prmteam7.podcasthistory.exception.*;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
@@ -31,6 +30,7 @@ public class AdminFinanceService {
   private final ContractRepository contracts;
   private final PackageFeatures packageFeatures;
   private final AudienceNotificationService audienceNotifications;
+  private final MembershipRevenueService membershipRevenueService;
 
   public AdminFinanceService(
       AdminSupportService support,
@@ -44,7 +44,8 @@ public class AdminFinanceService {
       AppUserRepository users,
       ContractRepository contracts,
       PackageFeatures packageFeatures,
-      AudienceNotificationService audienceNotifications) {
+      AudienceNotificationService audienceNotifications,
+      MembershipRevenueService membershipRevenueService) {
     this.support = support;
     this.withdrawals = withdrawals;
     this.reviews = reviews;
@@ -57,6 +58,7 @@ public class AdminFinanceService {
     this.contracts = contracts;
     this.packageFeatures = packageFeatures;
     this.audienceNotifications = audienceNotifications;
+    this.membershipRevenueService = membershipRevenueService;
   }
 
   public Page<WithdrawalItem> withdrawals(UUID actor, String status, int page, int size) {
@@ -92,6 +94,7 @@ public class AdminFinanceService {
     AppUser admin = support.actor(actor, true);
     WithdrawalRequest w = lockWithdrawal(id);
     AdminSupportService.state(w.getStatus(), "PENDING");
+    requireLegacyWithdrawal(w);
     if (!Boolean.TRUE.equals(body.payoutAccountVerified()))
       throw new InvalidFlowRequestException("Phải xác minh tài khoản nhận tiền trước khi duyệt.");
     if (w.isFundsReserved())
@@ -135,6 +138,7 @@ public class AdminFinanceService {
     AppUser admin = support.actor(actor, true);
     WithdrawalRequest w = lockWithdrawal(id);
     AdminSupportService.state(w.getStatus(), "PENDING");
+    requireLegacyWithdrawal(w);
     if (w.isFundsReserved())
       throw new ResourceConflictException(
           "Yêu cầu đã giữ tiền; dùng fail để hoàn trả đúng nghiệp vụ.");
@@ -187,19 +191,30 @@ public class AdminFinanceService {
     return withdrawalItem(withdrawals.save(w));
   }
 
-  public Page<WalletItem> wallets(UUID actor, int page, int size) {
+  public Page<WalletItem> wallets(UUID actor, String q, String role, int page, int size) {
     support.actor(actor, true);
+    String normalizedQuery = q == null || q.isBlank() ? null : q.trim();
+    String normalizedRole = role == null || role.isBlank() ? null : role.trim().toUpperCase(Locale.ROOT);
     return wallets
-        .findAllForAdmin(AdminSupportService.page(page, size))
-        .map(this::walletItem);
-  }
-
-  public WalletItem wallet(UUID actor, UUID walletId) {
-    support.actor(actor, true);
-    return wallets
-        .findAdminById(walletId)
-        .map(this::walletItem)
-        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ví."));
+        .findAllForAdmin(normalizedQuery, normalizedRole, AdminSupportService.page(page, size))
+        .map(
+            w ->
+                new WalletItem(
+                    w.getUserWalletId(),
+                    w.getUser().getUserId(),
+                    w.getUser().getUsername(),
+                    w.getUser().getEmail(),
+                    w.getUser().getDisplayName(),
+                    w.getUser().getRole().getRoleCode(),
+                    Boolean.TRUE.equals(w.getUser().getIsActive()),
+                    Boolean.TRUE.equals(w.getUser().getIsVerified()),
+                    w.getBalance(),
+                    w.getHeldBalance(),
+                    w.getBalance().add(w.getHeldBalance()),
+                    w.getCurrency(),
+                    w.getStatus(),
+                    w.getCreatedAt(),
+                    w.getUpdatedAt()));
   }
 
   public Page<TransactionItem> transactions(
@@ -312,6 +327,7 @@ public class AdminFinanceService {
       p.setProviderTransactionId(reference);
       p.setProvider("MANUAL_TRANSFER");
       ensurePaymentMethod(p);
+      if (p.getSubscription() != null) membershipRevenueService.creditPaidMembership(p);
     } else {
       p.setStatus("FAILED");
       if (p.getSubscription() != null) {
@@ -354,8 +370,6 @@ public class AdminFinanceService {
   public PaymentItem refund(UUID actor, UUID id, RefundPayment body) {
     AppUser admin = support.actor(actor, true);
     Payment p = lockPayment(id);
-    if ("WALLET".equalsIgnoreCase(p.getProvider()))
-      throw new ResourceConflictException("Hoàn tiền membership qua ví cần nghiệp vụ hoàn số dư riêng.");
     AdminSupportService.state(p.getStatus(), "PAID", "SUCCESS", "COMPLETED");
     if (payments.existsByRefundReference(body.refundReference().trim()))
       throw new ResourceConflictException("Mã hoàn tiền đã được ghi nhận.");
@@ -398,6 +412,13 @@ public class AdminFinanceService {
       throw new ResourceConflictException("Không có tiền đang giữ; cần kiểm tra dữ liệu rút tiền.");
   }
 
+  private void requireLegacyWithdrawal(WithdrawalRequest w) {
+    if (transactions.findFirstByWithdrawalRequest_WithdrawalRequestIdAndTransactionType(
+            w.getWithdrawalRequestId(), "WITHDRAWAL_HOLD").isPresent())
+      throw new ResourceConflictException(
+          "Yêu cầu đã giữ tiền theo payout mới; xử lý tại /api/admin/payouts/withdrawals.");
+  }
+
   private WalletTransaction hold(UUID id) {
     var transaction =
         transactions
@@ -421,28 +442,6 @@ public class AdminFinanceService {
     return wallets
         .lockById(id)
         .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ví."));
-  }
-
-  private WalletItem walletItem(UserWallet wallet) {
-    AppUser user = wallet.getUser();
-    BigDecimal available = wallet.getBalance() == null ? BigDecimal.ZERO : wallet.getBalance();
-    BigDecimal held = wallet.getHeldBalance() == null ? BigDecimal.ZERO : wallet.getHeldBalance();
-    return new WalletItem(
-        wallet.getUserWalletId(),
-        user.getUserId(),
-        user.getUsername(),
-        user.getEmail(),
-        user.getDisplayName(),
-        user.getRole() == null ? null : user.getRole().getRoleCode(),
-        user.getIsActive(),
-        user.getIsVerified(),
-        available,
-        held,
-        available.add(held),
-        wallet.getCurrency(),
-        wallet.getStatus(),
-        wallet.getCreatedAt(),
-        wallet.getUpdatedAt());
   }
 
   private WithdrawalRequest lockWithdrawal(UUID id) {

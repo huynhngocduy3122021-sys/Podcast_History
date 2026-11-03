@@ -79,6 +79,45 @@ class AiModerationDeduplicationTest {
     }
 
     @Test
+    void resubmittingAlreadyApprovedVersionTriggersApprovalAfterCommit() {
+        Fixture fixture = new Fixture();
+        AiModerationService service = fixture.service();
+        service.enqueue(fixture.podcast);
+        AiModerationResult completed = fixture.saved.get(0);
+        completed.setModerationResultId(UUID.randomUUID());
+        completed.setStatus("COMPLETED");
+        completed.setOverallLabel("SAFE");
+        completed.setRecommendation("APPROVE");
+        completed.setConfidenceScore(new BigDecimal("0.95"));
+        completed.setTranscriptHash(AiModerationService.hashText(fixture.transcript.getFullText()));
+
+        service.enqueue(fixture.podcast);
+
+        assertEquals(1, fixture.saved.size());
+        verify(fixture.events).publishEvent(new AiModerationService.ReusedCompletion(
+                completed.getModerationResultId()));
+    }
+
+    @Test
+    void lowConfidenceCompletedResultDoesNotAutoApproveOnResubmit() {
+        Fixture fixture = new Fixture();
+        AiModerationService service = fixture.service();
+        service.enqueue(fixture.podcast);
+        AiModerationResult completed = fixture.saved.get(0);
+        completed.setStatus("COMPLETED");
+        completed.setOverallLabel("SAFE");
+        completed.setRecommendation("APPROVE");
+        completed.setConfidenceScore(new BigDecimal("0.50"));
+        completed.setTranscriptHash(AiModerationService.hashText(fixture.transcript.getFullText()));
+
+        service.enqueue(fixture.podcast);
+
+        assertEquals(1, fixture.saved.size());
+        verify(fixture.events, times(1)).publishEvent(any(AiModerationService.Requested.class));
+        verify(fixture.events, times(0)).publishEvent(any(AiModerationService.ReusedCompletion.class));
+    }
+
+    @Test
     void versionGuardAllowsOnlyMatchingTranscriptForCompletedResult() {
         PodcastTranscript transcript = new PodcastTranscript();
         transcript.setStatus("COMPLETED");
@@ -92,6 +131,24 @@ class AiModerationDeduplicationTest {
                 result, transcript, AiModerationService.hashText("Nội dung")));
         assertFalse(AiModerationService.sameContentVersion(
                 result, transcript, AiModerationService.hashText("Nội dung mới")));
+    }
+
+    @Test
+    void metadataEditKeepsModerationVersionButMediaReplacementChangesIt() {
+        Podcast podcast = new Podcast();
+        podcast.setTitle("Tiêu đề cũ");
+        podcast.setDescription("Mô tả cũ");
+        podcast.setMediaUrl("video/old.mp4");
+        podcast.setMediaType("video/mp4");
+        String original = AiModerationService.hash(podcast);
+
+        podcast.setTitle("Tiêu đề mới");
+        podcast.setDescription("Mô tả mới");
+        podcast.setThumbnailUrl("cover/new.jpg");
+        assertEquals(original, AiModerationService.hash(podcast));
+
+        podcast.setMediaUrl("video/new.mp4");
+        assertFalse(original.equals(AiModerationService.hash(podcast)));
     }
 
     private static final class Fixture {
