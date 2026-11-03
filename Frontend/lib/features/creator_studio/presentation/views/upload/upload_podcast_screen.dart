@@ -1385,15 +1385,117 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
             ),
           ],
           const SizedBox(height: AppSpacing.lg),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Chế độ Độc quyền thành viên (Locked)',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text(
-                'Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập này.'),
-            value: _isExclusive,
-            activeThumbColor: AppColors.secondaryLight,
-            onChanged: (val) => setState(() => _isExclusive = val),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+              borderRadius: AppSpacing.roundedMd,
+              border: Border.all(
+                color: _isExclusive
+                    ? (isDark ? AppColors.secondaryDark : AppColors.secondaryLight)
+                    : (isDark ? AppColors.outlineDark : AppColors.outlineLight),
+                width: _isExclusive ? 1.5 : 1.0,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _isExclusive
+                        ? (isDark ? AppColors.secondaryDark : AppColors.secondaryLight)
+                            .withValues(alpha: 0.15)
+                        : (isDark
+                            ? AppColors.surfaceVariantDark
+                            : AppColors.surfaceVariantLight),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    _isExclusive
+                        ? Icons.workspace_premium_rounded
+                        : Icons.public_rounded,
+                    size: 24,
+                    color: _isExclusive
+                        ? (isDark ? AppColors.secondaryDark : AppColors.secondaryLight)
+                        : (isDark
+                            ? AppColors.onSurfaceMutedDark
+                            : AppColors.onSurfaceMutedLight),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              'Chế độ giới hạn của thành viên',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? AppColors.onSurfaceDark
+                                    : AppColors.onSurfaceLight,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _isExclusive
+                                  ? (isDark
+                                          ? AppColors.secondaryDark
+                                          : AppColors.secondaryLight)
+                                      .withValues(alpha: 0.15)
+                                  : AppColors.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _isExclusive ? 'Hội viên' : 'Công khai',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: _isExclusive
+                                    ? (isDark
+                                        ? AppColors.secondaryDark
+                                        : AppColors.secondaryLight)
+                                    : AppColors.success,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _isExclusive
+                            ? 'Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập podcast này.'
+                            : 'Mọi thính giả đều có thể nghe đầy đủ nội dung tập này miễn phí.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: isDark
+                              ? AppColors.onSurfaceMutedDark
+                              : AppColors.onSurfaceMutedLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Switch(
+                  value: _isExclusive,
+                  activeThumbColor: isDark
+                      ? AppColors.secondaryDark
+                      : AppColors.secondaryLight,
+                  onChanged: (val) => setState(() => _isExclusive = val),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Container(

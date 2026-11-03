@@ -242,6 +242,32 @@ abstract class CreatorRepository {
     List<FormQuestion> questions,
   );
 
+  // Polls (/api/creator/polls)
+  Future<List<CreatorPoll>> getPolls({String? status, String? seriesId, String? podcastId});
+  Future<CreatorPoll> getPollDetail(String pollId);
+  Future<CreatorPoll> createPoll({
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  });
+  Future<CreatorPoll> updatePoll(
+    String pollId, {
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  });
+  Future<void> deletePoll(String pollId);
+  Future<CreatorPoll> publishPoll(String pollId);
+  Future<CreatorPoll> closePoll(String pollId);
+  Future<PollResultsData> getPollResults(String pollId);
+  Future<List<PollResponseUserItem>> getPollResponses(String pollId);
+
   // Livestreams (Agora)
   Future<List<CreatorLivestreamItem>> getLivestreams();
   Future<CreatorLivestreamItem> getLivestreamById(String livestreamId);

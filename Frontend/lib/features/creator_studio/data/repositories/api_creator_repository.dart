@@ -2723,6 +2723,199 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   // ==========================================
+  // REAL POLLS API (/api/creator/polls)
+  // ==========================================
+
+  @override
+  Future<List<CreatorPoll>> getPolls({
+    String? status,
+    String? seriesId,
+    String? podcastId,
+  }) async {
+    final queryParams = <String, String>{};
+    if (status != null && status.isNotEmpty) queryParams['status'] = status;
+    if (seriesId != null && seriesId.isNotEmpty) queryParams['seriesId'] = seriesId;
+    if (podcastId != null && podcastId.isNotEmpty) queryParams['podcastId'] = podcastId;
+    queryParams['page'] = '0';
+    queryParams['size'] = '50';
+
+    String endpoint = ApiEndpoints.creatorPolls;
+    if (queryParams.isNotEmpty) {
+      final queryString = Uri(queryParameters: queryParams).query;
+      endpoint = '$endpoint?$queryString';
+    }
+
+    final res = await _apiClient.get(endpoint);
+    final list = <CreatorPoll>[];
+
+    if (res is Map<String, dynamic> && res['content'] is List) {
+      for (final item in res['content']) {
+        if (item is Map<String, dynamic>) {
+          list.add(CreatorPoll.fromJson(item));
+        }
+      }
+    } else if (res is List) {
+      for (final item in res) {
+        if (item is Map<String, dynamic>) {
+          list.add(CreatorPoll.fromJson(item));
+        }
+      }
+    }
+    return list;
+  }
+
+  @override
+  Future<CreatorPoll> getPollDetail(String pollId) async {
+    final res = await _apiClient.get(ApiEndpoints.creatorPollById(pollId));
+    if (res is Map<String, dynamic>) {
+      final pollMap = (res['poll'] is Map<String, dynamic>)
+          ? res['poll'] as Map<String, dynamic>
+          : res;
+      final optionsList = <CreatorPollOption>[];
+      if (res['options'] is List) {
+        for (final opt in res['options']) {
+          if (opt is Map<String, dynamic>) {
+            optionsList.add(CreatorPollOption.fromJson(opt));
+          }
+        }
+      }
+      return CreatorPoll.fromJson(pollMap, options: optionsList);
+    }
+    throw Exception('Không thể tải chi tiết cuộc bình chọn');
+  }
+
+  @override
+  Future<CreatorPoll> createPoll({
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  }) async {
+    final body = <String, dynamic>{
+      'question': question.trim(),
+      'options': options.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+    };
+    if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
+    if (podcastId != null && podcastId.isNotEmpty) body['podcastId'] = podcastId;
+    if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
+    if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
+
+    final res = await _apiClient.post(ApiEndpoints.creatorPolls, body: body);
+    if (res is Map<String, dynamic>) {
+      final pollMap = (res['poll'] is Map<String, dynamic>)
+          ? res['poll'] as Map<String, dynamic>
+          : res;
+      final optionsList = <CreatorPollOption>[];
+      if (res['options'] is List) {
+        for (final opt in res['options']) {
+          if (opt is Map<String, dynamic>) {
+            optionsList.add(CreatorPollOption.fromJson(opt));
+          }
+        }
+      }
+      return CreatorPoll.fromJson(pollMap, options: optionsList);
+    }
+    throw Exception('Tạo cuộc bình chọn không thành công');
+  }
+
+  @override
+  Future<CreatorPoll> updatePoll(
+    String pollId, {
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  }) async {
+    final body = <String, dynamic>{
+      'question': question.trim(),
+      'options': options.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+    };
+    if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
+    if (podcastId != null && podcastId.isNotEmpty) body['podcastId'] = podcastId;
+    if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
+    if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
+
+    final res = await _apiClient.put(ApiEndpoints.creatorPollById(pollId), body: body);
+    if (res is Map<String, dynamic>) {
+      final pollMap = (res['poll'] is Map<String, dynamic>)
+          ? res['poll'] as Map<String, dynamic>
+          : res;
+      final optionsList = <CreatorPollOption>[];
+      if (res['options'] is List) {
+        for (final opt in res['options']) {
+          if (opt is Map<String, dynamic>) {
+            optionsList.add(CreatorPollOption.fromJson(opt));
+          }
+        }
+      }
+      return CreatorPoll.fromJson(pollMap, options: optionsList);
+    }
+    throw Exception('Cập nhật cuộc bình chọn không thành công');
+  }
+
+  @override
+  Future<void> deletePoll(String pollId) async {
+    await _apiClient.delete(ApiEndpoints.creatorPollById(pollId));
+  }
+
+  @override
+  Future<CreatorPoll> publishPoll(String pollId) async {
+    final res = await _apiClient.post(ApiEndpoints.creatorPollPublish(pollId));
+    if (res is Map<String, dynamic>) {
+      final pollMap = (res['poll'] is Map<String, dynamic>)
+          ? res['poll'] as Map<String, dynamic>
+          : res;
+      return CreatorPoll.fromJson(pollMap);
+    }
+    return getPollDetail(pollId);
+  }
+
+  @override
+  Future<CreatorPoll> closePoll(String pollId) async {
+    final res = await _apiClient.post(ApiEndpoints.creatorPollClose(pollId));
+    if (res is Map<String, dynamic>) {
+      final pollMap = (res['poll'] is Map<String, dynamic>)
+          ? res['poll'] as Map<String, dynamic>
+          : res;
+      return CreatorPoll.fromJson(pollMap);
+    }
+    return getPollDetail(pollId);
+  }
+
+  @override
+  Future<PollResultsData> getPollResults(String pollId) async {
+    final res = await _apiClient.get(ApiEndpoints.creatorPollResults(pollId));
+    if (res is Map<String, dynamic>) {
+      return PollResultsData.fromJson(res);
+    }
+    throw Exception('Không lấy được kết quả bình chọn');
+  }
+
+  @override
+  Future<List<PollResponseUserItem>> getPollResponses(String pollId) async {
+    final res = await _apiClient.get(ApiEndpoints.creatorPollResponses(pollId));
+    final list = <PollResponseUserItem>[];
+    if (res is Map<String, dynamic> && res['content'] is List) {
+      for (final item in res['content']) {
+        if (item is Map<String, dynamic>) {
+          list.add(PollResponseUserItem.fromJson(item));
+        }
+      }
+    } else if (res is List) {
+      for (final item in res) {
+        if (item is Map<String, dynamic>) {
+          list.add(PollResponseUserItem.fromJson(item));
+        }
+      }
+    }
+    return list;
+  }
+
+  // ==========================================
   // PRIVATE MAPPER HELPERS
   // ==========================================
 

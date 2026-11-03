@@ -1029,6 +1029,71 @@ final creatorFormsProvider =
       CreatorFormsNotifier.new,
     );
 
+// Polls (/api/creator/polls)
+class CreatorPollsNotifier extends Notifier<AsyncValue<List<CreatorPoll>>> {
+  @override
+  AsyncValue<List<CreatorPoll>> build() {
+    Future.microtask(() => loadPolls());
+    return const AsyncValue.loading();
+  }
+
+  CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  Future<void> loadPolls({String? status}) async {
+    state = const AsyncValue.loading();
+    try {
+      final list = await _repo.getPolls(status: status);
+      state = AsyncValue.data(list);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
+  }
+
+  Future<CreatorPoll> createPoll({
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+    bool publish = false,
+  }) async {
+    final created = await _repo.createPoll(
+      question: question,
+      options: options,
+      seriesId: seriesId,
+      podcastId: podcastId,
+      startsAt: startsAt,
+      endsAt: endsAt,
+    );
+    if (publish) {
+      await _repo.publishPoll(created.pollId);
+    }
+    await loadPolls();
+    return created;
+  }
+
+  Future<void> publishPoll(String pollId) async {
+    await _repo.publishPoll(pollId);
+    await loadPolls();
+  }
+
+  Future<void> closePoll(String pollId) async {
+    await _repo.closePoll(pollId);
+    await loadPolls();
+  }
+
+  Future<void> deletePoll(String pollId) async {
+    await _repo.deletePoll(pollId);
+    await loadPolls();
+  }
+}
+
+final creatorPollsProvider =
+    NotifierProvider<CreatorPollsNotifier, AsyncValue<List<CreatorPoll>>>(
+  CreatorPollsNotifier.new,
+);
+
 // Livestreams (Agora RTC)
 class CreatorLivestreamsNotifier
     extends Notifier<AsyncValue<List<CreatorLivestreamItem>>> {
