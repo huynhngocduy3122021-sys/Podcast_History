@@ -14,7 +14,9 @@ class ModerationResponseValidatorTest {
     @Test
     void acceptsSafeApproveWithValidConfidenceAndEvidence() throws Exception {
         var response = ModerationResponseValidator.validate(mapper.readTree(
-                """{"label":"SAFE","recommendation":"APPROVE","confidence":0.95,"reason":"Nội dung an toàn","evidence":["Không phát hiện rủi ro"]}"""));
+                """
+                {"label":"SAFE","recommendation":"APPROVE","confidence":0.95,"reason":"Nội dung an toàn","evidence":["Không phát hiện rủi ro"]}
+                """));
 
         assertEquals(new BigDecimal("0.95"), response.confidence());
         assertEquals("SAFE", response.label());

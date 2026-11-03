@@ -19,6 +19,30 @@ Tài liệu này dành cho luồng **hợp đồng có giữ ngân sách VND**. 
 | `GET /api/me/checkouts/{checkoutId}` | Không | Chỉ tiếp tục khi checkout đã được webhook xác nhận thành công |
 | `GET /api/listener/wallet/transactions?page=0&size=20` | Không | Lịch sử ví, gồm giao dịch giữ, chi đợt và hoàn ngân sách của luồng hợp đồng mới |
 
+### Hiển thị lịch sử ví Listener
+
+`GET /api/listener/wallet/transactions` trả `Page` với `content[]`. Mỗi phần tử giữ các trường cũ (`type`, `direction`, `amount`, `balanceAfter`, `heldBalanceAfter`, `referenceCode`, `createdAt`) và có thêm:
+
+| Trường | Ý nghĩa |
+|---|---|
+| `title`, `description` | Tên và giải thích giao dịch bằng tiếng Việt; ưu tiên hiển thị thay cho tên `type` thô |
+| `movement` | `AVAILABLE_TO_HELD`, `HELD_TO_SETTLEMENT`, `HELD_TO_AVAILABLE`, `AVAILABLE_CREDIT`, `AVAILABLE_DEBIT`; có thể `null` với loại giao dịch cũ/chưa phân loại |
+| `availableBalanceChange`, `heldBalanceChange` | Số tiền có dấu thay đổi ở từng ngăn ví. `null` nếu chưa xác định được; **không cộng `amount` theo `direction` để tính lại số dư** |
+| `requestId`, `requestTitle` | Yêu cầu liên quan, nếu có |
+| `milestoneId`, `milestoneName` | Đợt liên quan, nếu có |
+
+Ví dụ cùng một request ngân sách 100.000 VND, đợt 1 giá 40.000 VND, sau đó hoàn 60.000 VND còn lại:
+
+```json
+[
+  {"type":"CONTRACT_HOLD","direction":"DEBIT","amount":100000,"title":"Giữ ngân sách: Podcast lịch sử Việt Nam","movement":"AVAILABLE_TO_HELD","availableBalanceChange":-100000,"heldBalanceChange":100000,"requestTitle":"Podcast lịch sử Việt Nam"},
+  {"type":"CONTRACT_STAGE_DEBIT","direction":"DEBIT","amount":40000,"title":"Giải ngân đợt 1: Bản nháp","movement":"HELD_TO_SETTLEMENT","availableBalanceChange":0,"heldBalanceChange":-40000,"requestTitle":"Podcast lịch sử Việt Nam","milestoneName":"Bản nháp"},
+  {"type":"CONTRACT_REFUND","direction":"CREDIT","amount":60000,"title":"Hoàn ngân sách: Podcast lịch sử Việt Nam","movement":"HELD_TO_AVAILABLE","availableBalanceChange":60000,"heldBalanceChange":-60000,"requestTitle":"Podcast lịch sử Việt Nam"}
+]
+```
+
+Danh sách thực tế sắp xếp mới nhất trước và có thêm các trường còn lại. `CONTRACT_HOLD` là **chuyển vào tiền giữ**, chưa trả CC. `CONTRACT_STAGE_DEBIT` trừ **tiền đã giữ**, không trừ tiếp số dư khả dụng. `CONTRACT_REFUND` chuyển phần chưa chi từ tiền giữ về khả dụng. Frontend nên hiển thị cả ba loại với nhãn khác nhau và cả hai cột biến động; chỉ lọc `direction=DEBIT` sẽ ẩn khoản hoàn và gây cảm giác bị trừ hai lần.
+
 ## 2. Listener tạo yêu cầu, chưa giữ ngân sách
 
 `POST /api/requests/contract` — role **LISTENER**. FE tạo `idempotencyKey` UUID một lần cho thao tác, giữ nguyên khi retry cùng nội dung. Backend chỉ lưu yêu cầu và ngân sách dự kiến, **chưa trừ ví/chưa giữ tiền**. Listener cần có đủ tiền khi CC gửi đề xuất; có thể nạp trước hoặc sau lúc tạo request.
