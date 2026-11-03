@@ -107,7 +107,7 @@ public class CreatorFlowController {
     }
 
     @PutMapping("/podcasts/{podcastId}")
-    @Operation(summary = "Cập nhật podcast; nội dung đã duyệt sẽ quay về nháp")
+    @Operation(summary = "Cập nhật thông tin podcast; nội dung đã duyệt giữ nguyên trạng thái nếu không thay media")
     public PodcastItem updatePodcast(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID podcastId,
@@ -132,7 +132,7 @@ public class CreatorFlowController {
 
     @PostMapping(value = "/podcasts/{podcastId}/video", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Upload video hoặc audio và gắn media vào podcast được chỉ định")
+    @Operation(summary = "Upload video hoặc audio; thay media cũ sẽ đưa podcast về nháp và chạy transcript mới")
     public PodcastVideoItem uploadVideo(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID podcastId,

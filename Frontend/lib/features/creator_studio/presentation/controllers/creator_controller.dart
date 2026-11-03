@@ -697,13 +697,14 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
     }
   }
 
-  Future<void> withdrawMoney(
+  Future<WalletTransaction> withdrawMoney(
     int amount,
     String bankAccountId,
     String pin,
   ) async {
-    await _repo.withdrawMoney(amount, bankAccountId, pin);
+    final transaction = await _repo.withdrawMoney(amount, bankAccountId, pin);
     await loadWallet();
+    return transaction;
   }
 
   Future<void> releaseFunds() async {

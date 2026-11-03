@@ -36,7 +36,10 @@ function transport(responses: Array<{ data: unknown; status?: number }>) {
 }
 
 test('payout API uses pending/result/account contracts and enforces SUCCESS reference', async () => {
-  const completed = { ...pending, status: 'COMPLETED' }
+  const completed = { withdrawalRequestId: withdrawalId, amount: pending.amount, currency: pending.currency,
+    payoutMethod: pending.payoutMethod, payoutAccountMasked: pending.payoutAccountMasked,
+    providerReference: 'provider-123', status: 'COMPLETED', requestedAt: pending.requestedAt,
+    processedAt: '2026-10-31T09:00:00Z', note: 'paid' }
   const account = { payoutAccountId: withdrawalId, creatorProfileId: creatorId, payoutMethod: 'BANK', accountMasked: '****1234', currency: 'VND', verified: true, active: true }
   const tx = transport([{ data: [pending] }, { data: completed }, { data: account, status: 201 }])
   const list = await tx.backend.pendingPayouts()

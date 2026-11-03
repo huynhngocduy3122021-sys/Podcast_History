@@ -31,6 +31,7 @@ public class AdminFinanceService {
   private final ContractRepository contracts;
   private final PackageFeatures packageFeatures;
   private final AudienceNotificationService audienceNotifications;
+  private final MembershipRevenueService membershipRevenueService;
 
   public AdminFinanceService(
       AdminSupportService support,
@@ -44,7 +45,8 @@ public class AdminFinanceService {
       AppUserRepository users,
       ContractRepository contracts,
       PackageFeatures packageFeatures,
-      AudienceNotificationService audienceNotifications) {
+      AudienceNotificationService audienceNotifications,
+      MembershipRevenueService membershipRevenueService) {
     this.support = support;
     this.withdrawals = withdrawals;
     this.reviews = reviews;
@@ -57,6 +59,7 @@ public class AdminFinanceService {
     this.contracts = contracts;
     this.packageFeatures = packageFeatures;
     this.audienceNotifications = audienceNotifications;
+    this.membershipRevenueService = membershipRevenueService;
   }
 
   public Page<WithdrawalItem> withdrawals(UUID actor, String status, int page, int size) {
@@ -92,6 +95,7 @@ public class AdminFinanceService {
     AppUser admin = support.actor(actor, true);
     WithdrawalRequest w = lockWithdrawal(id);
     AdminSupportService.state(w.getStatus(), "PENDING");
+    requireLegacyWithdrawal(w);
     if (!Boolean.TRUE.equals(body.payoutAccountVerified()))
       throw new InvalidFlowRequestException("Phải xác minh tài khoản nhận tiền trước khi duyệt.");
     if (w.isFundsReserved())
@@ -135,6 +139,7 @@ public class AdminFinanceService {
     AppUser admin = support.actor(actor, true);
     WithdrawalRequest w = lockWithdrawal(id);
     AdminSupportService.state(w.getStatus(), "PENDING");
+    requireLegacyWithdrawal(w);
     if (w.isFundsReserved())
       throw new ResourceConflictException(
           "Yêu cầu đã giữ tiền; dùng fail để hoàn trả đúng nghiệp vụ.");
@@ -312,6 +317,7 @@ public class AdminFinanceService {
       p.setProviderTransactionId(reference);
       p.setProvider("MANUAL_TRANSFER");
       ensurePaymentMethod(p);
+      if (p.getSubscription() != null) membershipRevenueService.creditPaidMembership(p);
     } else {
       p.setStatus("FAILED");
       if (p.getSubscription() != null) {
@@ -396,6 +402,13 @@ public class AdminFinanceService {
   private void requireReserved(WithdrawalRequest w) {
     if (!w.isFundsReserved())
       throw new ResourceConflictException("Không có tiền đang giữ; cần kiểm tra dữ liệu rút tiền.");
+  }
+
+  private void requireLegacyWithdrawal(WithdrawalRequest w) {
+    if (transactions.findFirstByWithdrawalRequest_WithdrawalRequestIdAndTransactionType(
+            w.getWithdrawalRequestId(), "WITHDRAWAL_HOLD").isPresent())
+      throw new ResourceConflictException(
+          "Yêu cầu đã giữ tiền theo payout mới; xử lý tại /api/admin/payouts/withdrawals.");
   }
 
   private WalletTransaction hold(UUID id) {
