@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
-import 'package:podcast_history/core/widgets/app_button.dart';
-import 'package:podcast_history/core/widgets/app_confirm_dialog.dart';
-import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/empty_state_widget.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 
@@ -21,13 +18,6 @@ class BankAccountsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Tài khoản nhận tiền'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: isDark ? AppColors.primaryDark : AppColors.primaryLight,
-        foregroundColor: isDark ? AppColors.onPrimaryDark : AppColors.onPrimaryLight,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Thêm tài khoản'),
-        onPressed: () => _showAddAccountDialog(context, ref),
-      ),
       body: accountsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Lỗi: $e')),
@@ -36,9 +26,7 @@ class BankAccountsScreen extends ConsumerWidget {
             return EmptyStateWidget(
               icon: Icons.account_balance_outlined,
               title: 'Chưa liên kết ngân hàng',
-              description: 'Thêm tài khoản ngân hàng chính chủ để rút tiền thù lao từ VietCast.',
-              actionLabel: 'Thêm tài khoản ngay',
-              onAction: () => _showAddAccountDialog(context, ref),
+              description: 'Liên hệ Admin để đăng ký và xác minh tài khoản nhận tiền trước khi rút.',
             );
           }
 
@@ -110,19 +98,6 @@ class BankAccountsScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                      onPressed: () {
-                        AppConfirmDialog.show(
-                          context,
-                          title: 'Xóa tài khoản ngân hàng?',
-                          content: 'Tài khoản ${acc.accountNumber} tại ${acc.bankName} sẽ bị gỡ bỏ.',
-                          confirmLabel: 'Xóa',
-                          isDestructive: true,
-                          onConfirm: () => ref.read(bankAccountsProvider.notifier).deleteAccount(acc.id),
-                        );
-                      },
-                    ),
                   ],
                 ),
               );
@@ -133,43 +108,4 @@ class BankAccountsScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddAccountDialog(BuildContext context, WidgetRef ref) {
-    final bankCtrl = TextEditingController(text: 'Techcombank');
-    final numCtrl = TextEditingController();
-    final nameCtrl = TextEditingController(text: 'NGUYEN THE GIANG');
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Thêm tài khoản ngân hàng', style: TextStyle(fontWeight: FontWeight.w700)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(label: 'Tên ngân hàng', controller: bankCtrl),
-            const SizedBox(height: AppSpacing.sm),
-            AppTextField(label: 'Số tài khoản', controller: numCtrl, keyboardType: TextInputType.number),
-            const SizedBox(height: AppSpacing.sm),
-            AppTextField(label: 'Chủ tài khoản (Không dấu)', controller: nameCtrl),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Hủy')),
-          AppButton(
-            label: 'Lưu tài khoản',
-            width: 130,
-            onPressed: () {
-              if (numCtrl.text.isNotEmpty && nameCtrl.text.isNotEmpty) {
-                ref.read(bankAccountsProvider.notifier).addAccount(
-                      bankCtrl.text.trim(),
-                      numCtrl.text.trim(),
-                      nameCtrl.text.trim(),
-                    );
-                Navigator.of(ctx).pop();
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
 }

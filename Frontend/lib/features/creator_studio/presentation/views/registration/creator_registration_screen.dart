@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -43,7 +44,7 @@ class _CreatorRegistrationScreenState
             socialLink: _socialCtrl.text.trim(),
           );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text(
               'Hồ sơ đăng ký làm Creator đã được gửi! Ban quản trị sẽ xét duyệt trong 24-48h.',

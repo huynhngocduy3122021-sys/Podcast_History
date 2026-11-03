@@ -11,6 +11,7 @@ import 'core/services/session_storage/session_storage.dart';
 import 'core/package_features.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/image_url_helper.dart';
+import 'core/widgets/top_notification.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
@@ -253,6 +254,7 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
     ],
     child: MaterialApp(
       title: 'VietCast',
+      navigatorKey: appNavigatorKey,
       debugShowCheckedModeBanner: false,
       themeMode: mode,
       theme: AppTheme.lightTheme,
@@ -749,7 +751,7 @@ class _ShellState extends State<Shell> {
     if (show.id == null) {
       if (mounted) {
         setState(() => playing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Podcast này chưa có audio trên máy chủ.'),
           ),
@@ -778,7 +780,7 @@ class _ShellState extends State<Shell> {
       setState(() => playing = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Không thể phát audio: $error')));
+      ).showTopSnackBar(SnackBar(content: Text('Không thể phát audio: $error')));
     }
   }
 
@@ -923,13 +925,13 @@ class _ShellState extends State<Shell> {
         future
             .then((_) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.of(context).showTopSnackBar(
                 SnackBar(content: Text('Đã gửi báo cáo "$reason" cho admin.')),
               );
             })
             .catchError((_) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
+              ScaffoldMessenger.of(context).showTopSnackBar(
                 const SnackBar(content: Text('Không thể gửi báo cáo lúc này.')),
               );
             });
@@ -939,7 +941,7 @@ class _ShellState extends State<Shell> {
 
   Future<void> _showMembership(Show show) async {
     if (show.creatorId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Podcast này chưa có Creator ID.')),
       );
       return;
@@ -985,7 +987,7 @@ class _ShellState extends State<Shell> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Tắt loading dialog
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể tải gói hội viên: $e')),
         );
       }
@@ -1146,7 +1148,7 @@ class _ShellState extends State<Shell> {
 
     // Chưa là hội viên
     if (plans.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Creator chưa có gói membership đang hoạt động.'),
         ),
@@ -1439,7 +1441,7 @@ class _ShellState extends State<Shell> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Không thể tải số dư ví.')));
+      ).showTopSnackBar(const SnackBar(content: Text('Không thể tải số dư ví.')));
       return;
     }
     if (!mounted) return;
@@ -1511,7 +1513,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
         await widget.api.checkout(widget.planId, paymentMethod: 'WALLET');
         if (!mounted) return;
         Navigator.of(context).pop(true);
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(
             backgroundColor: Colors.green.shade700,
             content: Text(
@@ -1525,13 +1527,13 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
         final msg = e.statusCode == 409
             ? 'Số dư ví không đủ hoặc bạn đã có gói hội viên đang hoạt động.'
             : e.message;
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
         );
       } catch (e) {
         if (!mounted) return;
         setState(() => _isSubmitting = false);
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(
             backgroundColor: Colors.red.shade700,
             content: Text('Không thể thanh toán bằng ví: $e'),
@@ -1557,7 +1559,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
           ),
         );
         if (paid == true && mounted) {
-          messenger.showSnackBar(
+          messenger.showTopSnackBar(
             SnackBar(
               backgroundColor: Colors.green.shade700,
               content: Text(
@@ -1572,13 +1574,13 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
         final msg = e.statusCode == 409
             ? 'Bạn đang có một đơn thanh toán chờ xử lý hoặc đã là hội viên kênh này.'
             : e.message;
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
         );
       } catch (e) {
         if (!mounted) return;
         setState(() => _isSubmitting = false);
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(
             backgroundColor: Colors.red.shade700,
             content: Text('Không thể tạo phiên thanh toán SePay: $e'),
@@ -3965,7 +3967,7 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Không thể tải thông tin giao dịch.')),
       );
     }
@@ -3994,7 +3996,7 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       }
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(content: Text('Không thể tạo giao dịch nạp tiền.')),
         );
       }
@@ -4670,7 +4672,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       });
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
         );
     } finally {
@@ -4902,7 +4904,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       if (mounted) setState(() => milestones = _loadMilestones());
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể yêu cầu làm lại: $error')),
         );
     }
@@ -4913,7 +4915,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       final result = await widget.api.approveMilestone(milestoneId);
       if (!mounted) return;
       setState(() => milestones = _loadMilestones());
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(
             '${result['message'] ?? 'Đã chấp nhận sản phẩm và tạo khoản thanh toán chờ xử lý.'}',
@@ -4922,7 +4924,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       );
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể chấp nhận sản phẩm: $error')),
         );
     }
@@ -4971,12 +4973,12 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       );
       if (!mounted) return;
       setState(() => contract = _loadContract());
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Đã ký hợp đồng thành công.')),
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể ký hợp đồng: $error')),
         );
       }
@@ -5255,7 +5257,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       if (mounted) setState(() => termination = _loadTermination());
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể rút tranh chấp: $error')),
         );
     }
@@ -5274,7 +5276,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       if (mounted) setState(() => termination = _loadTermination());
     } catch (error) {
       if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể xác nhận tranh chấp: $error')),
         );
     }
@@ -5382,7 +5384,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                       milestones = _loadMilestones();
                       termination = _loadTermination();
                     });
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       const SnackBar(
                         content: Text('Đã gửi yêu cầu tranh chấp.'),
                       ),
@@ -5390,7 +5392,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                   }
                 } catch (error) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       SnackBar(
                         content: Text('Không thể tạo tranh chấp: $error'),
                       ),
@@ -5554,8 +5556,10 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                           child: TextField(
                             controller: messageController,
                             onSubmitted: (_) => _sendMessage(),
+                            style: const TextStyle(color: Color(0xFF141312)),
                             decoration: InputDecoration(
                               hintText: 'Nhập tin nhắn...',
+                              hintStyle: const TextStyle(color: Color(0xFF6D665F)),
                               filled: true,
                               fillColor: const Color(0xFFF6F4F0),
                               border: OutlineInputBorder(
@@ -5957,7 +5961,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không thể phát podcast: $error')),
         );
       }
@@ -6053,7 +6057,7 @@ class _ProfileEditorState extends State<ProfileEditor> {
 
   void _message(String value) =>
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(value)));
+          .showTopSnackBar(SnackBar(content: Text(value)));
 
   Future<void> _saveProfile() async {
     _message('API hiện tại chưa cung cấp endpoint cập nhật hồ sơ.');
@@ -6950,7 +6954,7 @@ class _PlayerState extends State<Player> {
       });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Không tải được bình luận: $error')),
         );
       }
@@ -7002,7 +7006,7 @@ class _PlayerState extends State<Player> {
     if (_sendingComment || text.trim().isEmpty) return false;
     final send = widget.onComment;
     if (send == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text(
             'Podcast mẫu chưa có ID trên server. Hãy chọn podcast đã được duyệt từ backend.',
@@ -7026,7 +7030,7 @@ class _PlayerState extends State<Player> {
       return true;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('Chưa lưu được bình luận: $error')),
         );
       }
@@ -7136,7 +7140,7 @@ class _PlayerState extends State<Player> {
         FilledButton.icon(
           onPressed: () {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context).showTopSnackBar(
               const SnackBar(content: Text('Đã sao chép đường dẫn chia sẻ.')),
             );
           },
@@ -7792,7 +7796,7 @@ class _ReportPanelState extends State<ReportPanel> {
   void submit() {
     final report = reason == 'Khác' ? customController.text.trim() : reason;
     if (report.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Vui lòng nhập nội dung báo cáo.')),
       );
       return;
@@ -7842,10 +7846,10 @@ class _ReportPanelState extends State<ReportPanel> {
               autofocus: true,
               minLines: 3,
               maxLines: 5,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Color(0xFF141312)),
               decoration: const InputDecoration(
                 hintText: 'Viết nội dung bạn muốn báo cáo cho admin...',
-                hintStyle: TextStyle(color: Colors.white60),
+                hintStyle: TextStyle(color: Color(0xFF6D665F)),
                 border: OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: Colors.white24),
@@ -7930,7 +7934,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     final creatorId = widget.show.creatorId;
     if (creatorId == null) return;
     if (!isMember) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Bạn cần là thành viên của kênh để gửi yêu cầu.'),
         ),
@@ -8111,7 +8115,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
         autoAcceptEnabled: result['autoAcceptEnabled'] as bool,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Đã gửi yêu cầu và giữ ngân sách thành công.'),
         ),
@@ -8120,7 +8124,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Không thể gửi yêu cầu: $error')));
+      ).showTopSnackBar(SnackBar(content: Text('Không thể gửi yêu cầu: $error')));
     }
   }
 
@@ -8139,7 +8143,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
         following = !following;
         loadingFollow = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(
             following ? 'Đã theo dõi creator.' : 'Đã bỏ theo dõi creator.',
@@ -8149,7 +8153,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     } catch (exception) {
       if (!mounted) return;
       setState(() => loadingFollow = false);
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(content: Text('Không thể cập nhật theo dõi: $exception')),
       );
     }
@@ -8852,7 +8856,7 @@ class _CommentLikeButtonState extends State<_CommentLikeButton> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(content: Text('KhĂ´ng thá»ƒ cáº­p nháº­t like: $error')),
         );
       }

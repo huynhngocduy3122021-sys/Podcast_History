@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -131,7 +132,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
     _commentController.clear();
     FocusScope.of(context).unfocus();
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context).showTopSnackBar(
       SnackBar(
         content: Text('Đã gửi bình luận tại mốc ${AppFormatters.formatDuration(Duration(seconds: currentSeconds))}!'),
         backgroundColor: AppColors.success,
@@ -425,7 +426,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                           final hasMedia = (pod.videoUrl != null && pod.videoUrl!.isNotEmpty) ||
                               (pod.audioFileName != null && pod.audioFileName!.isNotEmpty);
 
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          ScaffoldMessenger.of(context).showTopSnackBar(
                             SnackBar(
                               content: Text(
                                 isCors
@@ -520,7 +521,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                     active: pod.likedByMe,
                     onTap: () {
                       if (pod.status != PodcastStatus.published) {
-                        ScaffoldMessenger.of(context).showSnackBar(
+                        ScaffoldMessenger.of(context).showTopSnackBar(
                           const SnackBar(
                             content: Text(
                               'Podcast chỉ có thể thích sau khi đã phát hành.',
@@ -548,7 +549,7 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
                     icon: Icons.ios_share_rounded,
                     label: 'Chia sẻ',
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context).showTopSnackBar(
                         SnackBar(content: Text('Đã sao chép liên kết tập "${pod.title}"')),
                       );
                     },

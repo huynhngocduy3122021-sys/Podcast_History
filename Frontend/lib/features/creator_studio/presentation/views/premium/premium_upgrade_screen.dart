@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -87,7 +88,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
       if (success == true && mounted) {
         await _handleRefresh();
         if (!mounted) return;
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(
             content: Text('Chúc mừng bạn đã nâng cấp thành công gói ${plan.name}!'),
             backgroundColor: AppColors.success,
@@ -96,7 +97,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(
             content: Text(e.message),
             backgroundColor: AppColors.error,
@@ -105,7 +106,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
+        messenger.showTopSnackBar(
           SnackBar(
             content: Text('Không thể tạo giao dịch nâng cấp: $e'),
             backgroundColor: AppColors.error,
@@ -632,7 +633,7 @@ class _CreatorPaymentDialogState extends ConsumerState<CreatorPaymentDialog> {
                             tooltip: 'Sao chép mã',
                             onPressed: () {
                               Clipboard.setData(ClipboardData(text: paymentCode));
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(context).showTopSnackBar(
                                 const SnackBar(
                                   content: Text('Đã sao chép mã thanh toán!'),
                                   duration: Duration(seconds: 2),

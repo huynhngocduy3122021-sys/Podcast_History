@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -213,7 +214,7 @@ class _CreatorLivestreamScreenState
           .renewToken(_activeLivestreamId!);
       await _engine!.renewToken(response.token);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã tự động gia hạn Agora Token thành công.'),
             duration: Duration(seconds: 2),
@@ -347,7 +348,7 @@ class _CreatorLivestreamScreenState
           );
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã lưu bản nháp livestream thành công!'),
             backgroundColor: AppColors.success,
@@ -419,7 +420,7 @@ class _CreatorLivestreamScreenState
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Đã kết thúc buổi Livestream.'),
           backgroundColor: AppColors.success,
@@ -474,7 +475,7 @@ class _CreatorLivestreamScreenState
     await _engine!.muteLocalAudioStream(nextState);
     setState(() => _isMuted = nextState);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(_isMuted ? 'Đã tắt Micro' : 'Đã bật Micro'),
           duration: const Duration(seconds: 1),
@@ -527,7 +528,7 @@ class _CreatorLivestreamScreenState
       _cameraUnavailable = false;
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(_isVideoDisabled ? 'Đã tắt Camera' : 'Đã bật Camera'),
           duration: const Duration(seconds: 1),
@@ -580,7 +581,7 @@ class _CreatorLivestreamScreenState
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context).showTopSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.error),
     );
   }

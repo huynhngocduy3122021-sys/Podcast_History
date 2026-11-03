@@ -66,9 +66,11 @@ Whisper xử lý nền sau khi Creator upload audio/video; submit vẫn nhận `
 3. `POST /api/admin/payments/{paymentId}/refund` với `{ "refundReference": "mã-hoàn-tiền", "note": "Lý do" }`.
 4. `GET /api/admin/wallets?page=0&size=20`, `GET /api/admin/wallet-transactions?page=0&size=20` (có thể lọc `walletId`, `status`) để kiểm tra sổ ví.
 5. Tạo phương thức nhận tiền cho Creator: `POST /api/admin/payouts/creators/{creatorProfileId}/accounts` với `{ "payoutMethod": "BANK", "accountReference": "số/tài khoản", "accountMasked": "****1234", "currency": "VND" }`. Giới hạn lần lượt 40, 255, 160; `currency` đúng 3 chữ cái.
-6. Yêu cầu rút tiền tạo từ `POST /api/creator/wallet/withdrawals` đã giữ tiền ngay. Dùng **`GET /api/admin/payouts/withdrawals/pending`** và **`POST /api/admin/payouts/withdrawals/{withdrawalId}/result`** với `{ "result": "SUCCESS", "providerReference": "mã-chuyển-tiền", "note": "..." }`. `result` là `SUCCESS` hoặc `FAILED`; `providerReference` bắt buộc khi `SUCCESS`.
+6. Yêu cầu rút tiền tạo từ `POST /api/creator/wallet/withdrawals` đã giữ tiền ngay. Dùng **`GET /api/admin/payouts/withdrawals/pending`** và **`POST /api/admin/payouts/withdrawals/{withdrawalId}/result`** với `{ "result": "SUCCESS", "providerReference": "mã-chuyển-tiền", "note": "..." }`. Chỉ ghi `SUCCESS` **sau khi Admin đã chuyển khoản bên ngoài và đối soát**; Backend không tự gọi ngân hàng. `result` là `SUCCESS` hoặc `FAILED`; `providerReference` bắt buộc khi `SUCCESS`. Response của API ghi kết quả là `WithdrawalResponse`, gồm `withdrawalRequestId`, `amount`, `currency`, `payoutMethod`, `payoutAccountMasked`, `providerReference`, `status`, `requestedAt`, `processedAt`, `note`; danh sách đang chờ dùng `AdminWithdrawalResponse` có thêm `creatorProfileId` và `payoutAccountReference`.
 
-Luồng `POST /api/admin/withdrawals/{id}/approve` cũ giả định chưa giữ tiền, có thể trả `409` đối với withdrawal Creator mới. Frontend Admin nên dùng cặp API `/api/admin/payouts/withdrawals/...` ở bước 6.
+Luồng `POST /api/admin/withdrawals/{id}/approve` và `/reject` cũ giả định chưa giữ tiền; Backend trả `409` với yêu cầu có giao dịch `WITHDRAWAL_HOLD` của luồng mới. Dùng cặp API `/api/admin/payouts/withdrawals/...` ở bước 6.
+
+Membership thanh toán bằng ví hoặc SePay sau khi thành `PAID` sẽ tạo bút toán `MEMBERSHIP_EARNING` cộng **80% giá gói** vào ví CC và `PLATFORM_FEE` **20%**. `monthlyRevenue` trên Dashboard vẫn là tổng doanh thu gộp theo Payment của tháng, không phải số dư khả dụng. Payment membership đã `PAID` trước thay đổi này cần đối soát riêng trước khi ghi bù, tránh cộng trùng các khoản đã chi thủ công.
 
 ## 7. Hợp đồng và tranh chấp
 

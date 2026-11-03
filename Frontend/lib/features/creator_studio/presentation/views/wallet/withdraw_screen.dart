@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -19,7 +20,6 @@ class WithdrawScreen extends ConsumerStatefulWidget {
 
 class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _pinController = TextEditingController();
   BankAccount? _selectedBank;
   bool _isProcessing = false;
   String _currentStepState = 'FORM'; // FORM -> VALIDATING -> PROCESSING -> SUCCESS
@@ -28,37 +28,29 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   @override
   void dispose() {
     _amountController.dispose();
-    _pinController.dispose();
     super.dispose();
   }
 
   Future<void> _processWithdrawal(int available) async {
     final amount = int.tryParse(_amountController.text.replaceAll('.', '').replaceAll(' ', '')) ?? 0;
     if (amount < 50000) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Số tiền rút tối thiểu là 50.000 ₫')),
       );
       return;
     }
     if (amount > available) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Số tiền rút vượt quá số dư khả dụng')),
       );
       return;
     }
     if (_selectedBank == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Vui lòng chọn tài khoản ngân hàng nhận tiền')),
       );
       return;
     }
-    if (_pinController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập mã PIN bảo mật 6 số')),
-      );
-      return;
-    }
-
     final messenger = ScaffoldMessenger.of(context);
 
     setState(() {
@@ -66,30 +58,18 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
       _currentStepState = 'VALIDATING';
     });
 
-    // Mô phỏng State Machine: VALIDATING -> HOLDING -> PROCESSING -> SUCCESS
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _currentStepState = 'HOLDING');
-
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _currentStepState = 'PROCESSING');
-
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-
     try {
-      await ref.read(walletProvider.notifier).withdrawMoney(
+      final transaction = await ref.read(walletProvider.notifier).withdrawMoney(
             amount,
             _selectedBank!.id,
-            _pinController.text,
+            '',
           );
 
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
         _currentStepState = 'SUCCESS';
-        _transactionId = 'VC-WD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+        _transactionId = transaction.id;
       });
     } catch (e) {
       if (!mounted) return;
@@ -97,8 +77,8 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         _isProcessing = false;
         _currentStepState = 'FORM';
       });
-      messenger.showSnackBar(
-        SnackBar(content: Text('Rút tiền thất bại: $e. Số tiền đã được hoàn lại ví.')),
+      messenger.showTopSnackBar(
+        SnackBar(content: Text('Không thể xác nhận yêu cầu rút tiền: $e. Vui lòng kiểm tra lại lịch sử và số dư ví.')),
       );
     }
   }
@@ -203,7 +183,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                           color: AppColors.warningContainer,
                           borderRadius: AppSpacing.roundedMd,
                         ),
-                        child: const Text('Chưa có tài khoản ngân hàng. Vui lòng bấm Quản lý TK để thêm.'),
+                        child: const Text('Chưa có tài khoản nhận tiền đã xác minh. Vui lòng liên hệ Admin.'),
                       )
                     else
                       DropdownButtonFormField<BankAccount>(
@@ -221,17 +201,6 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                       ),
                     const SizedBox(height: AppSpacing.lg),
 
-                    // Xác thực PIN bảo mật
-                    AppTextField(
-                      label: 'Mã PIN bảo mật rút tiền (6 chữ số)',
-                      hint: 'Nhập mã PIN...',
-                      controller: _pinController,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      prefixIcon: const Icon(Icons.pin_rounded),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
                     // Tóm tắt giao dịch
                     Container(
                       padding: const EdgeInsets.all(AppSpacing.md),
@@ -243,7 +212,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                         children: [
                           _buildSummaryRow('Phí dịch vụ rút tiền', 'Miễn phí (0 ₫)'),
                           const SizedBox(height: 6),
-                          _buildSummaryRow('Thời gian xử lý dự kiến', '24h làm việc (24/7)'),
+                          _buildSummaryRow('Xử lý', 'Admin xác nhận chuyển khoản thủ công'),
                         ],
                       ),
                     ),
@@ -300,11 +269,11 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   String _getProcessingStatusTitle() {
     switch (_currentStepState) {
       case 'VALIDATING':
-        return '1/3: Đang xác thực số dư và tài khoản ngân hàng...';
+        return 'Đang gửi yêu cầu và giữ tiền trong ví...';
       case 'HOLDING':
-        return '2/3: Đang tạm giữ tiền trong quỹ thanh khoản...';
+        return 'Đang chờ phản hồi từ hệ thống...';
       case 'PROCESSING':
-        return '3/3: Đang gửi lệnh chuyển khoản Napas 247...';
+        return 'Đang chờ phản hồi từ hệ thống...';
       default:
         return 'Đang xử lý giao dịch...';
     }
@@ -349,15 +318,15 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
               children: [
                 _buildReceiptRow('Số tiền rút', '${_amountController.text} ₫', isBold: true),
                 const Divider(),
-                _buildReceiptRow('Ngân hàng nhận', _selectedBank?.bankName ?? ''),
+                _buildReceiptRow('Phương thức nhận', _selectedBank?.bankName ?? ''),
                 const SizedBox(height: 6),
                 _buildReceiptRow('Số tài khoản', _selectedBank?.accountNumber ?? ''),
                 const SizedBox(height: 6),
-                _buildReceiptRow('Chủ tài khoản', _selectedBank?.accountHolder ?? ''),
+                _buildReceiptRow('Tiền tệ', _selectedBank?.accountHolder ?? ''),
                 const SizedBox(height: 6),
                 _buildReceiptRow('Thời gian tạo lệnh', AppFormatters.formatDateTime(DateTime.now())),
                 const SizedBox(height: 6),
-                _buildReceiptRow('Trạng thái', 'Đang giải ngân', color: AppColors.warning),
+                _buildReceiptRow('Trạng thái', 'Đang chờ Admin chuyển khoản', color: AppColors.warning),
               ],
             ),
           ),

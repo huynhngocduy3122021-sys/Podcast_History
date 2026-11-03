@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -635,24 +636,33 @@ class _FormBuilderScreenState extends ConsumerState<FormBuilderScreen> {
         title: const Text('Xóa cuộc bình chọn?'),
         content: const Text('Hành động này sẽ xóa mềm cuộc bình chọn. Dữ liệu câu trả lời vẫn được lưu trữ.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await ref.read(creatorPollsProvider.notifier).deletePoll(poll.pollId);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Đã xóa cuộc bình chọn!')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Không thể xóa: $e')),
-                  );
-                }
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Hủy')),
+          AppButton(
+            label: 'Tạo form',
+            width: 110,
+            onPressed: () {
+              if (titleCtrl.text.isNotEmpty) {
+                ref.read(creatorFormsProvider.notifier).createForm(
+                      titleCtrl.text.trim(),
+                      descCtrl.text.trim(),
+                      [
+                        const FormQuestion(
+                          id: 'q1',
+                          question: 'Giai đoạn lịch sử bạn muốn nghe nhất?',
+                          type: FormQuestionType.singleChoice,
+                          options: ['1858-1945', '1945-1954', '1954-1975', '1975-1986'],
+                        ),
+                        const FormQuestion(
+                          id: 'q2',
+                          question: 'Góp ý thêm cho giọng đọc của kênh:',
+                          type: FormQuestionType.shortText,
+                        ),
+                      ],
+                    );
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(context).showTopSnackBar(
+                  const SnackBar(content: Text('Đã tạo biểu mẫu khảo sát thành công!')),
+                );
               }
             },
             child: const Text('Xác nhận xóa'),
