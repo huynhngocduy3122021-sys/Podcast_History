@@ -967,6 +967,177 @@ class InteractiveForm {
   });
 }
 
+// --- CREATOR POLLS (SWAGGER /api/creator/polls) ---
+
+class CreatorPollOption {
+  final String optionId;
+  final String text;
+  final int sortOrder;
+
+  const CreatorPollOption({
+    required this.optionId,
+    required this.text,
+    required this.sortOrder,
+  });
+
+  factory CreatorPollOption.fromJson(Map<String, dynamic> json) {
+    return CreatorPollOption(
+      optionId: json['optionId']?.toString() ?? '',
+      text: json['text']?.toString() ?? '',
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class CreatorPoll {
+  final String pollId;
+  final String? creatorProfileId;
+  final String? channelName;
+  final String? seriesId;
+  final String? podcastId;
+  final String question;
+  final String status; // DRAFT, OPEN, CLOSED, DELETED
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final bool acceptingResponses;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final List<CreatorPollOption> options;
+
+  const CreatorPoll({
+    required this.pollId,
+    this.creatorProfileId,
+    this.channelName,
+    this.seriesId,
+    this.podcastId,
+    required this.question,
+    required this.status,
+    this.startsAt,
+    this.endsAt,
+    this.acceptingResponses = false,
+    this.createdAt,
+    this.updatedAt,
+    this.options = const [],
+  });
+
+  bool get isDraft => status.toUpperCase() == 'DRAFT';
+  bool get isOpen => status.toUpperCase() == 'OPEN';
+  bool get isClosed => status.toUpperCase() == 'CLOSED';
+  bool get isDeleted => status.toUpperCase() == 'DELETED';
+
+  factory CreatorPoll.fromJson(Map<String, dynamic> json, {List<CreatorPollOption>? options}) {
+    final opts = options ??
+        ((json['options'] is List)
+            ? (json['options'] as List)
+                .map((e) => CreatorPollOption.fromJson(e as Map<String, dynamic>))
+                .toList()
+            : <CreatorPollOption>[]);
+
+    return CreatorPoll(
+      pollId: json['pollId']?.toString() ?? '',
+      creatorProfileId: json['creatorProfileId']?.toString(),
+      channelName: json['channelName']?.toString(),
+      seriesId: json['seriesId']?.toString(),
+      podcastId: json['podcastId']?.toString(),
+      question: json['question']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'DRAFT',
+      startsAt: json['startsAt'] != null ? DateTime.tryParse(json['startsAt'].toString()) : null,
+      endsAt: json['endsAt'] != null ? DateTime.tryParse(json['endsAt'].toString()) : null,
+      acceptingResponses: json['acceptingResponses'] == true,
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
+      updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'].toString()) : null,
+      options: opts,
+    );
+  }
+}
+
+class PollOptionResultItem {
+  final String optionId;
+  final String text;
+  final int sortOrder;
+  final int responseCount;
+  final double percentage;
+
+  const PollOptionResultItem({
+    required this.optionId,
+    required this.text,
+    required this.sortOrder,
+    required this.responseCount,
+    required this.percentage,
+  });
+
+  factory PollOptionResultItem.fromJson(Map<String, dynamic> json) {
+    return PollOptionResultItem(
+      optionId: json['optionId']?.toString() ?? '',
+      text: json['text']?.toString() ?? '',
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      responseCount: (json['responseCount'] as num?)?.toInt() ?? 0,
+      percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class PollResultsData {
+  final String pollId;
+  final String question;
+  final int totalResponses;
+  final List<PollOptionResultItem> options;
+
+  const PollResultsData({
+    required this.pollId,
+    required this.question,
+    required this.totalResponses,
+    required this.options,
+  });
+
+  factory PollResultsData.fromJson(Map<String, dynamic> json) {
+    return PollResultsData(
+      pollId: json['pollId']?.toString() ?? '',
+      question: json['question']?.toString() ?? '',
+      totalResponses: (json['totalResponses'] as num?)?.toInt() ?? 0,
+      options: (json['options'] is List)
+          ? (json['options'] as List)
+              .map((e) => PollOptionResultItem.fromJson(e as Map<String, dynamic>))
+              .toList()
+          : const [],
+    );
+  }
+}
+
+class PollResponseUserItem {
+  final String responseId;
+  final String pollId;
+  final String userId;
+  final String displayName;
+  final String optionId;
+  final String optionText;
+  final DateTime? submittedAt;
+
+  const PollResponseUserItem({
+    required this.responseId,
+    required this.pollId,
+    required this.userId,
+    required this.displayName,
+    required this.optionId,
+    required this.optionText,
+    this.submittedAt,
+  });
+
+  factory PollResponseUserItem.fromJson(Map<String, dynamic> json) {
+    return PollResponseUserItem(
+      responseId: json['responseId']?.toString() ?? '',
+      pollId: json['pollId']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? 'Thính giả',
+      optionId: json['optionId']?.toString() ?? '',
+      optionText: json['optionText']?.toString() ?? '',
+      submittedAt: json['submittedAt'] != null
+          ? DateTime.tryParse(json['submittedAt'].toString())
+          : null,
+    );
+  }
+}
+
 // --- CREATOR SERIES ---
 
 class CreatorSeries {

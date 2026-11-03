@@ -14,6 +14,8 @@ import 'package:podcast_history/features/creator_studio/presentation/views/regis
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/policies/historical_guidelines_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/policies/creator_support_screen.dart';
 
 class CreatorMoreScreen extends ConsumerWidget {
   final VoidCallback? onTheme;
@@ -59,8 +61,8 @@ class CreatorMoreScreen extends ConsumerWidget {
               ),
               _MenuItem(
                 icon: Icons.poll_rounded,
-                title: 'Biểu mẫu Khảo sát & Ý kiến',
-                subtitle: 'Tạo form thu thập ý kiến người nghe',
+                title: 'Khảo sát & Bình chọn',
+                subtitle: 'Tạo bình chọn câu hỏi, lấy ý kiến và tương tác thính giả',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const FormBuilderScreen()),
                 ),
