@@ -54,7 +54,7 @@ class ApiCreatorRepository implements CreatorRepository {
   int _availableBalance = 0;
   int _pendingRelease = 0;
   int _holdingWithdraw = 0;
-  final int _totalWithdrawn = 0;
+  int _totalWithdrawn = 0;
 
   ApiCreatorRepository(this._apiClient);
 
@@ -1712,47 +1712,76 @@ class ApiCreatorRepository implements CreatorRepository {
     }
     final res = await _apiClient.get(ApiEndpoints.creatorWallet);
     if (res is Map<String, dynamic>) {
-      if (res['availableBalance'] is! num || res['heldBalance'] is! num ||
-          res['pendingRelease'] is! num) {
-        throw Exception('Dữ liệu số dư ví từ máy chủ không đầy đủ.');
-      }
-      _availableBalance = (res['availableBalance'] as num).toInt();
-      _holdingWithdraw = (res['heldBalance'] as num).toInt();
-      _pendingRelease = (res['pendingRelease'] as num).toInt();
+      _availableBalance = (res['availableBalance'] as num?)?.toInt() ?? 0;
+      _holdingWithdraw = (res['heldBalance'] as num?)?.toInt() ?? 0;
+      _pendingRelease = (res['pendingRelease'] as num?)?.toInt() ?? 0;
+      final totalBalance = (res['totalBalance'] as num?)?.toInt() ??
+          (_availableBalance + _holdingWithdraw);
+
+      return {
+        'available': _availableBalance,
+        'pending': _pendingRelease,
+        'holding': _holdingWithdraw,
+        'total': totalBalance,
+        'totalWithdrawn': _totalWithdrawn,
+      };
     } else {
       throw Exception('Dữ liệu số dư ví từ máy chủ không hợp lệ.');
     }
-
-    return {
-      'available': _availableBalance,
-      'pending': _pendingRelease,
-      'holding': _holdingWithdraw,
-      'totalWithdrawn': _totalWithdrawn,
-    };
   }
 
-  String _walletTransactionTitle(dynamic rawType) {
-    switch ('${rawType ?? ''}'.toUpperCase()) {
-      case 'REQUEST_EARNING':
-      case 'CONTRACT_PAYMENT':
-      case 'MILESTONE_RELEASE':
-      case 'RELEASE_FUNDS':
-        return 'Thu nhập từ hợp đồng';
-      case 'MEMBERSHIP':
-      case 'MEMBERSHIP_EARNING':
-        return 'Thu nhập hội viên';
-      case 'WALLET_TOPUP':
-      case 'TOP_UP':
-        return 'Nạp tiền vào ví';
-      case 'REFUND':
-      case 'WITHDRAWAL_REFUND':
-        return 'Hoàn tiền';
-      case 'WITHDRAWAL':
-      case 'WITHDRAWAL_HOLD':
-        return 'Yêu cầu rút tiền';
-      default:
-        return 'Giao dịch ví';
+  (String, String) _walletTransactionTitleAndSubtitle(
+    dynamic rawType,
+    dynamic rawRef,
+    dynamic note,
+  ) {
+    final typeStr = '${rawType ?? ''}'.toUpperCase();
+    final refStr = '${rawRef ?? ''}'.toUpperCase();
+
+    if (typeStr == 'RELEASE_FUNDS' ||
+        typeStr == 'CONTRACT_PAYMENT' ||
+        typeStr == 'MILESTONE_RELEASE' ||
+        typeStr == 'REQUEST_EARNING') {
+      if (refStr.startsWith('CONTRACT_CREATOR:')) {
+        return (
+          'Thù lao hợp đồng',
+          'Giải ngân đợt bàn giao đã nghiệm thu (80%)'
+        );
+      } else if (refStr.startsWith('CONTRACT_DISPUTE_CREATOR:')) {
+        return (
+          'Giải ngân tranh chấp',
+          'Thù lao sau khi giải quyết tranh chấp hợp đồng'
+        );
+      } else if (refStr.startsWith('CONTRACT_COMPENSATION_CREATOR:')) {
+        return (
+          'Bồi thường hợp đồng',
+          'Bồi hoàn hợp đồng đã xử lý'
+        );
+      }
+      return ('Thù lao hợp đồng', 'Giải ngân thu nhập vào số dư khả dụng');
     }
+    if (typeStr == 'WITHDRAWAL') {
+      return ('Rút tiền về ngân hàng', 'Đã chuyển thành công về tài khoản');
+    }
+    if (typeStr == 'WITHDRAWAL_HOLD') {
+      return ('Yêu cầu rút tiền', 'Tạm giữ số dư chờ Admin giải ngân');
+    }
+    if (typeStr == 'WITHDRAWAL_REFUND') {
+      return ('Hoàn lại tiền rút', 'Yêu cầu rút tiền bị từ chối hoặc hủy');
+    }
+    if (typeStr == 'MEMBERSHIP' ||
+        typeStr == 'MEMBERSHIP_EARNING' ||
+        typeStr == 'MEMBERSHIP_FEE' ||
+        typeStr == 'SUBSCRIPTION') {
+      return ('Thu nhập hội viên', 'Đăng ký gói hội viên kênh');
+    }
+    if (typeStr == 'WALLET_TOPUP' || typeStr == 'TOP_UP') {
+      return ('Nạp tiền vào ví', 'Nạp tiền thành công');
+    }
+    if (typeStr == 'REFUND') {
+      return ('Hoàn tiền ví', note?.toString() ?? 'Hoàn tiền giao dịch');
+    }
+    return ('Giao dịch ví', note?.toString() ?? '');
   }
 
   TransactionType _walletTransactionType(dynamic rawType) {
@@ -1764,6 +1793,8 @@ class ApiCreatorRepository implements CreatorRepository {
         return TransactionType.requestEarning;
       case 'MEMBERSHIP':
       case 'MEMBERSHIP_EARNING':
+      case 'MEMBERSHIP_FEE':
+      case 'SUBSCRIPTION':
         return TransactionType.membership;
       case 'REFUND':
       case 'WITHDRAWAL_REFUND':
@@ -1774,71 +1805,112 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   int _walletTransactionAmount(Map<String, dynamic> item) {
-    final rawAmount = (item['amount'] as num?)?.toInt() ?? 0;
+    final rawAmount = ((item['amount'] as num?)?.toInt() ?? 0).abs();
     final direction = '${item['direction'] ?? ''}'.toUpperCase();
-    if (direction == 'DEBIT' || direction == 'OUT') {
-      return -rawAmount.abs();
+    final type = '${item['type'] ?? ''}'.toUpperCase();
+
+    if (direction == 'DEBIT' ||
+        direction == 'OUT' ||
+        type == 'WITHDRAWAL' ||
+        type == 'WITHDRAWAL_HOLD') {
+      return -rawAmount;
     }
     if (direction == 'CREDIT' || direction == 'IN') {
-      return rawAmount.abs();
+      return rawAmount;
     }
     return rawAmount;
   }
 
   @override
-  Future<List<WalletTransaction>> getTransactions() async {
+  Future<List<WalletTransaction>> getTransactions({
+    String? status,
+    int page = 0,
+    int size = 20,
+  }) async {
     if (!_apiClient.isAuthenticated) {
       throw Exception('Vui lòng đăng nhập để xem lịch sử ví.');
     }
+    final queryParams = <String, dynamic>{
+      'page': page,
+      'size': size,
+    };
+    if (status != null && status.trim().isNotEmpty) {
+      queryParams['status'] = status.trim();
+    }
     final res = await _apiClient.get(
-        ApiEndpoints.creatorTransactions,
-        queryParams: const {'page': 0, 'size': 20},
-      );
-      if (res is! List && !(res is Map<String, dynamic> && res['content'] is List)) {
-        throw Exception('Dữ liệu lịch sử ví từ máy chủ không hợp lệ.');
-      }
-      final rawTransactions = res is List
-          ? res
-          : res is Map<String, dynamic> && res['content'] is List
-          ? res['content'] as List
-          : const [];
-        final transactions = rawTransactions
-            .whereType<Map<String, dynamic>>()
-            .map((item) {
-              final status = (item['status']?.toString() ?? '').toUpperCase();
-              final transactionStatus = switch (status) {
-                'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
-                'FAILED' ||
-                'REJECTED' ||
-                'CANCELLED' => TransactionStatus.failed,
-                'PENDING' => TransactionStatus.holding,
-                _ => TransactionStatus.processing,
-              };
-              return WalletTransaction(
-                id:
-                    item['transactionId']?.toString() ??
-                    item['walletTransactionId']?.toString() ??
-                    item['withdrawalRequestId']?.toString() ??
-                    _uuid.v4(),
-                title: _walletTransactionTitle(item['type']),
-                type: _walletTransactionType(item['type']),
-                amount: _walletTransactionAmount(item),
-                status: transactionStatus,
-                createdAt:
-                    DateTime.tryParse(
-                      item['createdAt']?.toString() ??
-                          item['occurredAt']?.toString() ??
-                          item['requestedAt']?.toString() ??
-                          '',
-                    ) ??
-                    DateTime.now(),
-                note: item['note']?.toString(),
-              );
-            })
-            .toList();
-        _cachedTransactions
-          ..clear()
-          ..addAll(transactions);
+      ApiEndpoints.creatorTransactions,
+      queryParams: queryParams,
+    );
+    if (res is! List &&
+        !(res is Map<String, dynamic> && res['content'] is List)) {
+      throw Exception('Dữ liệu lịch sử ví từ máy chủ không hợp lệ.');
+    }
+    final rawTransactions = res is List
+        ? res
+        : res is Map<String, dynamic> && res['content'] is List
+            ? res['content'] as List
+            : const [];
+
+    final transactions = rawTransactions
+        .whereType<Map<String, dynamic>>()
+        .map((item) {
+          final statusStr = (item['status']?.toString() ?? '').toUpperCase();
+          final transactionStatus = switch (statusStr) {
+            'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
+            'FAILED' ||
+            'REJECTED' ||
+            'CANCELLED' => TransactionStatus.failed,
+            'PENDING' || 'HOLDING' => TransactionStatus.holding,
+            _ => TransactionStatus.processing,
+          };
+
+          final (title, subtitle) = _walletTransactionTitleAndSubtitle(
+            item['type'],
+            item['referenceCode'],
+            item['note'],
+          );
+
+          return WalletTransaction(
+            id: item['transactionId']?.toString() ??
+                item['walletTransactionId']?.toString() ??
+                item['withdrawalRequestId']?.toString() ??
+                _uuid.v4(),
+            title: title,
+            subtitle: subtitle,
+            type: _walletTransactionType(item['type']),
+            rawType: item['type']?.toString(),
+            direction: item['direction']?.toString(),
+            amount: _walletTransactionAmount(item),
+            currency: item['currency']?.toString() ?? 'VND',
+            status: transactionStatus,
+            rawStatus: statusStr,
+            referenceCode: item['referenceCode']?.toString(),
+            balanceAfter: (item['balanceAfter'] as num?)?.toInt(),
+            heldBalanceAfter: (item['heldBalanceAfter'] as num?)?.toInt(),
+            createdAt: DateTime.tryParse(
+                  item['createdAt']?.toString() ??
+                      item['occurredAt']?.toString() ??
+                      item['requestedAt']?.toString() ??
+                      '',
+                ) ??
+                DateTime.now(),
+            note: item['note']?.toString(),
+          );
+        })
+        .toList();
+
+    _cachedTransactions
+      ..clear()
+      ..addAll(transactions);
+
+    // Compute total withdrawn from completed withdrawal transactions
+    _totalWithdrawn = transactions
+        .where((t) =>
+            (t.type == TransactionType.withdrawal ||
+                t.rawType == 'WITHDRAWAL') &&
+            t.status == TransactionStatus.success)
+        .fold(0, (sum, t) => sum + t.amount.abs());
+
     return List.unmodifiable(_cachedTransactions);
   }
 
@@ -1849,18 +1921,38 @@ class ApiCreatorRepository implements CreatorRepository {
     }
     final res = await _apiClient.get(ApiEndpoints.creatorBankAccounts);
     if (res is List) {
-        final accounts = res.whereType<Map<String, dynamic>>().map((item) {
-          return BankAccount(
-            id: item['payoutAccountId']?.toString() ?? _uuid.v4(),
-            bankName: item['payoutMethod']?.toString() ?? 'Tài khoản nhận tiền',
-            accountNumber: item['accountMasked']?.toString() ?? '',
-            accountHolder: item['currency']?.toString() ?? '',
-            isDefault: item['active'] == true && item['verified'] == true,
-          );
-        }).toList();
-        _cachedBankAccounts
-          ..clear()
-          ..addAll(accounts);
+      final accounts = res.whereType<Map<String, dynamic>>().map((item) {
+        final payoutMethod =
+            item['payoutMethod']?.toString() ?? 'BANK_TRANSFER';
+        final bankNameDisplay = switch (payoutMethod.toUpperCase()) {
+          'BANK_TRANSFER' => 'Chuyển khoản Ngân hàng',
+          'MOMO' => 'Ví điện tử MoMo',
+          'ZALOPAY' => 'Ví ZaloPay',
+          'VIETQR' => 'VietQR Pro',
+          _ => payoutMethod,
+        };
+        final isVerified = item['verified'] == true;
+        final isActive = item['active'] == true;
+        return BankAccount(
+          id: item['payoutAccountId']?.toString() ??
+              item['creatorPayoutAccountId']?.toString() ??
+              _uuid.v4(),
+          bankName: bankNameDisplay,
+          accountNumber:
+              item['accountMasked']?.toString() ?? 'Chưa cập nhật',
+          accountHolder: item['accountReference']?.toString() ??
+              item['currency']?.toString() ??
+              'VND',
+          isDefault: isActive && isVerified,
+          payoutMethod: payoutMethod,
+          currency: item['currency']?.toString() ?? 'VND',
+          verified: isVerified,
+          active: isActive,
+        );
+      }).toList();
+      _cachedBankAccounts
+        ..clear()
+        ..addAll(accounts);
     } else {
       throw Exception('Danh sách tài khoản nhận tiền từ máy chủ không hợp lệ.');
     }

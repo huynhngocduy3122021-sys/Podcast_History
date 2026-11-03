@@ -149,7 +149,11 @@ abstract class CreatorRepository {
 
   // Wallet & Withdraw
   Future<Map<String, int>> getWalletBalance();
-  Future<List<WalletTransaction>> getTransactions();
+  Future<List<WalletTransaction>> getTransactions({
+    String? status,
+    int page = 0,
+    int size = 20,
+  });
   Future<List<BankAccount>> getBankAccounts();
   Future<void> addBankAccount(
     String bankName,

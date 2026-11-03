@@ -32,7 +32,15 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   }
 
   Future<void> _processWithdrawal(int available) async {
-    final amount = int.tryParse(_amountController.text.replaceAll('.', '').replaceAll(' ', '')) ?? 0;
+    final amount = int.tryParse(
+            _amountController.text
+                .replaceAll('.', '')
+                .replaceAll(',', '')
+                .replaceAll(' ', '')
+                .replaceAll('₫', '')
+                .trim(),
+          ) ??
+          0;
     if (amount < 50000) {
       ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Số tiền rút tối thiểu là 50.000 ₫')),

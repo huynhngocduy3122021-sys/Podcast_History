@@ -80,6 +80,17 @@ class BankAccountsScreen extends ConsumerWidget {
                                   child: const Text('Mặc định', style: TextStyle(fontSize: 10, color: AppColors.success, fontWeight: FontWeight.w700)),
                                 ),
                               ],
+                              if (acc.verified) ...[
+                                const SizedBox(width: AppSpacing.xs),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.infoContainer,
+                                    borderRadius: AppSpacing.roundedPill,
+                                  ),
+                                  child: const Text('Đã xác minh', style: TextStyle(fontSize: 10, color: AppColors.info, fontWeight: FontWeight.w700)),
+                                ),
+                              ],
                             ],
                           ),
                           const SizedBox(height: 2),

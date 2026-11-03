@@ -776,6 +776,10 @@ class BankAccount {
   final String accountNumber;
   final String accountHolder;
   final bool isDefault;
+  final String payoutMethod;
+  final String currency;
+  final bool verified;
+  final bool active;
 
   const BankAccount({
     required this.id,
@@ -783,29 +787,72 @@ class BankAccount {
     required this.accountNumber,
     required this.accountHolder,
     this.isDefault = false,
+    this.payoutMethod = 'BANK_TRANSFER',
+    this.currency = 'VND',
+    this.verified = true,
+    this.active = true,
   });
 }
 
 class WalletTransaction {
   final String id;
   final String title;
+  final String? subtitle;
   final TransactionType type;
-  final int amount; // VND
+  final String? rawType;
+  final String? direction; // 'CREDIT' or 'DEBIT'
+  final int amount; // VND (+ for credit, - for debit)
+  final String currency; // 'VND'
   final TransactionStatus status;
+  final String? rawStatus; // 'COMPLETED', 'PENDING', 'FAILED', etc.
+  final String? referenceCode; // e.g. 'CONTRACT_CREATOR:<milestoneId>'
+  final int? balanceAfter;
+  final int? heldBalanceAfter;
   final DateTime createdAt;
   final String? note;
 
   const WalletTransaction({
     required this.id,
     required this.title,
+    this.subtitle,
     required this.type,
+    this.rawType,
+    this.direction,
     required this.amount,
+    this.currency = 'VND',
     required this.status,
+    this.rawStatus,
+    this.referenceCode,
+    this.balanceAfter,
+    this.heldBalanceAfter,
     required this.createdAt,
     this.note,
   });
 
+  bool get isCredit =>
+      (direction?.toUpperCase() == 'CREDIT') || amount > 0;
+
+  bool get isDebit =>
+      (direction?.toUpperCase() == 'DEBIT') || amount < 0;
+
+  bool get isContractRelated =>
+      referenceCode != null &&
+          (referenceCode!.startsWith('CONTRACT_') ||
+              referenceCode!.startsWith('CONTRACT_CREATOR:')) ||
+      rawType == 'RELEASE_FUNDS';
+
   StatusType get statusType {
+    final s = (rawStatus ?? '').toUpperCase();
+    if (s == 'COMPLETED' || s == 'SUCCESS' || s == 'PAID') {
+      return StatusType.success;
+    }
+    if (s == 'FAILED' || s == 'REJECTED' || s == 'CANCELLED') {
+      return StatusType.error;
+    }
+    if (s == 'PENDING' || s == 'HOLDING') {
+      return StatusType.info;
+    }
+
     switch (status) {
       case TransactionStatus.success:
         return StatusType.success;
@@ -819,6 +866,20 @@ class WalletTransaction {
   }
 
   String get statusDisplay {
+    final s = (rawStatus ?? '').toUpperCase();
+    if (s == 'COMPLETED' || s == 'SUCCESS' || s == 'PAID') {
+      return 'Thành công';
+    }
+    if (s == 'PENDING' || s == 'HOLDING') {
+      return 'Đang giữ';
+    }
+    if (s == 'PROCESSING') {
+      return 'Đang xử lý';
+    }
+    if (s == 'FAILED' || s == 'REJECTED' || s == 'CANCELLED') {
+      return 'Thất bại';
+    }
+
     switch (status) {
       case TransactionStatus.success:
         return 'Thành công';

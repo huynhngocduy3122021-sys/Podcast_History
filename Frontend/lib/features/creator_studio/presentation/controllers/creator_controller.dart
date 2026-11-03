@@ -644,14 +644,18 @@ class WalletState {
   final int available;
   final int pending;
   final int holding;
+  final int total;
   final int totalWithdrawn;
+  final String currency;
   final List<WalletTransaction> transactions;
 
   const WalletState({
     required this.available,
     required this.pending,
     required this.holding,
+    this.total = 0,
     required this.totalWithdrawn,
+    this.currency = 'VND',
     required this.transactions,
   });
 }
@@ -665,7 +669,7 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
 
-  Future<void> loadWallet() async {
+  Future<void> loadWallet({String? statusFilter}) async {
     final token = ref.read(creatorAccessTokenProvider);
     if (token == null || token.isEmpty) {
       state = const AsyncValue.data(
@@ -673,7 +677,9 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
           available: 0,
           pending: 0,
           holding: 0,
+          total: 0,
           totalWithdrawn: 0,
+          currency: 'VND',
           transactions: [],
         ),
       );
@@ -682,13 +688,25 @@ class WalletNotifier extends Notifier<AsyncValue<WalletState>> {
     try {
       state = const AsyncValue.loading();
       final balance = await _repo.getWalletBalance();
-      final txs = await _repo.getTransactions();
+      final txs = await _repo.getTransactions(status: statusFilter);
+      final totalWithdrawnCalc = txs
+          .where((t) =>
+              (t.type == TransactionType.withdrawal ||
+                  t.rawType == 'WITHDRAWAL') &&
+              t.status == TransactionStatus.success)
+          .fold(0, (sum, t) => sum + t.amount.abs());
+
       state = AsyncValue.data(
         WalletState(
           available: balance['available'] ?? 0,
           pending: balance['pending'] ?? 0,
           holding: balance['holding'] ?? 0,
-          totalWithdrawn: balance['totalWithdrawn'] ?? 0,
+          total: balance['total'] ??
+              ((balance['available'] ?? 0) + (balance['holding'] ?? 0)),
+          totalWithdrawn: totalWithdrawnCalc > 0
+              ? totalWithdrawnCalc
+              : (balance['totalWithdrawn'] ?? 0),
+          currency: 'VND',
           transactions: txs,
         ),
       );
