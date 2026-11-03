@@ -95,7 +95,7 @@ class _CreatorLivestreamScreenState
 
     if (!micGranted) {
       if (mounted) {
-        _showErrorSnackBar('Vui lòng cấp quyền Microphone để phát livestream.');
+        _showErrorSnackBar('Vui lòng cấp quyền Microphone để phát Cộng Đồng.');
       }
       return false;
     }
@@ -168,7 +168,7 @@ class _CreatorLivestreamScreenState
           } catch (_) {}
           if (mounted) {
             _showErrorSnackBar(
-              'Không mở được camera. Livestream sẽ phát âm thanh.',
+              'Không mở được camera. Cộng Đồng sẽ phát âm thanh.',
             );
           }
         }
@@ -231,7 +231,7 @@ class _CreatorLivestreamScreenState
   Future<void> _startNewLivestream() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi Livestream.');
+      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi Cộng Đồng.');
       return;
     }
     if (title.length > 220) {
@@ -333,7 +333,7 @@ class _CreatorLivestreamScreenState
   Future<void> _saveDraftOnly() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi Livestream.');
+      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi Cộng Đồng.');
       return;
     }
 
@@ -350,7 +350,7 @@ class _CreatorLivestreamScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
-            content: Text('Đã lưu bản nháp livestream thành công!'),
+            content: Text('Đã lưu bản nháp Cộng Đồng thành công!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -368,7 +368,7 @@ class _CreatorLivestreamScreenState
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Kết thúc Livestream?'),
+        title: const Text('Kết thúc Cộng Đồng?'),
         content: const Text(
           'Bạn có chắc chắn muốn kết thúc buổi phát này không? Thính giả sẽ không thể tiếp tục theo dõi và trạng thái sẽ chuyển sang ĐÃ KẾT THÚC.',
         ),
@@ -398,7 +398,7 @@ class _CreatorLivestreamScreenState
       debugPrint('Error calling /end endpoint: $e');
       if (mounted) {
         setState(() => _isLoading = false);
-        _handleApiError(e, 'Không thể kết thúc livestream trên máy chủ');
+        _handleApiError(e, 'Không thể kết thúc Cộng Đồng trên máy chủ');
       }
       return;
     }
@@ -422,7 +422,7 @@ class _CreatorLivestreamScreenState
     if (mounted) {
       ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
-          content: Text('Đã kết thúc buổi Livestream.'),
+          content: Text('Đã kết thúc buổi Cộng Đồng.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -603,7 +603,7 @@ class _CreatorLivestreamScreenState
           ),
           title: const Text('Agora chưa được cấu hình'),
           content: const Text(
-            'Máy chủ Backend chưa được điền AGORA_APP_ID và AGORA_APP_CERTIFICATE trong file Backend/.env.\n\nVui lòng cấu hình trên server để sử dụng tính năng Livestream theo tài liệu AGORA_SETUP.md.',
+            'Máy chủ Backend chưa được điền AGORA_APP_ID và AGORA_APP_CERTIFICATE trong file Backend/.env.\n\nVui lòng cấu hình trên server để sử dụng tính năng Cộng Đồng theo tài liệu AGORA_SETUP.md.',
           ),
           actions: [
             FilledButton(
@@ -630,7 +630,7 @@ class _CreatorLivestreamScreenState
       appBar: _isLive
           ? null
           : AppBar(
-              title: const Text('Livestream Studio'),
+              title: const Text('Cộng Đồng Studio'),
         actions: [
           // Nút Series
           Padding(
@@ -1205,7 +1205,7 @@ class _CreatorLivestreamScreenState
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                'Không thể tải dữ liệu Livestream: $e',
+                'Không thể tải dữ liệu Cộng Đồng: $e',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -1338,7 +1338,7 @@ class _CreatorLivestreamScreenState
           ),
           const SizedBox(height: 4),
           Text(
-            'Kênh của bạn hiện có phiên livestream đang ở trạng thái LIVE. Mỗi kênh chỉ được phép phát 1 phiên cùng lúc theo quy định Agora.',
+            'Kênh của bạn hiện có phiên Cộng Đồng đang ở trạng thái LIVE. Mỗi kênh chỉ được phép phát 1 phiên cùng lúc theo quy định Agora.',
             style: TextStyle(
               fontSize: 12.5,
               color: isDark
@@ -1400,7 +1400,7 @@ class _CreatorLivestreamScreenState
               ),
               const SizedBox(width: 8),
               const Text(
-                'Thiết lập buổi Livestream mới',
+                'Thiết lập buổi Cộng Đồng mới',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ],
@@ -1409,7 +1409,7 @@ class _CreatorLivestreamScreenState
 
           // Tiêu đề
           AppTextField(
-            label: 'Tiêu đề buổi Livestream *',
+            label: 'Tiêu đề buổi Cộng Đồng *',
             controller: _titleController,
             hint: 'Nhập tiêu đề hấp dẫn (tối đa 220 ký tự)...',
           ),
@@ -1567,7 +1567,7 @@ class _CreatorLivestreamScreenState
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              'Danh sách Livestream của kênh',
+              'Danh sách Cộng Đồng của kênh',
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
             ),
             Text(
@@ -1613,7 +1613,7 @@ class _CreatorLivestreamScreenState
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Chưa có buổi Livestream nào trong mục này.',
+                  'Chưa có buổi Cộng Đồng nào trong mục này.',
                   style: TextStyle(
                     fontSize: 13,
                     color: isDark

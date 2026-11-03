@@ -16,6 +16,7 @@ import 'features/creator_studio/presentation/controllers/creator_controller.dart
 import 'features/creator_studio/presentation/views/creator_main_shell.dart';
 import 'features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 import 'features/livestream/listener_livestream_screen.dart';
+import 'features/polls/listener_polls_screen.dart';
 import 'features/notifications/notification_socket.dart';
 
 import 'api_service.dart';
@@ -1430,7 +1431,7 @@ class _ShellState extends State<Shell> {
       NavigationDestination(
         icon: Icon(Icons.home_outlined),
         selectedIcon: Icon(Icons.home),
-        label: 'Trang chu',
+        label: 'Trang chủ',
       ),
       NavigationDestination(
         icon: Icon(Icons.explore_outlined),
@@ -1440,12 +1441,12 @@ class _ShellState extends State<Shell> {
       NavigationDestination(
         icon: Icon(Icons.live_tv_outlined),
         selectedIcon: Icon(Icons.live_tv),
-        label: 'Livestream',
+        label: 'Cộng Đồng',
       ),
       NavigationDestination(
         icon: Icon(Icons.library_music_outlined),
         selectedIcon: Icon(Icons.library_music),
-        label: 'Thu vien',
+        label: 'Thư viện',
       ),
       NavigationDestination(
         icon: Icon(Icons.person_outline),
@@ -2584,6 +2585,7 @@ class Discover extends StatefulWidget {
 class _DiscoverState extends State<Discover> {
   String query = '';
   String? selectedCategoryId;
+  String? selectedSeriesTitle;
   final searchController = TextEditingController();
   final searchHistory = <String>['lịch sử Việt Nam', 'Đổi Mới', 'Trường Sơn'];
   Timer? creatorSearchTimer;
@@ -2673,6 +2675,12 @@ class _DiscoverState extends State<Discover> {
 
   @override
   Widget build(BuildContext context) {
+    final seriesTitles = shows
+        .map((show) => show.seriesTitle?.trim() ?? '')
+        .where((title) => title.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
     final result = shows
         .where(
           (s) =>
@@ -2680,7 +2688,9 @@ class _DiscoverState extends State<Discover> {
                 query.toLowerCase(),
               ) &&
               (selectedCategoryId == null ||
-                  s.categoryId == selectedCategoryId),
+                  s.categoryId == selectedCategoryId) &&
+              (selectedSeriesTitle == null ||
+                  s.seriesTitle?.trim() == selectedSeriesTitle),
         )
         .toList();
     return CustomScrollView(
@@ -2738,6 +2748,34 @@ class _DiscoverState extends State<Discover> {
                 ],
                 onChanged: (value) =>
                     setState(() => selectedCategoryId = value),
+              ),
+            ),
+          ),
+        if (seriesTitles.isNotEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: DropdownButtonFormField<String?>(
+                value: selectedSeriesTitle,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Series',
+                  prefixIcon: Icon(Icons.playlist_play_outlined),
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Tất cả series'),
+                  ),
+                  ...seriesTitles.map(
+                    (seriesTitle) => DropdownMenuItem<String?>(
+                      value: seriesTitle,
+                      child: Text(seriesTitle),
+                    ),
+                  ),
+                ],
+                onChanged: (value) =>
+                    setState(() => selectedSeriesTitle = value),
               ),
             ),
           ),
@@ -3792,9 +3830,25 @@ class LivestreamPage extends StatelessWidget {
   final NotificationSocket socket;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Livestream')),
-    body: ListenerLivestreamScreen(api: api, socket: socket),
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 2,
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Cộng Đồng'),
+        bottom: const TabBar(
+          tabs: [
+            Tab(text: 'Livestream', icon: Icon(Icons.live_tv_outlined)),
+            Tab(text: 'Bình Chọn', icon: Icon(Icons.poll_outlined)),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        children: [
+          ListenerLivestreamScreen(api: api, socket: socket),
+          ListenerPollsScreen(api: api),
+        ],
+      ),
+    ),
   );
 }
 
@@ -3825,6 +3879,8 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
   String? walletTransactionsError;
   List<Map<String, dynamic>> walletTransactions = const [];
   bool showAllHistory = false;
+  bool showAllWalletTransactions = false;
+  bool showWalletTransactionsTab = false;
   void Function()? removeRealtimeListener;
 
   @override
@@ -3935,10 +3991,7 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
         builder: (_) => WalletTopUpDialog(api: widget.api, checkout: checkout),
       );
       if (paid == true) {
-        final wallet = await widget.api.wallet();
-        balance = (wallet['availableBalance'] as num?)?.round() ?? balance;
-        widget.onBalanceChanged(balance);
-        if (mounted) setState(() {});
+        await _loadWalletAndHistory();
       }
     } catch (_) {
       if (mounted) {
@@ -3978,6 +4031,27 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
         ),
       ),
       const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: _WalletHistoryTab(
+              label: 'Giao dịch gần đây',
+              selected: !showWalletTransactionsTab,
+              onTap: () => setState(() => showWalletTransactionsTab = false),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _WalletHistoryTab(
+              label: 'Biến động số dư',
+              selected: showWalletTransactionsTab,
+              onTap: () => setState(() => showWalletTransactionsTab = true),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      if (!showWalletTransactionsTab) ...[
       const Text('Giao dịch gần đây'),
       if (historyLoading)
         const Padding(
@@ -4006,8 +4080,9 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
             child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
           ),
         ),
-      const SizedBox(height: 22),
-      const Text('Giao dịch chi tiêu từ ví'),
+      ],
+      if (showWalletTransactionsTab) ...[
+      const Text('Lịch sử biến động ví'),
       if (walletTransactionsLoading)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
@@ -4015,22 +4090,73 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
         )
       else if (walletTransactionsError != null)
         Text(walletTransactionsError!)
-      else if (walletTransactions.where(_isWalletExpense).isEmpty)
+      else if (walletTransactions.isEmpty)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
-          child: Text('Chưa có giao dịch chi tiêu nào.'),
+          child: Text('Chưa có giao dịch ví nào.'),
         )
       else
-        ...walletTransactions
-            .where(_isWalletExpense)
-            .map(Transaction.fromWalletTransaction),
+        ...((showAllWalletTransactions
+                ? walletTransactions
+                : walletTransactions.take(5))
+            .map(Transaction.fromWalletTransaction)),
+      if (!walletTransactionsLoading &&
+          walletTransactionsError == null &&
+          walletTransactions.length > 5)
+        Align(
+          alignment: Alignment.center,
+          child: TextButton(
+            onPressed: () => setState(
+              () => showAllWalletTransactions = !showAllWalletTransactions,
+            ),
+            child: Text(
+              showAllWalletTransactions ? 'Thu gọn' : 'Xem thêm',
+            ),
+          ),
+        ),
+      ],
     ],
   );
 }
 
-bool _isWalletExpense(Map<String, dynamic> transaction) {
-  final direction = '${transaction['direction'] ?? ''}'.toUpperCase();
-  return direction == 'DEBIT' || direction == 'OUT';
+class _WalletHistoryTab extends StatelessWidget {
+  const _WalletHistoryTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(10),
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 8),
+      decoration: BoxDecoration(
+        color: selected ? Theme.of(context).colorScheme.primary : null,
+        border: Border.all(
+          color: selected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).dividerColor,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: selected
+              ? Theme.of(context).colorScheme.onPrimary
+              : null,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+  );
 }
 
 class _TopUpAmountDialog extends StatefulWidget {
@@ -6517,6 +6643,7 @@ class Transaction extends StatelessWidget {
     required this.title,
     required this.amount,
     this.status = 'Đang xử lý',
+    this.details,
     this.onTap,
   });
 
@@ -6544,23 +6671,39 @@ class Transaction extends StatelessWidget {
   }
 
   factory Transaction.fromWalletTransaction(Map<String, dynamic> transaction) {
-    final type = _walletTransactionTitle(transaction['type']);
+    final title = _walletTransactionTitle(transaction);
     final status = '${transaction['status'] ?? 'PENDING'}'.toUpperCase();
     final amount = (transaction['amount'] as num?)?.round() ?? 0;
+    final direction = '${transaction['direction'] ?? ''}'.toUpperCase();
+    final signedAmount = direction == 'CREDIT' || direction == 'IN'
+        ? amount
+        : -amount;
     final statusLabel = switch (status) {
       'COMPLETED' || 'PAID' || 'SUCCESS' => 'Đã hoàn tất',
       'FAILED' || 'CANCELLED' => 'Thất bại',
       _ => 'Đang xử lý',
     };
+    final details = <String>[
+      if ('${transaction['description'] ?? ''}'.trim().isNotEmpty)
+        '${transaction['description']}'.trim(),
+      if ('${transaction['requestTitle'] ?? ''}'.trim().isNotEmpty)
+        'Yêu cầu: ${transaction['requestTitle']}'.trim(),
+      if ('${transaction['milestoneName'] ?? ''}'.trim().isNotEmpty)
+        'Đợt: ${transaction['milestoneName']}'.trim(),
+    ].join(' • ');
     return Transaction(
-      title: type,
-      amount: '-${_formatVnd(amount)}',
+      title: title,
+      amount:
+          '${signedAmount >= 0 ? '+' : ''}${_formatVnd(signedAmount.abs())}',
       status: statusLabel,
+      details: details.isEmpty ? null : details,
     );
   }
 
-  static String _walletTransactionTitle(dynamic rawType) {
-    final type = '$rawType'.toUpperCase();
+  static String _walletTransactionTitle(Map<String, dynamic> transaction) {
+    final serverTitle = '${transaction['title'] ?? ''}'.trim();
+    if (serverTitle.isNotEmpty) return serverTitle;
+    final type = '${transaction['type'] ?? ''}'.toUpperCase();
     return switch (type) {
       'MEMBERSHIP_PURCHASE' => 'Thanh toán gói thành viên',
       'WALLET_TOPUP' => 'Nạp tiền vào ví',
@@ -6572,6 +6715,7 @@ class Transaction extends StatelessWidget {
 
   final String title, amount;
   final String status;
+  final String? details;
   final VoidCallback? onTap;
 
   @override
@@ -6582,16 +6726,28 @@ class Transaction extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.receipt_long_outlined),
       title: Text(title),
-      subtitle: Text(
-        status,
-        style: TextStyle(
-          color: switch (status) {
-            'Đã thanh toán' => Colors.green,
-            'Thất bại' => Colors.red,
-            _ => Colors.amber[800],
-          },
-          fontWeight: FontWeight.w600,
-        ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            status,
+            style: TextStyle(
+              color: switch (status) {
+                'Đã thanh toán' || 'Đã hoàn tất' => Colors.green,
+                'Thất bại' => Colors.red,
+                _ => Colors.amber[800],
+              },
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (details != null && details!.isNotEmpty)
+            Text(
+              details!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
       ),
       trailing: Text(amount),
     ),

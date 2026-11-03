@@ -73,7 +73,7 @@ class _CreatorMainShellState extends ConsumerState<CreatorMainShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.live_tv_outlined),
             activeIcon: Icon(Icons.live_tv_rounded),
-            label: 'Livestream',
+            label: 'Cộng Đồng',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),

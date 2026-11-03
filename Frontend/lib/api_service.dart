@@ -980,7 +980,7 @@ class ListenerLivestream {
         creatorId: '${json['creatorId'] ?? ''}',
         creatorChannelName:
             '${json['creatorChannelName'] ?? 'Content Creator'}',
-        title: '${json['title'] ?? 'Livestream'}',
+        title: '${json['title'] ?? 'Cộng Đồng'}',
         description: json['description']?.toString(),
         status: '${json['status'] ?? 'LIVE'}',
         startedAt: json['startedAt'] == null

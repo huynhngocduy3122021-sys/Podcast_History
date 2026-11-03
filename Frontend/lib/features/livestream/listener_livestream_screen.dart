@@ -73,7 +73,7 @@ class _ListenerLivestreamScreenState extends State<ListenerLivestreamScreen> {
           ],
         ),
         const Text(
-          'Vuốt lên hoặc xuống để chuyển nhanh giữa các buổi livestream.',
+          'Vuốt lên hoặc xuống để chuyển nhanh giữa các buổi Cộng Đồng.',
         ),
         const SizedBox(height: 18),
         if (_loading)
@@ -86,13 +86,13 @@ class _ListenerLivestreamScreenState extends State<ListenerLivestreamScreen> {
         else if (_error != null)
           _StateCard(
             icon: Icons.cloud_off,
-            message: 'Không thể tải danh sách livestream.\n$_error',
+            message: 'Không thể tải danh sách Cộng Đồng.\n$_error',
             action: TextButton(onPressed: _load, child: const Text('Thử lại')),
           )
         else if (_items.isEmpty)
           const _StateCard(
             icon: Icons.live_tv_outlined,
-            message: 'Hiện chưa có livestream nào đang phát.',
+            message: 'Hiện chưa có Cộng Đồng nào đang phát.',
           )
         else
           ..._items.map(
@@ -293,7 +293,7 @@ class _ListenerLivestreamFeedPageState
         setState(() {
           _chatOpen = false;
           _chatSessionEnded = true;
-          _error = 'Livestream đã kết thúc.';
+          _error = 'Cộng Đồng đã kết thúc.';
           _loading = false;
         });
       }
@@ -363,7 +363,7 @@ class _ListenerLivestreamFeedPageState
         if (current && _error != null)
           Center(
             child: Text(
-              'Không thể tham gia livestream.\n$_error',
+              'Không thể tham gia Cộng Đồng.\n$_error',
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white),
             ),
@@ -377,7 +377,7 @@ class _ListenerLivestreamFeedPageState
                 const SizedBox(height: 12),
                 Text(
                   _loading
-                      ? 'Đang kết nối tới livestream…'
+                      ? 'Đang kết nối tới Cộng Đồng…'
                       : 'Đang chờ Creator vào phòng phát.',
                   style: const TextStyle(color: Colors.white),
                 ),

@@ -3336,7 +3336,7 @@ class ApiCreatorRepository implements CreatorRepository {
     if (res is Map<String, dynamic>) {
       return CreatorLivestreamItem.fromJson(res);
     }
-    throw Exception('Không thể tạo buổi livestream');
+    throw Exception('Không thể tạo buổi Cộng Đồng');
   }
 
   @override
@@ -3369,7 +3369,7 @@ class ApiCreatorRepository implements CreatorRepository {
     if (res is Map<String, dynamic>) {
       return CreatorLivestreamItem.fromJson(res);
     }
-    throw Exception('Không thể kết thúc livestream');
+    throw Exception('Không thể kết thúc Cộng Đồng');
   }
 
   // Channel Membership Plans
