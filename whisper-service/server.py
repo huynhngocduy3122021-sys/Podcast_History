@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -12,6 +13,12 @@ from pathlib import Path
 from faster_whisper import WhisperModel
 
 MODEL_NAME = os.getenv("WHISPER_MODEL", "small")
+DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "float16" if DEVICE == "cuda" else "int8")
+CPU_THREADS = int(os.getenv("WHISPER_CPU_THREADS", "4"))
+BEAM_SIZE = int(os.getenv("WHISPER_BEAM_SIZE", "1"))
+if CPU_THREADS < 1 or BEAM_SIZE < 1:
+    raise ValueError("WHISPER_CPU_THREADS and WHISPER_BEAM_SIZE must be positive integers")
 LANGUAGE = os.getenv("WHISPER_LANGUAGE", "vi") or None
 MEDIA_HOST = os.getenv("WHISPER_MEDIA_HOST", "").lower()
 TOKEN = os.getenv("WHISPER_SERVICE_TOKEN", "")
@@ -26,6 +33,7 @@ def transcribe(url):
         raise ValueError("Media URL must use the configured HTTPS R2 host")
     global model
     with tempfile.TemporaryDirectory(prefix="whisper-media-") as directory:
+        download_started = time.perf_counter()
         media = Path(directory) / "media"
         request = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(request, timeout=60) as source, media.open("wb") as target:
@@ -37,16 +45,28 @@ def transcribe(url):
                 target.write(chunk)
         if size == 0:
             raise ValueError("Media is empty")
+        download_seconds = time.perf_counter() - download_started
+        transcribe_started = time.perf_counter()
         with model_lock:
             if model is None:
-                model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
+                model = WhisperModel(
+                    MODEL_NAME, device=DEVICE, compute_type=COMPUTE_TYPE,
+                    cpu_threads=CPU_THREADS,
+                )
             segments, info = model.transcribe(
-                str(media), language=LANGUAGE, beam_size=3, vad_filter=True
+                str(media), language=LANGUAGE, beam_size=BEAM_SIZE, vad_filter=True
             )
             parts = [
                 {"start": round(item.start, 3), "end": round(item.end, 3), "text": item.text.strip()}
                 for item in segments if item.text.strip()
             ]
+        transcribe_seconds = time.perf_counter() - transcribe_started
+        print(
+            f"Whisper: download={download_seconds:.1f}s "
+            f"transcribe={transcribe_seconds:.1f}s bytes={size} "
+            f"model={MODEL_NAME} device={DEVICE} threads={CPU_THREADS} beam={BEAM_SIZE}",
+            flush=True,
+        )
         return {
             "fullText": "\n".join(item["text"] for item in parts),
             "segments": parts,

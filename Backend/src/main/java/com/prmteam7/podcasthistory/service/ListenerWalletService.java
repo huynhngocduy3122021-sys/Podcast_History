@@ -8,6 +8,9 @@ import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
 import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,16 +26,18 @@ public class ListenerWalletService {
   private final WalletTransactionRepository transactions;
   private final CheckoutPaymentRepository checkouts;
   private final PaymentMethodRepository paymentMethods;
+  private final SeriesRequestRepository requests;
   private final SepayService sepay;
 
   public ListenerWalletService(AppUserRepository users, UserWalletRepository wallets,
       WalletTransactionRepository transactions, CheckoutPaymentRepository checkouts,
-      PaymentMethodRepository paymentMethods, SepayService sepay) {
+      PaymentMethodRepository paymentMethods, SeriesRequestRepository requests, SepayService sepay) {
     this.users = users;
     this.wallets = wallets;
     this.transactions = transactions;
     this.checkouts = checkouts;
     this.paymentMethods = paymentMethods;
+    this.requests = requests;
     this.sepay = sepay;
   }
 
@@ -79,18 +84,138 @@ public class ListenerWalletService {
         Math.max(0, page),
         Math.min(100, Math.max(1, size)),
         Sort.by(Sort.Direction.DESC, "createdAt"));
-    return transactions.findForUser(userId, normalizedStatus, pageable).map(transaction ->
-        new WalletTransactionItem(
-            transaction.getWalletTransactionId(),
-            transaction.getTransactionType(),
-            transaction.getDirection(),
-            transaction.getAmount(),
-            transaction.getCurrency(),
-            transaction.getStatus(),
-            transaction.getReferenceCode(),
-            transaction.getBalanceAfter(),
-            transaction.getHeldBalanceAfter(),
-            transaction.getCreatedAt()));
+    Page<WalletTransaction> result = transactions.findForUser(userId, normalizedStatus, pageable);
+    Map<UUID, String> requestTitles = new HashMap<>();
+    var requestIds = result.getContent().stream()
+        .filter(transaction -> "CONTRACT_HOLD".equals(transaction.getTransactionType())
+            || "CONTRACT_REFUND".equals(transaction.getTransactionType()))
+        .map(transaction -> requestIdFromReference(transaction.getReferenceCode()))
+        .filter(Objects::nonNull).distinct().toList();
+    if (!requestIds.isEmpty()) {
+      requests.findAllById(requestIds).forEach(request -> {
+        if (userId.equals(request.getUser().getUserId()))
+          requestTitles.put(request.getSeriesRequestId(), request.getRequestedTitle());
+      });
+    }
+    return result.map(transaction -> toTransactionItem(transaction, requestTitles));
+  }
+
+  private WalletTransactionItem toTransactionItem(WalletTransaction transaction,
+      Map<UUID, String> requestTitles) {
+    String type = transaction.getTransactionType();
+    BigDecimal amount = transaction.getAmount();
+    BigDecimal availableChange = null;
+    BigDecimal heldChange = null;
+    String movement = null;
+    String title;
+    String description;
+    UUID requestId = null;
+    String requestTitle = null;
+    UUID milestoneId = null;
+    String milestoneName = null;
+    Payment payment = transaction.getPayment();
+    ContractStage stage = payment == null ? null : payment.getContractStage();
+    if (stage != null) {
+      milestoneId = stage.getContractStageId();
+      milestoneName = stage.getStageName();
+      SeriesRequest request = stage.getContract().getSeriesResponse().getSeriesRequest();
+      requestId = request.getSeriesRequestId();
+      requestTitle = request.getRequestedTitle();
+    } else if (payment != null && payment.getSeriesRequest() != null) {
+      SeriesRequest request = payment.getSeriesRequest();
+      requestId = request.getSeriesRequestId();
+      requestTitle = request.getRequestedTitle();
+    } else if ("CONTRACT_HOLD".equals(type) || "CONTRACT_REFUND".equals(type)) {
+      requestId = requestIdFromReference(transaction.getReferenceCode());
+      requestTitle = requestTitles.get(requestId);
+    }
+    switch (type) {
+      case "CONTRACT_HOLD" -> {
+        title = requestTitle == null ? "Giữ ngân sách cho yêu cầu"
+            : "Giữ ngân sách: " + requestTitle;
+        description = "Chuyển tiền từ số dư khả dụng sang tiền đang giữ; chưa trả cho CC.";
+        movement = "AVAILABLE_TO_HELD";
+        availableChange = amount.negate();
+        heldChange = amount;
+      }
+      case "CONTRACT_STAGE_DEBIT" -> {
+        title = stage == null ? "Giải ngân một đợt hợp đồng"
+            : "Giải ngân đợt " + stage.getStageOrder() + ": " + stage.getStageName();
+        description = "Chi từ tiền đã giữ cho đợt này; không trừ thêm số dư khả dụng.";
+        movement = "HELD_TO_SETTLEMENT";
+        availableChange = BigDecimal.ZERO;
+        heldChange = amount.negate();
+      }
+      case "CONTRACT_COMPENSATION_DEBIT" -> {
+        title = "Chi đền công cho CC từ tiền giữ";
+        description = "Chi khoản đền công từ tiền đã giữ; không trừ thêm số dư khả dụng.";
+        movement = "HELD_TO_SETTLEMENT";
+        availableChange = BigDecimal.ZERO;
+        heldChange = amount.negate();
+      }
+      case "CONTRACT_DISPUTE_DEBIT" -> {
+        title = "Giải ngân cho CC sau tranh chấp";
+        description = "Chi từ tiền đã giữ theo kết quả tranh chấp; không trừ thêm số dư khả dụng.";
+        movement = "HELD_TO_SETTLEMENT";
+        availableChange = BigDecimal.ZERO;
+        heldChange = amount.negate();
+      }
+      case "CONTRACT_REFUND" -> {
+        title = requestTitle == null ? "Hoàn ngân sách chưa chi"
+            : "Hoàn ngân sách: " + requestTitle;
+        description = "Chuyển tiền còn giữ của hợp đồng về số dư khả dụng.";
+        movement = "HELD_TO_AVAILABLE";
+        availableChange = amount;
+        heldChange = amount.negate();
+      }
+      case "WALLET_TOPUP" -> {
+        title = "Nạp tiền vào ví";
+        description = "Tiền nạp được cộng vào số dư khả dụng.";
+        movement = "AVAILABLE_CREDIT";
+        availableChange = amount;
+        heldChange = BigDecimal.ZERO;
+      }
+      case "MEMBERSHIP_PURCHASE" -> {
+        title = "Thanh toán gói thành viên";
+        description = "Trả phí gói thành viên từ số dư khả dụng.";
+        movement = "AVAILABLE_DEBIT";
+        availableChange = amount.negate();
+        heldChange = BigDecimal.ZERO;
+      }
+      case "ADMIN_BALANCE_ADJUSTMENT" -> {
+        title = "Điều chỉnh số dư ví";
+        description = "Số dư khả dụng được điều chỉnh bởi quản trị viên.";
+        boolean credit = "CREDIT".equalsIgnoreCase(transaction.getDirection());
+        movement = credit ? "AVAILABLE_CREDIT" : "AVAILABLE_DEBIT";
+        availableChange = credit ? amount : amount.negate();
+        heldChange = BigDecimal.ZERO;
+      }
+      case "REFUND" -> {
+        title = "Hoàn tiền vào ví";
+        description = "Khoản hoàn được cộng vào số dư khả dụng.";
+        movement = "AVAILABLE_CREDIT";
+        availableChange = amount;
+        heldChange = BigDecimal.ZERO;
+      }
+      default -> {
+        title = "Giao dịch ví: " + type;
+        description = "Kiểm tra mã tham chiếu và biến động số dư của giao dịch này.";
+      }
+    }
+    return new WalletTransactionItem(transaction.getWalletTransactionId(), type,
+        transaction.getDirection(), amount, transaction.getCurrency(), transaction.getStatus(),
+        transaction.getReferenceCode(), transaction.getBalanceAfter(),
+        transaction.getHeldBalanceAfter(), transaction.getCreatedAt(), title, description,
+        movement, availableChange, heldChange, requestId, requestTitle,
+        milestoneId, milestoneName);
+  }
+
+  private UUID requestIdFromReference(String reference) {
+    if (reference == null) return null;
+    int separator = reference.lastIndexOf(':');
+    if (separator < 0) return null;
+    try { return UUID.fromString(reference.substring(separator + 1)); }
+    catch (IllegalArgumentException exception) { return null; }
   }
 
   public UserWallet walletForLockedUser(AppUser user) {
