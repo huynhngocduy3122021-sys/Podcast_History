@@ -637,32 +637,23 @@ class _FormBuilderScreenState extends ConsumerState<FormBuilderScreen> {
         content: const Text('Hành động này sẽ xóa mềm cuộc bình chọn. Dữ liệu câu trả lời vẫn được lưu trữ.'),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Hủy')),
-          AppButton(
-            label: 'Tạo form',
-            width: 110,
-            onPressed: () {
-              if (titleCtrl.text.isNotEmpty) {
-                ref.read(creatorFormsProvider.notifier).createForm(
-                      titleCtrl.text.trim(),
-                      descCtrl.text.trim(),
-                      [
-                        const FormQuestion(
-                          id: 'q1',
-                          question: 'Giai đoạn lịch sử bạn muốn nghe nhất?',
-                          type: FormQuestionType.singleChoice,
-                          options: ['1858-1945', '1945-1954', '1954-1975', '1975-1986'],
-                        ),
-                        const FormQuestion(
-                          id: 'q2',
-                          question: 'Góp ý thêm cho giọng đọc của kênh:',
-                          type: FormQuestionType.shortText,
-                        ),
-                      ],
-                    );
-                Navigator.of(ctx).pop();
-                ScaffoldMessenger.of(context).showTopSnackBar(
-                  const SnackBar(content: Text('Đã tạo biểu mẫu khảo sát thành công!')),
-                );
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                await ref.read(creatorPollsProvider.notifier).deletePoll(poll.pollId);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showTopSnackBar(
+                    const SnackBar(content: Text('Đã xóa cuộc bình chọn.')),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showTopSnackBar(
+                    SnackBar(content: Text('Không thể xóa: $e')),
+                  );
+                }
               }
             },
             child: const Text('Xác nhận xóa'),

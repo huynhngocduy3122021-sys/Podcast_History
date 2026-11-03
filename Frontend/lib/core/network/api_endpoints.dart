@@ -172,6 +172,17 @@ class ApiEndpoints {
     int size = 20,
   }) => '/api/creator/memberships?status=$status&page=$page&size=$size';
 
+  // Listener polls
+  static String listenerCreatorPolls(String creatorId) =>
+      '/api/creators/$creatorId/polls';
+  static String listenerPoll(String pollId) => '/api/polls/$pollId';
+  static String listenerPollResults(String pollId) =>
+      '/api/polls/$pollId/results';
+  static String listenerPollResponse(String pollId) =>
+      '/api/polls/$pollId/responses';
+  static String listenerMyPollResponse(String pollId) =>
+      '/api/polls/$pollId/responses/me';
+
   // Notifications
   static const String notifications = '/api/me/notifications';
   static String markNotificationRead(String id) =>

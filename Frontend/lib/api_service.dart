@@ -311,6 +311,56 @@ class ListenerApi {
   Future<Map<String, dynamic>> creator(String creatorId) =>
       _sendMap('GET', '/api/creators/$creatorId');
 
+  Future<List<Map<String, dynamic>>> listenerPolls(
+    String creatorId, {
+    String? seriesId,
+    String? podcastId,
+    int page = 0,
+    int size = 20,
+  }) async => _pageItems(
+    await _send(
+      'GET',
+      ApiEndpoints.listenerCreatorPolls(creatorId),
+      queryParameters: {
+        'page': '$page',
+        'size': '$size',
+        if (seriesId?.isNotEmpty == true) 'seriesId': seriesId!,
+        if (podcastId?.isNotEmpty == true) 'podcastId': podcastId!,
+      },
+    ),
+  );
+
+  Future<Map<String, dynamic>> listenerPoll(String pollId) =>
+      _sendMap('GET', ApiEndpoints.listenerPoll(pollId));
+
+  Future<Map<String, dynamic>> listenerPollResults(String pollId) =>
+      _sendMap('GET', ApiEndpoints.listenerPollResults(pollId));
+
+  Future<Map<String, dynamic>> answerListenerPoll(
+    String pollId,
+    String optionId,
+  ) => _sendMap(
+    'POST',
+    ApiEndpoints.listenerPollResponse(pollId),
+    body: {'optionId': optionId},
+  );
+
+  Future<Map<String, dynamic>> changeListenerPollAnswer(
+    String pollId,
+    String optionId,
+  ) => _sendMap(
+    'PUT',
+    ApiEndpoints.listenerMyPollResponse(pollId),
+    body: {'optionId': optionId},
+  );
+
+  Future<Map<String, dynamic>> myListenerPollResponse(String pollId) =>
+      _sendMap('GET', ApiEndpoints.listenerMyPollResponse(pollId));
+
+  Future<void> withdrawListenerPollResponse(String pollId) async {
+    await _send('DELETE', ApiEndpoints.listenerMyPollResponse(pollId));
+  }
+
   Future<ListenerPodcast> podcast(String podcastId) async =>
       ListenerPodcast.fromJson(await _send('GET', '/api/podcasts/$podcastId'));
 

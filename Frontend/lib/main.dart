@@ -83,6 +83,7 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
   ThemeMode mode = ThemeMode.light;
   Account? account;
   Timer? _tokenRefreshTimer;
+  Timer? _roleRefreshTimer;
   bool _isRefreshingToken = false;
 
   @override
@@ -96,6 +97,7 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _tokenRefreshTimer?.cancel();
+    _roleRefreshTimer?.cancel();
     super.dispose();
   }
 
@@ -106,6 +108,9 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
       if (current != null && current.session.refreshToken.isNotEmpty) {
         if (_isTokenExpiringSoon(current.session.accessToken)) {
           _autoRefreshToken();
+        }
+        if (current.role == UserRole.listener) {
+          _refreshAccountRole();
         }
       }
     }
@@ -154,6 +159,49 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
     });
   }
 
+  void _scheduleRoleRefresh(Account acc) {
+    _roleRefreshTimer?.cancel();
+    if (acc.role != UserRole.listener) return;
+    _roleRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _refreshAccountRole();
+    });
+  }
+
+  UserRole _roleFromApi(String role) => switch (role.toUpperCase()) {
+    'ADMIN' => UserRole.admin,
+    'CREATOR' || 'CC' => UserRole.creator,
+    _ => UserRole.listener,
+  };
+
+  Future<void> _refreshAccountRole() async {
+    final current = account;
+    if (!mounted || current == null || current.role != UserRole.listener) {
+      return;
+    }
+    try {
+      final user = await AuthApi().me(current.session.accessToken);
+      final role = _roleFromApi(user.role);
+      if (!mounted || role == UserRole.listener) return;
+      _saveSession(
+        Account(
+          email: user.email,
+          name: user.displayName,
+          role: role,
+          session: AuthSession(
+            user: user,
+            accessToken: current.session.accessToken,
+            refreshToken: current.session.refreshToken,
+            tokenType: current.session.tokenType,
+            expiresIn: current.session.expiresIn,
+            refreshExpiresIn: current.session.refreshExpiresIn,
+          ),
+        ),
+      );
+    } catch (_) {
+      // Role refresh is best-effort; the normal token refresh remains active.
+    }
+  }
+
   Future<void> _autoRefreshToken() async {
     if (_isRefreshingToken) return;
     final current = account;
@@ -196,6 +244,7 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
         } else {
           _scheduleTokenRefresh(restored);
         }
+        _scheduleRoleRefresh(restored);
       }
     } catch (_) {}
   }
@@ -210,8 +259,10 @@ class _AppState extends State<VietCastApp> with WidgetsBindingObserver {
         );
       } catch (_) {}
       _scheduleTokenRefresh(acc);
+      _scheduleRoleRefresh(acc);
     } else {
       _tokenRefreshTimer?.cancel();
+      _roleRefreshTimer?.cancel();
       SessionStorage.removeItem('vietcast_saved_account');
     }
   }
@@ -1494,99 +1545,40 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
   String _selectedMethod = 'WALLET';
   bool _isSubmitting = false;
 
-  @override
-  void initState() {
-    super.initState();
-    if (widget.walletBalance < widget.price) {
-      _selectedMethod = 'SEPAY';
-    } else {
-      _selectedMethod = 'WALLET';
-    }
-  }
-
   Future<void> _handlePayment() async {
     setState(() => _isSubmitting = true);
     final messenger = ScaffoldMessenger.of(context);
 
-    if (_selectedMethod == 'WALLET') {
-      try {
-        await widget.api.checkout(widget.planId, paymentMethod: 'WALLET');
-        if (!mounted) return;
-        Navigator.of(context).pop(true);
-        messenger.showTopSnackBar(
-          SnackBar(
-            backgroundColor: Colors.green.shade700,
-            content: Text(
-              'Thanh toán ví thành công! Bạn đã là Hội viên của kênh ${widget.show.channel}.',
-            ),
+    try {
+      await widget.api.checkout(widget.planId, paymentMethod: 'WALLET');
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+      messenger.showTopSnackBar(
+        SnackBar(
+          backgroundColor: Colors.green.shade700,
+          content: Text(
+            'Thanh toán ví thành công! Bạn đã là Hội viên của kênh ${widget.show.channel}.',
           ),
-        );
-      } on ApiException catch (e) {
-        if (!mounted) return;
-        setState(() => _isSubmitting = false);
-        final msg = e.statusCode == 409
-            ? 'Số dư ví không đủ hoặc bạn đã có gói hội viên đang hoạt động.'
-            : e.message;
-        messenger.showTopSnackBar(
-          SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        setState(() => _isSubmitting = false);
-        messenger.showTopSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red.shade700,
-            content: Text('Không thể thanh toán bằng ví: $e'),
-          ),
-        );
-      }
-    } else {
-      // SEPAY
-      try {
-        final checkout = await widget.api.checkout(
-          widget.planId,
-          paymentMethod: 'SEPAY',
-        );
-        if (!mounted) return;
-        Navigator.of(context).pop(false);
-        final paid = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => PaymentDialog(
-            api: widget.api,
-            checkout: checkout,
-            planName: widget.planName,
-          ),
-        );
-        if (paid == true && mounted) {
-          messenger.showTopSnackBar(
-            SnackBar(
-              backgroundColor: Colors.green.shade700,
-              content: Text(
-                'Thanh toán thành công! Chúc mừng bạn đã là Hội viên của ${widget.show.channel}.',
-              ),
-            ),
-          );
-        }
-      } on ApiException catch (e) {
-        if (!mounted) return;
-        setState(() => _isSubmitting = false);
-        final msg = e.statusCode == 409
-            ? 'Bạn đang có một đơn thanh toán chờ xử lý hoặc đã là hội viên kênh này.'
-            : e.message;
-        messenger.showTopSnackBar(
-          SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        setState(() => _isSubmitting = false);
-        messenger.showTopSnackBar(
-          SnackBar(
-            backgroundColor: Colors.red.shade700,
-            content: Text('Không thể tạo phiên thanh toán SePay: $e'),
-          ),
-        );
-      }
+        ),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      final msg = e.statusCode == 409
+          ? 'Số dư ví không đủ hoặc bạn đã có gói hội viên đang hoạt động.'
+          : e.message;
+      messenger.showTopSnackBar(
+        SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      messenger.showTopSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Không thể thanh toán bằng ví: $e'),
+        ),
+      );
     }
   }
 
@@ -1906,83 +1898,6 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
             ),
             const SizedBox(height: 10),
 
-            // Lựa chọn 2: Chuyển khoản QR SePay (SEPAY)
-            InkWell(
-              onTap: () => setState(() => _selectedMethod = 'SEPAY'),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _selectedMethod == 'SEPAY'
-                        ? const Color(0xFFFFB800)
-                        : Colors.grey.withValues(alpha: 0.3),
-                    width: _selectedMethod == 'SEPAY' ? 2 : 1,
-                  ),
-                  color: _selectedMethod == 'SEPAY'
-                      ? (isDark
-                            ? const Color(0xFFFFB800).withValues(alpha: 0.08)
-                            : const Color(0xFFFFB800).withValues(alpha: 0.05))
-                      : null,
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _selectedMethod == 'SEPAY'
-                              ? const Color(0xFFFFB800)
-                              : Colors.grey,
-                          width: 2,
-                        ),
-                      ),
-                      child: _selectedMethod == 'SEPAY'
-                          ? Center(
-                              child: Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Color(0xFFFFB800),
-                                ),
-                              ),
-                            )
-                          : null,
-                    ),
-                    const SizedBox(width: 10),
-                    const Icon(
-                      Icons.qr_code_2_rounded,
-                      color: Colors.blueAccent,
-                      size: 26,
-                    ),
-                    const SizedBox(width: 12),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Chuyển khoản SePay (VietQR)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Quét mã QR ngân hàng tự động xác nhận',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
             const SizedBox(height: 24),
 
             // Nút bấm hành động
@@ -2004,11 +1919,9 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                         _handlePayment();
                       },
                       child: Text(
-                        _selectedMethod == 'WALLET'
-                            ? (hasEnoughBalance
-                                  ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
-                                  : 'Ví không đủ số dư - Nạp ví ngay')
-                            : 'Tạo mã QR thanh toán (${_formatVnd(priceInt)})',
+                        hasEnoughBalance
+                            ? 'Thanh toán ${_formatVnd(priceInt)} bằng Ví'
+                            : 'Ví không đủ số dư - Nạp ví ngay',
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
@@ -2132,12 +2045,11 @@ class _PaymentDialogState extends State<PaymentDialog> {
               SelectableText('Nội dung chuyển khoản: $paymentCode'),
             ],
             const SizedBox(height: 12),
-            Text(
-              terminal
-                  ? 'Phiên thanh toán đã kết thúc. Vui lòng tạo giao dịch mới.'
-                  : 'Quét QR và chờ hệ thống xác nhận. Màn hình tự kiểm tra mỗi 4 giây.',
-              textAlign: TextAlign.center,
-            ),
+            if (terminal)
+              const Text(
+                'Phiên thanh toán đã kết thúc. Vui lòng tạo giao dịch mới.',
+                textAlign: TextAlign.center,
+              ),
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(
@@ -2565,28 +2477,68 @@ class Art extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final thumbnailUrl = resolveImageUrl(show.thumbnailUrl);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(colors: show.colors),
-        ),
-        child: thumbnailUrl.isEmpty
-            ? _fallbackArt()
-            : thumbnailUrl.startsWith('data:image')
-            ? Image.memory(
-                base64Decode(thumbnailUrl.split(',').last),
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _fallbackArt(),
-              )
-            : Image.network(
-                thumbnailUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _fallbackArt(),
-              ),
+    final artwork = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: show.colors),
       ),
+      child: thumbnailUrl.isEmpty
+          ? _fallbackArt()
+          : thumbnailUrl.startsWith('data:image')
+          ? Image.memory(
+              base64Decode(thumbnailUrl.split(',').last),
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fallbackArt(),
+            )
+          : Image.network(
+              thumbnailUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _fallbackArt(),
+            ),
+    );
+
+    return Stack(
+      children: [
+        ClipRRect(borderRadius: BorderRadius.circular(12), child: artwork),
+        if (show.member)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: const Color(0xFFFFB800),
+                    width: 3,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        if (show.member)
+          Positioned(
+            top: 7,
+            right: 7,
+            child: Semantics(
+              label: 'Podcast dành cho thành viên',
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFB800),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 4),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.star_rounded,
+                  color: Colors.black,
+                  size: 17,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -2609,12 +2561,6 @@ class Art extends StatelessWidget {
           ),
         ),
       ),
-      if (show.member)
-        const Positioned(
-          top: 8,
-          right: 8,
-          child: Chip(label: Text('MEM'), visualDensity: VisualDensity.compact),
-        ),
     ],
   );
 }
@@ -4214,12 +4160,11 @@ class _WalletTopUpDialogState extends State<WalletTopUpDialog> {
             Text('Số tiền: ${checkout['amount'] ?? ''} VND'),
             if (code?.isNotEmpty == true) SelectableText('Nội dung: $code'),
             const SizedBox(height: 12),
-            Text(
-              terminal
-                  ? 'Phiên đã kết thúc. Vui lòng tạo giao dịch mới.'
-                  : 'Quét QR và chờ hệ thống xác nhận. Tự kiểm tra mỗi 4 giây.',
-              textAlign: TextAlign.center,
-            ),
+            if (terminal)
+              const Text(
+                'Phiên đã kết thúc. Vui lòng tạo giao dịch mới.',
+                textAlign: TextAlign.center,
+              ),
             if (error != null) Text(error!),
           ],
         ),
@@ -8102,12 +8047,44 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     durationController.dispose();
     criteriaController.dispose();
     if (!mounted || result == null) return;
+
+    // Luôn lấy số dư mới nhất trước khi gửi yêu cầu để không tạo yêu cầu
+    // khi ngân sách đề xuất lớn hơn số dư khả dụng của người nghe.
+    final requestedBudget = result['budget'] as int;
+    try {
+      final wallet = await widget.api.wallet();
+      final availableBalance =
+          (wallet['availableBalance'] as num?)?.round() ?? 0;
+      if (requestedBudget > availableBalance) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showTopSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red.shade700,
+            content: Text(
+              'Số dư ví không đủ. Cần ${requestedBudget.toString()} VND, '
+              'hiện có ${availableBalance.toString()} VND.',
+            ),
+          ),
+        );
+        return;
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        SnackBar(
+          backgroundColor: Colors.red.shade700,
+          content: Text('Không thể kiểm tra số dư ví: $error'),
+        ),
+      );
+      return;
+    }
+
     try {
       await widget.api.createContractRequest(
         creatorProfileId: creatorId,
         requestedTitle: result['title'] as String,
         description: result['description'] as String,
-        budgetAmount: result['budget'] as int,
+        budgetAmount: requestedBudget,
         productType: result['productType'] as String,
         fileFormat: result['fileFormat'] as String,
         duration: result['duration'] as String,

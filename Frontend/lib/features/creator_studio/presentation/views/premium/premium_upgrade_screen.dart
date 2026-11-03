@@ -649,29 +649,7 @@ class _CreatorPaymentDialogState extends ConsumerState<CreatorPaymentDialog> {
               ),
             ),
             const SizedBox(height: 12),
-            if (!isTerminal) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'Quét mã QR và chờ xác nhận. Hệ thống tự kiểm tra mỗi 3 giây.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            ] else ...[
+            if (isTerminal) ...[
               const Text(
                 'Phiên thanh toán đã hết hạn. Vui lòng tạo giao dịch mới.',
                 style: TextStyle(fontSize: 12, color: AppColors.error),
