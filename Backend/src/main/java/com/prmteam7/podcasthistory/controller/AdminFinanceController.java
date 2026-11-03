@@ -91,9 +91,11 @@ public class AdminFinanceController {
   @Operation(summary = "Xem ví và số dư khả dụng, phân trang")
   public Page<WalletItem> wallets(
       @AuthenticationPrincipal Jwt jwt,
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) String role,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return service.wallets(id(jwt), page, size);
+    return service.wallets(id(jwt), q, role, page, size);
   }
 
   @GetMapping("/wallets/{walletId}")
