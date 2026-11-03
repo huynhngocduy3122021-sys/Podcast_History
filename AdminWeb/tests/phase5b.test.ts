@@ -115,6 +115,7 @@ test('wallets and withdrawals are ADMIN-only and duplicate actions are locked', 
   assert.equal(canAccess('STAFF', true), false)
   assert.equal(sections.find(section => section.path === '/wallets')?.adminOnly, true)
   assert.equal(sections.find(section => section.path === '/withdrawals')?.adminOnly, true)
+  assert.equal(sections.find(section => section.path === '/withdrawals')?.sidebarHidden, true)
   const admin = identityOf({ id: userId, role: 'ADMIN' })
   assert.equal(sameIdentity(admin, identityOf({ id: userId, role: 'STAFF' })), false)
   const run = pendingAction()

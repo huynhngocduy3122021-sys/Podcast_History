@@ -4,7 +4,7 @@ import axios, { AxiosError } from 'axios'
 import { createModerationApi } from '../src/lib/moderation-api.ts'
 import { confirmedNoContent } from '../src/lib/api-mutation.ts'
 import { canModeratePodcast, canResolveAppeal, isPodcastReportTarget, linkExpired, reportActions, reportCacheKeys, sameModerator } from '../src/lib/moderation-rules.ts'
-import { moderationNoteSchema, podcastDetailSchema, previewSchema, resolveReportSchema } from '../src/lib/moderation-contracts.ts'
+import { moderationNoteSchema, podcastDetailSchema, previewSchema, resolveReportSchema, reviewsPageSchema } from '../src/lib/moderation-contracts.ts'
 
 const podcastId = '11111111-1111-4111-8111-111111111111'
 const reporterId = '22222222-2222-4222-8222-222222222222'
@@ -26,6 +26,12 @@ test('moderation contracts enforce 5,000 UTF-16 note units and verified signed H
   assert.equal(previewSchema.safeParse({ podcastId, videoUrl: 'https://r2.example/signed?x=1', expiresAt: '2026-10-14T10:00:00Z' }).success, true)
   assert.equal(previewSchema.safeParse({ podcastId, videoUrl: 'http://r2.example/signed', expiresAt: '2026-10-14T10:00:00Z' }).success, false)
   assert.equal(podcastDetailSchema.safeParse({ podcast, reviews: [review] }).success, true)
+})
+
+test('AI-created moderation reviews accept the Backend response with no reviewer user', () => {
+  const aiReview = { ...review, reviewerId: null, reviewerName: 'AI', note: 'AI tự động duyệt: nội dung an toàn' }
+  assert.equal(podcastDetailSchema.safeParse({ podcast, reviews: [aiReview] }).success, true)
+  assert.equal(reviewsPageSchema.safeParse({ content: [aiReview], number: 0, size: 20, totalElements: 1, totalPages: 1 }).success, true)
 })
 
 test('state and role rules keep unsupported actions hidden', () => {

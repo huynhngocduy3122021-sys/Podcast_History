@@ -15,7 +15,7 @@ export const resolveReportSchema = moderationNoteSchema.extend({ action: reportA
 export const resolveAppealSchema = moderationNoteSchema.extend({ decision: appealDecisionSchema })
 
 export const reviewSchema = z.object({
-  reviewId: z.uuid(), reviewerId: z.uuid(), reviewerName: nullableText,
+  reviewId: z.uuid(), reviewerId: z.uuid().nullable(), reviewerName: nullableText,
   decision: z.string(), note: nullableText, reviewedAt: instant,
 })
 export const reviewsPageSchema = pageSchema(reviewSchema)
