@@ -2774,79 +2774,92 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               'Nộp bài cho người nghe',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Chọn tệp âm thanh/video hoàn thiện để nộp cho người nghe nghiệm thu.',
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (req.milestones.length > 1) ...[
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedMilestoneId,
-                      decoration: const InputDecoration(
-                        labelText: 'Đợt nộp bài',
-                        isDense: true,
-                      ),
-                      items: req.milestones.map((m) {
-                        return DropdownMenuItem<String>(
-                          value: m.id,
-                          child: Text(
-                            'Đợt ${m.order}: ${m.title} (${AppFormatters.formatVND(m.amount)})',
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: isSubmitting
-                          ? null
-                          : (val) {
-                              setDialogState(() => selectedMilestoneId = val);
-                            },
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Chọn tệp âm thanh/video hoàn thiện để nộp cho người nghe nghiệm thu.',
                     ),
-                    const SizedBox(height: AppSpacing.md),
-                  ] else if (selectedMilestone != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.surfaceVariantDark
-                            : AppColors.surfaceVariantLight,
-                        borderRadius: AppSpacing.roundedSm,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.layers_outlined,
-                            size: 16,
-                            color: AppColors.primaryLight,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
+                    const SizedBox(height: AppSpacing.sm),
+                    if (req.milestones.length > 1) ...[
+                      DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        initialValue: selectedMilestoneId,
+                        decoration: const InputDecoration(
+                          labelText: 'Đợt nộp bài',
+                          isDense: true,
+                        ),
+                        items: req.milestones.map((m) {
+                          final cleanTitle = m.title.trim().toLowerCase().startsWith('đợt')
+                              ? m.title.trim()
+                              : 'Đợt ${m.order}: ${m.title.trim()}';
+                          return DropdownMenuItem<String>(
+                            value: m.id,
                             child: Text(
-                              'Đợt ${selectedMilestone.order}: ${selectedMilestone.title}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                              '$cleanTitle (${AppFormatters.formatVND(m.amount)})',
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: isSubmitting
+                            ? null
+                            : (val) {
+                                setDialogState(() => selectedMilestoneId = val);
+                              },
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                    ] else if (selectedMilestone != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppColors.surfaceVariantDark
+                              : AppColors.surfaceVariantLight,
+                          borderRadius: AppSpacing.roundedSm,
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.layers_outlined,
+                              size: 16,
+                              color: AppColors.primaryLight,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                selectedMilestone.title.trim().toLowerCase().startsWith('đợt')
+                                    ? selectedMilestone.title.trim()
+                                    : 'Đợt ${selectedMilestone.order}: ${selectedMilestone.title.trim()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
                               ),
                             ),
-                          ),
-                          Text(
-                            AppFormatters.formatVND(selectedMilestone.amount),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.success,
+                            const SizedBox(width: 8),
+                            Text(
+                              AppFormatters.formatVND(selectedMilestone.amount),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.success,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                  ],
+                      const SizedBox(height: AppSpacing.md),
+                    ],
 
                   // File picker box
                   InkWell(
@@ -2966,7 +2979,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                 ],
               ),
             ),
-            actions: [
+          ),
+          actions: [
               TextButton(
                 onPressed: isSubmitting
                     ? null

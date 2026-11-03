@@ -195,6 +195,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                       )
                     else
                       DropdownButtonFormField<BankAccount>(
+                        isExpanded: true,
                         initialValue: _selectedBank,
                         decoration: const InputDecoration(
                           prefixIcon: Icon(Icons.account_balance_rounded),
