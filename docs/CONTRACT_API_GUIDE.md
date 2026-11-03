@@ -138,7 +138,18 @@ Listener có **3 lượt yêu cầu làm lại mỗi đợt**. Sau CC upload b�
 
 Khi duyệt, Backend chuyển đúng tiền gộp đợt khỏi khoản đang giữ: CC nhận **80%**, app **20%** (làm tròn VND). Ví dụ đợt 20.000 VND: `creatorNet=16000`, `platformFee=4000`. Có bút toán ví của Listener và CC, phí app, `Payment PAID`; không đòi Listener thanh toán lần hai. Nếu mọi đợt được duyệt, hợp đồng thành `COMPLETED`.
 
-CC gọi `GET /api/creator/wallet/transactions?page=0&size=20` với token Creator để xem lịch sử ví của mình. Có thể thêm `status=COMPLETED`; bỏ `status` để xem mọi trạng thái. Response là `Page` với `content[]`, `totalElements`, `totalPages`; mỗi giao dịch có `transactionId`, `type`, `direction`, `amount`, `currency`, `status`, `referenceCode`, `balanceAfter`, `heldBalanceAfter`, `createdAt`. Khoản CC nhận từ đợt được duyệt có `type=RELEASE_FUNDS`, `direction=CREDIT`, `referenceCode=CONTRACT_CREATOR:<milestoneId>`. `GET /api/creator/wallet/balance` cho số dư hiện tại. Listener tiếp tục xem khoản giữ, trừ và hoàn qua `GET /api/listener/wallet/transactions`.
+CC gọi `GET /api/creator/wallet/transactions?page=0&size=20` với token Creator để xem lịch sử ví của mình. Có thể thêm `status=COMPLETED`; bỏ `status` để xem mọi trạng thái. Response là `Page` với `content[]`, `totalElements`, `totalPages`; mỗi giao dịch giữ các trường cũ `transactionId`, `type`, `direction`, `amount`, `currency`, `status`, `referenceCode`, `balanceAfter`, `heldBalanceAfter`, `createdAt` và thêm `title`, `description`, `movement`, `availableBalanceChange`, `heldBalanceChange`, `requestId`, `requestTitle`, `milestoneId`, `milestoneName`, `withdrawalId`, `payoutAccountMasked`, `membershipPlanName`. Các trường ID/tên không liên quan đến giao dịch sẽ là `null`.
+
+| `type` | `movement` | Ý nghĩa hiển thị |
+|---|---|---|
+| `RELEASE_FUNDS` | `AVAILABLE_CREDIT` | CC nhận tiền thực từ đợt hợp đồng hoặc kết quả tranh chấp; số tiền trong `amount` đã trừ phí nền tảng |
+| `MEMBERSHIP_EARNING` | `AVAILABLE_CREDIT` | CC nhận doanh thu gói thành viên sau phí nền tảng |
+| `WITHDRAWAL_HOLD` | `AVAILABLE_TO_HELD` | Chuyển tiền khả dụng sang tiền giữ để chờ xử lý rút; chưa có nghĩa ngân hàng đã nhận |
+| `WITHDRAWAL_SETTLEMENT` | `HELD_TO_PAYOUT` | Admin đã ghi nhận chuyển khoản thành công; tiền rời khoản giữ, số dư khả dụng không bị trừ lần hai |
+| `WITHDRAWAL_REFUND` | `HELD_TO_AVAILABLE` | Chuyển tiền giữ của yêu cầu rút thất bại về số dư khả dụng |
+| `WITHDRAWAL` | `AVAILABLE_DEBIT` | Bút toán của luồng rút tiền cũ |
+
+Ví dụ yêu cầu rút 40.000 VND thành công có hai bút toán: `WITHDRAWAL_HOLD` (`availableBalanceChange=-40000`, `heldBalanceChange=40000`) và `WITHDRAWAL_SETTLEMENT` (`availableBalanceChange=0`, `heldBalanceChange=-40000`). Nếu chuyển khoản thất bại, bút toán thứ hai là `WITHDRAWAL_REFUND` (`availableBalanceChange=40000`, `heldBalanceChange=-40000`). Frontend dùng `title`, `description` và biến động của từng ngăn ví; không xem mọi `DEBIT` là một lần trừ mới từ số dư khả dụng. `WITHDRAWAL_SETTLEMENT` chỉ được ghi cho những khoản rút thành công **sau khi Backend triển khai thay đổi này**; lịch sử cũ không được tự động ghi bù. Khoản CC nhận từ đợt được duyệt có `referenceCode=CONTRACT_CREATOR:<milestoneId>`. `GET /api/creator/wallet/balance` cho số dư hiện tại.
 
 Nếu `autoAcceptEnabled=true`, job Backend kiểm tra mỗi phút: chỉ tự duyệt sau **3 ngày kể từ bản nộp mới nhất**, khi đợt vẫn `SUBMITTED`, hợp đồng đang hiệu lực và chưa có phản hồi/tranh chấp. Nếu `false`, không tự duyệt. FE theo dõi bằng GET đợt/hợp đồng; job không phải API để FE gọi.
 

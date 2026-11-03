@@ -29,9 +29,11 @@ import com.prmteam7.podcasthistory.exception.PodcastWorkflowNotFoundException;
 import com.prmteam7.podcasthistory.exception.WalletWorkflowException;
 import com.prmteam7.podcasthistory.model.AppUser;
 import com.prmteam7.podcasthistory.model.Contract;
+import com.prmteam7.podcasthistory.model.ContractStage;
 import com.prmteam7.podcasthistory.model.CreatorPayoutAccount;
 import com.prmteam7.podcasthistory.model.Payment;
 import com.prmteam7.podcasthistory.model.ProducerProfile;
+import com.prmteam7.podcasthistory.model.SeriesRequest;
 import com.prmteam7.podcasthistory.model.UserWallet;
 import com.prmteam7.podcasthistory.model.WalletTransaction;
 import com.prmteam7.podcasthistory.model.WithdrawalRequest;
@@ -80,12 +82,102 @@ public class CreatorWalletService {
         Pageable pageable = PageRequest.of(Math.max(0, page), Math.min(100, Math.max(1, size)),
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         return transactionRepository.findForUser(creatorUserId, normalizedStatus, pageable)
-                .map(transaction -> new CreatorWalletTransactionItem(
-                        transaction.getWalletTransactionId(), transaction.getTransactionType(),
-                        transaction.getDirection(), transaction.getAmount(), transaction.getCurrency(),
-                        transaction.getStatus(), transaction.getReferenceCode(),
-                        transaction.getBalanceAfter(), transaction.getHeldBalanceAfter(),
-                        transaction.getCreatedAt()));
+                .map(this::toTransactionItem);
+    }
+
+    private CreatorWalletTransactionItem toTransactionItem(WalletTransaction transaction) {
+        String type = transaction.getTransactionType();
+        BigDecimal amount = transaction.getAmount();
+        String title;
+        String description;
+        String movement = null;
+        BigDecimal availableChange = null;
+        BigDecimal heldChange = null;
+        UUID requestId = null;
+        String requestTitle = null;
+        UUID milestoneId = null;
+        String milestoneName = null;
+        String membershipPlanName = null;
+        Payment payment = transaction.getPayment();
+        if (payment != null) {
+            ContractStage stage = payment.getContractStage();
+            SeriesRequest request = payment.getSeriesRequest();
+            if (stage != null) {
+                milestoneId = stage.getContractStageId();
+                milestoneName = stage.getStageName();
+                if (stage.getContract() != null && stage.getContract().getSeriesResponse() != null)
+                    request = stage.getContract().getSeriesResponse().getSeriesRequest();
+            }
+            if (request != null) {
+                requestId = request.getSeriesRequestId();
+                requestTitle = request.getRequestedTitle();
+            }
+            if (payment.getSubscription() != null
+                    && payment.getSubscription().getMembershipPlan() != null)
+                membershipPlanName = payment.getSubscription().getMembershipPlan().getName();
+        }
+        WithdrawalRequest withdrawal = transaction.getWithdrawalRequest();
+        UUID withdrawalId = withdrawal == null ? null : withdrawal.getWithdrawalRequestId();
+        String payoutAccountMasked = withdrawal == null ? null : withdrawal.getPayoutAccountMasked();
+        switch (type) {
+            case "RELEASE_FUNDS" -> {
+                title = milestoneName == null ? "Nhận tiền từ hợp đồng"
+                        : "Nhận tiền đợt: " + milestoneName;
+                description = "Tiền CC thực nhận sau phí nền tảng, đã cộng vào số dư khả dụng.";
+                movement = "AVAILABLE_CREDIT";
+                availableChange = amount;
+                heldChange = ZERO;
+            }
+            case "MEMBERSHIP_EARNING" -> {
+                title = membershipPlanName == null ? "Doanh thu gói thành viên"
+                        : "Doanh thu membership: " + membershipPlanName;
+                description = "Tiền CC thực nhận từ gói thành viên sau phí nền tảng.";
+                movement = "AVAILABLE_CREDIT";
+                availableChange = amount;
+                heldChange = ZERO;
+            }
+            case "WITHDRAWAL_HOLD" -> {
+                title = "Giữ tiền cho yêu cầu rút";
+                description = "Chuyển từ số dư khả dụng sang tiền đang giữ để xử lý rút tiền."
+                        + ("FAILED".equals(transaction.getStatus())
+                        ? " Yêu cầu thất bại; xem giao dịch hoàn tiền rút." : "");
+                movement = "AVAILABLE_TO_HELD";
+                availableChange = amount.negate();
+                heldChange = amount;
+            }
+            case "WITHDRAWAL_SETTLEMENT" -> {
+                title = "Đã chuyển tiền rút khỏi ví";
+                description = "Tiền đang giữ đã được ghi nhận chuyển đến tài khoản nhận tiền.";
+                movement = "HELD_TO_PAYOUT";
+                availableChange = ZERO;
+                heldChange = amount.negate();
+            }
+            case "WITHDRAWAL_REFUND" -> {
+                title = "Hoàn tiền rút thất bại";
+                description = "Chuyển tiền đã giữ của yêu cầu rút thất bại về số dư khả dụng.";
+                movement = "HELD_TO_AVAILABLE";
+                availableChange = amount;
+                heldChange = amount.negate();
+            }
+            case "WITHDRAWAL" -> {
+                title = "Yêu cầu rút tiền (luồng cũ)";
+                description = "Luồng rút tiền cũ trừ trực tiếp số dư khả dụng; xem trạng thái yêu cầu rút.";
+                movement = "AVAILABLE_DEBIT";
+                availableChange = amount.negate();
+                heldChange = ZERO;
+            }
+            default -> {
+                title = "Giao dịch ví: " + type;
+                description = "Xem mã tham chiếu và biến động số dư của giao dịch này.";
+            }
+        }
+        return new CreatorWalletTransactionItem(transaction.getWalletTransactionId(), type,
+                transaction.getDirection(), amount, transaction.getCurrency(),
+                transaction.getStatus(), transaction.getReferenceCode(),
+                transaction.getBalanceAfter(), transaction.getHeldBalanceAfter(),
+                transaction.getCreatedAt(), title, description, movement, availableChange,
+                heldChange, requestId, requestTitle, milestoneId, milestoneName,
+                withdrawalId, payoutAccountMasked, membershipPlanName);
     }
 
     @Transactional
@@ -239,6 +331,10 @@ public class CreatorWalletService {
             withdrawal.setProviderReference(trimToNull(input.providerReference()));
             withdrawal.setNote(trimToNull(input.note()));
             holdTransaction.setStatus("COMPLETED");
+            transactionRepository.save(createTransaction(
+                    wallet, null, withdrawal, "WITHDRAWAL_SETTLEMENT", "DEBIT",
+                    withdrawal.getAmount(), "COMPLETED", wallet.getBalance(),
+                    wallet.getHeldBalance()));
         } else {
             wallet.setBalance(wallet.getBalance().add(withdrawal.getAmount()));
             withdrawal.setStatus(WithdrawalStatus.FAILED.name());
@@ -253,8 +349,6 @@ public class CreatorWalletService {
         }
 
         withdrawal.setProcessedAt(Instant.now());
-        holdTransaction.setBalanceAfter(wallet.getBalance());
-        holdTransaction.setHeldBalanceAfter(wallet.getHeldBalance());
         walletRepository.save(wallet);
         transactionRepository.save(holdTransaction);
         return toWithdrawalResponse(withdrawalRepository.save(withdrawal));
