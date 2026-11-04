@@ -3,34 +3,59 @@ import { ArrowRight, RefreshCw, Users, Mic, ShieldCheck, UserCheck } from 'lucid
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { api, errorMessage } from '../lib/client'
-import { dashboardSchema } from '../lib/contracts'
-import { formatMoney } from '../lib/finance-format'
-import { apiPrefix, isRole } from '../lib/permissions'
+import { createAdminApi } from '../lib/admin-api'
+import { formatDate, formatMoney, statusClass, statusLabel } from '../lib/finance-format'
+import { isRole } from '../lib/permissions'
 import { Button } from '../components/ui/button'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
 import { DashboardRevenue } from './dashboard-revenue'
 
 const number = new Intl.NumberFormat('vi-VN')
+const sourceLabels: Record<string, string> = {
+  MEMBERSHIP: 'Gói thành viên',
+  CONTRACT_STAGE: 'Giai đoạn hợp đồng',
+  CONTRACT_DISPUTE: 'Tranh chấp hợp đồng',
+  CONTRACT_COMPENSATION: 'Bồi thường hợp đồng',
+  REQUEST: 'Yêu cầu',
+  OTHER: 'Khác',
+}
+
+function sourceLabel(sourceType: string) {
+  return sourceLabels[sourceType] || sourceType
+}
+
+function display(value: string | null | undefined) {
+  return value?.trim() || '—'
+}
+
 export function DashboardPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const role = user?.role
+  const admin = role === 'ADMIN'
+  const backend = useMemo(() => createAdminApi(api), [])
+  const [revenuePage, setRevenuePage] = useState(0)
   const query = useQuery({
     queryKey: ['dashboard', user?.id, role],
     enabled: isRole(role),
-    queryFn: async ({ signal }) => {
+    queryFn: ({ signal }) => {
       if (!isRole(role)) throw new Error('Vai trò không hợp lệ.')
-      return dashboardSchema.parse((await api.get(`${apiPrefix(role)}/dashboard`, { signal })).data)
+      return backend.dashboard(signal)
     },
   })
+  const revenueQuery = useQuery({
+    queryKey: ['dashboard-revenue-details', user?.id, role, revenuePage],
+    enabled: isRole(role),
+    queryFn: ({ signal }) => backend.revenueDetails(revenuePage, 20, signal),
+  })
   const data = query.data
-  const admin = role === 'ADMIN'
   const metrics = data ? [
     { label: 'Người dùng', value: data.users, detail: `${number.format(data.activeUsers)} đang hoạt động`, icon: Users },
     { label: 'Creator đã duyệt', value: data.creators, detail: admin ? `${number.format(data.pendingCreators)} hồ sơ chờ duyệt` : 'Kênh đã được phê duyệt', icon: UserCheck },
     { label: 'Podcast', value: data.podcasts, detail: `${number.format(data.pendingPodcasts)} chờ kiểm duyệt`, icon: Mic },
     { label: 'Báo cáo đang mở', value: data.pendingReports, detail: 'Chờ xử lý hoặc đang xem xét', icon: ShieldCheck },
   ] : []
+
   return <>
     <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Không gian làm việc / {role}</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Tổng quan vận hành</h1><p className="mt-2 text-sm text-muted-foreground">Theo dõi nội dung và các công việc cần xử lý.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { void Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: ['dashboard-revenue-details', user?.id] })]) }}><RefreshCw className={`size-4 ${query.isFetching ? 'motion-safe:animate-spin' : ''}`} />Làm mới</Button></div>
     {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : data && <>
