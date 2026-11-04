@@ -1406,6 +1406,21 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) async {
+    await _apiClient.post(
+      ApiEndpoints.contractDispute(contractId),
+      body: {
+        'reason': reason.trim(),
+        if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+      },
+    );
+  }
+
+  @override
   Future<ContractTerminationStatus?> getTerminationRequest(
     String requestId,
   ) async {

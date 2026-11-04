@@ -915,11 +915,7 @@ class _ShellState extends State<Shell> {
     if (show?.id != null) {
       final seconds = _latestPosition.inSeconds;
       unawaited(
-        api.saveProgress(
-          show!.id!,
-          progressSeconds: seconds,
-          completed: false,
-        ),
+        api.saveProgress(show!.id!, progressSeconds: seconds, completed: false),
       );
     }
     _audioPlayer.dispose();
@@ -1467,7 +1463,7 @@ class _ShellState extends State<Shell> {
       NavigationDestination(
         icon: Icon(Icons.live_tv_outlined),
         selectedIcon: Icon(Icons.live_tv),
-            label: 'Livestream',
+        label: 'Livestream',
       ),
       NavigationDestination(
         icon: Icon(Icons.library_music_outlined),
@@ -3030,12 +3026,116 @@ class _LibraryPageState extends State<LibraryPage> {
   String selected = 'liked';
   final customPlaylists = <PlaylistData>[];
   List<Map<String, dynamic>> followedCreators = const [];
+  List<Map<String, dynamic>> products = const [];
   bool loadingCreators = true;
+  bool loadingProducts = false;
+  String? productsError;
+  final Set<String> expandedProductFolders = <String>{};
 
   @override
   void initState() {
     super.initState();
     _loadFollowedCreators();
+  }
+
+  Future<void> _loadProducts() async {
+    if (loadingProducts) return;
+    setState(() {
+      loadingProducts = true;
+      productsError = null;
+    });
+    try {
+      final requests = await widget.api.requestFlowRequests();
+      final completed = <Map<String, dynamic>>[];
+      for (final request in requests) {
+        final requestId = request['requestId']?.toString();
+        if (requestId == null || requestId.isEmpty) continue;
+        List<Map<String, dynamic>> milestones;
+        try {
+          milestones = await widget.api.requestMilestones(requestId);
+        } catch (_) {
+          continue;
+        }
+        for (final milestone in milestones) {
+          final status = '${milestone['status'] ?? ''}'.toUpperCase();
+          if (status != 'APPROVED' && status != 'COMPLETED') continue;
+          final milestoneId = milestone['milestoneId']?.toString();
+          if (milestoneId == null || milestoneId.isEmpty) continue;
+          final submissions = await widget.api.milestoneSubmissions(
+            milestoneId,
+          );
+          if (submissions.isEmpty) continue;
+          final submission = Map<String, dynamic>.from(submissions.last);
+          final submissionId =
+              submission['submissionId']?.toString() ??
+              submission['milestoneSubmissionId']?.toString();
+          if (submissionId == null || submissionId.isEmpty) continue;
+          completed.add({
+            ...submission,
+            'requestId': requestId,
+            'requestTitle': request['requestedTitle'] ?? request['title'],
+            'creatorChannelName': request['creatorChannelName'] ?? 'Creator',
+            'milestoneId': milestoneId,
+            'milestoneName': milestone['name'] ?? milestone['title'],
+          });
+        }
+      }
+      if (mounted) {
+        setState(() {
+          products = completed;
+          loadingProducts = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          loadingProducts = false;
+          productsError = error.toString();
+        });
+      }
+    }
+  }
+
+  Future<void> _openProduct(Map<String, dynamic> product) async {
+    final milestoneId = product['milestoneId']?.toString();
+    final submissionId =
+        product['submissionId']?.toString() ??
+        product['milestoneSubmissionId']?.toString();
+    if (milestoneId == null || submissionId == null) return;
+    try {
+      final media = await widget.api.milestoneSubmissionMedia(
+        milestoneId,
+        submissionId,
+      );
+      final url = media['url']?.toString();
+      if (!mounted || url == null || url.isEmpty) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (_) => _ProductPlayerSheet(
+          title: '${product['requestTitle'] ?? 'Sản phẩm hợp đồng'}',
+          url: url,
+          contentType: media['contentType']?.toString(),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showTopSnackBar(
+          SnackBar(content: Text('Không thể mở sản phẩm: $error')),
+        );
+      }
+    }
+  }
+
+  Map<String, List<Map<String, dynamic>>> get productFolders {
+    final folders = <String, List<Map<String, dynamic>>>{};
+    for (final product in products) {
+      final key =
+          product['requestId']?.toString() ??
+          '${product['requestTitle'] ?? 'Sản phẩm hợp đồng'}';
+      folders.putIfAbsent(key, () => []).add(product);
+    }
+    return folders;
   }
 
   Future<void> _loadFollowedCreators() async {
@@ -3148,11 +3248,19 @@ class _LibraryPageState extends State<LibraryPage> {
             segments: const [
               ButtonSegment(value: 'liked', label: Text('Đã thích')),
               ButtonSegment(value: 'playlist', label: Text('Playlist')),
-              ButtonSegment(value: 'creators', label: Text('Kênh đang theo dõi')),
+              ButtonSegment(
+                value: 'creators',
+                label: Text('Kênh đang theo dõi'),
+              ),
+              ButtonSegment(value: 'products', label: Text('Sản phẩm')),
             ],
             selected: {selected},
-            onSelectionChanged: (value) =>
-                setState(() => selected = value.first),
+            onSelectionChanged: (value) {
+              setState(() => selected = value.first);
+              if (value.first == 'products' && products.isEmpty) {
+                unawaited(_loadProducts());
+              }
+            },
           ),
         ),
       ),
@@ -3187,6 +3295,48 @@ class _LibraryPageState extends State<LibraryPage> {
         SliverToBoxAdapter(
           child: PlaylistList(playlists: allPlaylists, onOpen: openPlaylist),
         ),
+      ] else if (selected == 'products') ...[
+        if (loadingProducts)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          )
+        else if (productsError != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Center(child: Text('Không tải được sản phẩm.')),
+            ),
+          )
+        else if (products.isEmpty)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(28),
+              child: Center(child: Text('Chưa có sản phẩm hoàn thiện nào.')),
+            ),
+          )
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate((_, index) {
+              final entry = productFolders.entries.elementAt(index);
+              return _ProductFolderTile(
+                title:
+                    '${entry.value.first['requestTitle'] ?? 'Sản phẩm hợp đồng'}',
+                creatorName:
+                    '${entry.value.first['creatorChannelName'] ?? 'Creator'}',
+                products: entry.value,
+                expanded: expandedProductFolders.contains(entry.key),
+                onToggle: () => setState(() {
+                  if (!expandedProductFolders.add(entry.key)) {
+                    expandedProductFolders.remove(entry.key);
+                  }
+                }),
+                onOpenProduct: _openProduct,
+              );
+            }, childCount: productFolders.length),
+          ),
       ] else ...[
         if (loadingCreators)
           const SliverToBoxAdapter(
@@ -3199,9 +3349,7 @@ class _LibraryPageState extends State<LibraryPage> {
           const SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(28),
-              child: Center(
-                child: Text('Bạn chưa theo dõi kênh nào.'),
-              ),
+              child: Center(child: Text('Bạn chưa theo dõi kênh nào.')),
             ),
           )
         else
@@ -3231,6 +3379,230 @@ class _LibraryPageState extends State<LibraryPage> {
       ],
       const SliverToBoxAdapter(child: SizedBox(height: 24)),
     ],
+  );
+}
+
+class _ProductFolderTile extends StatelessWidget {
+  const _ProductFolderTile({
+    required this.title,
+    required this.creatorName,
+    required this.products,
+    required this.expanded,
+    required this.onToggle,
+    required this.onOpenProduct,
+  });
+
+  final String title;
+  final String creatorName;
+  final List<Map<String, dynamic>> products;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final ValueChanged<Map<String, dynamic>> onOpenProduct;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+    child: Column(
+      children: [
+        ListTile(
+          leading: const CircleAvatar(child: Icon(Icons.folder_outlined)),
+          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text('$creatorName • ${products.length} sản phẩm'),
+          trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+          onTap: onToggle,
+        ),
+        if (expanded)
+          ...products.map(
+            (product) => Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: _ProductLibraryTile(
+                product: product,
+                onOpen: () => onOpenProduct(product),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _ProductLibraryTile extends StatelessWidget {
+  const _ProductLibraryTile({required this.product, required this.onOpen});
+
+  final Map<String, dynamic> product;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+    child: ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.inventory_2_outlined)),
+      title: Text(
+        '${product['requestTitle'] ?? product['milestoneName'] ?? 'Sản phẩm hoàn thiện'}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${product['creatorChannelName'] ?? 'Creator'} • ${product['milestoneName'] ?? 'Đợt bàn giao'}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: const Icon(Icons.play_circle_outline),
+      onTap: onOpen,
+    ),
+  );
+}
+
+class _ProductPlayerSheet extends StatefulWidget {
+  const _ProductPlayerSheet({
+    required this.title,
+    required this.url,
+    this.contentType,
+  });
+
+  final String title;
+  final String url;
+  final String? contentType;
+
+  @override
+  State<_ProductPlayerSheet> createState() => _ProductPlayerSheetState();
+}
+
+class _ProductPlayerSheetState extends State<_ProductPlayerSheet> {
+  late final AudioPlayer _player;
+  bool _playing = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  StreamSubscription<Duration>? _positionSubscription;
+  StreamSubscription<Duration>? _durationSubscription;
+  StreamSubscription<void>? _completeSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _positionSubscription = _player.onPositionChanged.listen((value) {
+      if (mounted) setState(() => _position = value);
+    });
+    _durationSubscription = _player.onDurationChanged.listen((value) {
+      if (mounted) setState(() => _duration = value);
+    });
+    _completeSubscription = _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _position = _duration;
+          _playing = false;
+        });
+      }
+    });
+    _player.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _playing = state == PlayerState.playing);
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    _durationSubscription?.cancel();
+    _completeSubscription?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  String _formatDuration(Duration value) {
+    final minutes = value.inMinutes.toString().padLeft(2, '0');
+    final seconds = (value.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  Future<void> _seekBy(int seconds) async {
+    final target = _position + Duration(seconds: seconds);
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > _duration ? _duration : target);
+    await _player.seek(clamped);
+  }
+
+  Future<void> _toggle() async {
+    if (_playing) {
+      await _player.pause();
+    } else {
+      await _player.play(UrlSource(widget.url, mimeType: widget.contentType));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          const Text('Sản phẩm đã hoàn thiện của hợp đồng'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(_formatDuration(_position)),
+              Expanded(
+                child: Slider(
+                  value: _duration.inMilliseconds <= 0
+                      ? 0
+                      : _position.inMilliseconds
+                            .clamp(0, _duration.inMilliseconds)
+                            .toDouble(),
+                  min: 0,
+                  max: _duration.inMilliseconds <= 0
+                      ? 1
+                      : _duration.inMilliseconds.toDouble(),
+                  onChanged: _duration.inMilliseconds <= 0
+                      ? null
+                      : (value) {
+                          final next = Duration(milliseconds: value.round());
+                          setState(() => _position = next);
+                          _player.seek(next);
+                        },
+                ),
+              ),
+              Text(_formatDuration(_duration)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                onPressed: _duration == Duration.zero
+                    ? null
+                    : () => _seekBy(-10),
+                icon: const Icon(Icons.replay_10),
+                tooltip: 'Tua lùi 10 giây',
+              ),
+              const SizedBox(width: 12),
+              IconButton.filled(
+                onPressed: _toggle,
+                iconSize: 34,
+                icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+                tooltip: _playing ? 'Tạm dừng' : 'Phát',
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                onPressed: _duration == Duration.zero
+                    ? null
+                    : () => _seekBy(10),
+                icon: const Icon(Icons.forward_10),
+                tooltip: 'Tua tới 10 giây',
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -5183,7 +5555,16 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
             future: contract,
             builder: (_, snapshot) {
               if (snapshot.data == null) return const SizedBox.shrink();
-              return TextButton.icon(
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Tranh chap hop dong',
+                    onPressed: _openDisputeDialog,
+                    icon: const Icon(Icons.gavel_rounded),
+                    color: const Color(0xFFC92822),
+                  ),
+                  TextButton.icon(
                 onPressed: _openChatDialog,
                 icon: Stack(
                   clipBehavior: Clip.none,
@@ -5205,6 +5586,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                   ],
                 ),
                 label: const Text('Nhắn tin'),
+                  ),
+                ],
               );
             },
           ),
@@ -5282,7 +5665,6 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
               return Column(
                 children: [
                   _contractCard(agreement),
-                  _buildDisputeCard(),
                   _buildDisputeStatusCard(),
                   _buildChatCard(),
                 ],
@@ -5333,6 +5715,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     );
   }
 
+  // Kept as a fallback for older request states.
+  // ignore: unused_element
   Widget _buildDisputeCard() {
     return Card(
       elevation: 0,
@@ -5357,6 +5741,126 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   }
 
   Widget _buildDisputeStatusCard() {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: termination,
+      builder: (context, snapshot) {
+        final dispute = snapshot.data;
+        if (dispute == null) return const SizedBox.shrink();
+        final status = dispute['status']?.toString().toUpperCase() ?? '';
+        final awaiting = status == 'AWAITING_RESPONSE';
+        final deadline = dispute['negotiationEndsAt'] ??
+            dispute['responseDeadlineAt'];
+        final openedByRoleValue =
+            dispute['openedByRole']?.toString().toUpperCase();
+        final openedByRole = openedByRoleValue?.isEmpty == true
+            ? null
+            : openedByRoleValue;
+        final openedByUserId =
+            dispute['openedByUserId']?.toString() ??
+            dispute['openedById']?.toString();
+        final listenerOpened = openedByRole == 'LISTENER' ||
+            (openedByRole == null &&
+                openedByUserId != null &&
+                openedByUserId == widget.api.currentUserId);
+        final creatorOpened = openedByRole == 'CREATOR' ||
+            (openedByRole == null &&
+                openedByUserId != null &&
+                openedByUserId != widget.api.currentUserId);
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFE9EA),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFC92822)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.gavel_rounded,
+                      color: Color(0xFFC92822), size: 20),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '\u{1F4CC} Yêu cầu chấm dứt & Tranh chấp hợp đồng',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: Color(0xFFC92822),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Hợp đồng đã đóng băng bước nghiệm thu/giải ngân. Hai bên có 3 ngày thương lượng tự giải quyết.',
+                style: TextStyle(fontSize: 12),
+              ),
+              if (deadline != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Hạn thương lượng đến: ${_formatDisputeValue('Hạn xác nhận', deadline.toString())}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Quy định Admin: Nếu xác nhận sản phẩm đạt tiêu chuẩn tối thiểu, CC nhận đền công 30% giá trị đợt đó (trừ 10% phí app, CC nhận ròng 90% khoản đền công). Phần còn lại hoàn trả cho người nghe.',
+                  style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Text(
+                'Trạng thái: ${_disputeStatusLabel(status)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (dispute['opponentConfirmedAt'] != null)
+                Text(
+                  'Đối phương đã xác nhận: ${_formatDisputeValue('Đối phương đã xác nhận', dispute['opponentConfirmedAt'].toString())}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              if (dispute['listenerWinAction'] != null)
+                _disputeField(
+                  'Phương án Listener thắng',
+                  dispute['listenerWinAction'],
+                ),
+              if (dispute['decision'] != null)
+                _disputeField('Quyết định', dispute['decision']),
+              if (awaiting)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    if (creatorOpened)
+                      OutlinedButton.icon(
+                      icon: const Icon(Icons.check_circle_outline),
+                      onPressed: () => _confirmContractDispute(dispute),
+                      label: const Text('Xác nhận tranh chấp'),
+                    ),
+                    if (listenerOpened)
+                      TextButton.icon(
+                      icon: const Icon(Icons.undo_rounded),
+                      onPressed: () => _withdrawContractDispute(dispute),
+                      label: const Text('Rút tranh chấp'),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Kept for compatibility with the previous listener dispute layout.
+  // ignore: unused_element
+  Widget _buildLegacyDisputeStatusCard() {
     return FutureBuilder<Map<String, dynamic>?>(
       future: termination,
       builder: (context, snapshot) {
@@ -5474,13 +5978,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   Future<void> _confirmContractDispute(Map<String, dynamic> dispute) async {
     final disputeId = dispute['disputeId']?.toString();
     if (disputeId == null || disputeId.isEmpty) return;
-    final action = await _chooseListenerWinAction();
-    if (action == null) return;
     try {
-      await widget.api.confirmContractDispute(
-        disputeId,
-        listenerWinAction: action,
-      );
+      await widget.api.confirmContractDispute(disputeId);
       if (mounted) {
         setState(() {
           termination = _loadTermination();
@@ -5494,6 +5993,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     }
   }
 
+  // Kept for the legacy confirmation flow.
+  // ignore: unused_element
   Future<String?> _chooseListenerWinAction() => showDialog<String>(
     context: context,
     builder: (dialogContext) => SimpleDialog(
@@ -5588,8 +6089,12 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                   ),
                 );
                 if (accepted != true || !mounted) return;
-                await widget.api.requestContractTermination(
-                  requestId,
+                final contractId = agreement?['contractId']?.toString();
+                if (contractId == null || contractId.isEmpty) {
+                  throw Exception('Không tìm thấy mã hợp đồng.');
+                }
+                await widget.api.openContractDispute(
+                  contractId,
                   reason: reason,
                 );
                 if (mounted) {
@@ -7687,9 +8192,9 @@ class _PlayerState extends State<Player> {
                 ),
               ),
             ),
-             ...podcastPolls.map(
-               (poll) => _PodcastPollCard(api: widget.api, poll: poll),
-             ),
+            ...podcastPolls.map(
+              (poll) => _PodcastPollCard(api: widget.api, poll: poll),
+            ),
             ...comments.map(
               (comment) => Comment(
                 name: comment.name,
@@ -7926,9 +8431,9 @@ class _PodcastPollCardState extends State<_PodcastPollCard> {
 
   List<Map<String, dynamic>> get _options => (_poll['options'] is List)
       ? (_poll['options'] as List)
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList()
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList()
       : const [];
 
   bool get _isOpen {
@@ -7948,9 +8453,9 @@ class _PodcastPollCardState extends State<_PodcastPollCard> {
       final detail = await widget.api.listenerPoll(_pollId);
       String? selected;
       try {
-        selected = (await widget.api.myListenerPollResponse(_pollId))[
-          'optionId'
-        ]?.toString();
+        selected = (await widget.api.myListenerPollResponse(
+          _pollId,
+        ))['optionId']?.toString();
       } catch (_) {}
       if (mounted) {
         setState(() {
@@ -7992,7 +8497,11 @@ class _PodcastPollCardState extends State<_PodcastPollCard> {
         children: [
           Row(
             children: [
-              const Icon(Icons.poll_outlined, color: Color(0xFFC62828), size: 18),
+              const Icon(
+                Icons.poll_outlined,
+                color: Color(0xFFC62828),
+                size: 18,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Bình chọn',
@@ -8044,7 +8553,6 @@ class _PodcastPollCardState extends State<_PodcastPollCard> {
       ),
     ),
   );
-
 }
 
 class CommentsPanel extends StatefulWidget {

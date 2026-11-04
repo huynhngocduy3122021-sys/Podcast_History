@@ -123,6 +123,11 @@ abstract class CreatorRepository {
     required String reason,
     String? listenerWinAction,
   });
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  });
   Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
   Future<void> confirmContractDispute(
     String disputeId, {

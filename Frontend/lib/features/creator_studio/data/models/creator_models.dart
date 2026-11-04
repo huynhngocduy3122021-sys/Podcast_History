@@ -397,6 +397,8 @@ class ContractTerminationStatus {
   final DateTime? resolvedAt;
   final DateTime? opponentConfirmedAt;
   final String? listenerWinAction;
+  final String? openedByRole;
+  final String? openedByUserId;
 
   const ContractTerminationStatus({
     required this.disputeId,
@@ -408,6 +410,8 @@ class ContractTerminationStatus {
     this.resolvedAt,
     this.opponentConfirmedAt,
     this.listenerWinAction,
+    this.openedByRole,
+    this.openedByUserId,
   });
 
   factory ContractTerminationStatus.fromJson(Map<String, dynamic> json) {
@@ -429,6 +433,9 @@ class ContractTerminationStatus {
           ? DateTime.tryParse(json['opponentConfirmedAt'].toString())
           : null,
       listenerWinAction: json['listenerWinAction']?.toString(),
+      openedByRole: json['openedByRole']?.toString().toUpperCase(),
+      openedByUserId: json['openedByUserId']?.toString() ??
+          json['openedById']?.toString(),
     );
   }
 }
@@ -854,11 +861,9 @@ class WalletTransaction {
     this.membershipPlanName,
   });
 
-  bool get isCredit =>
-      (direction?.toUpperCase() == 'CREDIT') || amount > 0;
+  bool get isCredit => (direction?.toUpperCase() == 'CREDIT') || amount > 0;
 
-  bool get isDebit =>
-      (direction?.toUpperCase() == 'DEBIT') || amount < 0;
+  bool get isDebit => (direction?.toUpperCase() == 'DEBIT') || amount < 0;
 
   bool get isContractRelated =>
       referenceCode != null &&
@@ -1111,12 +1116,19 @@ class CreatorPoll {
   bool get isClosed => status.toUpperCase() == 'CLOSED';
   bool get isDeleted => status.toUpperCase() == 'DELETED';
 
-  factory CreatorPoll.fromJson(Map<String, dynamic> json, {List<CreatorPollOption>? options}) {
-    final opts = options ??
+  factory CreatorPoll.fromJson(
+    Map<String, dynamic> json, {
+    List<CreatorPollOption>? options,
+  }) {
+    final opts =
+        options ??
         ((json['options'] is List)
             ? (json['options'] as List)
-                .map((e) => CreatorPollOption.fromJson(e as Map<String, dynamic>))
-                .toList()
+                  .map(
+                    (e) =>
+                        CreatorPollOption.fromJson(e as Map<String, dynamic>),
+                  )
+                  .toList()
             : <CreatorPollOption>[]);
 
     return CreatorPoll(
@@ -1127,11 +1139,19 @@ class CreatorPoll {
       podcastId: json['podcastId']?.toString(),
       question: json['question']?.toString() ?? '',
       status: json['status']?.toString() ?? 'DRAFT',
-      startsAt: json['startsAt'] != null ? DateTime.tryParse(json['startsAt'].toString()) : null,
-      endsAt: json['endsAt'] != null ? DateTime.tryParse(json['endsAt'].toString()) : null,
+      startsAt: json['startsAt'] != null
+          ? DateTime.tryParse(json['startsAt'].toString())
+          : null,
+      endsAt: json['endsAt'] != null
+          ? DateTime.tryParse(json['endsAt'].toString())
+          : null,
       acceptingResponses: json['acceptingResponses'] == true,
-      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'].toString()) : null,
-      updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'].toString()) : null,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
       options: opts,
     );
   }
@@ -1183,8 +1203,11 @@ class PollResultsData {
       totalResponses: (json['totalResponses'] as num?)?.toInt() ?? 0,
       options: (json['options'] is List)
           ? (json['options'] as List)
-              .map((e) => PollOptionResultItem.fromJson(e as Map<String, dynamic>))
-              .toList()
+                .map(
+                  (e) =>
+                      PollOptionResultItem.fromJson(e as Map<String, dynamic>),
+                )
+                .toList()
           : const [],
     );
   }

@@ -549,6 +549,19 @@ class CreatorRequestsNotifier
     await loadRequests();
   }
 
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) async {
+    await _repo.openContractDispute(
+      contractId,
+      reason: reason,
+      listenerWinAction: listenerWinAction,
+    );
+    await loadRequests();
+  }
+
   Future<ContractTerminationStatus?> getTerminationRequest(
     String requestId,
   ) async {

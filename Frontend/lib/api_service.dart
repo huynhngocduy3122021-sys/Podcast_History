@@ -801,6 +801,19 @@ class ListenerApi {
     ApiEndpoints.milestoneDisputeWithdraw(milestoneId, disputeId),
   );
 
+  Future<Map<String, dynamic>> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.contractDispute(contractId),
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
   Future<List<Map<String, dynamic>>> requestMessages(
     String requestId, {
     int page = 0,

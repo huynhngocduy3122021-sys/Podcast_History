@@ -86,6 +86,8 @@ class ApiEndpoints {
       '/api/milestones/$milestoneId/submissions/$submissionId/media';
   static String contractTerminationRequest(String requestId) =>
       '/api/requests/$requestId/termination-requests';
+  static String contractDispute(String contractId) =>
+      '/api/contracts/$contractId/disputes';
   static String getContractTerminationRequest(String requestId) =>
       '/api/requests/$requestId/termination-request';
   static String milestoneDispute(String milestoneId) =>

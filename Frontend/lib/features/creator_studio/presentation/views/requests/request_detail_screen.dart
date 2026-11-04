@@ -823,7 +823,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     const Expanded(
                       child: Text(
                         'Hợp đồng điện tử (v1)',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -899,7 +902,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 10,
+                    ),
                   ),
                   onPressed: () => _showContractDialog(req),
                   child: const Row(
@@ -926,7 +932,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryLight,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 10,
+                      ),
                     ),
                     onPressed: () => _showContractDialog(req, autoSign: true),
                     child: const Row(
@@ -1352,7 +1361,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
               ),
               if (confidence != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(4),
@@ -1389,7 +1401,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     Text(
                       aiReason,
                       maxLines: isExpanded ? null : 2,
-                      overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                      overflow: isExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 11,
                         height: 1.35,
@@ -1415,7 +1429,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             Text(
               errorMessage,
               maxLines: isExpanded ? null : 2,
-              overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+              overflow: isExpanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 10.5, color: AppColors.error),
             ),
           ],
@@ -1428,15 +1444,23 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.error,
-                      side: BorderSide(color: AppColors.error.withValues(alpha: 0.4)),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      side: BorderSide(
+                        color: AppColors.error.withValues(alpha: 0.4),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     icon: const Icon(Icons.close_rounded, size: 14),
                     label: const Text(
                       'Hủy draft',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     onPressed: () => _confirmCancelDraft(milestoneId, draftId),
                   ),
@@ -1446,14 +1470,20 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     icon: const Icon(Icons.send_rounded, size: 14),
                     label: const Text(
                       'Bàn giao bản này',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     onPressed: () => _deliverDraft(milestoneId, draftId),
                   ),
@@ -1519,11 +1549,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           .cancelMilestoneDraft(milestoneId, draftId);
       if (mounted) {
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã hủy bản nháp.'),
-          ),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Đã hủy bản nháp.')));
       }
     } catch (error) {
       if (mounted) {
@@ -1569,8 +1596,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           if (req.submissions.isNotEmpty)
             ...req.submissions.map((sub) {
               final isCurrentSub = _currentlyPlayingUrl == sub.mediaUrl;
-              final isCurrentSubPlaying =
-                  isCurrentSub && _isPlaying;
+              final isCurrentSubPlaying = isCurrentSub && _isPlaying;
               return Container(
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                 padding: const EdgeInsets.all(AppSpacing.sm),
@@ -1645,16 +1671,18 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                       thumbShape: const RoundSliderThumbShape(
                                         enabledThumbRadius: 6,
                                       ),
-                                      overlayShape: const RoundSliderOverlayShape(
-                                        overlayRadius: 12,
-                                      ),
+                                      overlayShape:
+                                          const RoundSliderOverlayShape(
+                                            overlayRadius: 12,
+                                          ),
                                     ),
                                     child: Slider(
                                       min: 0,
                                       max: 1,
                                       value: _totalDuration.inMilliseconds > 0
                                           ? (_currentPosition.inMilliseconds /
-                                                    _totalDuration.inMilliseconds)
+                                                    _totalDuration
+                                                        .inMilliseconds)
                                                 .clamp(0.0, 1.0)
                                                 .toDouble()
                                           : 0,
@@ -1694,7 +1722,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               onPressed: () => _skipAudio(-10),
                             ),
                             IconButton(
-                              tooltip: isCurrentSubPlaying ? 'Tạm dừng' : 'Phát',
+                              tooltip: isCurrentSubPlaying
+                                  ? 'Tạm dừng'
+                                  : 'Phát',
                               iconSize: 34,
                               color: AppColors.primaryLight,
                               icon: Icon(
@@ -1785,7 +1815,35 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     );
   }
 
+  String? get _currentCreatorUserIdForDispute {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map<String, dynamic>) {
+        return '${payload['userId'] ?? payload['user_id'] ?? payload['sub'] ?? ''}'
+            .trim();
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Widget _buildDisputeActions(ContractTerminationStatus termination) {
+    final openedByRole = termination.openedByRole?.isEmpty == true
+        ? null
+        : termination.openedByRole;
+    final openedByCurrentUser = termination.openedByUserId != null &&
+        termination.openedByUserId == _currentCreatorUserIdForDispute;
+    final creatorOpened = openedByRole == 'CREATOR' ||
+        (openedByRole == null && openedByCurrentUser);
+    final listenerOpened = openedByRole == 'LISTENER' ||
+        (openedByRole == null &&
+            termination.openedByUserId != null &&
+            !openedByCurrentUser);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1812,12 +1870,14 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           Wrap(
             spacing: AppSpacing.sm,
             children: [
-              OutlinedButton.icon(
+              if (listenerOpened)
+                OutlinedButton.icon(
                 icon: const Icon(Icons.check_circle_outline),
                 label: const Text('Xác nhận tranh chấp'),
                 onPressed: () => _confirmContractDispute(termination.disputeId),
               ),
-              TextButton.icon(
+              if (creatorOpened)
+                TextButton.icon(
                 icon: const Icon(Icons.undo_rounded),
                 label: const Text('Rút tranh chấp'),
                 onPressed: () =>
@@ -1876,8 +1936,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           .read(creatorRequestsProvider.notifier)
           .withdrawContractDispute(disputeId);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showTopSnackBar(const SnackBar(content: Text('Đã rút tranh chấp.')));
+        ScaffoldMessenger.of(
+          context,
+        ).showTopSnackBar(const SnackBar(content: Text('Đã rút tranh chấp.')));
       }
     } catch (error) {
       if (mounted) {
@@ -2717,7 +2778,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           isDense: true,
                         ),
                         items: req.milestones.map((m) {
-                          final cleanTitle = m.title.trim().toLowerCase().startsWith('đợt')
+                          final cleanTitle =
+                              m.title.trim().toLowerCase().startsWith('đợt')
                               ? m.title.trim()
                               : 'Đợt ${m.order}: ${m.title.trim()}';
                           return DropdownMenuItem<String>(
@@ -2758,7 +2820,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                selectedMilestone.title.trim().toLowerCase().startsWith('đợt')
+                                selectedMilestone.title
+                                        .trim()
+                                        .toLowerCase()
+                                        .startsWith('đợt')
                                     ? selectedMilestone.title.trim()
                                     : 'Đợt ${selectedMilestone.order}: ${selectedMilestone.title.trim()}',
                                 style: const TextStyle(
@@ -2784,126 +2849,126 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       const SizedBox(height: AppSpacing.md),
                     ],
 
-                  // File picker box
-                  InkWell(
-                    onTap: isSubmitting
-                        ? null
-                        : () async {
-                            try {
-                              PlatformFile? file;
+                    // File picker box
+                    InkWell(
+                      onTap: isSubmitting
+                          ? null
+                          : () async {
                               try {
-                                file = await FilePicker.pickFile(
-                                  type: FileType.custom,
-                                  allowedExtensions: [
-                                    'mp3',
-                                    'wav',
-                                    'm4a',
-                                    'aac',
-                                    'ogg',
-                                    'mp4',
-                                  ],
-                                );
-                              } catch (_) {
-                                file = await FilePicker.pickFile(
-                                  type: FileType.audio,
+                                PlatformFile? file;
+                                try {
+                                  file = await FilePicker.pickFile(
+                                    type: FileType.custom,
+                                    allowedExtensions: [
+                                      'mp3',
+                                      'wav',
+                                      'm4a',
+                                      'aac',
+                                      'ogg',
+                                      'mp4',
+                                    ],
+                                  );
+                                } catch (_) {
+                                  file = await FilePicker.pickFile(
+                                    type: FileType.audio,
+                                  );
+                                }
+                                if (file != null && file.name.isNotEmpty) {
+                                  final bytes = await file.readAsBytes();
+                                  setDialogState(() {
+                                    pickedFile = file;
+                                    pickedBytes = bytes.isNotEmpty
+                                        ? bytes
+                                        : null;
+                                  });
+                                }
+                              } catch (e) {
+                                messenger.showTopSnackBar(
+                                  SnackBar(
+                                    content: Text('Lỗi chọn tệp: $e'),
+                                    backgroundColor: AppColors.error,
+                                  ),
                                 );
                               }
-                              if (file != null && file.name.isNotEmpty) {
-                                final bytes = await file.readAsBytes();
-                                setDialogState(() {
-                                  pickedFile = file;
-                                  pickedBytes = bytes.isNotEmpty ? bytes : null;
-                                });
-                              }
-                            } catch (e) {
-                              messenger.showTopSnackBar(
-                                SnackBar(
-                                  content: Text('Lỗi chọn tệp: $e'),
-                                  backgroundColor: AppColors.error,
-                                ),
-                              );
-                            }
-                          },
-                    borderRadius: AppSpacing.roundedSm,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color:
-                            (isDark
-                                    ? AppColors.primaryDark
-                                    : AppColors.primaryLight)
-                                .withValues(alpha: 0.08),
-                        border: Border.all(
-                          color: pickedFile != null
-                              ? AppColors.success
-                              : (isDark
-                                    ? AppColors.outlineDark
-                                    : AppColors.outlineLight),
+                            },
+                      borderRadius: AppSpacing.roundedSm,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
                         ),
-                        borderRadius: AppSpacing.roundedSm,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            pickedFile != null
-                                ? Icons.check_circle_rounded
-                                : Icons.audio_file_rounded,
+                        decoration: BoxDecoration(
+                          color:
+                              (isDark
+                                      ? AppColors.primaryDark
+                                      : AppColors.primaryLight)
+                                  .withValues(alpha: 0.08),
+                          border: Border.all(
                             color: pickedFile != null
                                 ? AppColors.success
                                 : (isDark
-                                      ? AppColors.primaryDark
-                                      : AppColors.primaryLight),
+                                      ? AppColors.outlineDark
+                                      : AppColors.outlineLight),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  pickedFile != null
-                                      ? pickedFile!.name
-                                      : 'Chọn tệp âm thanh (.mp3, .wav, .m4a)',
-                                  style: TextStyle(
-                                    fontWeight: pickedFile != null
-                                        ? FontWeight.bold
-                                        : FontWeight.normal,
-                                    fontSize: 13,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                if (byteCount > 0)
-                                  Text(
-                                    '${(byteCount / 1024).toStringAsFixed(1)} KB',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.grey,
-                                    ),
-                                  ),
-                              ],
+                          borderRadius: AppSpacing.roundedSm,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              pickedFile != null
+                                  ? Icons.check_circle_rounded
+                                  : Icons.audio_file_rounded,
+                              color: pickedFile != null
+                                  ? AppColors.success
+                                  : (isDark
+                                        ? AppColors.primaryDark
+                                        : AppColors.primaryLight),
                             ),
-                          ),
-                          const Icon(Icons.upload_file_rounded, size: 20),
-                        ],
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    pickedFile != null ? pickedFile!.name : 'Chọn tệp âm thanh (.mp3, .wav, .m4a)',
+                                    style: TextStyle(
+                                      fontWeight: pickedFile != null
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (byteCount > 0)
+                                    Text(
+                                      '${(byteCount / 1024).toStringAsFixed(1)} KB',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.upload_file_rounded, size: 20),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AppTextField(
-                    label: 'Ghi chú bàn giao',
-                    hint: 'Mô tả tóm tắt bản thu âm bàn giao...',
-                    controller: noteController,
-                    maxLines: 3,
-                    readOnly: isSubmitting,
-                  ),
-                ],
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      label: 'Ghi chú bàn giao',
+                      hint: 'Mô tả tóm tắt bản thu âm bàn giao...',
+                      controller: noteController,
+                      maxLines: 3,
+                      readOnly: isSubmitting,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
+            actions: [
               TextButton(
                 onPressed: isSubmitting
                     ? null
@@ -3078,7 +3143,10 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           if (!accepted || !mounted) return;
                           await ref
                               .read(creatorRequestsProvider.notifier)
-                              .requestTermination(req.id, reason: reason);
+                              .openContractDispute(
+                                req.contract!.contractId,
+                                reason: reason,
+                              );
                           messenger.showTopSnackBar(
                             const SnackBar(
                               content: Text('Đã mở yêu cầu chấm dứt hợp đồng.'),
@@ -3275,8 +3343,8 @@ class _RequestChatBottomSheetState
         item['isCreator'] == true) {
       return true;
     }
-    final role =
-        '${item['senderRole'] ?? item['senderType'] ?? ''}'.toUpperCase();
+    final role = '${item['senderRole'] ?? item['senderType'] ?? ''}'
+        .toUpperCase();
     return role == 'CREATOR' || role == 'CC';
   }
 
@@ -3284,10 +3352,12 @@ class _RequestChatBottomSheetState
     Map<String, dynamic> first,
     Map<String, dynamic> second,
   ) {
-    final firstDate =
-        DateTime.tryParse('${first['createdAt'] ?? first['sentAt'] ?? ''}');
-    final secondDate =
-        DateTime.tryParse('${second['createdAt'] ?? second['sentAt'] ?? ''}');
+    final firstDate = DateTime.tryParse(
+      '${first['createdAt'] ?? first['sentAt'] ?? ''}',
+    );
+    final secondDate = DateTime.tryParse(
+      '${second['createdAt'] ?? second['sentAt'] ?? ''}',
+    );
     if (firstDate == null || secondDate == null) return 0;
     return firstDate.compareTo(secondDate);
   }
@@ -3340,10 +3410,7 @@ class _RequestChatBottomSheetState
           children: [
             Text(
               'Nhắn tin với ${widget.request.listenerName}',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -3355,9 +3422,7 @@ class _RequestChatBottomSheetState
                   }
                   if (snapshot.hasError) {
                     return Center(
-                      child: Text(
-                        'Không thể tải tin nhắn: ${snapshot.error}',
-                      ),
+                      child: Text('Không thể tải tin nhắn: ${snapshot.error}'),
                     );
                   }
                   final items = List<Map<String, dynamic>>.from(
