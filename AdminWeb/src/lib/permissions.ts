@@ -22,7 +22,7 @@ export const sections = [
   { path: '/membership-plans', label: 'Gói thành viên', group: 'Quản lý', icon: 'plan', adminOnly: true },
   { path: '/creator-system-plans', label: 'Gói Premium', group: 'Quản lý', icon: 'plan', adminOnly: true },
   { path: '/payments', label: 'Thanh toán', group: 'Tài chính & hợp đồng', icon: 'payment', adminOnly: true },
-  { path: '/withdrawals', label: 'Rút tiền', group: 'Tài chính & hợp đồng', icon: 'withdrawal', adminOnly: true, sidebarHidden: true },
+  { path: '/withdrawals', label: 'Rút tiền', group: 'Tài chính & hợp đồng', icon: 'withdrawal', adminOnly: true },
   { path: '/wallets', label: 'Ví', group: 'Tài chính & hợp đồng', icon: 'wallet', adminOnly: true },
   { path: '/contracts', label: 'Hợp đồng', group: 'Tài chính & hợp đồng', icon: 'contract', adminOnly: true },
   { path: '/disputes', label: 'Tranh chấp', group: 'Tài chính & hợp đồng', icon: 'dispute' },
