@@ -25,9 +25,15 @@ final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
   final socket = NotificationSocket(
     url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
     accessToken: token,
-    onNotification: (_) {},
+    onNotification: (json) {
+      ref
+          .read(creatorNotificationsProvider.notifier)
+          .receiveRealtimeNotification(json);
+    },
     onRealtime: (_) {},
-    onReconnected: () {},
+    onReconnected: () {
+      ref.read(creatorNotificationsProvider.notifier).loadNotifications();
+    },
   );
   ref.onDispose(socket.dispose);
   socket.connect();
@@ -1244,6 +1250,20 @@ class CreatorNotificationsNotifier
   }
 
   CreatorRepository get _repo => ref.read(creatorRepositoryProvider);
+
+  void receiveRealtimeNotification(Map<String, dynamic> json) {
+    final item = CreatorStudioNotification.fromJson(json);
+    if (item.id.isEmpty) return;
+    final current = state.value;
+    if (current == null) {
+      Future.microtask(loadNotifications);
+      return;
+    }
+    state = AsyncValue.data([
+      item,
+      ...current.where((existing) => existing.id != item.id),
+    ]);
+  }
 
   Future<void> loadNotifications() async {
     final token = ref.read(creatorAccessTokenProvider);

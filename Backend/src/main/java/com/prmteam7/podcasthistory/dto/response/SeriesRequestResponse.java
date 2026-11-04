@@ -18,5 +18,8 @@ public record SeriesRequestResponse(
         Instant respondedAt,
         String listenerName,
         String listenerAvatarUrl,
-        String creatorAvatarUrl) {
+        String creatorAvatarUrl,
+        String flowType,
+        UUID contractId,
+        String contractStatus) {
 }

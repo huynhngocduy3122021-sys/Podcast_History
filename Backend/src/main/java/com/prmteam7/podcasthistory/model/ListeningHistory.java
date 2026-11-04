@@ -30,6 +30,10 @@ public class ListeningHistory extends UpdatedEntity {
     @Column(name = "completed", nullable = false)
     private Boolean completed;
 
+    /** Number of distinct playback sessions recorded for this listener/podcast pair. */
+    @Column(name = "listen_count")
+    private Integer listenCount;
+
     @Column(name = "last_listened_at", nullable = false)
     private Instant lastListenedAt;
 
@@ -81,6 +85,14 @@ public class ListeningHistory extends UpdatedEntity {
 
     public void setCompleted(Boolean completed) {
         this.completed = completed;
+    }
+
+    public Integer getListenCount() {
+        return listenCount;
+    }
+
+    public void setListenCount(Integer listenCount) {
+        this.listenCount = listenCount;
     }
 
     public Instant getLastListenedAt() {

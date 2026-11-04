@@ -43,6 +43,8 @@ Khi `POST /api/auth/login` trả `401`, frontend đọc trường `message`: `T�
 
 Khi phát hết, gửi `completed: true`. Signed `playbackUrl` có thể hết hạn; lấy lại bằng `/playback` khi cần. `DELETE /api/me/listening-history/{podcastId}` xóa lịch sử của chính người nghe. Danh sách tìm kiếm chỉ gồm podcast đã duyệt/xuất bản; bản nháp không công khai.
 
+API tiến độ nghe giữ nguyên đúng body trên, không thêm `sessionId` hoặc trường mới. Frontend có thể gọi định kỳ trong lúc phát và gửi `completed: true` khi kết thúc; backend tự cập nhật số phiên nghe dùng cho `metrics.totalListens` trên dashboard Creator. Không cần gọi thêm API đếm lượt nghe.
+
 ### Xem transcript
 
 - `GET /api/podcast-transcripts/{podcastId}`: gửi token `LISTENER`. Đây là cùng endpoint chủ kênh dùng; Listener chỉ xem transcript `COMPLETED` của podcast có quyền nghe, gồm `MEMBERS_ONLY` khi quyền nghe hợp lệ.

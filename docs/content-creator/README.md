@@ -26,6 +26,29 @@ Chat trong livestream dùng Agora Signaling, không lưu tin nhắn ở backend:
 | `GET /api/categories` | Danh mục đang hoạt động để chọn `categoryId`; không cần token. |
 | `GET /api/creator/podcasts` | Trả `List` podcast của kênh hiện tại, không phân trang. |
 
+### Lượt nghe trên dashboard
+
+Frontend chỉ cần gọi `GET /api/creator/dashboard?period=7d` (hoặc `4w`, `12m`) như trên, không cần thêm endpoint hay thay đổi request. Tổng lượt nghe nằm ở `metrics.totalListens`; `metrics.monthlyListens` và `growth[].listens` là số liệu theo kỳ dùng cho biểu đồ.
+
+Ví dụ phần response:
+
+```json
+{
+  "metrics": {
+    "trackCount": 5,
+    "followerCount": 12,
+    "totalListens": 38,
+    "monthlyListens": 7,
+    "monthlyRevenue": 240000,
+    "availableBalance": 120000,
+    "pendingRelease": 50000,
+    "currency": "VND"
+  }
+}
+```
+
+Số tổng được backend cập nhật qua API nghe hiện có `PUT /api/podcasts/{podcastId}/listening-progress` với body chỉ gồm `progressSeconds` và `completed`; frontend **không gửi `sessionId`**. Các lần cập nhật tiến độ liên tục của cùng một lượt nghe không làm tăng tổng. Backend tự nhận diện lượt nghe mới khi người nghe tua lại đáng kể, phát lại từ đầu sau khi đã hoàn tất, hoặc tiếp tục sau một khoảng gián đoạn dài. Các dòng lịch sử cũ được tính tối thiểu là một lượt nghe.
+
 ## 3. Tạo và phát hành podcast
 
 Gọi các bước theo thứ tự sau. `podcastId` là ID trả về từ bước tạo bản nháp; không gọi `POST /api/creator/podcasts` lần nữa khi cần upload hoặc submit bản nháp đó.

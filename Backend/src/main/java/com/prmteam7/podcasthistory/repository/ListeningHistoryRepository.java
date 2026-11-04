@@ -14,10 +14,11 @@ import com.prmteam7.podcasthistory.model.ListeningHistory;
 public interface ListeningHistoryRepository extends JpaRepository<ListeningHistory, UUID> {
 
     @org.springframework.data.jpa.repository.Query("""
-            select count(history)
+            select coalesce(sum(coalesce(history.listenCount, 1)), 0)
             from ListeningHistory history
             where history.podcast.producerProfile.producerProfileId = :creatorId
               and upper(history.podcast.status) <> 'DELETED'
+              and history.user.userId <> history.podcast.producerProfile.user.userId
             """)
     long countByCreator(@org.springframework.data.repository.query.Param("creatorId") UUID creatorId);
 

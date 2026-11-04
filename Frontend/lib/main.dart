@@ -830,9 +830,9 @@ class _ShellState extends State<Shell> {
     } catch (error) {
       if (!mounted || request != _playRequest) return;
       setState(() => playing = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showTopSnackBar(SnackBar(content: Text('Không thể phát audio: $error')));
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        SnackBar(content: Text('Không thể phát audio: $error')),
+      );
     }
   }
 
@@ -903,7 +903,11 @@ class _ShellState extends State<Shell> {
     if (show?.id != null) {
       final seconds = _latestPosition.inSeconds;
       unawaited(
-        api.saveProgress(show!.id!, progressSeconds: seconds, completed: false),
+        api.saveProgress(
+          show!.id!,
+          progressSeconds: seconds,
+          completed: false,
+        ),
       );
     }
     _audioPlayer.dispose();
@@ -1491,9 +1495,9 @@ class _ShellState extends State<Shell> {
       walletBalance = (wallet['availableBalance'] as num?)?.round() ?? 0;
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showTopSnackBar(const SnackBar(content: Text('Không thể tải số dư ví.')));
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(content: Text('Không thể tải số dư ví.')),
+      );
       return;
     }
     if (!mounted) return;
@@ -2481,9 +2485,7 @@ class Art extends StatelessWidget {
     final artwork = Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: show.colors),
-      ),
+      decoration: BoxDecoration(gradient: LinearGradient(colors: show.colors)),
       child: thumbnailUrl.isEmpty
           ? _fallbackArt()
           : thumbnailUrl.startsWith('data:image')
@@ -2507,10 +2509,7 @@ class Art extends StatelessWidget {
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: const Color(0xFFFFB800),
-                    width: 3,
-                  ),
+                  border: Border.all(color: const Color(0xFFFFB800), width: 3),
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
@@ -2675,12 +2674,13 @@ class _DiscoverState extends State<Discover> {
 
   @override
   Widget build(BuildContext context) {
-    final seriesTitles = shows
-        .map((show) => show.seriesTitle?.trim() ?? '')
-        .where((title) => title.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final seriesTitles =
+        shows
+            .map((show) => show.seriesTitle?.trim() ?? '')
+            .where((title) => title.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     final result = shows
         .where(
           (s) =>
@@ -3627,6 +3627,8 @@ class AppNotification {
       subtitle: [message, time].where((item) => item.isNotEmpty).join(' • '),
       icon: type.contains('COMMENT') || type.contains('LIKE')
           ? Icons.favorite_border
+          : type.contains('POLL')
+          ? Icons.poll_outlined
           : type.contains('MEMBERSHIP')
           ? Icons.workspace_premium_outlined
           : type.contains('PODCAST')
@@ -4036,68 +4038,66 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
       ),
       const SizedBox(height: 12),
       if (!showWalletTransactionsTab) ...[
-      const Text('Giao dịch gần đây'),
-      if (historyLoading)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: Center(child: CircularProgressIndicator()),
-        )
-      else if (historyError != null)
-        Text(historyError!)
-      else if (history.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: Text('Chưa có giao dịch nào.'),
-        )
-      else
-        ...((showAllHistory ? history : history.take(5)).map(
-          (item) => Transaction.fromCheckout(
-            item,
-            onTap: () => _openTransaction(item),
+        const Text('Giao dịch gần đây'),
+        if (historyLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (historyError != null)
+          Text(historyError!)
+        else if (history.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Text('Chưa có giao dịch nào.'),
+          )
+        else
+          ...((showAllHistory ? history : history.take(5)).map(
+            (item) => Transaction.fromCheckout(
+              item,
+              onTap: () => _openTransaction(item),
+            ),
+          )),
+        if (!historyLoading && historyError == null && history.length > 5)
+          Align(
+            alignment: Alignment.center,
+            child: TextButton(
+              onPressed: () => setState(() => showAllHistory = !showAllHistory),
+              child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
+            ),
           ),
-        )),
-      if (!historyLoading && historyError == null && history.length > 5)
-        Align(
-          alignment: Alignment.center,
-          child: TextButton(
-            onPressed: () => setState(() => showAllHistory = !showAllHistory),
-            child: Text(showAllHistory ? 'Thu gọn' : 'Xem thêm'),
-          ),
-        ),
       ],
       if (showWalletTransactionsTab) ...[
-      const Text('Lịch sử biến động ví'),
-      if (walletTransactionsLoading)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: Center(child: CircularProgressIndicator()),
-        )
-      else if (walletTransactionsError != null)
-        Text(walletTransactionsError!)
-      else if (walletTransactions.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: Text('Chưa có giao dịch ví nào.'),
-        )
-      else
-        ...((showAllWalletTransactions
-                ? walletTransactions
-                : walletTransactions.take(5))
-            .map(Transaction.fromWalletTransaction)),
-      if (!walletTransactionsLoading &&
-          walletTransactionsError == null &&
-          walletTransactions.length > 5)
-        Align(
-          alignment: Alignment.center,
-          child: TextButton(
-            onPressed: () => setState(
-              () => showAllWalletTransactions = !showAllWalletTransactions,
-            ),
-            child: Text(
-              showAllWalletTransactions ? 'Thu gọn' : 'Xem thêm',
+        const Text('Lịch sử biến động ví'),
+        if (walletTransactionsLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (walletTransactionsError != null)
+          Text(walletTransactionsError!)
+        else if (walletTransactions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Text('Chưa có giao dịch ví nào.'),
+          )
+        else
+          ...((showAllWalletTransactions
+                  ? walletTransactions
+                  : walletTransactions.take(5))
+              .map(Transaction.fromWalletTransaction)),
+        if (!walletTransactionsLoading &&
+            walletTransactionsError == null &&
+            walletTransactions.length > 5)
+          Align(
+            alignment: Alignment.center,
+            child: TextButton(
+              onPressed: () => setState(
+                () => showAllWalletTransactions = !showAllWalletTransactions,
+              ),
+              child: Text(showAllWalletTransactions ? 'Thu gọn' : 'Xem thêm'),
             ),
           ),
-        ),
       ],
     ],
   );
@@ -4133,9 +4133,7 @@ class _WalletHistoryTab extends StatelessWidget {
         label,
         textAlign: TextAlign.center,
         style: TextStyle(
-          color: selected
-              ? Theme.of(context).colorScheme.onPrimary
-              : null,
+          color: selected ? Theme.of(context).colorScheme.onPrimary : null,
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -4469,13 +4467,15 @@ class _ListenerCreatorContactsPageState
         }
         final grouped = <String, List<Map<String, dynamic>>>{};
         for (final request in snapshot.data ?? const []) {
-          final status = '${request['status'] ?? ''}'.toUpperCase();
+          final flowType = '${request['flowType'] ?? ''}'.toUpperCase();
+          if (flowType != 'ESCROW' || request['contractId'] == null) continue;
+          final status =
+              '${request['contractStatus'] ?? request['status'] ?? ''}'
+                  .toUpperCase();
           if (!{
-            'ACCEPTED',
             'PENDING_SIGNATURE',
             'IN_PROGRESS',
             'DISPUTED',
-            'COMPLETED',
           }.contains(status))
             continue;
           final key =
@@ -4622,9 +4622,9 @@ class ListenerRequestDetailPage extends StatefulWidget {
 
 class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   final messageController = TextEditingController();
+  late Future<Map<String, dynamic>?> contract = _loadContract();
   late Future<List<Map<String, dynamic>>> messages = _loadMessages();
   late Future<List<Map<String, dynamic>>> milestones = _loadMilestones();
-  late Future<Map<String, dynamic>?> contract = _loadContract();
   late Future<Map<String, dynamic>?> termination = _loadTermination();
   bool sending = false;
   bool signing = false;
@@ -4644,14 +4644,62 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   void Function()? _removeChatReconnectListener;
 
   String get requestId => '${widget.request['requestId']}';
+
+  bool get _mayHaveContract {
+    // The listener request list now includes escrow metadata. If the request
+    // is explicitly marked as legacy or has no contract id, do not probe the
+    // contract endpoint (or any dependent chat/dispute endpoint).
+    if (widget.request.containsKey('flowType')) {
+      final flowType = '${widget.request['flowType'] ?? ''}'.toUpperCase();
+      if (flowType == 'LEGACY') return false;
+      if (flowType == 'ESCROW' && widget.request['contractId'] == null) {
+        return false;
+      }
+    }
+    if (widget.request.containsKey('contractId') &&
+        widget.request['contractId'] == null) {
+      return false;
+    }
+    final status = '${widget.request['status'] ?? ''}'.toUpperCase();
+    return status == 'ACCEPTED' ||
+        status == 'IN_PROGRESS' ||
+        status == 'SUBMITTED' ||
+        status == 'APPROVED' ||
+        status == 'COMPLETED' ||
+        status == 'DISPUTED' ||
+        status == 'TERMINATED';
+  }
+
   Future<List<Map<String, dynamic>>> _loadMessages() =>
-      widget.api.requestMessages(requestId);
+      _loadAfterContract(widget.api.requestMessages);
+
   Future<List<Map<String, dynamic>>> _loadMilestones() =>
-      widget.api.requestMilestones(requestId);
-  Future<Map<String, dynamic>?> _loadContract() =>
-      widget.api.contractAgreement(requestId);
+      _loadAfterContract(widget.api.requestMilestones);
+
+  Future<List<Map<String, dynamic>>> _loadAfterContract(
+    Future<List<Map<String, dynamic>>> Function(String requestId) loader,
+  ) async {
+    if (!_mayHaveContract) return const [];
+    final agreement = await contract;
+    if (agreement == null) return const [];
+    return loader(requestId);
+  }
+
+  Future<Map<String, dynamic>?> _loadContract() => _mayHaveContract
+      ? widget.api.contractAgreement(requestId)
+      : Future.value(null);
+
   Future<Map<String, dynamic>?> _loadTermination() async {
+    if (!_mayHaveContract) return null;
     try {
+      final agreement = await contract;
+      final contractStatus = agreement?['contractStatus']
+          ?.toString()
+          .toUpperCase();
+      if (agreement == null ||
+          (contractStatus != 'DISPUTED' && contractStatus != 'TERMINATED')) {
+        return null;
+      }
       return await widget.api.contractTermination(requestId);
     } on ApiException catch (error) {
       if (error.statusCode == 404 || error.statusCode == 409) return null;
@@ -4666,9 +4714,9 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     widget.socket.listen(_requestTopic, (_) {
       if (!mounted) return;
       setState(() {
+        contract = _loadContract();
         messages = _loadMessages();
         milestones = _loadMilestones();
-        contract = _loadContract();
         termination = _loadTermination();
       });
     });
@@ -4717,6 +4765,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   Future<void> _sendMessage() async {
     final text = messageController.text.trim();
     if (text.isEmpty || sending) return;
+    if (await contract == null) return;
     setState(() => sending = true);
     try {
       await widget.api.sendRequestMessage(requestId, text);
@@ -4736,6 +4785,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   }
 
   Future<void> _openChatDialog() async {
+    if (await contract == null || !mounted) return;
     final chatScrollController = ScrollController();
     await showModalBottomSheet<void>(
       context: context,
@@ -5058,10 +5108,16 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
         backgroundColor: const Color(0xFFF8F5EF),
         title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          TextButton.icon(
-            onPressed: _openChatDialog,
-            icon: const Icon(Icons.chat_bubble_outline, size: 18),
-            label: const Text('Nhắn tin'),
+          FutureBuilder<Map<String, dynamic>?>(
+            future: contract,
+            builder: (_, snapshot) {
+              if (snapshot.data == null) return const SizedBox.shrink();
+              return TextButton.icon(
+                onPressed: _openChatDialog,
+                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                label: const Text('Nhắn tin'),
+              );
+            },
           ),
           const SizedBox(width: 8),
         ],
@@ -5134,12 +5190,16 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
             builder: (_, snapshot) {
               final agreement = snapshot.data;
               if (agreement == null) return const SizedBox.shrink();
-              return _contractCard(agreement);
+              return Column(
+                children: [
+                  _contractCard(agreement),
+                  _buildDisputeCard(),
+                  _buildDisputeStatusCard(),
+                  _buildChatCard(),
+                ],
+              );
             },
           ),
-          _buildDisputeCard(),
-          _buildDisputeStatusCard(),
-          _buildChatCard(),
           const SizedBox(height: 22),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -5356,6 +5416,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   );
 
   Future<void> _openDisputeDialog() async {
+    if (await contract == null || !mounted) return;
     final reasonController = TextEditingController();
     if (!mounted) {
       reasonController.dispose();
@@ -5364,100 +5425,97 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-          title: const Text('Tạo tranh chấp'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: reasonController,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Lý do',
-                    hintText: 'Mô tả vấn đề cần được xử lý',
-                    border: OutlineInputBorder(),
-                  ),
+        title: const Text('Tạo tranh chấp'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: reasonController,
+                minLines: 3,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  labelText: 'Lý do',
+                  hintText: 'Mô tả vấn đề cần được xử lý',
+                  border: OutlineInputBorder(),
                 ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Hủy'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFC92822),
               ),
-              onPressed: () async {
-                final reason = reasonController.text.trim();
-                if (reason.isEmpty) return;
-                try {
-                  final agreement = await contract;
-                  final snapshot = agreement?['contentSnapshot']?.toString() ?? '';
-                  if (snapshot.isEmpty) {
-                    throw Exception('Không có template hợp đồng để xác nhận.');
-                  }
-                  if (dialogContext.mounted) Navigator.pop(dialogContext);
-                  if (!mounted) return;
-                  final accepted = await showDialog<bool>(
-                    context: context,
-                    builder: (previewContext) => AlertDialog(
-                      title: const Text('Xác nhận gửi tranh chấp'),
-                      content: SizedBox(
-                        width: 560,
-                        height: 480,
-                        child: SingleChildScrollView(
-                          child: Text(
-                            snapshot,
-                            style: const TextStyle(height: 1.45),
-                          ),
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(previewContext, false),
-                          child: const Text('Quay lại'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(previewContext, true),
-                          child: const Text('Đồng ý gửi'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (accepted != true || !mounted) return;
-                  await widget.api.requestContractTermination(
-                    requestId,
-                    reason: reason,
-                  );
-                  if (mounted) {
-                    setState(() {
-                      contract = _loadContract();
-                      milestones = _loadMilestones();
-                      termination = _loadTermination();
-                    });
-                    ScaffoldMessenger.of(context).showTopSnackBar(
-                      const SnackBar(
-                        content: Text('Đã gửi yêu cầu tranh chấp.'),
-                      ),
-                    );
-                  }
-                } catch (error) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showTopSnackBar(
-                      SnackBar(
-                        content: Text('Không thể tạo tranh chấp: $error'),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Gửi yêu cầu'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFC92822),
             ),
-          ],
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) return;
+              try {
+                final agreement = await contract;
+                final snapshot =
+                    agreement?['contentSnapshot']?.toString() ?? '';
+                if (snapshot.isEmpty) {
+                  throw Exception('Không có template hợp đồng để xác nhận.');
+                }
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (!mounted) return;
+                final accepted = await showDialog<bool>(
+                  context: context,
+                  builder: (previewContext) => AlertDialog(
+                    title: const Text('Xác nhận gửi tranh chấp'),
+                    content: SizedBox(
+                      width: 560,
+                      height: 480,
+                      child: SingleChildScrollView(
+                        child: Text(
+                          snapshot,
+                          style: const TextStyle(height: 1.45),
+                        ),
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(previewContext, false),
+                        child: const Text('Quay lại'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(previewContext, true),
+                        child: const Text('Đồng ý gửi'),
+                      ),
+                    ],
+                  ),
+                );
+                if (accepted != true || !mounted) return;
+                await widget.api.requestContractTermination(
+                  requestId,
+                  reason: reason,
+                );
+                if (mounted) {
+                  setState(() {
+                    contract = _loadContract();
+                    termination = _loadTermination();
+                    milestones = _loadMilestones();
+                  });
+                  ScaffoldMessenger.of(context).showTopSnackBar(
+                    const SnackBar(content: Text('Đã gửi yêu cầu tranh chấp.')),
+                  );
+                }
+              } catch (error) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showTopSnackBar(
+                    SnackBar(content: Text('Không thể tạo tranh chấp: $error')),
+                  );
+                }
+              }
+            },
+            child: const Text('Gửi yêu cầu'),
+          ),
+        ],
       ),
     );
     reasonController.dispose();
@@ -5614,7 +5672,9 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                             style: const TextStyle(color: Color(0xFF141312)),
                             decoration: InputDecoration(
                               hintText: 'Nhập tin nhắn...',
-                              hintStyle: const TextStyle(color: Color(0xFF6D665F)),
+                              hintStyle: const TextStyle(
+                                color: Color(0xFF6D665F),
+                              ),
                               filled: true,
                               fillColor: const Color(0xFFF6F4F0),
                               border: OutlineInputBorder(
@@ -5702,6 +5762,13 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     );
   }
 
+  String _formatVietnamDateTime(dynamic value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) return '';
+    final vietnamTime = parsed.toUtc().add(const Duration(hours: 7));
+    return DateFormat('dd/MM/yyyy HH:mm').format(vietnamTime);
+  }
+
   Widget _milestoneCard(
     Map<String, dynamic> milestone, {
     int index = 0,
@@ -5714,6 +5781,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
         : status == 'SUBMITTED'
         ? Colors.orange
         : Colors.grey.shade700;
+    final dueAt = _formatVietnamDateTime(milestone['dueAt']);
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 10),
@@ -5790,6 +5858,18 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                 ],
               ),
             ),
+            if (dueAt.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 46, top: 6),
+                child: Text(
+                  'Hạn nộp: $dueAt (GMT+7)',
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
             if (status == 'SUBMITTED' || status == 'APPROVED') ...[
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: widget.api.milestoneSubmissions(id),
@@ -5836,8 +5916,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     final submissionId =
         '${submission['submissionId'] ?? submission['milestoneSubmissionId'] ?? ''}';
     final isPlaying = _playingMilestoneId == milestoneId;
-    final isCurrent = _submissionUrl != null &&
-        _activeMilestoneId == milestoneId;
+    final isCurrent =
+        _submissionUrl != null && _activeMilestoneId == milestoneId;
     final isLoading = loadingMilestones.contains(milestoneId);
     final canControl = isCurrent && _submissionDuration > Duration.zero;
     return Container(
@@ -5892,12 +5972,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
             SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(
-                  enabledThumbRadius: 6,
-                ),
-                overlayShape: const RoundSliderOverlayShape(
-                  overlayRadius: 12,
-                ),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
               ),
               child: Slider(
                 min: 0,
@@ -5910,11 +5986,13 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                     : 0,
                 activeColor: const Color(0xFFC62828),
                 onChanged: canControl
-                    ? (value) => _submissionPlayer?.seek(Duration(
+                    ? (value) => _submissionPlayer?.seek(
+                        Duration(
                           milliseconds:
                               (value * _submissionDuration.inMilliseconds)
                                   .round(),
-                        ))
+                        ),
+                      )
                     : null,
               ),
             ),
@@ -6009,10 +6087,9 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
           _activeMilestoneId = null;
         });
       });
-      await player.play(UrlSource(
-        url,
-        mimeType: media['contentType']?.toString(),
-      ));
+      await player.play(
+        UrlSource(url, mimeType: media['contentType']?.toString()),
+      );
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {
@@ -6726,11 +6803,7 @@ class Transaction extends StatelessWidget {
             ),
           ),
           if (details != null && details!.isNotEmpty)
-            Text(
-              details!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(details!, maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
       ),
       trailing: Text(amount),
@@ -8410,9 +8483,9 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showTopSnackBar(SnackBar(content: Text('Không thể gửi yêu cầu: $error')));
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        SnackBar(content: Text('Không thể gửi yêu cầu: $error')),
+      );
     }
   }
 
