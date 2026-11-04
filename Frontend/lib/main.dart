@@ -5950,7 +5950,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     if (label == 'Quyết định') {
       return switch (value) {
         'LISTENER_WINS' => 'Listener thắng',
-        'CREATOR_WINS' => 'CC thắng',
+        'CREATOR_WINS' => 'Content Creator thắng',
         _ => value,
       };
     }

@@ -1926,7 +1926,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
   String _disputeDecisionLabel(String decision) => switch (decision) {
     'LISTENER_WINS' => 'Listener thắng',
-    'CREATOR_WINS' => 'CC thắng',
+    'CREATOR_WINS' => 'Content Creator thắng',
     _ => decision,
   };
 
