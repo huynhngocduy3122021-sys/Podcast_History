@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
@@ -565,27 +566,48 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
               const Divider(color: Colors.white24, height: 1),
               const SizedBox(height: 16),
 
-              // Danh sách bình luận theo mốc thời gian
+              // Danh sách bình luận theo mốc thời gian & Nút Bình chọn / Quản lý Studio
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Bình luận theo thời gian',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                  const Expanded(
+                    child: Text(
+                      'Bình luận theo thời gian',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8A42)),
-                    icon: const Icon(Icons.open_in_new_rounded, size: 16),
-                    label: const Text('Quản lý Studio', style: TextStyle(fontSize: 12)),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const StudioCommentsScreen()),
-                      );
-                    },
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFFF8A42),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                        icon: const Icon(Icons.add_circle_outline_rounded, size: 16),
+                        label: const Text('Bình chọn', style: TextStyle(fontSize: 12)),
+                        onPressed: () => _showPodcastPollsSheet(context),
+                      ),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFFFF8A42),
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                        icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                        label: const Text('Quản lý Studio', style: TextStyle(fontSize: 12)),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const StudioCommentsScreen()),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -695,6 +717,805 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
           ),
         ),
       ),
+    );
+  }
+
+  // --- QUẢN LÝ BÌNH CHỌN CHO PODCAST (API /api/creator/polls) ---
+  void _showPodcastPollsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.4,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, scrollController) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Header
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF8A42).withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.poll_rounded, color: Color(0xFFFF8A42), size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Bình chọn cho Podcast',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  widget.podcast.title,
+                                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF8A42),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
+                            icon: const Icon(Icons.add_rounded, size: 16),
+                            label: const Text('Tạo mới', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () {
+                              _showCreatePollDialog(
+                                context,
+                                onCreated: () => setSheetState(() {}),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(color: Colors.white12, height: 1),
+                      const SizedBox(height: 12),
+
+                      // Danh sách polls lấy từ API
+                      Expanded(
+                        child: FutureBuilder<List<CreatorPoll>>(
+                          future: ref.read(creatorRepositoryProvider).getPolls(podcastId: widget.podcast.id),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const Center(
+                                child: CircularProgressIndicator(color: Color(0xFFFF8A42)),
+                              );
+                            }
+                            if (snapshot.hasError) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 36),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Không thể tải danh sách bình chọn: ${snapshot.error}',
+                                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextButton(
+                                      onPressed: () => setSheetState(() {}),
+                                      child: const Text('Thử lại', style: TextStyle(color: Color(0xFFFF8A42))),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            final polls = snapshot.data ?? [];
+                            if (polls.isEmpty) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.how_to_vote_outlined, size: 48, color: Colors.white.withValues(alpha: 0.3)),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Chưa có cuộc bình chọn nào',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 24),
+                                      child: Text(
+                                        'Tạo câu hỏi và các lựa chọn để người nghe tương tác và tham gia bình chọn trong lúc nghe podcast!',
+                                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(0xFFFF8A42),
+                                        side: const BorderSide(color: Color(0xFFFF8A42)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      ),
+                                      icon: const Icon(Icons.add_rounded, size: 16),
+                                      label: const Text('Tạo bình chọn đầu tiên'),
+                                      onPressed: () {
+                                        _showCreatePollDialog(
+                                          context,
+                                          onCreated: () => setSheetState(() {}),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+
+                            return ListView.separated(
+                              controller: scrollController,
+                              itemCount: polls.length,
+                              separatorBuilder: (_, _) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final poll = polls[index];
+                                return _buildPollItemCard(context, poll, () => setSheetState(() {}));
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPollItemCard(BuildContext context, CreatorPoll poll, VoidCallback onRefresh) {
+    Color statusColor;
+    String statusText;
+    switch (poll.status.toUpperCase()) {
+      case 'OPEN':
+        statusColor = AppColors.success;
+        statusText = 'Đang mở';
+        break;
+      case 'DRAFT':
+        statusColor = AppColors.warning;
+        statusText = 'Bản nháp';
+        break;
+      case 'CLOSED':
+        statusColor = Colors.white54;
+        statusText = 'Đã đóng';
+        break;
+      default:
+        statusColor = Colors.white70;
+        statusText = poll.status;
+    }
+
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              if (poll.createdAt != null)
+                Text(
+                  dateFormat.format(poll.createdAt!.toLocal()),
+                  style: const TextStyle(fontSize: 11, color: Colors.white38),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            poll.question,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14.5,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (poll.options.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: poll.options.map((opt) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.radio_button_unchecked_rounded, size: 14, color: Color(0xFFFF8A42)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          opt.text,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          const SizedBox(height: 8),
+          const Divider(color: Colors.white12, height: 1),
+          const SizedBox(height: 4),
+
+          // Action buttons bar
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (poll.isOpen || poll.isClosed)
+                TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8A42), visualDensity: VisualDensity.compact),
+                  icon: const Icon(Icons.bar_chart_rounded, size: 15),
+                  label: const Text('Kết quả', style: TextStyle(fontSize: 11.5)),
+                  onPressed: () => _showPollResultsSheet(context, poll.pollId),
+                ),
+              if (poll.isDraft)
+                TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: AppColors.success, visualDensity: VisualDensity.compact),
+                  icon: const Icon(Icons.publish_rounded, size: 15),
+                  label: const Text('Công bố', style: TextStyle(fontSize: 11.5)),
+                  onPressed: () async {
+                    try {
+                      await ref.read(creatorRepositoryProvider).publishPoll(poll.pollId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showTopSnackBar(
+                          const SnackBar(content: Text('Đã công bố cuộc bình chọn thành công!')),
+                        );
+                      }
+                      onRefresh();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showTopSnackBar(
+                          SnackBar(content: Text('Lỗi công bố: $e')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              if (poll.isOpen)
+                TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: Colors.white60, visualDensity: VisualDensity.compact),
+                  icon: const Icon(Icons.lock_clock_rounded, size: 15),
+                  label: const Text('Đóng', style: TextStyle(fontSize: 11.5)),
+                  onPressed: () async {
+                    try {
+                      await ref.read(creatorRepositoryProvider).closePoll(poll.pollId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showTopSnackBar(
+                          const SnackBar(content: Text('Đã đóng cuộc bình chọn!')),
+                        );
+                      }
+                      onRefresh();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showTopSnackBar(
+                          SnackBar(content: Text('Lỗi đóng bình chọn: $e')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline_rounded, color: Colors.white38, size: 18),
+                tooltip: 'Xóa bình chọn',
+                visualDensity: VisualDensity.compact,
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (dCtx) => AlertDialog(
+                      title: const Text('Xóa cuộc bình chọn?'),
+                      content: Text('Bạn có chắc chắn muốn xóa "${poll.question}"?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Hủy')),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+                          onPressed: () => Navigator.pop(dCtx, true),
+                          child: const Text('Xóa'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    try {
+                      await ref.read(creatorRepositoryProvider).deletePoll(poll.pollId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showTopSnackBar(
+                          const SnackBar(content: Text('Đã xóa cuộc bình chọn.')),
+                        );
+                      }
+                      onRefresh();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showTopSnackBar(
+                          SnackBar(content: Text('Lỗi xóa: $e')),
+                        );
+                      }
+                    }
+                  }
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- DIALOG: TẠO BÌNH CHỌN MỚI (GẮN VỚI PODCAST NÀY) ---
+  void _showCreatePollDialog(BuildContext context, {VoidCallback? onCreated}) {
+    final questionCtrl = TextEditingController();
+    final optionCtrls = [
+      TextEditingController(),
+      TextEditingController(),
+    ];
+    bool isSubmitting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(dialogContext).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Tạo cuộc bình chọn mới',
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                          onPressed: () => Navigator.pop(sheetCtx),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      'Tập podcast: ${widget.podcast.title}',
+                      style: const TextStyle(color: Colors.white38, fontSize: 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Câu hỏi
+                    TextField(
+                      controller: questionCtrl,
+                      maxLines: 3,
+                      cursorColor: const Color(0xFFFF8A42),
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFF2A2A30),
+                        labelText: 'Câu hỏi bình chọn *',
+                        labelStyle: const TextStyle(color: Colors.white70),
+                        floatingLabelStyle: const TextStyle(color: Color(0xFFFF8A42)),
+                        hintText: 'VD: Bạn đánh giá thế nào về diễn biến lịch sử tập này?',
+                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Colors.white24),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(color: Color(0xFFFF8A42), width: 1.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Danh sách options
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Các lựa chọn trả lời (2 – 20 lựa chọn):',
+                          style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600, fontSize: 12.5),
+                        ),
+                        if (optionCtrls.length < 20)
+                          TextButton.icon(
+                            style: TextButton.styleFrom(foregroundColor: const Color(0xFFFF8A42)),
+                            icon: const Icon(Icons.add, size: 15),
+                            label: const Text('Thêm lựa chọn', style: TextStyle(fontSize: 11.5)),
+                            onPressed: () {
+                              setDialogState(() {
+                                optionCtrls.add(TextEditingController());
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    ...List.generate(optionCtrls.length, (idx) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 11,
+                              backgroundColor: const Color(0xFFFF8A42).withValues(alpha: 0.2),
+                              child: Text(
+                                '${idx + 1}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFF8A42),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: optionCtrls[idx],
+                                cursorColor: const Color(0xFFFF8A42),
+                                style: const TextStyle(color: Colors.white, fontSize: 13.5),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0xFF2A2A30),
+                                  hintText: 'Lựa chọn ${idx + 1}',
+                                  hintStyle: const TextStyle(color: Colors.white38, fontSize: 13),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(color: Colors.white24),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: const BorderSide(color: Color(0xFFFF8A42), width: 1.5),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (optionCtrls.length > 2)
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+                                onPressed: () {
+                                  setDialogState(() {
+                                    optionCtrls.removeAt(idx);
+                                  });
+                                },
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 16),
+
+                    // Nút lưu nháp / công bố ngay
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white30),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: isSubmitting
+                                ? null
+                                : () => _submitCreatePoll(
+                                      sheetCtx,
+                                      questionCtrl,
+                                      optionCtrls,
+                                      publishNow: false,
+                                      onSubmittingChange: (v) => setDialogState(() => isSubmitting = v),
+                                      onSuccess: onCreated,
+                                    ),
+                            child: const Text('Lưu bản nháp'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF8A42),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: isSubmitting
+                                ? null
+                                : () => _submitCreatePoll(
+                                      sheetCtx,
+                                      questionCtrl,
+                                      optionCtrls,
+                                      publishNow: true,
+                                      onSubmittingChange: (v) => setDialogState(() => isSubmitting = v),
+                                      onSuccess: onCreated,
+                                    ),
+                            child: isSubmitting
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Text('Công bố ngay', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitCreatePoll(
+    BuildContext sheetCtx,
+    TextEditingController questionCtrl,
+    List<TextEditingController> optionCtrls, {
+    required bool publishNow,
+    required void Function(bool) onSubmittingChange,
+    VoidCallback? onSuccess,
+  }) async {
+    final question = questionCtrl.text.trim();
+    if (question.isEmpty) {
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập câu hỏi bình chọn.')),
+      );
+      return;
+    }
+
+    final options = optionCtrls
+        .map((c) => c.text.trim())
+        .where((text) => text.isNotEmpty)
+        .toList();
+
+    if (options.length < 2) {
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(content: Text('Cần ít nhất 2 lựa chọn có nội dung.')),
+      );
+      return;
+    }
+
+    onSubmittingChange(true);
+    try {
+      final repo = ref.read(creatorRepositoryProvider);
+      final created = await repo.createPoll(
+        question: question,
+        options: options,
+        podcastId: widget.podcast.id,
+      );
+
+      if (publishNow) {
+        await repo.publishPoll(created.pollId);
+      }
+
+      if (sheetCtx.mounted) {
+        Navigator.pop(sheetCtx);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showTopSnackBar(
+          SnackBar(
+            content: Text(
+              publishNow
+                  ? 'Đã công bố cuộc bình chọn thành công!'
+                  : 'Đã lưu bản nháp cuộc bình chọn!',
+            ),
+          ),
+        );
+      }
+      onSuccess?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showTopSnackBar(
+          SnackBar(content: Text('Lỗi tạo bình chọn: $e')),
+        );
+      }
+    } finally {
+      onSubmittingChange(false);
+    }
+  }
+
+  // --- MODAL XEM KẾT QUẢ BÌNH CHỌN (GET /api/creator/polls/{pollId}/results) ---
+  void _showPollResultsSheet(BuildContext context, String pollId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E22),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return FutureBuilder<PollResultsData>(
+          future: ref.read(creatorRepositoryProvider).getPollResults(pollId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 250,
+                child: Center(child: CircularProgressIndicator(color: Color(0xFFFF8A42))),
+              );
+            }
+            if (snapshot.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 40),
+                    const SizedBox(height: 8),
+                    Text('Lỗi: ${snapshot.error}', style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Đóng')),
+                  ],
+                ),
+              );
+            }
+
+            final results = snapshot.data!;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Kết quả bình chọn',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white54),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    results.question,
+                    style: const TextStyle(color: Colors.white, fontSize: 14.5, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Tổng số lượt phản hồi: ${results.totalResponses}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFFF8A42)),
+                  ),
+                  const SizedBox(height: 14),
+
+                  ...results.options.map((opt) {
+                    final percentage = opt.percentage.clamp(0.0, 100.0);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  opt.text,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${opt.responseCount} (${percentage.toStringAsFixed(1)}%)',
+                                style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: percentage / 100.0,
+                              minHeight: 8,
+                              backgroundColor: Colors.white12,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF8A42)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
