@@ -61,6 +61,7 @@ import com.prmteam7.podcasthistory.repository.SeriesRequestRepository;
 import com.prmteam7.podcasthistory.repository.SubscriptionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.List;
@@ -226,8 +227,26 @@ public class ListenerFlowService {
         listeningHistoryRepository
             .findByUser_UserIdAndPodcast_PodcastId(userId, podcastId)
             .orElseGet(ListeningHistory::new);
+    boolean newHistory = history.getListeningHistoryId() == null;
+    Integer previousProgress = history.getProgressSeconds();
+    Instant previousListenedAt = history.getLastListenedAt();
+    Instant now = Instant.now();
+    boolean progressReset = previousProgress != null
+        && request.progressSeconds() + 10 < previousProgress;
+    boolean replayAfterCompletion = Boolean.TRUE.equals(history.getCompleted())
+        && request.progressSeconds() <= 5;
+    boolean resumedAfterLongPause = previousListenedAt != null
+        && previousListenedAt.isBefore(now.minus(30, ChronoUnit.MINUTES));
+    boolean newListeningSession = newHistory
+        || progressReset
+        || replayAfterCompletion
+        || resumedAfterLongPause;
     history.setUser(user);
     history.setPodcast(podcast);
+    if (history.getListenCount() == null) history.setListenCount(1);
+    if (newListeningSession && !newHistory) {
+      history.setListenCount(history.getListenCount() + 1);
+    }
     int max =
         podcast.getDurationSeconds() == null
             ? request.progressSeconds()
@@ -237,7 +256,7 @@ public class ListenerFlowService {
     history.setCompleted(
         Boolean.TRUE.equals(request.completed())
             || (podcast.getDurationSeconds() != null && progress >= podcast.getDurationSeconds()));
-    history.setLastListenedAt(Instant.now());
+    history.setLastListenedAt(now);
     return toListeningItem(listeningHistoryRepository.save(history));
   }
 

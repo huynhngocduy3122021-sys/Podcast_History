@@ -24,10 +24,11 @@ public class PollService {
     private final ProducerProfileRepository creators;
     private final SeriesRepository series;
     private final PodcastRepository podcasts;
+    private final AudienceNotificationService audienceNotifications;
 
     public PollService(PollRepository polls, PollOptionRepository options, PollVoteRepository votes,
             AppUserRepository users, ProducerProfileRepository creators, SeriesRepository series,
-            PodcastRepository podcasts) {
+            PodcastRepository podcasts, AudienceNotificationService audienceNotifications) {
         this.polls = polls;
         this.options = options;
         this.votes = votes;
@@ -35,6 +36,7 @@ public class PollService {
         this.creators = creators;
         this.series = series;
         this.podcasts = podcasts;
+        this.audienceNotifications = audienceNotifications;
     }
 
     public Page<Summary> myPolls(UUID userId, PollStatus status, UUID seriesId, UUID podcastId, int page, int size) {
@@ -83,7 +85,9 @@ public class PollService {
             throw new ResourceConflictException("Poll đã hết thời hạn nhận câu trả lời.");
         }
         poll.setStatus(PollStatus.OPEN.name());
-        return detail(polls.save(poll));
+        Poll saved = polls.save(poll);
+        audienceNotifications.newPoll(saved);
+        return detail(saved);
     }
 
     @Transactional
@@ -156,15 +160,19 @@ public class PollService {
         vote.setPoll(poll);
         vote.setUser(user);
         vote.setPollOption(option);
-        return response(votes.save(vote));
+        PollVote saved = votes.save(vote);
+        audienceNotifications.pollResponse(poll, user, update, false);
+        return response(saved);
     }
 
     @Transactional
     public void withdraw(UUID userId, UUID pollId) {
-        listener(userId);
+        AppUser user = listener(userId);
         Poll poll = visible(pollId, true);
         accepting(poll);
-        votes.delete(vote(pollId, userId));
+        PollVote vote = vote(pollId, userId);
+        votes.delete(vote);
+        audienceNotifications.pollResponse(poll, user, false, true);
     }
 
     private PollVote vote(UUID pollId, UUID userId) {

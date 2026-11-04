@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.model.AppUser;
 import com.prmteam7.podcasthistory.model.Notification;
+import com.prmteam7.podcasthistory.model.Poll;
 import com.prmteam7.podcasthistory.model.Podcast;
 import com.prmteam7.podcasthistory.config.PackageFeatures;
 import com.prmteam7.podcasthistory.repository.FollowRepository;
@@ -75,6 +76,36 @@ public class AudienceNotificationService {
         listener.getDisplayName() + " vừa mua gói thành viên của kênh bạn.",
         Map.of("creatorId", creatorId, "subscriptionId", subscriptionId,
             "membershipPlanId", planId, "listenerId", listener.getUserId()));
+  }
+
+  /** Notify followers when a Creator publishes a poll. */
+  public void newPoll(Poll poll) {
+    if (poll == null || poll.getProducerProfile() == null
+        || poll.getPollId() == null) return;
+    UUID creatorId = poll.getProducerProfile().getProducerProfileId();
+    String channelName = poll.getProducerProfile().getChannelName();
+    String question = poll.getQuestion();
+    for (AppUser listener : follows.findActiveListenersByCreatorId(creatorId)) {
+      send(listener, "NEW_POLL", channelName + " vừa đăng bình chọn",
+          "Bình chọn mới từ " + channelName + ": " + question,
+          Map.of("pollId", poll.getPollId(), "creatorId", creatorId));
+    }
+  }
+
+  /** Notify a Creator when a Listener answers, changes or withdraws a vote. */
+  public void pollResponse(Poll poll, AppUser listener, boolean changed,
+      boolean withdrawn) {
+    if (poll == null || listener == null || poll.getProducerProfile() == null) return;
+    AppUser creator = poll.getProducerProfile().getUser();
+    if (creator == null || creator.getUserId() == null) return;
+    String action = withdrawn ? " đã rút bình chọn" : changed
+        ? " đã thay đổi lựa chọn trong bình chọn"
+        : " đã trả lời bình chọn";
+    String question = poll.getQuestion();
+    send(creator, "POLL_RESPONSE", listener.getDisplayName() + action,
+        listener.getDisplayName() + action + ": " + question,
+        Map.of("pollId", poll.getPollId(), "creatorId",
+            creator.getUserId(), "listenerId", listener.getUserId()));
   }
 
   private void send(AppUser recipient, String type, String title, String message,

@@ -264,7 +264,7 @@ class ContractStageModel {
   final String milestoneId;
   final String name;
   final String description;
-  final DateTime dueAt;
+  final DateTime? dueAt;
   final int amount;
   final String status; // 'NOT_STARTED', 'SUBMITTED', 'REVISION_REQUESTED', 'DISPUTED', 'APPROVED', 'CANCELLED'
 
@@ -272,7 +272,7 @@ class ContractStageModel {
     required this.milestoneId,
     required this.name,
     required this.description,
-    required this.dueAt,
+    this.dueAt,
     required this.amount,
     required this.status,
   });
@@ -282,8 +282,7 @@ class ContractStageModel {
       milestoneId: json['milestoneId']?.toString() ?? '',
       name: json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
-      dueAt:
-          DateTime.tryParse(json['dueAt']?.toString() ?? '') ?? DateTime.now(),
+      dueAt: DateTime.tryParse(json['dueAt']?.toString() ?? ''),
       amount: (json['amount'] as num?)?.toInt() ?? 0,
       status: (json['status'] as String? ?? 'NOT_STARTED').toUpperCase(),
     );
@@ -488,6 +487,7 @@ class RequestMilestone {
   final String id;
   final String title;
   final String? description;
+  final DateTime? dueAt;
   final int order;
   final int percentage;
   final int amount;
@@ -501,6 +501,7 @@ class RequestMilestone {
     required this.id,
     required this.title,
     this.description,
+    this.dueAt,
     this.order = 1,
     required this.percentage,
     required this.amount,
@@ -520,6 +521,7 @@ class RequestMilestone {
     String? id,
     String? title,
     String? description,
+    DateTime? dueAt,
     int? order,
     int? percentage,
     int? amount,
@@ -533,6 +535,7 @@ class RequestMilestone {
       id: id ?? this.id,
       title: title ?? this.title,
       description: description ?? this.description,
+      dueAt: dueAt ?? this.dueAt,
       order: order ?? this.order,
       percentage: percentage ?? this.percentage,
       amount: amount ?? this.amount,

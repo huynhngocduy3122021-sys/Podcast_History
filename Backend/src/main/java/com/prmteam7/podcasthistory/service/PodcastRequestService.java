@@ -148,8 +148,19 @@ public class PodcastRequestService {
     @Transactional(readOnly = true)
     public List<SeriesRequestResponse> getListenerRequests(UUID listenerId) { // UUID là 
         requireRole(requireActiveUser(listenerId), UserRole.LISTENER);
-        return requestRepository.findAllByUser_UserIdOrderByCreatedAtDesc(listenerId)
-                .stream().map(this::toRequestResponse).toList();
+        List<SeriesRequest> requests = requestRepository
+                .findAllByUser_UserIdOrderByCreatedAtDesc(listenerId);
+        if (requests.isEmpty()) return List.of();
+        Map<UUID, ContractEscrow> escrowsByRequest = contractEscrowRepository
+                .findAllByRequest_SeriesRequestIdIn(requests.stream()
+                        .map(SeriesRequest::getSeriesRequestId).toList())
+                .stream().collect(Collectors.toMap(
+                        escrow -> escrow.getRequest().getSeriesRequestId(),
+                        Function.identity()));
+        return requests.stream()
+                .map(request -> toRequestResponse(request,
+                        escrowsByRequest.get(request.getSeriesRequestId())))
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -681,6 +692,14 @@ public class PodcastRequestService {
     }
 
     private SeriesRequestResponse toRequestResponse(SeriesRequest request) {
+        ContractEscrow escrow = contractEscrowRepository
+                .findByRequest_SeriesRequestId(request.getSeriesRequestId())
+                .orElse(null);
+        return toRequestResponse(request, escrow);
+    }
+
+    private SeriesRequestResponse toRequestResponse(SeriesRequest request, ContractEscrow escrow) {
+        Contract contract = escrow == null ? null : escrow.getContract();
         return new SeriesRequestResponse(
                 request.getSeriesRequestId(),
                 request.getUser().getUserId(),
@@ -695,7 +714,10 @@ public class PodcastRequestService {
                 request.getRespondedAt(),
                 displayName(request.getUser()),
                 request.getUser().getAvatarUrl(),
-                request.getProducerProfile().getAvatarUrl());
+                request.getProducerProfile().getAvatarUrl(),
+                escrow == null ? "LEGACY" : "ESCROW",
+                contract == null ? null : contract.getContractId(),
+                contract == null ? null : contract.getStatus());
     }
 
     private String displayName(AppUser user) {

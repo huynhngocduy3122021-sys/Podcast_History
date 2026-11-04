@@ -769,12 +769,12 @@ class ApiCreatorRepository implements CreatorRepository {
 
     final existingIndex = _cachedPodcasts.indexWhere((p) => p.id == id);
     final finalPodcast = updatedPodcast.copyWith(
-          audioFileName: audioFileName,
-          sources: sources,
-          eraTag: eraTag,
-          categoryId: effectiveCategoryId,
-          seriesId: seriesId,
-        );
+      audioFileName: audioFileName,
+      sources: sources,
+      eraTag: eraTag,
+      categoryId: effectiveCategoryId,
+      seriesId: seriesId,
+    );
 
     if (existingIndex != -1) {
       _cachedPodcasts[existingIndex] = finalPodcast;
@@ -1177,6 +1177,7 @@ class ApiCreatorRepository implements CreatorRepository {
                   id: m['milestoneId']?.toString() ?? '',
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
+                  dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
                   order: (m['order'] as num?)?.toInt() ?? 1,
                   percentage: totalBudget > 0
                       ? ((mAmount / totalBudget) * 100).toInt()
@@ -1211,6 +1212,7 @@ class ApiCreatorRepository implements CreatorRepository {
                   id: m['milestoneId']?.toString() ?? '',
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
+                  dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
                   order: (m['order'] as num?)?.toInt() ?? 1,
                   percentage: totalBudget > 0
                       ? ((mAmount / totalBudget) * 100).toInt()
@@ -1292,6 +1294,7 @@ class ApiCreatorRepository implements CreatorRepository {
           id: s.milestoneId,
           title: s.name,
           description: s.description,
+          dueAt: s.dueAt,
           order: agreement.milestones.indexOf(s) + 1,
           percentage: agreement.budgetAmount > 0
               ? ((s.amount / agreement.budgetAmount) * 100).toInt()
@@ -1593,6 +1596,7 @@ class ApiCreatorRepository implements CreatorRepository {
                   id: m['milestoneId']?.toString() ?? '',
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
+                  dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
                   order: (m['order'] as num?)?.toInt() ?? 1,
                   percentage: _cachedRequests[index].totalBudget > 0
                       ? ((mAmount / _cachedRequests[index].totalBudget) * 100)
@@ -1715,7 +1719,8 @@ class ApiCreatorRepository implements CreatorRepository {
       _availableBalance = (res['availableBalance'] as num?)?.toInt() ?? 0;
       _holdingWithdraw = (res['heldBalance'] as num?)?.toInt() ?? 0;
       _pendingRelease = (res['pendingRelease'] as num?)?.toInt() ?? 0;
-      final totalBalance = (res['totalBalance'] as num?)?.toInt() ??
+      final totalBalance =
+          (res['totalBalance'] as num?)?.toInt() ??
           (_availableBalance + _holdingWithdraw);
 
       return {
@@ -1745,18 +1750,15 @@ class ApiCreatorRepository implements CreatorRepository {
       if (refStr.startsWith('CONTRACT_CREATOR:')) {
         return (
           'Thù lao hợp đồng',
-          'Giải ngân đợt bàn giao đã nghiệm thu (80%)'
+          'Giải ngân đợt bàn giao đã nghiệm thu (80%)',
         );
       } else if (refStr.startsWith('CONTRACT_DISPUTE_CREATOR:')) {
         return (
           'Giải ngân tranh chấp',
-          'Thù lao sau khi giải quyết tranh chấp hợp đồng'
+          'Thù lao sau khi giải quyết tranh chấp hợp đồng',
         );
       } else if (refStr.startsWith('CONTRACT_COMPENSATION_CREATOR:')) {
-        return (
-          'Bồi thường hợp đồng',
-          'Bồi hoàn hợp đồng đã xử lý'
-        );
+        return ('Bồi thường hợp đồng', 'Bồi hoàn hợp đồng đã xử lý');
       }
       return ('Thù lao hợp đồng', 'Giải ngân thu nhập vào số dư khả dụng');
     }
@@ -1830,10 +1832,7 @@ class ApiCreatorRepository implements CreatorRepository {
     if (!_apiClient.isAuthenticated) {
       throw Exception('Vui lòng đăng nhập để xem lịch sử ví.');
     }
-    final queryParams = <String, dynamic>{
-      'page': page,
-      'size': size,
-    };
+    final queryParams = <String, dynamic>{'page': page, 'size': size};
     if (status != null && status.trim().isNotEmpty) {
       queryParams['status'] = status.trim();
     }
@@ -1848,78 +1847,80 @@ class ApiCreatorRepository implements CreatorRepository {
     final rawTransactions = res is List
         ? res
         : res is Map<String, dynamic> && res['content'] is List
-            ? res['content'] as List
-            : const [];
+        ? res['content'] as List
+        : const [];
 
-    final transactions = rawTransactions
-        .whereType<Map<String, dynamic>>()
-        .map((item) {
-          final statusStr = (item['status']?.toString() ?? '').toUpperCase();
-          final transactionStatus = switch (statusStr) {
-            'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
-            'FAILED' ||
-            'REJECTED' ||
-            'CANCELLED' => TransactionStatus.failed,
-            'PENDING' || 'HOLDING' => TransactionStatus.holding,
-            _ => TransactionStatus.processing,
-          };
+    final transactions = rawTransactions.whereType<Map<String, dynamic>>().map((
+      item,
+    ) {
+      final statusStr = (item['status']?.toString() ?? '').toUpperCase();
+      final transactionStatus = switch (statusStr) {
+        'COMPLETED' || 'SUCCESS' || 'PAID' => TransactionStatus.success,
+        'FAILED' || 'REJECTED' || 'CANCELLED' => TransactionStatus.failed,
+        'PENDING' || 'HOLDING' => TransactionStatus.holding,
+        _ => TransactionStatus.processing,
+      };
 
-          final rawTitle = item['title']?.toString();
-          final rawDescription = item['description']?.toString();
+      final rawTitle = item['title']?.toString();
+      final rawDescription = item['description']?.toString();
 
-          final (fallbackTitle, fallbackSubtitle) = _walletTransactionTitleAndSubtitle(
-            item['type'],
-            item['referenceCode'],
-            item['note'],
-          );
+      final (
+        fallbackTitle,
+        fallbackSubtitle,
+      ) = _walletTransactionTitleAndSubtitle(
+        item['type'],
+        item['referenceCode'],
+        item['note'],
+      );
 
-          final title = (rawTitle != null && rawTitle.trim().isNotEmpty)
-              ? rawTitle.trim()
-              : fallbackTitle;
-          final subtitle = (rawDescription != null && rawDescription.trim().isNotEmpty)
-              ? rawDescription.trim()
-              : fallbackSubtitle;
+      final title = (rawTitle != null && rawTitle.trim().isNotEmpty)
+          ? rawTitle.trim()
+          : fallbackTitle;
+      final subtitle =
+          (rawDescription != null && rawDescription.trim().isNotEmpty)
+          ? rawDescription.trim()
+          : fallbackSubtitle;
 
-          return WalletTransaction(
-            id: item['transactionId']?.toString() ??
-                item['walletTransactionId']?.toString() ??
-                item['withdrawalRequestId']?.toString() ??
-                _uuid.v4(),
-            title: title,
-            subtitle: subtitle,
-            type: _walletTransactionType(item['type']),
-            rawType: item['type']?.toString(),
-            direction: item['direction']?.toString(),
-            amount: _walletTransactionAmount(item),
-            currency: item['currency']?.toString() ?? 'VND',
-            status: transactionStatus,
-            rawStatus: statusStr,
-            referenceCode: item['referenceCode']?.toString(),
-            balanceAfter: (item['balanceAfter'] as num?)?.toInt(),
-            heldBalanceAfter: (item['heldBalanceAfter'] as num?)?.toInt(),
-            createdAt: DateTime.tryParse(
-                  item['createdAt']?.toString() ??
-                      item['occurredAt']?.toString() ??
-                      item['requestedAt']?.toString() ??
-                      '',
-                ) ??
-                DateTime.now(),
-            note: item['note']?.toString(),
-            movement: item['movement']?.toString(),
-            availableBalanceChange:
-                (item['availableBalanceChange'] as num?)?.toInt(),
-            heldBalanceChange:
-                (item['heldBalanceChange'] as num?)?.toInt(),
-            requestId: item['requestId']?.toString(),
-            requestTitle: item['requestTitle']?.toString(),
-            milestoneId: item['milestoneId']?.toString(),
-            milestoneName: item['milestoneName']?.toString(),
-            withdrawalId: item['withdrawalId']?.toString(),
-            payoutAccountMasked: item['payoutAccountMasked']?.toString(),
-            membershipPlanName: item['membershipPlanName']?.toString(),
-          );
-        })
-        .toList();
+      return WalletTransaction(
+        id:
+            item['transactionId']?.toString() ??
+            item['walletTransactionId']?.toString() ??
+            item['withdrawalRequestId']?.toString() ??
+            _uuid.v4(),
+        title: title,
+        subtitle: subtitle,
+        type: _walletTransactionType(item['type']),
+        rawType: item['type']?.toString(),
+        direction: item['direction']?.toString(),
+        amount: _walletTransactionAmount(item),
+        currency: item['currency']?.toString() ?? 'VND',
+        status: transactionStatus,
+        rawStatus: statusStr,
+        referenceCode: item['referenceCode']?.toString(),
+        balanceAfter: (item['balanceAfter'] as num?)?.toInt(),
+        heldBalanceAfter: (item['heldBalanceAfter'] as num?)?.toInt(),
+        createdAt:
+            DateTime.tryParse(
+              item['createdAt']?.toString() ??
+                  item['occurredAt']?.toString() ??
+                  item['requestedAt']?.toString() ??
+                  '',
+            ) ??
+            DateTime.now(),
+        note: item['note']?.toString(),
+        movement: item['movement']?.toString(),
+        availableBalanceChange: (item['availableBalanceChange'] as num?)
+            ?.toInt(),
+        heldBalanceChange: (item['heldBalanceChange'] as num?)?.toInt(),
+        requestId: item['requestId']?.toString(),
+        requestTitle: item['requestTitle']?.toString(),
+        milestoneId: item['milestoneId']?.toString(),
+        milestoneName: item['milestoneName']?.toString(),
+        withdrawalId: item['withdrawalId']?.toString(),
+        payoutAccountMasked: item['payoutAccountMasked']?.toString(),
+        membershipPlanName: item['membershipPlanName']?.toString(),
+      );
+    }).toList();
 
     _cachedTransactions
       ..clear()
@@ -1927,10 +1928,12 @@ class ApiCreatorRepository implements CreatorRepository {
 
     // Compute total withdrawn from completed withdrawal transactions
     _totalWithdrawn = transactions
-        .where((t) =>
-            (t.type == TransactionType.withdrawal ||
-                t.rawType == 'WITHDRAWAL') &&
-            t.status == TransactionStatus.success)
+        .where(
+          (t) =>
+              (t.type == TransactionType.withdrawal ||
+                  t.rawType == 'WITHDRAWAL') &&
+              t.status == TransactionStatus.success,
+        )
         .fold(0, (sum, t) => sum + t.amount.abs());
 
     return List.unmodifiable(_cachedTransactions);
@@ -1956,13 +1959,14 @@ class ApiCreatorRepository implements CreatorRepository {
         final isVerified = item['verified'] == true;
         final isActive = item['active'] == true;
         return BankAccount(
-          id: item['payoutAccountId']?.toString() ??
+          id:
+              item['payoutAccountId']?.toString() ??
               item['creatorPayoutAccountId']?.toString() ??
               _uuid.v4(),
           bankName: bankNameDisplay,
-          accountNumber:
-              item['accountMasked']?.toString() ?? 'Chưa cập nhật',
-          accountHolder: item['accountReference']?.toString() ??
+          accountNumber: item['accountMasked']?.toString() ?? 'Chưa cập nhật',
+          accountHolder:
+              item['accountReference']?.toString() ??
               item['currency']?.toString() ??
               'VND',
           isDefault: isActive && isVerified,
@@ -1987,7 +1991,9 @@ class ApiCreatorRepository implements CreatorRepository {
     String accountNumber,
     String accountHolder,
   ) async {
-    throw UnsupportedError('Tài khoản nhận tiền cần được Admin xác minh và đăng ký trên hệ thống.');
+    throw UnsupportedError(
+      'Tài khoản nhận tiền cần được Admin xác minh và đăng ký trên hệ thống.',
+    );
   }
 
   @override
@@ -2008,9 +2014,12 @@ class ApiCreatorRepository implements CreatorRepository {
       ApiEndpoints.creatorWithdraw,
       body: {'amount': amount, 'payoutAccountId': bankAccountId},
     );
-    if (response is! Map<String, dynamic> || response['status'] != 'PENDING' ||
+    if (response is! Map<String, dynamic> ||
+        response['status'] != 'PENDING' ||
         response['withdrawalRequestId'] == null) {
-      throw Exception('Cần kiểm tra lại trạng thái yêu cầu rút tiền trên máy chủ.');
+      throw Exception(
+        'Cần kiểm tra lại trạng thái yêu cầu rút tiền trên máy chủ.',
+      );
     }
     return WalletTransaction(
       id: response['withdrawalRequestId'].toString(),
@@ -2018,7 +2027,9 @@ class ApiCreatorRepository implements CreatorRepository {
       type: TransactionType.withdrawal,
       amount: -amount,
       status: TransactionStatus.holding,
-      createdAt: DateTime.tryParse(response['requestedAt']?.toString() ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(response['requestedAt']?.toString() ?? '') ??
+          DateTime.now(),
       note: 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
     );
   }
@@ -2766,8 +2777,10 @@ class ApiCreatorRepository implements CreatorRepository {
   }) async {
     final queryParams = <String, String>{};
     if (status != null && status.isNotEmpty) queryParams['status'] = status;
-    if (seriesId != null && seriesId.isNotEmpty) queryParams['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty) queryParams['podcastId'] = podcastId;
+    if (seriesId != null && seriesId.isNotEmpty)
+      queryParams['seriesId'] = seriesId;
+    if (podcastId != null && podcastId.isNotEmpty)
+      queryParams['podcastId'] = podcastId;
     queryParams['page'] = '0';
     queryParams['size'] = '50';
 
@@ -2827,10 +2840,14 @@ class ApiCreatorRepository implements CreatorRepository {
   }) async {
     final body = <String, dynamic>{
       'question': question.trim(),
-      'options': options.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+      'options': options
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty) body['podcastId'] = podcastId;
+    if (podcastId != null && podcastId.isNotEmpty)
+      body['podcastId'] = podcastId;
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 
@@ -2864,14 +2881,21 @@ class ApiCreatorRepository implements CreatorRepository {
   }) async {
     final body = <String, dynamic>{
       'question': question.trim(),
-      'options': options.map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
+      'options': options
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty) body['podcastId'] = podcastId;
+    if (podcastId != null && podcastId.isNotEmpty)
+      body['podcastId'] = podcastId;
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 
-    final res = await _apiClient.put(ApiEndpoints.creatorPollById(pollId), body: body);
+    final res = await _apiClient.put(
+      ApiEndpoints.creatorPollById(pollId),
+      body: body,
+    );
     if (res is Map<String, dynamic>) {
       final pollMap = (res['poll'] is Map<String, dynamic>)
           ? res['poll'] as Map<String, dynamic>
@@ -3072,9 +3096,11 @@ class ApiCreatorRepository implements CreatorRepository {
 
     final requestId = json['requestId']?.toString() ?? _uuid.v4();
 
-    // The escrow list uses RequestDetail field names, while the legacy inbox
-    // uses SeriesRequestResponse names. Normalize both before rendering UI.
-    final detail = await _loadContractRequestDetail(requestId);
+    // The contract list already returns RequestDetail. Do not call the
+    // per-request endpoint again for every item, and do not probe contract
+    // endpoints for legacy requests that have no escrow record.
+    final isEscrowRequest = _isEscrowRequestPayload(json);
+    final detail = isEscrowRequest ? json : null;
     final source = <String, dynamic>{...json, ...?detail};
     final budgetNum =
         (source['budgetAmount'] as num?) ??
@@ -3089,14 +3115,16 @@ class ApiCreatorRepository implements CreatorRepository {
 
     // Check for Escrow Contract
     ContractAgreement? agreement;
-    try {
-      final contractRes = await _apiClient.get(
-        ApiEndpoints.requestContract(requestId),
-      );
-      if (contractRes is Map<String, dynamic>) {
-        agreement = ContractAgreement.fromJson(contractRes);
-      }
-    } catch (_) {}
+    if (isEscrowRequest && json['contractId'] != null) {
+      try {
+        final contractRes = await _apiClient.get(
+          ApiEndpoints.requestContract(requestId),
+        );
+        if (contractRes is Map<String, dynamic>) {
+          agreement = ContractAgreement.fromJson(contractRes);
+        }
+      } catch (_) {}
+    }
 
     ContractTerminationStatus? termStatus;
     if (agreement != null && (agreement.isDisputed || agreement.isTerminated)) {
@@ -3153,6 +3181,7 @@ class ApiCreatorRepository implements CreatorRepository {
             id: stage.milestoneId,
             title: stage.name,
             description: stage.description,
+            dueAt: stage.dueAt,
             order: agreement.milestones.indexOf(stage) + 1,
             percentage: percentage,
             amount: stage.amount,
@@ -3180,7 +3209,9 @@ class ApiCreatorRepository implements CreatorRepository {
       } else if (agreement.isPendingSignature) {
         status = CustomRequestStatus.accepted;
       }
-    } else {
+    } else if (!isEscrowRequest &&
+        status != CustomRequestStatus.sent &&
+        status != CustomRequestStatus.rejected) {
       // Fallback for non-escrow or legacy requests
       try {
         final milestonesRes = await _apiClient.get(
@@ -3218,6 +3249,7 @@ class ApiCreatorRepository implements CreatorRepository {
                   id: milestoneId,
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
+                  dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
                   order: (m['order'] as num?)?.toInt() ?? 1,
                   percentage: totalBudget > 0
                       ? ((mAmount / totalBudget) * 100).toInt()
@@ -3275,17 +3307,15 @@ class ApiCreatorRepository implements CreatorRepository {
     );
   }
 
-  Future<Map<String, dynamic>?> _loadContractRequestDetail(
-    String requestId,
-  ) async {
-    try {
-      final detail = await _apiClient.get(
-        ApiEndpoints.contractRequestDetail(requestId),
-      );
-      return detail is Map<String, dynamic> ? detail : null;
-    } catch (_) {
-      return null;
-    }
+  bool _isEscrowRequestPayload(Map<String, dynamic> json) {
+    final flowType = json['flowType']?.toString().toUpperCase();
+    if (flowType == 'LEGACY') return false;
+    return flowType == 'ESCROW' ||
+        json.containsKey('fundsHeld') ||
+        json.containsKey('remainingHeld') ||
+        json['contractId'] != null ||
+        json['contractStatus'] != null ||
+        (json.containsKey('productType') && json['productType'] != null);
   }
 
   // Livestreams (Agora RTC)

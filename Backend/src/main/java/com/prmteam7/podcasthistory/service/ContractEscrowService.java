@@ -13,6 +13,8 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
@@ -28,6 +30,9 @@ public class ContractEscrowService {
     private static final BigDecimal PLATFORM_RATE = new BigDecimal("0.20");
     private static final BigDecimal COMPENSATION_RATE = new BigDecimal("0.30");
     private static final BigDecimal COMPENSATION_FEE_RATE = new BigDecimal("0.10");
+    private static final ZoneId VIETNAM_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final DateTimeFormatter CONTRACT_DATE_TIME =
+            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm 'GMT+7'").withZone(VIETNAM_ZONE);
     private final AppUserRepository users;
     private final ProducerProfileRepository creators;
     private final SeriesRequestRepository requests;
@@ -715,7 +720,7 @@ public class ContractEscrowService {
             Map<String, String> values = Map.ofEntries(
                     Map.entry("APP_NAME", "VietCast"),
                     Map.entry("CONTRACT_ID", contract.getContractId().toString()),
-                    Map.entry("CREATED_AT", contract.getCreatedAt().toString()),
+                    Map.entry("CREATED_AT", formatContractInstant(contract.getCreatedAt())),
                     Map.entry("LISTENER_NAME", safe(listener.getDisplayName())),
                     Map.entry("LISTENER_ID", listener.getUserId().toString()),
                     Map.entry("LISTENER_EMAIL", safe(listener.getEmail())),
@@ -740,7 +745,7 @@ public class ContractEscrowService {
                 rows.append("| ").append(index + 1).append(" | ")
                         .append(safe(offer.name())).append(" | ")
                         .append(safe(offer.description())).append(" | ")
-                        .append(offer.dueAt()).append(" | ")
+                        .append(formatContractInstant(offer.dueAt())).append(" | ")
                         .append(offer.amount().toPlainString()).append(" VND |\n");
             }
             text = text.replace("[MILESTONE_COUNT]", Integer.toString(offers.size()));
@@ -757,6 +762,10 @@ public class ContractEscrowService {
                 .replace("|", "｜").replace("#", "＃")
                 .replace("<", "＜").replace(">", "＞")
                 .replace("*", "＊").replace("_", "＿").replace("`", "｀");
+    }
+
+    private String formatContractInstant(Instant value) {
+        return value == null ? "" : CONTRACT_DATE_TIME.format(value);
     }
 
     private String sha256(String content) {

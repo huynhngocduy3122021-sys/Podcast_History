@@ -1263,6 +1263,19 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                   ),
                                 ),
                               ],
+                              if (m.dueAt != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Hạn nộp: ${_formatVietnamDateTime(m.dueAt!)} (GMT+7)',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? AppColors.onSurfaceMutedDark
+                                        : AppColors.onSurfaceMutedLight,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1340,6 +1353,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         ],
       ),
     );
+  }
+
+  String _formatVietnamDateTime(DateTime value) {
+    final vietnamTime = value.toUtc().add(const Duration(hours: 7));
+    return DateFormat('dd/MM/yyyy HH:mm').format(vietnamTime);
   }
 
   Widget _buildDraftsForMilestone(String milestoneId, bool isDark) {
