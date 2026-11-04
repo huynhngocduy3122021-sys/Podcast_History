@@ -243,7 +243,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
             ),
             _buildBenefitItem(
               Icons.live_tv_rounded,
-              'Phòng Cộng Đồng kể chuyện trực tiếp',
+              'Phòng Livestream kể chuyện trực tiếp',
               'Tương tác giọng nói và bình luận realtime cùng cộng đồng người nghe lịch sử.',
               isDark,
             ),
@@ -291,7 +291,7 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
                           : '${subscription.uploadsRemaining ?? 0} lượt còn lại (đã dùng ${subscription.uploadsUsed})',
                     ),
                     _buildInfoRow(
-                      'Phòng Cộng Đồng:',
+                      'Phòng Livestream:',
                       subscription.canLivestream ? 'Đã kích hoạt' : 'Chưa hỗ trợ',
                     ),
                   ],

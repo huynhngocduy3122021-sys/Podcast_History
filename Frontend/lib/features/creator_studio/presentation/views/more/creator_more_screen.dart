@@ -114,7 +114,7 @@ class CreatorMoreScreen extends ConsumerWidget {
                 icon: Icons.workspace_premium_rounded,
                 iconColor: AppColors.secondaryLight,
                 title: 'Gói Studio Premium',
-                subtitle: profile?.isPremium == true ? 'Đang kích hoạt • Đăng không giới hạn' : 'Đăng không giới hạn, Cộng Đồng, Form khảo sát',
+                subtitle: profile?.isPremium == true ? 'Đang kích hoạt • Đăng không giới hạn' : 'Đăng không giới hạn, Livestream, Form khảo sát',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const PremiumUpgradeScreen()),
                 ),

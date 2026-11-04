@@ -3,9 +3,16 @@ import 'package:podcast_history/api_service.dart';
 import 'package:podcast_history/core/widgets/top_notification.dart';
 
 class ListenerPollsScreen extends StatefulWidget {
-  const ListenerPollsScreen({super.key, required this.api});
+  const ListenerPollsScreen({
+    super.key,
+    required this.api,
+    this.creatorId,
+    this.creatorName,
+  });
 
   final ListenerApi api;
+  final String? creatorId;
+  final String? creatorName;
 
   @override
   State<ListenerPollsScreen> createState() => _ListenerPollsScreenState();
@@ -22,26 +29,55 @@ class _ListenerPollsScreenState extends State<ListenerPollsScreen> {
     _load();
   }
 
+  Future<List<Map<String, dynamic>>> _loadAllCreatorPolls(
+    String creatorId,
+  ) async {
+    const pageSize = 50;
+    final all = <Map<String, dynamic>>[];
+    final seen = <String>{};
+
+    for (var page = 0; page < 100; page++) {
+      final batch = await widget.api.listenerPolls(
+        creatorId,
+        page: page,
+        size: pageSize,
+      );
+      if (batch.isEmpty) break;
+
+      var added = 0;
+      for (final poll in batch) {
+        final pollId = poll['pollId']?.toString() ?? '';
+        if (pollId.isNotEmpty && seen.add(pollId)) {
+          all.add(poll);
+          added++;
+        }
+      }
+      if (batch.length < pageSize || added == 0) break;
+    }
+    return all;
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final creators = await widget.api.creators();
-      final creatorIds = creators
-          .map(
-            (creator) =>
-                creator['creatorProfileId']?.toString() ??
-                creator['profileId']?.toString() ??
-                creator['id']?.toString(),
-          )
-          .whereType<String>()
-          .where((id) => id.isNotEmpty)
-          .toSet();
+      final creatorIds = widget.creatorId?.trim().isNotEmpty == true
+          ? {widget.creatorId!.trim()}
+          : (await widget.api.creators())
+                .map(
+                  (creator) =>
+                      creator['creatorProfileId']?.toString() ??
+                      creator['profileId']?.toString() ??
+                      creator['id']?.toString(),
+                )
+                .whereType<String>()
+                .where((id) => id.isNotEmpty)
+                .toSet();
 
       final pollLists = await Future.wait(
-        creatorIds.map((creatorId) => widget.api.listenerPolls(creatorId)),
+        creatorIds.map(_loadAllCreatorPolls),
       );
       final polls = pollLists.expand((items) => items).toList();
       final seen = <String>{};
@@ -77,9 +113,16 @@ class _ListenerPollsScreenState extends State<ListenerPollsScreen> {
       children: [
         Row(
           children: [
+            IconButton(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back),
+              tooltip: 'Quay lại',
+            ),
             Expanded(
               child: Text(
-                'Bình Chọn từ các Creator',
+                widget.creatorName?.trim().isNotEmpty == true
+                    ? 'Bài đăng của ${widget.creatorName}'
+                    : 'Bình Chọn từ các Creator',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
@@ -89,7 +132,6 @@ class _ListenerPollsScreenState extends State<ListenerPollsScreen> {
             ),
           ],
         ),
-        const Text('Bình chọn để góp ý cho nội dung của cộng đồng.'),
         const SizedBox(height: 18),
         if (_loading)
           const Center(
@@ -149,6 +191,32 @@ class _ListenerPollCardState extends State<_ListenerPollCard> {
   bool get _isOpen {
     final status = '${_poll['status'] ?? ''}'.toUpperCase();
     return _poll['acceptingResponses'] == true || status == 'OPEN';
+  }
+
+  String _formatDate(Object? value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '';
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final hour = date.hour.toString().padLeft(2, '0');
+    final minute = date.minute.toString().padLeft(2, '0');
+    return '$day/$month/${date.year} $hour:$minute';
+  }
+
+  String? get _timeLabel {
+    final startsAt = _formatDate(_poll['startsAt']);
+    var endsAt = _formatDate(_poll['endsAt']);
+    if (endsAt.isEmpty &&
+        '${_poll['status'] ?? ''}'.toUpperCase() == 'CLOSED') {
+      endsAt = _formatDate(_poll['updatedAt']);
+    }
+    if (startsAt.isNotEmpty && endsAt.isNotEmpty) {
+      return 'Từ $startsAt đến $endsAt';
+    }
+    if (startsAt.isNotEmpty) return 'Bắt đầu lúc $startsAt';
+    if (endsAt.isNotEmpty) return 'Kết thúc lúc $endsAt';
+    final createdAt = _formatDate(_poll['createdAt']);
+    return createdAt.isNotEmpty ? 'Đăng lúc $createdAt' : null;
   }
 
   @override
@@ -317,6 +385,22 @@ class _ListenerPollCardState extends State<_ListenerPollCard> {
               fontWeight: FontWeight.w700,
             ),
           ),
+          if (_timeLabel != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.schedule_outlined, size: 15),
+                const SizedBox(width: 5),
+                Text(
+                  _timeLabel!,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
             '${_poll['question'] ?? _poll['title'] ?? 'Bình chọn'}',

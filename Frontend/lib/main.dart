@@ -1441,7 +1441,7 @@ class _ShellState extends State<Shell> {
       NavigationDestination(
         icon: Icon(Icons.live_tv_outlined),
         selectedIcon: Icon(Icons.live_tv),
-        label: 'Cộng Đồng',
+            label: 'Livestream',
       ),
       NavigationDestination(
         icon: Icon(Icons.library_music_outlined),
@@ -3830,25 +3830,9 @@ class LivestreamPage extends StatelessWidget {
   final NotificationSocket socket;
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
-    child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Cộng Đồng'),
-        bottom: const TabBar(
-          tabs: [
-            Tab(text: 'Livestream', icon: Icon(Icons.live_tv_outlined)),
-            Tab(text: 'Bình Chọn', icon: Icon(Icons.poll_outlined)),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        children: [
-          ListenerLivestreamScreen(api: api, socket: socket),
-          ListenerPollsScreen(api: api),
-        ],
-      ),
-    ),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Livestream')),
+    body: ListenerLivestreamScreen(api: api, socket: socket),
   );
 }
 
@@ -6987,6 +6971,7 @@ class _PlayerState extends State<Player> {
   late final comments = List<CommentData>.of(
     widget.initialComments ?? const [],
   );
+  List<Map<String, dynamic>> podcastPolls = const [];
   bool _sendingComment = false;
 
   @override
@@ -7025,6 +7010,7 @@ class _PlayerState extends State<Player> {
       });
     });
     unawaited(_loadComments());
+    unawaited(_loadPodcastPolls());
   }
 
   double _progressFor(Duration current, Duration total) {
@@ -7059,6 +7045,23 @@ class _PlayerState extends State<Player> {
           SnackBar(content: Text('Không tải được bình luận: $error')),
         );
       }
+    }
+  }
+
+  Future<void> _loadPodcastPolls() async {
+    final creatorId = widget.show.creatorId;
+    final podcastId = widget.show.id;
+    if (creatorId == null || podcastId == null) return;
+    try {
+      final polls = await widget.api.listenerPolls(
+        creatorId,
+        podcastId: podcastId,
+        page: 0,
+        size: 100,
+      );
+      if (mounted) setState(() => podcastPolls = polls);
+    } catch (_) {
+      // Polls are supplementary to comments.
     }
   }
 
@@ -7201,6 +7204,8 @@ class _PlayerState extends State<Player> {
     backgroundColor: const Color(0xFF181818),
     builder: (_) => CommentsPanel(
       comments: comments,
+      polls: podcastPolls,
+      api: widget.api,
       onSubmit: addComment,
       onLike: _toggleCommentLike,
     ),
@@ -7512,6 +7517,9 @@ class _PlayerState extends State<Player> {
                 ),
               ),
             ),
+             ...podcastPolls.map(
+               (poll) => _PodcastPollCard(api: widget.api, poll: poll),
+             ),
             ...comments.map(
               (comment) => Comment(
                 name: comment.name,
@@ -7729,14 +7737,158 @@ class CommentMarker extends StatelessWidget {
   );
 }
 
+class _PodcastPollCard extends StatefulWidget {
+  const _PodcastPollCard({required this.api, required this.poll});
+
+  final ListenerApi api;
+  final Map<String, dynamic> poll;
+
+  @override
+  State<_PodcastPollCard> createState() => _PodcastPollCardState();
+}
+
+class _PodcastPollCardState extends State<_PodcastPollCard> {
+  late Map<String, dynamic> _poll = Map<String, dynamic>.from(widget.poll);
+  String? _selectedOptionId;
+  bool _loading = false;
+
+  String get _pollId => _poll['pollId']?.toString() ?? '';
+
+  List<Map<String, dynamic>> get _options => (_poll['options'] is List)
+      ? (_poll['options'] as List)
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
+      : const [];
+
+  bool get _isOpen {
+    final status = '${_poll['status'] ?? ''}'.toUpperCase();
+    return _poll['acceptingResponses'] == true || status == 'OPEN';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetails();
+  }
+
+  Future<void> _loadDetails() async {
+    if (_pollId.isEmpty) return;
+    try {
+      final detail = await widget.api.listenerPoll(_pollId);
+      String? selected;
+      try {
+        selected = (await widget.api.myListenerPollResponse(_pollId))[
+          'optionId'
+        ]?.toString();
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _poll = {..._poll, ...detail};
+          _selectedOptionId = selected;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _vote(String optionId) async {
+    if (!_isOpen || _loading || optionId.isEmpty) return;
+    setState(() => _loading = true);
+    try {
+      if (_selectedOptionId == null) {
+        await widget.api.answerListenerPoll(_pollId, optionId);
+      } else {
+        await widget.api.changeListenerPollAnswer(_pollId, optionId);
+      }
+      if (mounted) {
+        setState(() {
+          _selectedOptionId = optionId;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 10),
+    color: const Color(0xFFF3EDE3),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.poll_outlined, color: Color(0xFFC62828), size: 18),
+              const SizedBox(width: 6),
+              Text(
+                'Bình chọn',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              if (!_isOpen)
+                const Text(
+                  'Đã đóng',
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            '${_poll['question'] ?? _poll['title'] ?? 'Bình chọn'}',
+            style: const TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (_options.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(),
+            )
+          else
+            ..._options.map(
+              (option) => RadioListTile<String>(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                value: option['optionId']?.toString() ?? '',
+                groupValue: _selectedOptionId,
+                title: Text(
+                  '${option['text'] ?? ''}',
+                  style: const TextStyle(color: Colors.black87),
+                ),
+                onChanged: _isOpen && !_loading
+                    ? (value) {
+                        if (value != null) _vote(value);
+                      }
+                    : null,
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
+
+}
+
 class CommentsPanel extends StatefulWidget {
   const CommentsPanel({
     super.key,
     required this.comments,
+    required this.polls,
+    required this.api,
     required this.onSubmit,
     required this.onLike,
   });
   final List<CommentData> comments;
+  final List<Map<String, dynamic>> polls;
+  final ListenerApi api;
   final Future<bool> Function(String) onSubmit;
   final Future<CommentData> Function(CommentData) onLike;
 
@@ -7795,18 +7947,21 @@ class _CommentsPanelState extends State<CommentsPanel> {
             constraints: const BoxConstraints(maxHeight: 310),
             child: ListView(
               shrinkWrap: true,
-              children: widget.comments
-                  .map(
-                    (comment) => Comment(
-                      name: comment.name,
-                      text: comment.text,
-                      time: comment.time,
-                      likeCount: comment.likeCount,
-                      likedByMe: comment.likedByMe,
-                      onLike: () => widget.onLike(comment),
-                    ),
-                  )
-                  .toList(),
+              children: [
+                ...widget.polls.map(
+                  (poll) => _PodcastPollCard(api: widget.api, poll: poll),
+                ),
+                ...widget.comments.map(
+                  (comment) => Comment(
+                    name: comment.name,
+                    text: comment.text,
+                    time: comment.time,
+                    likeCount: comment.likeCount,
+                    likedByMe: comment.likedByMe,
+                    onLike: () => widget.onLike(comment),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -8444,6 +8599,35 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFFF6B5F),
                     side: const BorderSide(color: Color(0x99C62C24)),
+                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: widget.show.creatorId == null
+                      ? null
+                      : () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ListenerPollsScreen(
+                                api: widget.api,
+                                creatorId: widget.show.creatorId,
+                                creatorName: widget.show.channel,
+                              ),
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.article_outlined),
+                  label: const Text('Bài đăng'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white54),
                     minimumSize: const Size.fromHeight(48),
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     shape: RoundedRectangleBorder(
