@@ -180,7 +180,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       _buildFilterChip(
                           'Rút tiền', TransactionType.withdrawal),
                       _buildFilterChip(
-                          'Hội viên kênh', TransactionType.membership),
+                          'Thành viên kênh', TransactionType.membership),
                       _buildFilterChip('Hoàn tiền', TransactionType.refund),
                     ],
                   ),
@@ -634,7 +634,7 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
               if (tx.milestoneName != null && tx.milestoneName!.isNotEmpty)
                 _buildDetailRow('Đợt nghiệm thu', tx.milestoneName!, isDark),
               if (tx.membershipPlanName != null && tx.membershipPlanName!.isNotEmpty)
-                _buildDetailRow('Gói hội viên', tx.membershipPlanName!, isDark),
+                _buildDetailRow('Gói thành viên', tx.membershipPlanName!, isDark),
               if (tx.payoutAccountMasked != null && tx.payoutAccountMasked!.isNotEmpty)
                 _buildDetailRow('Tài khoản nhận', tx.payoutAccountMasked!, isDark),
               if (tx.movement != null && tx.movement!.isNotEmpty)

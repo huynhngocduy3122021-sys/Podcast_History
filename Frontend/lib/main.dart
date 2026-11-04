@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'core/services/session_storage/session_storage.dart';
 import 'core/package_features.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/formatters.dart';
 import 'core/utils/image_url_helper.dart';
 import 'core/widgets/top_notification.dart';
 import 'features/creator_studio/presentation/controllers/creator_controller.dart';
@@ -423,6 +424,7 @@ class Show {
     this.categoryId,
     this.categoryName = '',
     this.thumbnailUrl,
+    this.listenCount = 0,
   });
   final String title, channel, period, duration;
   final List<Color> colors;
@@ -435,11 +437,13 @@ class Show {
   final String? categoryId;
   final String categoryName;
   final String? thumbnailUrl;
+  final int listenCount;
 
   Show copyWith({
     String? duration,
     int? durationSeconds,
     String? thumbnailUrl,
+    int? listenCount,
   }) => Show(
     title,
     channel,
@@ -455,6 +459,7 @@ class Show {
     seriesTitle: seriesTitle,
     description: description,
     thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+    listenCount: listenCount ?? this.listenCount,
   );
 }
 
@@ -535,6 +540,7 @@ class _ShellState extends State<Shell> {
   final commentCountsByPodcast = <String, int>{};
   final creatorDetails = <String, Map<String, dynamic>>{};
   String? commentTopic;
+  bool _hasUnreadMessages = false;
   int tab = 0;
   Show? current;
   bool playing = false;
@@ -622,6 +628,11 @@ class _ShellState extends State<Shell> {
       },
       onReconnected: () => unawaited(_refreshNotifications()),
     )..connect();
+    _notificationSocket.listen('/user/queue/contract-chat', (event) {
+      if ('${event['type'] ?? ''}' == 'CONTRACT_CHAT_MESSAGE' && mounted) {
+        setState(() => _hasUnreadMessages = true);
+      }
+    });
     shows = List<Show>.of(fallbackShows);
     _loadListenerFlow();
   }
@@ -707,6 +718,7 @@ class _ShellState extends State<Shell> {
             seriesTitle: podcast.seriesTitle,
             description: podcast.description,
             thumbnailUrl: podcast.thumbnailUrl,
+            listenCount: podcast.listenCount,
           );
         }).toList();
         final interactionResponses = await Future.wait(
@@ -1016,7 +1028,7 @@ class _ShellState extends State<Shell> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 12),
-                Text('Đang tải thông tin gói hội viên...'),
+                Text('Đang tải thông tin gói thành viên...'),
               ],
             ),
           ),
@@ -1044,7 +1056,7 @@ class _ShellState extends State<Shell> {
       if (mounted) {
         Navigator.pop(context); // Tắt loading dialog
         ScaffoldMessenger.of(context).showTopSnackBar(
-          SnackBar(content: Text('Không thể tải gói hội viên: $e')),
+          SnackBar(content: Text('Không thể tải gói thành viên: $e')),
         );
       }
       return;
@@ -1065,7 +1077,7 @@ class _ShellState extends State<Shell> {
     walletBalance = currentBal;
 
     if (activeSub != null) {
-      // Đã là Hội viên ACTIVE -> Hiển thị chi tiết gói
+      // Đã là Thành viên ACTIVE -> Hiển thị chi tiết gói
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -1073,7 +1085,7 @@ class _ShellState extends State<Shell> {
             children: [
               Icon(Icons.verified_rounded, color: Color(0xFFFFB800), size: 28),
               SizedBox(width: 10),
-              Text('Hội viên kênh'),
+              Text('Thành viên kênh'),
             ],
           ),
           content: Column(
@@ -1135,7 +1147,7 @@ class _ShellState extends State<Shell> {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Đặc quyền hội viên của bạn:',
+                'Đặc quyền thành viên của bạn:',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               ),
               const SizedBox(height: 8),
@@ -1166,7 +1178,7 @@ class _ShellState extends State<Shell> {
                   SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Huy hiệu hội viên kênh nổi bật',
+                      'Huy hiệu thành viên kênh nổi bật',
                       style: TextStyle(fontSize: 13),
                     ),
                   ),
@@ -1202,7 +1214,7 @@ class _ShellState extends State<Shell> {
       return;
     }
 
-    // Chưa là hội viên
+    // Chưa là thành viên
     if (plans.isEmpty) {
       ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
@@ -1222,7 +1234,7 @@ class _ShellState extends State<Shell> {
     final priceVal = (plan['price'] as num?)?.toDouble() ?? 0.0;
     final durationDays = (plan['durationDays'] as num?)?.toInt() ?? 30;
     final desc =
-        '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền hội viên.'}';
+        '${plan['description'] ?? 'Ủng hộ creator và mở khóa toàn bộ đặc quyền thành viên.'}';
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -1358,14 +1370,18 @@ class _ShellState extends State<Shell> {
         onOpen: openShow,
         onSearch: () => setState(() => tab = 1),
         onWallet: _openWallet,
-        onMessages: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ListenerCreatorContactsPage(
-              api: api,
-              socket: _notificationSocket,
+        onMessages: () {
+          setState(() => _hasUnreadMessages = false);
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ListenerCreatorContactsPage(
+                api: api,
+                socket: _notificationSocket,
+              ),
             ),
-          ),
-        ),
+          );
+        },
+        hasUnreadMessages: _hasUnreadMessages,
         hasUnreadNotifications: notifications.any((item) => !item.read),
         onNotifications: _showNotifications,
         onProfile: () => setState(() => tab = 4),
@@ -1568,7 +1584,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
         SnackBar(
           backgroundColor: Colors.green.shade700,
           content: Text(
-            'Thanh toán ví thành công! Bạn đã là Hội viên của kênh ${widget.show.channel}.',
+            'Thanh toán ví thành công! Bạn đã là Thành viên của kênh ${widget.show.channel}.',
           ),
         ),
       );
@@ -1576,7 +1592,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       final msg = e.statusCode == 409
-          ? 'Số dư ví không đủ hoặc bạn đã có gói hội viên đang hoạt động.'
+          ? 'Số dư ví không đủ hoặc bạn đã có gói thành viên đang hoạt động.'
           : e.message;
       messenger.showTopSnackBar(
         SnackBar(backgroundColor: Colors.red.shade700, content: Text(msg)),
@@ -1649,7 +1665,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Tham gia Hội viên Kênh',
+                        'Tham gia Thành viên Kênh',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -1771,7 +1787,7 @@ class _ListenerMembershipSheetState extends State<ListenerMembershipSheet> {
                       ),
                       SizedBox(width: 6),
                       Text(
-                        'Huy hiệu hội viên nổi bật bên cạnh tên',
+                        'Huy hiệu thành viên nổi bật bên cạnh tên',
                         style: TextStyle(fontSize: 12),
                       ),
                     ],
@@ -2173,6 +2189,7 @@ class Home extends StatelessWidget {
     required this.onSearch,
     required this.onWallet,
     required this.onMessages,
+    this.hasUnreadMessages = false,
     required this.hasUnreadNotifications,
     required this.onNotifications,
     required this.onProfile,
@@ -2183,6 +2200,7 @@ class Home extends StatelessWidget {
   final ValueChanged<Show> onOpen;
   final VoidCallback onSearch, onWallet, onMessages, onNotifications, onProfile;
   final bool hasUnreadNotifications;
+  final bool hasUnreadMessages;
   @override
   Widget build(BuildContext context) => CustomScrollView(
     slivers: [
@@ -2232,7 +2250,29 @@ class Home extends StatelessWidget {
               IconButton(
                 onPressed: onMessages,
                 tooltip: 'Nhắn tin',
-                icon: const Icon(Icons.chat_bubble_outline),
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.chat_bubble_outline),
+                    if (hasUnreadMessages)
+                      Positioned(
+                        top: -1,
+                        right: -1,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Colors.deepOrange,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFFBF7F0),
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
               IconButton(
                 onPressed: onNotifications,
@@ -4634,6 +4674,8 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
   late Future<Map<String, dynamic>?> termination = _loadTermination();
   bool sending = false;
   bool signing = false;
+  bool _hasUnreadChat = false;
+  bool _isChatOpen = false;
   final Set<String> completedMilestones = <String>{};
   final Set<String> loadingMilestones = <String>{};
   AudioPlayer? _submissionPlayer;
@@ -4739,6 +4781,9 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       final refreshedMessages = _loadMessages();
       setState(() {
         messages = refreshedMessages;
+        if (!_isChatOpen) {
+          _hasUnreadChat = true;
+        }
       });
     });
     _removeChatReconnectListener = widget.socket.addReconnectListener(() {
@@ -4792,6 +4837,10 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
 
   Future<void> _openChatDialog() async {
     if (await contract == null || !mounted) return;
+    setState(() {
+      _hasUnreadChat = false;
+      _isChatOpen = true;
+    });
     final chatScrollController = ScrollController();
     await showModalBottomSheet<void>(
       context: context,
@@ -4949,6 +4998,11 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
       ),
     );
     chatScrollController.dispose();
+    if (mounted) {
+      setState(() {
+        _isChatOpen = false;
+      });
+    }
   }
 
   bool _isListenerChatMessage(Map<String, dynamic> item) {
@@ -5061,8 +5115,11 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
           height: 420,
           child: SingleChildScrollView(
             child: Text(
-              agreement['contentSnapshot']?.toString() ??
-                  'Không có nội dung hợp đồng để hiển thị.',
+              agreement['contentSnapshot'] != null
+                  ? AppFormatters.cleanContractText(
+                      agreement['contentSnapshot'].toString(),
+                    )
+                  : 'Không có nội dung hợp đồng để hiển thị.',
               style: const TextStyle(height: 1.45),
             ),
           ),
@@ -5128,7 +5185,25 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
               if (snapshot.data == null) return const SizedBox.shrink();
               return TextButton.icon(
                 onPressed: _openChatDialog,
-                icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.chat_bubble_outline, size: 18),
+                    if (_hasUnreadChat)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFC62828),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 label: const Text('Nhắn tin'),
               );
             },
@@ -5495,7 +5570,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                       height: 480,
                       child: SingleChildScrollView(
                         child: Text(
-                          snapshot,
+                          AppFormatters.cleanContractText(snapshot),
                           style: const TextStyle(height: 1.45),
                         ),
                       ),
@@ -5599,7 +5674,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                   ),
                   child: SingleChildScrollView(
                     child: Text(
-                      snapshot,
+                      AppFormatters.cleanContractText(snapshot),
                       style: const TextStyle(fontSize: 12, height: 1.4),
                     ),
                   ),
@@ -8642,7 +8717,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                     color: isMember ? const Color(0xFFFFB800) : Colors.white,
                   ),
                   label: Text(
-                    isMember ? 'Đã là hội viên' : 'Đăng ký thành viên',
+                    isMember ? 'Đã là thành viên' : 'Đăng ký thành viên',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

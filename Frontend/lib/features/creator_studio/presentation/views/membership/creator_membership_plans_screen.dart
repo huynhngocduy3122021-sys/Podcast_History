@@ -155,7 +155,7 @@ class _CreatorMembershipPlansScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gói Hội viên Kênh'),
+        title: const Text('Gói Thành viên Kênh'),
         actions: const [
           CreatorNotificationButton(),
           SizedBox(width: 8),
@@ -206,14 +206,14 @@ class _CreatorMembershipPlansScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hội viên Kênh (Channel Membership)',
+                              'Thành viên Kênh (Channel Membership)',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Mở bán các gói hội viên để người nghe đăng ký theo tháng. Hội viên được nghe podcast độc quyền (Members-Only) và gửi yêu cầu nội dung.',
+                              'Mở bán các gói thành viên để người nghe đăng ký theo tháng. Thành viên được nghe podcast độc quyền (Members-Only) và gửi yêu cầu nội dung.',
                               style: TextStyle(
                                 fontSize: 12.5,
                                 color: isDark ? Colors.white70 : Colors.black87,
@@ -518,7 +518,7 @@ class _CreatorMembershipPlansScreenState
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
-                            'Kiểm tra doanh thu & số dư hội viên trong Ví Creator',
+                            'Kiểm tra doanh thu & số dư thành viên trong Ví Creator',
                             style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
                           ),
                         ),

@@ -320,9 +320,7 @@ class ApiCreatorRepository implements CreatorRepository {
                 eraTag: mapped.eraTag.isNotEmpty
                     ? mapped.eraTag
                     : existing.eraTag,
-                listensCount: existing.listensCount > 0
-                    ? existing.listensCount
-                    : mapped.listensCount,
+                listensCount: mapped.listensCount,
                 likesCount: existing.likesCount,
                 likedByMe: existing.likedByMe,
                 commentsCount: existing.commentsCount,
@@ -403,46 +401,6 @@ class ApiCreatorRepository implements CreatorRepository {
           }
         }
 
-        // Fetch dashboard metrics to synchronize creator's total listens with podcasts
-        int totalCreatorListens = 0;
-        try {
-          final dashRes = await _apiClient.get(
-            ApiEndpoints.creatorDashboard(period: '7d'),
-            headers: const {'ngrok-skip-browser-warning': '1'},
-          );
-          if (dashRes is Map<String, dynamic> &&
-              dashRes['metrics'] is Map<String, dynamic>) {
-            final m = dashRes['metrics'] as Map<String, dynamic>;
-            totalCreatorListens =
-                (m['totalListens'] as num?)?.toInt() ??
-                (m['views'] as num?)?.toInt() ??
-                0;
-          }
-        } catch (_) {}
-
-        if (totalCreatorListens > 0) {
-          final publishedIndices = <int>[];
-          for (int i = 0; i < list.length; i++) {
-            if (list[i].status == PodcastStatus.published) {
-              publishedIndices.add(i);
-            }
-          }
-
-          if (publishedIndices.length == 1) {
-            final idx = publishedIndices.first;
-            list[idx] = list[idx].copyWith(listensCount: totalCreatorListens);
-          } else if (publishedIndices.length > 1) {
-            final totalCurrent = publishedIndices.fold<int>(
-              0,
-              (sum, i) => sum + list[i].listensCount,
-            );
-            if (totalCurrent == 0) {
-              final idx = publishedIndices.first;
-              list[idx] = list[idx].copyWith(listensCount: totalCreatorListens);
-            }
-          }
-        }
-
         _cachedPodcasts.clear();
         _cachedPodcasts.addAll(list);
       }
@@ -470,9 +428,7 @@ class ApiCreatorRepository implements CreatorRepository {
             likesCount: existing.likesCount,
             likedByMe: existing.likedByMe,
             commentsCount: existing.commentsCount,
-            listensCount: existing.listensCount > 0
-                ? existing.listensCount
-                : mapped.listensCount,
+            listensCount: mapped.listensCount,
           );
           _cachedPodcasts[idx] = resolved;
           return resolved;
@@ -1775,7 +1731,7 @@ class ApiCreatorRepository implements CreatorRepository {
         typeStr == 'MEMBERSHIP_EARNING' ||
         typeStr == 'MEMBERSHIP_FEE' ||
         typeStr == 'SUBSCRIPTION') {
-      return ('Thu nhập hội viên', 'Đăng ký gói hội viên kênh');
+      return ('Thu nhập thành viên', 'Đăng ký gói thành viên kênh');
     }
     if (typeStr == 'WALLET_TOPUP' || typeStr == 'TOP_UP') {
       return ('Nạp tiền vào ví', 'Nạp tiền thành công');

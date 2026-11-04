@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -38,6 +39,93 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   final Set<String> _expandedDraftIds = {};
+  bool _hasUnreadChat = false;
+  bool _isChatOpen = false;
+  final ValueNotifier<int> _chatMessageNotifier = ValueNotifier<int>(0);
+
+  String? get _currentCreatorUserId {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map<String, dynamic>) {
+        return '${payload['userId'] ?? payload['user_id'] ?? payload['sub'] ?? ''}'
+            .trim();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  void _onContractChatMessage(Map<String, dynamic> event) {
+    if ('${event['type'] ?? ''}' != 'CONTRACT_CHAT_MESSAGE') return;
+    final data = event['data'] is Map
+        ? Map<String, dynamic>.from(event['data'] as Map)
+        : event;
+    final eventRequestId =
+        data['requestId']?.toString() ??
+        data['contractRequestId']?.toString();
+    if (eventRequestId != null && eventRequestId != widget.requestId) return;
+
+    final senderId = data['senderId']?.toString();
+    final myUserId = _currentCreatorUserId;
+    final isMine = (senderId != null && myUserId != null && senderId == myUserId) ||
+        data['isMine'] == true ||
+        data['mine'] == true ||
+        data['isCreator'] == true;
+
+    if (_isChatOpen) {
+      _chatMessageNotifier.value++;
+    } else if (!isMine) {
+      if (mounted) {
+        setState(() {
+          _hasUnreadChat = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkInitialUnreadStatus() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastSeenIso = prefs.getString('last_seen_chat_${widget.requestId}');
+      final messages = await ref
+          .read(creatorRepositoryProvider)
+          .getChatMessages(widget.requestId, size: 20);
+      if (messages.isEmpty || !mounted) return;
+
+      final lastSeen = lastSeenIso != null ? DateTime.tryParse(lastSeenIso) : null;
+      final currentUserId = _currentCreatorUserId;
+
+      bool hasUnread = false;
+      for (final msg in messages) {
+        final senderId = msg['senderId']?.toString();
+        final isMine = (senderId != null && currentUserId != null && senderId == currentUserId) ||
+            msg['isMine'] == true ||
+            msg['mine'] == true ||
+            msg['isCreator'] == true;
+        if (!isMine) {
+          final msgTime = DateTime.tryParse('${msg['createdAt'] ?? msg['sentAt'] ?? ''}');
+          if (lastSeen == null) {
+            hasUnread = true;
+            break;
+          } else if (msgTime != null && msgTime.isAfter(lastSeen)) {
+            hasUnread = true;
+            break;
+          }
+        }
+      }
+
+      if (mounted && hasUnread && !_isChatOpen) {
+        setState(() {
+          _hasUnreadChat = true;
+        });
+      }
+    } catch (_) {}
+  }
 
   String _cleanErrorMessage(dynamic error) {
     if (error is ApiException) {
@@ -59,15 +147,15 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     super.initState();
     _chatSocket = ref.read(creatorNotificationSocketProvider);
     if (_chatSocket != null) {
-      _chatSocket!.listen('/user/queue/contract-chat', (event) {
-        if ('${event['type'] ?? ''}' == 'CONTRACT_CHAT_MESSAGE' && mounted) {
+      _chatSocket!.listen('/user/queue/contract-chat', _onContractChatMessage);
+      _removeChatReconnectListener = _chatSocket!.addReconnectListener(() {
+        if (mounted) {
+          _checkInitialUnreadStatus();
           setState(() {});
         }
       });
-      _removeChatReconnectListener = _chatSocket!.addReconnectListener(() {
-        if (mounted) setState(() {});
-      });
     }
+    _checkInitialUnreadStatus();
     _audioPlayer = AudioPlayer();
     _audioPlayer.onPlayerStateChanged.listen((state) {
       if (mounted) {
@@ -99,7 +187,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   @override
   void dispose() {
     _removeChatReconnectListener?.call();
-    _chatSocket?.unlisten('/user/queue/contract-chat');
+    _chatSocket?.unlisten('/user/queue/contract-chat', _onContractChatMessage);
+    _chatMessageNotifier.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -181,14 +270,30 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
         actions: [
           IconButton(
             tooltip: 'Nhắn tin với người nghe',
-            icon: const Icon(Icons.chat_bubble_outline_rounded),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.chat_bubble_outline_rounded),
+                if (_hasUnreadChat)
+                  Positioned(
+                    top: -2,
+                    right: -2,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             onPressed: () => _openChat(req),
-          ),
-          IconButton(
-            tooltip: 'Tải lại',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () =>
-                ref.read(creatorRequestsProvider.notifier).loadRequests(),
           ),
           if (req.hasEscrow &&
               req.contract != null &&
@@ -257,12 +362,37 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   }
 
   Future<void> _openChat(PodcastRequest req) async {
+    _isChatOpen = true;
+    if (_hasUnreadChat) {
+      setState(() => _hasUnreadChat = false);
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'last_seen_chat_${widget.requestId}',
+        DateTime.now().toIso8601String(),
+      );
+    } catch (_) {}
+
+    if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => _RequestChatBottomSheet(request: req),
+      builder: (sheetContext) => _RequestChatBottomSheet(
+        request: req,
+        updateNotifier: _chatMessageNotifier,
+      ),
     );
+
+    _isChatOpen = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'last_seen_chat_${widget.requestId}',
+        DateTime.now().toIso8601String(),
+      );
+    } catch (_) {}
   }
 
   // ==========================================
@@ -2411,7 +2541,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                       child: SingleChildScrollView(
                         child: SelectableText(
                           contract.contentSnapshot.isNotEmpty
-                              ? contract.contentSnapshot
+                              ? AppFormatters.cleanContractText(
+                                  contract.contentSnapshot,
+                                )
                               : 'Đang tải điều khoản hợp đồng...',
                           style: const TextStyle(fontSize: 12.5, height: 1.5),
                         ),
@@ -2852,7 +2984,9 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           child: SingleChildScrollView(
             child: SelectableText(
               contract.contentSnapshot.isNotEmpty
-                  ? contract.contentSnapshot
+                  ? AppFormatters.cleanContractText(
+                      contract.contentSnapshot,
+                    )
                   : 'Không có nội dung hợp đồng để hiển thị.',
               style: const TextStyle(fontSize: 12.5, height: 1.5),
             ),
@@ -3064,7 +3198,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
 class _RequestChatBottomSheet extends ConsumerStatefulWidget {
   final PodcastRequest request;
-  const _RequestChatBottomSheet({required this.request});
+  final ValueNotifier<int>? updateNotifier;
+  const _RequestChatBottomSheet({
+    required this.request,
+    this.updateNotifier,
+  });
 
   @override
   ConsumerState<_RequestChatBottomSheet> createState() =>
@@ -3086,10 +3224,21 @@ class _RequestChatBottomSheetState
     _chatFuture = ref
         .read(creatorRepositoryProvider)
         .getChatMessages(widget.request.id);
+    widget.updateNotifier?.addListener(_onChatNotified);
+  }
+
+  void _onChatNotified() {
+    if (!mounted) return;
+    setState(() {
+      _chatFuture = ref
+          .read(creatorRepositoryProvider)
+          .getChatMessages(widget.request.id);
+    });
   }
 
   @override
   void dispose() {
+    widget.updateNotifier?.removeListener(_onChatNotified);
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();

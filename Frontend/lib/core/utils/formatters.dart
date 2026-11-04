@@ -62,4 +62,62 @@ class AppFormatters {
     if (diff.inDays < 7) return '${diff.inDays} ngày trước';
     return formatDate(dateTime);
   }
+
+  /// Làm sạch văn bản hợp đồng: xóa bỏ các ký tự Markdown (#, ##, **, *...),
+  /// chuẩn hóa bảng thành định dạng văn bản đợt bàn giao dễ đọc trên điện thoại.
+  static String cleanContractText(String text) {
+    if (text.isEmpty) return text;
+
+    // 1. Xóa bỏ ký tự Markdown Header (#, ##, ###, ####)
+    var cleaned = text.replaceAll(RegExp(r'^#{1,6}\s*', multiLine: true), '');
+
+    // 2. Xóa bỏ ký tự in đậm và in nghiêng Markdown (**, __, *)
+    cleaned = cleaned.replaceAll('**', '');
+    cleaned = cleaned.replaceAll('__', '');
+
+    // 3. Xóa bỏ các dòng phân cách bảng Markdown (|---|---|...)
+    cleaned = cleaned.replaceAll(RegExp(r'^\|[-:\s|]+\|\s*$', multiLine: true), '');
+
+    // 4. Chuẩn hóa các dòng bảng Markdown (| Đợt | ... |) thành định dạng đợt bàn giao sạch
+    final lines = cleaned.split('\n');
+    final resultLines = <String>[];
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        final cells = trimmed
+            .split('|')
+            .map((c) => c.trim())
+            .where((c) => c.isNotEmpty)
+            .toList();
+        if (cells.isNotEmpty) {
+          // Bỏ dòng tiêu đề bảng
+          if (cells[0] == 'Đợt' || cells.any((c) => c.contains('---'))) {
+            continue;
+          }
+          final stt = cells[0];
+          final name = cells.length > 1 ? cells[1] : '';
+          final desc = cells.length > 2 ? cells[2] : '';
+          final date = cells.length > 3 ? cells[3] : '';
+          final amount = cells.length > 4 ? cells[4] : '';
+
+          resultLines.add('• Đợt $stt: $name');
+          if (desc.isNotEmpty) resultLines.add('  - Nội dung: $desc');
+          if (date.isNotEmpty) resultLines.add('  - Thời hạn: $date');
+          if (amount.isNotEmpty) resultLines.add('  - Giá trị: $amount');
+          continue;
+        }
+      }
+      resultLines.add(line);
+    }
+
+    cleaned = resultLines.join('\n');
+
+    // 5. Làm sạch ký tự sao hoa thị (*) ở đầu dòng nếu có
+    cleaned = cleaned.replaceAll(RegExp(r'^\s*\*\s+', multiLine: true), '- ');
+
+    // 6. Xóa bớt khoảng trống liên tiếp quá 2 dòng
+    cleaned = cleaned.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+    return cleaned.trim();
+  }
 }

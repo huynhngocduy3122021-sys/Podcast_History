@@ -138,7 +138,7 @@ class _CreatorDashboardScreenState extends ConsumerState<CreatorDashboardScreen>
             ),
           ),
           IconButton(
-            tooltip: 'Hội viên kênh',
+            tooltip: 'Thành viên kênh',
             icon: const Icon(Icons.stars_rounded, color: AppColors.secondaryLight),
             onPressed: () {
               Navigator.of(context).push(

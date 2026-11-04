@@ -361,12 +361,11 @@ class CreatorPodcastsNotifier
       final likeCount = (likesRes['likeCount'] as num?)?.toInt();
       final likedByMe = likesRes['likedByMe'] as bool?;
 
-      // Đồng bộ lượt nghe từ Dashboard Metrics
       int? listens;
       try {
-        final dash = await _repo.getDashboard(period: '7d');
-        if (dash.metrics.views > 0) {
-          listens = dash.metrics.views;
+        final pod = await _repo.getPodcastById(podcastId);
+        if (pod != null) {
+          listens = pod.listensCount;
         }
       } catch (_) {}
 

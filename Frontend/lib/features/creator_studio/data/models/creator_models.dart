@@ -1628,7 +1628,7 @@ class CreatorChannelPlan {
       planId: json['planId']?.toString() ?? '',
       creatorId: json['creatorId']?.toString() ?? '',
       templateCode: json['templateCode']?.toString() ?? '',
-      name: json['name'] as String? ?? 'Gói Hội viên Kênh',
+      name: json['name'] as String? ?? 'Gói Thành viên Kênh',
       description: json['description'] as String? ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       currency: json['currency'] as String? ?? 'VND',

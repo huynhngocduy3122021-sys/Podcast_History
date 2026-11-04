@@ -186,6 +186,7 @@ class ListenerPodcast {
     required this.categoryId,
     required this.categoryName,
     required this.visibility,
+    this.listenCount = 0,
   });
 
   final String id;
@@ -199,6 +200,7 @@ class ListenerPodcast {
   final String? categoryId;
   final String categoryName;
   final String visibility;
+  final int listenCount;
 
   factory ListenerPodcast.fromJson(Map<String, dynamic> json) =>
       ListenerPodcast(
@@ -213,6 +215,7 @@ class ListenerPodcast {
         categoryId: json['categoryId']?.toString(),
         categoryName: '${json['categoryName'] ?? ''}',
         visibility: '${json['visibility'] ?? 'PUBLIC'}',
+        listenCount: (json['listenCount'] as num?)?.toInt() ?? 0,
       );
 }
 
