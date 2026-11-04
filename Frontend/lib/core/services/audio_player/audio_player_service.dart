@@ -53,12 +53,14 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
   StreamSubscription? _durSub;
   StreamSubscription? _stateSub;
   StreamSubscription? _completeSub;
+  int _lastSavedSecond = -1;
 
   @override
   AudioPlaybackState build() {
     _player = AudioPlayer();
     _initListeners();
     ref.onDispose(() {
+      _saveCurrentProgress(refreshDashboard: true);
       _posSub?.cancel();
       _durSub?.cancel();
       _stateSub?.cancel();
@@ -68,11 +70,26 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
     return const AudioPlaybackState();
   }
 
+  void _saveCurrentProgress({bool? isCompleted, bool refreshDashboard = false}) {
+    final pid = state.podcastId;
+    if (pid == null) return;
+    final sec = state.position.inSeconds;
+    final completed = isCompleted ?? (state.progress >= 0.99);
+    _lastSavedSecond = sec;
+    _triggerListeningProgress(pid, sec, completed, refreshDashboard: refreshDashboard);
+  }
+
   void _initListeners() {
     _posSub = _player.onPositionChanged.listen((pos) {
       final dur = state.duration.inMilliseconds > 0 ? state.duration : const Duration(seconds: 1);
       final frac = (pos.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0);
       state = state.copyWith(position: pos, progress: frac);
+
+      // Lưu tiến độ nghe mỗi 5 giây vào API PUT /api/podcasts/{podcastId}/listening-progress
+      if (state.podcastId != null && (pos.inSeconds - _lastSavedSecond).abs() >= 5) {
+        _lastSavedSecond = pos.inSeconds;
+        _triggerListeningProgress(state.podcastId!, pos.inSeconds, frac >= 0.99);
+      }
     });
 
     _durSub = _player.onDurationChanged.listen((dur) {
@@ -99,7 +116,9 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
         progress: 0.0,
       );
       if (currentPodcastId != null) {
-        _triggerListeningProgress(currentPodcastId, dur > 0 ? dur : 1, true);
+        final sec = dur > 0 ? dur : 1;
+        _lastSavedSecond = sec;
+        _triggerListeningProgress(currentPodcastId, sec, true, refreshDashboard: true);
       }
     });
   }
@@ -224,13 +243,27 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
       if (cached != null && cached.isNotEmpty) {
         await _player.stop();
         await _player.play(BytesSource(cached));
-        _triggerListeningProgress(podcast.id, 1, false);
+        _lastSavedSecond = 0;
+        _triggerListeningProgress(podcast.id, 0, false, refreshDashboard: true);
         return;
       }
 
       String? remoteUrl = (podcast.videoUrl?.isNotEmpty == true && podcast.videoUrl!.startsWith('http'))
           ? podcast.videoUrl
           : null;
+
+      int resumeSec = 0;
+      try {
+        final playback = await ref.read(creatorRepositoryProvider).getPlayback(podcast.id);
+        if (playback != null) {
+          if (playback['mediaUrl'] is String && (playback['mediaUrl'] as String).isNotEmpty) {
+            remoteUrl = playback['mediaUrl'] as String;
+          }
+          if (playback['resumeSeconds'] is num) {
+            resumeSec = (playback['resumeSeconds'] as num).toInt();
+          }
+        }
+      } catch (_) {}
 
       if (remoteUrl == null) {
         try {
@@ -244,7 +277,14 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
       if (remoteUrl != null) {
         await _player.stop();
         await _player.play(UrlSource(remoteUrl));
-        _triggerListeningProgress(podcast.id, 1, false);
+        if (resumeSec > 0 && effectiveDur.inSeconds > 0 && resumeSec < effectiveDur.inSeconds) {
+          await _player.seek(Duration(seconds: resumeSec));
+          _lastSavedSecond = resumeSec;
+          _triggerListeningProgress(podcast.id, resumeSec, false, refreshDashboard: true);
+        } else {
+          _lastSavedSecond = 0;
+          _triggerListeningProgress(podcast.id, 0, false, refreshDashboard: true);
+        }
         return;
       }
 
@@ -259,11 +299,13 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
   Future<void> pause() async {
     await _player.pause();
     state = state.copyWith(isPlaying: false);
+    _saveCurrentProgress(refreshDashboard: true);
   }
 
   Future<void> resume() async {
     await _player.resume();
     state = state.copyWith(isPlaying: true);
+    _saveCurrentProgress();
   }
 
   Future<void> seek(Duration position) async {
@@ -271,6 +313,7 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
     final dur = state.duration.inMilliseconds > 0 ? state.duration : const Duration(seconds: 1);
     final frac = (position.inMilliseconds / dur.inMilliseconds).clamp(0.0, 1.0);
     state = state.copyWith(position: position, progress: frac);
+    _saveCurrentProgress();
   }
 
   Future<void> seekFraction(double fraction) async {
@@ -283,7 +326,12 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
     await seek(Duration(milliseconds: nextMs));
   }
 
-  void _triggerListeningProgress(String podcastId, int progressSec, bool completed) {
+  void _triggerListeningProgress(
+    String podcastId,
+    int progressSec,
+    bool completed, {
+    bool refreshDashboard = false,
+  }) {
     unawaited(
       ref
           .read(creatorRepositoryProvider)
@@ -293,8 +341,10 @@ class AudioPlayerNotifier extends Notifier<AudioPlaybackState> {
             completed: completed,
           )
           .then((_) {
-            ref.read(creatorPodcastsProvider.notifier).refreshPodcastStats(podcastId);
-            ref.invalidate(creatorDashboardProvider);
+            if (completed || refreshDashboard) {
+              ref.read(creatorPodcastsProvider.notifier).refreshPodcastStats(podcastId);
+              ref.invalidate(creatorDashboardProvider);
+            }
           })
           .catchError((_) {}),
     );

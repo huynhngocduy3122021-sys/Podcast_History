@@ -13,6 +13,7 @@ import 'package:podcast_history/core/utils/formatters.dart';
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
+import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/notifications/notification_socket.dart';
@@ -37,6 +38,21 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
   final Set<String> _expandedDraftIds = {};
+
+  String _cleanErrorMessage(dynamic error) {
+    if (error is ApiException) {
+      return error.message;
+    }
+    final raw = error.toString();
+    final regex = RegExp(r'^.*ApiException\s*\[\d+\]:\s*');
+    if (regex.hasMatch(raw)) {
+      return raw.replaceFirst(regex, '').trim();
+    }
+    if (raw.startsWith('Exception: ')) {
+      return raw.replaceFirst('Exception: ', '').trim();
+    }
+    return raw.trim();
+  }
 
   @override
   void initState() {
@@ -241,256 +257,12 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
   }
 
   Future<void> _openChat(PodcastRequest req) async {
-    final controller = TextEditingController();
-    final chatScrollController = ScrollController();
-    var chatFuture = ref
-        .read(creatorRepositoryProvider)
-        .getChatMessages(req.id);
-    var sending = false;
-
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            0,
-            16,
-            MediaQuery.viewInsetsOf(context).bottom + 16,
-          ),
-          child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * .68,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Nhắn tin với ${req.listenerName}',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: FutureBuilder<List<Map<String, dynamic>>>(
-                    future: chatFuture,
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text(
-                            'Không thể tải tin nhắn: ${snapshot.error}',
-                          ),
-                        );
-                      }
-                      final items = List<Map<String, dynamic>>.from(
-                        snapshot.data ?? const [],
-                      )..sort(_compareChatMessages);
-                      if (items.isEmpty) {
-                        return const Center(child: Text('Chưa có tin nhắn.'));
-                      }
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (chatScrollController.hasClients) {
-                          chatScrollController.jumpTo(
-                            chatScrollController.position.maxScrollExtent,
-                          );
-                        }
-                      });
-                      return ListView.separated(
-                        controller: chatScrollController,
-                        itemCount: items.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (_, index) {
-                          final item = items[index];
-                          final isMine = _isCreatorChatMessage(item);
-                          final content =
-                              item['content'] ?? item['message'] ?? '';
-                          return Align(
-                            alignment: isMine
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              constraints: const BoxConstraints(maxWidth: 290),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 9,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isMine
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context)
-                                          .colorScheme
-                                          .surfaceContainerHighest,
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(16),
-                                  topRight: const Radius.circular(16),
-                                  bottomLeft: Radius.circular(isMine ? 16 : 4),
-                                  bottomRight: Radius.circular(isMine ? 4 : 16),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (!isMine)
-                                    Text(
-                                      'Người nghe',
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  Text(
-                                    '$content',
-                                    style: TextStyle(
-                                      color: isMine
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .onPrimary
-                                          : null,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: controller,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) async {
-                          await _sendChatMessage(
-                            req.id,
-                            controller,
-                            setSheetState,
-                            () => sending,
-                            (value) => sending = value,
-                            (future) => chatFuture = future,
-                          );
-                        },
-                        decoration: const InputDecoration(
-                          hintText: 'Nhập tin nhắn',
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Gửi tin nhắn',
-                      onPressed: sending
-                          ? null
-                          : () async {
-                              await _sendChatMessage(
-                                req.id,
-                                controller,
-                                setSheetState,
-                                () => sending,
-                                (value) => sending = value,
-                                (future) => chatFuture = future,
-                              );
-                            },
-                      icon: const Icon(Icons.send_rounded),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      builder: (sheetContext) => _RequestChatBottomSheet(request: req),
     );
-    controller.dispose();
-    chatScrollController.dispose();
-  }
-
-  bool _isCreatorChatMessage(Map<String, dynamic> item) {
-    final senderId = item['senderId']?.toString();
-    final currentUserId = _currentCreatorUserId;
-    if (senderId != null &&
-        senderId.isNotEmpty &&
-        currentUserId != null &&
-        senderId == currentUserId) {
-      return true;
-    }
-    if (item['isMine'] == true ||
-        item['mine'] == true ||
-        item['isCreator'] == true) {
-      return true;
-    }
-    final role = '${item['senderRole'] ?? item['senderType'] ?? ''}'
-        .toUpperCase();
-    return role == 'CREATOR' || role == 'CC';
-  }
-
-  int _compareChatMessages(
-    Map<String, dynamic> first,
-    Map<String, dynamic> second,
-  ) {
-    final firstDate = DateTime.tryParse(
-      '${first['createdAt'] ?? first['sentAt'] ?? ''}',
-    );
-    final secondDate = DateTime.tryParse(
-      '${second['createdAt'] ?? second['sentAt'] ?? ''}',
-    );
-    if (firstDate == null || secondDate == null) return 0;
-    return firstDate.compareTo(secondDate);
-  }
-
-  String? get _currentCreatorUserId {
-    final token = ref.read(creatorAccessTokenProvider);
-    if (token == null) return null;
-    final parts = token.split('.');
-    if (parts.length != 3) return null;
-    try {
-      final payload = jsonDecode(
-        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
-      );
-      if (payload is Map<String, dynamic>) {
-        return '${payload['userId'] ?? payload['user_id'] ?? payload['sub'] ?? ''}'
-            .trim();
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Future<void> _sendChatMessage(
-    String requestId,
-    TextEditingController controller,
-    StateSetter setSheetState,
-    bool Function() isSending,
-    void Function(bool) setSending,
-    void Function(Future<List<Map<String, dynamic>>>) setFuture,
-  ) async {
-    final content = controller.text.trim();
-    if (content.isEmpty || isSending()) return;
-    setSheetState(() => setSending(true));
-    try {
-      await ref
-          .read(creatorRepositoryProvider)
-          .sendChatMessage(requestId, content);
-      controller.clear();
-      setSheetState(
-        () => setFuture(
-          ref.read(creatorRepositoryProvider).getChatMessages(requestId),
-        ),
-      );
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showTopSnackBar(
-          SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
-        );
-      }
-    } finally {
-      setSheetState(() => setSending(false));
-    }
   }
 
   // ==========================================
@@ -2209,39 +1981,6 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight.withValues(alpha: 0.1),
-                        borderRadius: AppSpacing.roundedSm,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Ngân sách hợp đồng: ${AppFormatters.formatVND(totalBudget)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Tổng các đợt: ${AppFormatters.formatVND(currentTotal)} '
-                            '(${isBudgetMatching ? "Hợp lệ" : "Chưa khớp, chênh lệch ${AppFormatters.formatVND(totalBudget - currentTotal)}"})',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: isBudgetMatching
-                                  ? AppColors.success
-                                  : AppColors.error,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-
                     // Lời nhắn
                     AppTextField(
                       label: 'Lời nhắn gửi người nghe',
@@ -2425,6 +2164,40 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         ),
                       );
                     }),
+
+                    // Thông báo ngân sách hợp đồng và tổng các đợt ở dưới cùng
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight.withValues(alpha: 0.1),
+                        borderRadius: AppSpacing.roundedSm,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ngân sách hợp đồng: ${AppFormatters.formatVND(totalBudget)}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Tổng các đợt: ${AppFormatters.formatVND(currentTotal)} '
+                            '(${isBudgetMatching ? "Hợp lệ" : "Chưa khớp, chênh lệch ${AppFormatters.formatVND(totalBudget - currentTotal)}"})',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isBudgetMatching
+                                  ? AppColors.success
+                                  : AppColors.error,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2517,7 +2290,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                         } catch (e) {
                           messenger.showTopSnackBar(
                             SnackBar(
-                              content: Text('Lỗi gửi đề xuất: $e'),
+                              content: Text(_cleanErrorMessage(e)),
                               backgroundColor: AppColors.error,
                             ),
                           );
@@ -2720,7 +2493,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             setDialogState(() => isSubmitting = false);
                             messenger.showTopSnackBar(
                               SnackBar(
-                                content: Text('Lỗi ký hợp đồng: $e'),
+                                content: Text(_cleanErrorMessage(e)),
                                 backgroundColor: AppColors.error,
                               ),
                             );
@@ -3032,7 +2805,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           setDialogState(() => isSubmitting = false);
                           messenger.showTopSnackBar(
                             SnackBar(
-                              content: Text('Lỗi nộp bài: $e'),
+                              content: Text(_cleanErrorMessage(e)),
                               backgroundColor: AppColors.error,
                             ),
                           );
@@ -3164,7 +2937,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           setDialogState(() => isSubmitting = false);
                           messenger.showTopSnackBar(
                             SnackBar(
-                              content: Text('Lỗi: $e'),
+                              content: Text(_cleanErrorMessage(e)),
                               backgroundColor: AppColors.error,
                             ),
                           );
@@ -3256,7 +3029,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                           setDialogState(() => isSubmitting = false);
                           messenger.showTopSnackBar(
                             SnackBar(
-                              content: Text('Lỗi: $e'),
+                              content: Text(_cleanErrorMessage(e)),
                               backgroundColor: AppColors.error,
                             ),
                           );
@@ -3266,6 +3039,253 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _RequestChatBottomSheet extends ConsumerStatefulWidget {
+  final PodcastRequest request;
+  const _RequestChatBottomSheet({required this.request});
+
+  @override
+  ConsumerState<_RequestChatBottomSheet> createState() =>
+      _RequestChatBottomSheetState();
+}
+
+class _RequestChatBottomSheetState
+    extends ConsumerState<_RequestChatBottomSheet> {
+  late final TextEditingController _controller;
+  late final ScrollController _scrollController;
+  late Future<List<Map<String, dynamic>>> _chatFuture;
+  bool _sending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+    _scrollController = ScrollController();
+    _chatFuture = ref
+        .read(creatorRepositoryProvider)
+        .getChatMessages(widget.request.id);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String? get _currentCreatorUserId {
+    final token = ref.read(creatorAccessTokenProvider);
+    if (token == null) return null;
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map<String, dynamic>) {
+        return '${payload['userId'] ?? payload['user_id'] ?? payload['sub'] ?? ''}'
+            .trim();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  bool _isCreatorChatMessage(Map<String, dynamic> item) {
+    final senderId = item['senderId']?.toString();
+    final currentUserId = _currentCreatorUserId;
+    if (senderId != null &&
+        senderId.isNotEmpty &&
+        currentUserId != null &&
+        senderId == currentUserId) {
+      return true;
+    }
+    if (item['isMine'] == true ||
+        item['mine'] == true ||
+        item['isCreator'] == true) {
+      return true;
+    }
+    final role =
+        '${item['senderRole'] ?? item['senderType'] ?? ''}'.toUpperCase();
+    return role == 'CREATOR' || role == 'CC';
+  }
+
+  int _compareChatMessages(
+    Map<String, dynamic> first,
+    Map<String, dynamic> second,
+  ) {
+    final firstDate =
+        DateTime.tryParse('${first['createdAt'] ?? first['sentAt'] ?? ''}');
+    final secondDate =
+        DateTime.tryParse('${second['createdAt'] ?? second['sentAt'] ?? ''}');
+    if (firstDate == null || secondDate == null) return 0;
+    return firstDate.compareTo(secondDate);
+  }
+
+  Future<void> _sendMessage() async {
+    final content = _controller.text.trim();
+    if (content.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await ref
+          .read(creatorRepositoryProvider)
+          .sendChatMessage(widget.request.id, content);
+      _controller.clear();
+      final newFuture = ref
+          .read(creatorRepositoryProvider)
+          .getChatMessages(widget.request.id);
+      if (mounted) {
+        setState(() {
+          _chatFuture = newFuture;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showTopSnackBar(
+          SnackBar(content: Text('Không thể gửi tin nhắn: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        MediaQuery.viewInsetsOf(context).bottom + 16,
+      ),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * .68,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Nhắn tin với ${widget.request.listenerName}',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _chatFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Không thể tải tin nhắn: ${snapshot.error}',
+                      ),
+                    );
+                  }
+                  final items = List<Map<String, dynamic>>.from(
+                    snapshot.data ?? const [],
+                  )..sort(_compareChatMessages);
+                  if (items.isEmpty) {
+                    return const Center(child: Text('Chưa có tin nhắn.'));
+                  }
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_scrollController.hasClients) {
+                      _scrollController.jumpTo(
+                        _scrollController.position.maxScrollExtent,
+                      );
+                    }
+                  });
+                  return ListView.separated(
+                    controller: _scrollController,
+                    itemCount: items.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      final isMine = _isCreatorChatMessage(item);
+                      final content = item['content'] ?? item['message'] ?? '';
+                      return Align(
+                        alignment: isMine
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 290),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isMine
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(16),
+                              topRight: const Radius.circular(16),
+                              bottomLeft: Radius.circular(isMine ? 16 : 4),
+                              bottomRight: Radius.circular(isMine ? 4 : 16),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: isMine
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            children: [
+                              if (!isMine)
+                                Text(
+                                  widget.request.listenerName,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              Text(
+                                '$content',
+                                style: TextStyle(
+                                  color: isMine
+                                      ? theme.colorScheme.onPrimary
+                                      : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMessage(),
+                    decoration: const InputDecoration(
+                      hintText: 'Nhập tin nhắn',
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Gửi tin nhắn',
+                  onPressed: _sending ? null : _sendMessage,
+                  icon: const Icon(Icons.send_rounded),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

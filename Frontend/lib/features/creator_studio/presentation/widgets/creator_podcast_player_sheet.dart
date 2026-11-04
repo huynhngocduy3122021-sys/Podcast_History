@@ -89,6 +89,14 @@ class _CreatorPodcastPlayerSheetState extends ConsumerState<CreatorPodcastPlayer
 
   @override
   void dispose() {
+    final audioState = ref.read(audioPlayerServiceProvider);
+    if (audioState.podcastId == widget.podcast.id && audioState.position.inSeconds > 0) {
+      ref.read(creatorRepositoryProvider).recordListeningProgress(
+        podcastId: widget.podcast.id,
+        progressSeconds: audioState.position.inSeconds,
+        completed: audioState.progress >= 0.99,
+      );
+    }
     _commentController.dispose();
     super.dispose();
   }

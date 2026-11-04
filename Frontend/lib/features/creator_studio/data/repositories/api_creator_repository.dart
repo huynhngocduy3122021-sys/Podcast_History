@@ -2149,18 +2149,37 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<Map<String, dynamic>?> getPlayback(String podcastId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.podcastPlayback(podcastId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return res;
+      }
+    } catch (e) {
+      debugPrint('[getPlayback] Error: $e');
+    }
+    return null;
+  }
+
+  @override
   Future<void> recordListeningProgress({
     required String podcastId,
     required int progressSeconds,
     bool completed = false,
   }) async {
     try {
+      debugPrint('[ListeningProgress] PUT /api/podcasts/$podcastId/listening-progress -> {progressSeconds: $progressSeconds, completed: $completed}');
       await _apiClient.put(
         ApiEndpoints.podcastListeningProgress(podcastId),
         body: {'progressSeconds': progressSeconds, 'completed': completed},
         headers: const {'ngrok-skip-browser-warning': '1'},
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ListeningProgress] Error: $e');
+    }
   }
 
   @override
