@@ -31,7 +31,7 @@ class NotificationSocket {
     ),
   );
   StompUnsubscribe? _unsubscribe;
-  final _topicHandlers = <String, NotificationMessageHandler>{};
+  final _topicHandlers = <String, List<NotificationMessageHandler>>{};
   final _topicSubscriptions = <String, StompUnsubscribe>{};
   final _realtimeListeners = <NotificationMessageHandler>[];
   final _reconnectListeners = <void Function()>[];
@@ -46,8 +46,10 @@ class NotificationSocket {
   }
 
   void listen(String destination, NotificationMessageHandler handler) {
-    _topicHandlers[destination] = handler;
-    if (_client.connected) _subscribeTopic(destination);
+    _topicHandlers.putIfAbsent(destination, () => []).add(handler);
+    if (_client.connected && !_topicSubscriptions.containsKey(destination)) {
+      _subscribeTopic(destination);
+    }
   }
 
   void Function() addRealtimeListener(NotificationMessageHandler handler) {
@@ -60,9 +62,17 @@ class NotificationSocket {
     return () => _reconnectListeners.remove(handler);
   }
 
-  void unlisten(String destination) {
-    _topicHandlers.remove(destination);
-    _topicSubscriptions.remove(destination)?.call();
+  void unlisten(String destination, [NotificationMessageHandler? handler]) {
+    if (handler != null) {
+      _topicHandlers[destination]?.remove(handler);
+      if (_topicHandlers[destination]?.isEmpty ?? true) {
+        _topicHandlers.remove(destination);
+        _topicSubscriptions.remove(destination)?.call();
+      }
+    } else {
+      _topicHandlers.remove(destination);
+      _topicSubscriptions.remove(destination)?.call();
+    }
   }
 
   void _onConnect(StompFrame _) {
@@ -113,12 +123,27 @@ class NotificationSocket {
 
   void _subscribeTopic(String destination) {
     _topicSubscriptions.remove(destination)?.call();
-    final handler = _topicHandlers[destination];
-    if (handler == null) return;
+    final handlers = _topicHandlers[destination];
+    if (handlers == null || handlers.isEmpty) return;
     _topicSubscriptions[destination] = _client.subscribe(
       destination: destination,
-      callback: (frame) => _dispatch(frame, handler),
+      callback: (frame) => _dispatchTopic(frame, destination),
     );
+  }
+
+  void _dispatchTopic(StompFrame frame, String destination) {
+    final body = frame.body;
+    if (body == null || body.isEmpty) return;
+    try {
+      final value = jsonDecode(body);
+      if (value is Map) {
+        final data = Map<String, dynamic>.from(value);
+        final handlers = List.of(_topicHandlers[destination] ?? []);
+        for (final handler in handlers) {
+          handler(data);
+        }
+      }
+    } catch (_) {}
   }
 
   void _dispatch(StompFrame frame, NotificationMessageHandler handler) {

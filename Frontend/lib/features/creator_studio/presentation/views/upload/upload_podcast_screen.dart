@@ -1458,7 +1458,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                               borderRadius: BorderRadius.circular(4),
                             ),
                             child: Text(
-                              _isExclusive ? 'Hội viên' : 'Công khai',
+                              _isExclusive ? 'Thành viên' : 'Công khai',
                               style: TextStyle(
                                 fontSize: 10.5,
                                 fontWeight: FontWeight.bold,
@@ -1475,7 +1475,7 @@ class _UploadPodcastScreenState extends ConsumerState<UploadPodcastScreen> {
                       const SizedBox(height: 4),
                       Text(
                         _isExclusive
-                            ? 'Chỉ người mua gói Hội viên kênh mới được nghe toàn bộ tập podcast này.'
+                            ? 'Chỉ người mua gói Thành viên kênh mới được nghe toàn bộ tập podcast này.'
                             : 'Mọi thính giả đều có thể nghe đầy đủ nội dung tập này miễn phí.',
                         style: TextStyle(
                           fontSize: 12,

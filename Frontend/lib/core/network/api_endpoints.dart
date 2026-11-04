@@ -86,6 +86,8 @@ class ApiEndpoints {
       '/api/milestones/$milestoneId/submissions/$submissionId/media';
   static String contractTerminationRequest(String requestId) =>
       '/api/requests/$requestId/termination-requests';
+  static String contractDispute(String contractId) =>
+      '/api/contracts/$contractId/disputes';
   static String getContractTerminationRequest(String requestId) =>
       '/api/requests/$requestId/termination-request';
   static String milestoneDispute(String milestoneId) =>
@@ -111,6 +113,8 @@ class ApiEndpoints {
       '/api/podcasts/$podcastId/like';
   static String podcastListeningProgress(String podcastId) =>
       '/api/podcasts/$podcastId/listening-progress';
+  static String podcastPlayback(String podcastId) =>
+      '/api/podcasts/$podcastId/playback';
   static String commentById(String commentId) => '/api/comments/$commentId';
   static String commentLikes(String commentId) =>
       '/api/comments/$commentId/likes';

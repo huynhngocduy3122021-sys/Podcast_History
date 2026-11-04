@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
-import 'package:podcast_history/features/creator_studio/presentation/views/comments/studio_comments_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_members_list_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_membership_plans_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/form_builder_screen.dart';
@@ -13,9 +11,9 @@ import 'package:podcast_history/features/creator_studio/presentation/views/premi
 import 'package:podcast_history/features/creator_studio/presentation/views/registration/creator_registration_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/series/series_management_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
-import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
-import 'package:podcast_history/features/creator_studio/presentation/views/policies/historical_guidelines_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/policies/creator_support_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/policies/historical_guidelines_screen.dart';
+import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
 class CreatorMoreScreen extends ConsumerWidget {
   final VoidCallback? onTheme;
@@ -44,14 +42,6 @@ class CreatorMoreScreen extends ConsumerWidget {
             'Tương tác & Cộng đồng',
             [
               _MenuItem(
-                icon: Icons.chat_rounded,
-                title: 'Quản lý Bình luận thính giả',
-                subtitle: 'Ghim, ẩn và trả lời bình luận theo mốc thời gian',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const StudioCommentsScreen()),
-                ),
-              ),
-              _MenuItem(
                 icon: Icons.video_collection_rounded,
                 title: 'Quản lý Series & Tuyển tập',
                 subtitle: 'Tạo chuỗi series và gắn các tập podcast liên quan',
@@ -70,7 +60,7 @@ class CreatorMoreScreen extends ConsumerWidget {
               _MenuItem(
                 icon: Icons.people_alt_rounded,
                 iconColor: AppColors.secondaryLight,
-                title: 'Thành viên kênh (Hội viên)',
+                title: 'Thành viên kênh',
                 subtitle: 'Xem danh sách thính giả đã đăng ký gói thành viên của kênh',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const CreatorMembersListScreen()),
@@ -87,7 +77,7 @@ class CreatorMoreScreen extends ConsumerWidget {
               _MenuItem(
                 icon: Icons.card_membership_rounded,
                 iconColor: AppColors.secondaryLight,
-                title: 'Gói Hội viên Kênh (Membership)',
+                title: 'Gói Thành viên Kênh (Membership)',
                 subtitle: 'Kích hoạt gói thành viên kênh và tùy chỉnh giá bán cho thính giả',
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const CreatorMembershipPlansScreen()),
@@ -139,21 +129,17 @@ class CreatorMoreScreen extends ConsumerWidget {
                 icon: Icons.menu_book_rounded,
                 title: 'Quy chuẩn kiểm duyệt tư liệu lịch sử',
                 subtitle: 'Hướng dẫn trích dẫn và tiêu chuẩn xác thực nội dung',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showTopSnackBar(
-                    const SnackBar(content: Text('Quy chuẩn: Chỉ sử dụng các tài liệu xuất bản chính thức.')),
-                  );
-                },
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const HistoricalGuidelinesScreen()),
+                ),
               ),
               _MenuItem(
                 icon: Icons.help_outline_rounded,
                 title: 'Trung tâm trợ giúp Creator',
                 subtitle: 'Liên hệ đội ngũ hỗ trợ kỹ thuật VietCast',
-                onTap: () {
-                  ScaffoldMessenger.of(context).showTopSnackBar(
-                    const SnackBar(content: Text('Email hỗ trợ: creator@vietcast.vn')),
-                  );
-                },
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CreatorSupportScreen()),
+                ),
               ),
             ],
             isDark,

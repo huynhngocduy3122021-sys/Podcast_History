@@ -28,13 +28,6 @@ class _FormBuilderScreenState extends ConsumerState<FormBuilderScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Khảo sát & Bình chọn'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Tải lại danh sách',
-            onPressed: () => ref.read(creatorPollsProvider.notifier).loadPolls(),
-          ),
-        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: isDark ? AppColors.primaryDark : AppColors.primaryLight,
@@ -72,19 +65,23 @@ class _FormBuilderScreenState extends ConsumerState<FormBuilderScreen> {
                   );
                 }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenMargin,
-                    AppSpacing.sm,
-                    AppSpacing.screenMargin,
-                    80,
+                return RefreshIndicator(
+                  onRefresh: () => ref.read(creatorPollsProvider.notifier).loadPolls(),
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.screenMargin,
+                      AppSpacing.sm,
+                      AppSpacing.screenMargin,
+                      80,
+                    ),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+                    itemBuilder: (context, index) {
+                      final poll = filtered[index];
+                      return _buildPollCard(poll, isDark);
+                    },
                   ),
-                  itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-                  itemBuilder: (context, index) {
-                    final poll = filtered[index];
-                    return _buildPollCard(poll, isDark);
-                  },
                 );
               },
             ),

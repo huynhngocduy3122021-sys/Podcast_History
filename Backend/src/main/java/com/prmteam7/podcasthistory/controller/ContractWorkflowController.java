@@ -76,6 +76,13 @@ public class ContractWorkflowController {
         return disputes.openForRequest(userId(jwt), requestId, input.reason(), input.listenerWinAction());
     }
 
+    @PostMapping("/api/contracts/{contractId}/disputes")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AdminResponses.DisputeItem openContractDispute(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID contractId, @Valid @RequestBody ContractWorkflowRequests.Dispute input) {
+        return disputes.open(userId(jwt), contractId, input.reason(), input.listenerWinAction());
+    }
+
     @GetMapping("/api/requests/{requestId}/termination-request")
     public ContractWorkflowResponses.TerminationRequestStatus terminationRequest(@AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID requestId) {

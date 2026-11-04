@@ -186,6 +186,7 @@ class ListenerPodcast {
     required this.categoryId,
     required this.categoryName,
     required this.visibility,
+    this.listenCount = 0,
   });
 
   final String id;
@@ -199,6 +200,7 @@ class ListenerPodcast {
   final String? categoryId;
   final String categoryName;
   final String visibility;
+  final int listenCount;
 
   factory ListenerPodcast.fromJson(Map<String, dynamic> json) =>
       ListenerPodcast(
@@ -213,6 +215,7 @@ class ListenerPodcast {
         categoryId: json['categoryId']?.toString(),
         categoryName: '${json['categoryName'] ?? ''}',
         visibility: '${json['visibility'] ?? 'PUBLIC'}',
+        listenCount: (json['listenCount'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -796,6 +799,19 @@ class ListenerApi {
   ) => _sendMap(
     'POST',
     ApiEndpoints.milestoneDisputeWithdraw(milestoneId, disputeId),
+  );
+
+  Future<Map<String, dynamic>> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.contractDispute(contractId),
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
   );
 
   Future<List<Map<String, dynamic>>> requestMessages(

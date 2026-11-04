@@ -19,6 +19,7 @@ import com.prmteam7.podcasthistory.model.ProducerProfile;
 import com.prmteam7.podcasthistory.model.Role;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.CategoryRepository;
+import com.prmteam7.podcasthistory.repository.ListeningHistoryRepository;
 import com.prmteam7.podcasthistory.repository.PodcastRepository;
 import com.prmteam7.podcasthistory.repository.ProducerProfileRepository;
 import com.prmteam7.podcasthistory.repository.SeriesRepository;
@@ -94,11 +95,12 @@ class CreatorPodcastEditReviewTest {
         final CategoryRepository categories = mock(CategoryRepository.class);
         final SeriesRepository series = mock(SeriesRepository.class);
         final PodcastRepository podcasts = mock(PodcastRepository.class);
+        final ListeningHistoryRepository listeningHistory = mock(ListeningHistoryRepository.class);
         final AiModerationService aiModeration = mock(AiModerationService.class);
         final PodcastTranscriptService transcriptService = mock(PodcastTranscriptService.class);
         final MediaUploadService mediaUpload = mock(MediaUploadService.class);
         final CreatorFlowService service = new CreatorFlowService(users, profiles, categories, series,
-                podcasts, mediaUpload, mock(R2PlaybackUrlService.class),
+                podcasts, listeningHistory, mediaUpload, mock(R2PlaybackUrlService.class),
                 mock(CreatorSystemPlanService.class), aiModeration, transcriptService);
         final Podcast podcast = new Podcast();
 

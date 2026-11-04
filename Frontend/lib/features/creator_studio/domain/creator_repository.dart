@@ -123,6 +123,11 @@ abstract class CreatorRepository {
     required String reason,
     String? listenerWinAction,
   });
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  });
   Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
   Future<void> confirmContractDispute(
     String disputeId, {
@@ -180,10 +185,11 @@ abstract class CreatorRepository {
   );
   Future<void> releaseFunds();
 
-  // Likes & History
+  // Likes & History & Playback
   Future<Map<String, dynamic>> getPodcastLikes(String podcastId);
   Future<Map<String, dynamic>> likePodcast(String podcastId);
   Future<Map<String, dynamic>> unlikePodcast(String podcastId);
+  Future<Map<String, dynamic>?> getPlayback(String podcastId);
   Future<void> recordListeningProgress({
     required String podcastId,
     required int progressSeconds,

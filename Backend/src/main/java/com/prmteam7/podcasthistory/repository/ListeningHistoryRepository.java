@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.repository;
 
 import java.util.Optional;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -12,6 +13,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.prmteam7.podcasthistory.model.ListeningHistory;
 
 public interface ListeningHistoryRepository extends JpaRepository<ListeningHistory, UUID> {
+
+    @org.springframework.data.jpa.repository.Query("""
+            select history.podcast.podcastId,
+                   coalesce(sum(coalesce(history.listenCount, 1)), 0)
+            from ListeningHistory history
+            where history.podcast.podcastId in :podcastIds
+              and history.user.userId <> history.podcast.producerProfile.user.userId
+            group by history.podcast.podcastId
+            """)
+    List<Object[]> sumListenCountsByPodcastIds(
+            @org.springframework.data.repository.query.Param("podcastIds") Collection<UUID> podcastIds);
 
     @org.springframework.data.jpa.repository.Query("""
             select coalesce(sum(coalesce(history.listenCount, 1)), 0)

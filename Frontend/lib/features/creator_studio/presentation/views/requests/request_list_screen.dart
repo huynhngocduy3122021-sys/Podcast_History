@@ -50,14 +50,9 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
     return Scaffold(
       appBar: AppBar(
         title: const Text('Đơn đặt Podcast (Hợp đồng Escrow)'),
-        actions: [
-          IconButton(
-            tooltip: 'Tải lại',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
-          ),
-          const CreatorNotificationButton(),
-          const SizedBox(width: 8),
+        actions: const [
+          CreatorNotificationButton(),
+          SizedBox(width: 8),
         ],
         bottom: TabBar(
           controller: _tabController,

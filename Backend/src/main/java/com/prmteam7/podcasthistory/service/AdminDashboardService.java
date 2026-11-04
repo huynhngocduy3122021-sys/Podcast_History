@@ -4,6 +4,7 @@ import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
@@ -147,6 +148,23 @@ public class AdminDashboardService {
     AppUser buyer = payment.getUser();
     AppUser creatorUser = creator == null ? null : creator.getUser();
     BigDecimal netRevenue = platformFee;
+    BigDecimal amount = payment.getAmount() == null ? BigDecimal.ZERO : payment.getAmount();
+    BigDecimal creatorNetAmount = amount.subtract(platformFee);
+    BigDecimal platformFeePercent = amount.signum() == 0
+        ? BigDecimal.ZERO.setScale(2)
+        : platformFee.multiply(BigDecimal.valueOf(100))
+            .divide(amount, 2, RoundingMode.HALF_UP);
+    String sourceTypeLabel = sourceTypeLabel(sourceType);
+    String statusLabel = paymentStatusLabel(payment.getStatus());
+    String paymentMethodLabel = paymentMethodLabel(payment.getPaymentMethod());
+    String amountDescription = "Tổng tiền giao dịch trước khi chia phí nền tảng.";
+    String platformFeeDescription = platformFeePercent.signum() == 0
+        ? "Chưa ghi nhận phí nền tảng cho giao dịch này."
+        : "Phí nền tảng app giữ lại (" + platformFeePercent.stripTrailingZeros().toPlainString()
+            + "%).";
+    String creatorNetDescription = "Số tiền CC thực nhận sau khi trừ phí nền tảng.";
+    String paymentDescription = paymentDescription(sourceType, payment.getPaymentMethod(),
+        sourceLabel, platformFeePercent);
     return new RevenueDetail(
         payment.getPaymentId(),
         sourceType,
@@ -175,7 +193,16 @@ public class AdminDashboardService {
         stage == null ? null : stage.getStageName(),
         stage == null ? null : stage.getStageOrder(),
         membershipPlanId,
-        membershipPlanName);
+        membershipPlanName,
+        sourceTypeLabel,
+        statusLabel,
+        paymentMethodLabel,
+        creatorNetAmount,
+        platformFeePercent,
+        amountDescription,
+        platformFeeDescription,
+        creatorNetDescription,
+        paymentDescription);
   }
 
   private List<RevenueBreakdown> revenueBreakdown() {
@@ -190,9 +217,60 @@ public class AdminDashboardService {
               currency,
               gross.getOrDefault(currency, BigDecimal.ZERO),
               platformFees,
-              platformFees);
+              platformFees,
+              "Tổng các Payment đã quyết toán; không phải doanh thu ròng của app.",
+              "Tổng phí nền tảng app đã ghi nhận và hoàn tất.",
+              "Doanh thu ròng của app, hiện bằng phí nền tảng đã ghi nhận.");
         })
         .toList();
+  }
+
+  private String sourceTypeLabel(String sourceType) {
+    return switch (sourceType) {
+      case "MEMBERSHIP" -> "Gói thành viên";
+      case "CONTRACT_STAGE" -> "Đợt hợp đồng";
+      case "CONTRACT_DISPUTE" -> "Quyết toán tranh chấp hợp đồng";
+      case "CONTRACT_COMPENSATION" -> "Bồi thường hợp đồng";
+      case "REQUEST" -> "Yêu cầu podcast";
+      default -> "Khoản thu khác";
+    };
+  }
+
+  private String paymentStatusLabel(String status) {
+    if (status == null) return "Chưa xác định";
+    return switch (status.trim().toUpperCase(Locale.ROOT)) {
+      case "PAID", "SUCCESS", "COMPLETED" -> "Đã thu và quyết toán";
+      case "PENDING", "PROCESSING" -> "Đang chờ xử lý";
+      case "FAILED", "CANCELLED" -> "Thất bại hoặc đã hủy";
+      case "REFUNDED" -> "Đã hoàn tiền";
+      default -> status;
+    };
+  }
+
+  private String paymentMethodLabel(String method) {
+    if (method == null || method.isBlank()) return "Không xác định";
+    return switch (method.trim().toUpperCase(Locale.ROOT)) {
+      case "WALLET_ESCROW" -> "Ví Listener - tiền ký quỹ hợp đồng";
+      case "WALLET_ESCROW_DISPUTE" -> "Ví Listener - quyết toán tranh chấp";
+      case "WALLET_ESCROW_COMPENSATION" -> "Ví Listener - bồi thường hợp đồng";
+      case "SEPAY" -> "Chuyển khoản SePay";
+      case "WALLET" -> "Ví người dùng";
+      default -> method;
+    };
+  }
+
+  private String paymentDescription(String sourceType, String method, String sourceLabel,
+      BigDecimal feePercent) {
+    String displaySource = sourceTypeLabel(sourceType);
+    String detail = sourceLabel == null ? "" : sourceLabel;
+    String prefix = sourceType + ":";
+    if (detail.startsWith(prefix)) detail = detail.substring(prefix.length()).trim();
+    String methodLabel = paymentMethodLabel(method).toLowerCase(Locale.ROOT);
+    String fee = feePercent.signum() == 0
+        ? "không ghi nhận phí nền tảng"
+        : "app giữ phí nền tảng " + feePercent.stripTrailingZeros().toPlainString() + "%";
+    return displaySource + (detail.isBlank() ? "" : " - " + detail)
+        + ": Listener thanh toán bằng " + methodLabel + "; " + fee + ".";
   }
 
   private Map<String, BigDecimal> aggregate(List<Object[]> rows) {

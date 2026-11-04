@@ -37,7 +37,8 @@ public final class ListenerResponses {
             UUID categoryId,
             String categoryName,
             UUID creatorProfileId,
-            String creatorChannelName) {
+            String creatorChannelName,
+            long listenCount) {
     }
 
     public record PlaybackItem(

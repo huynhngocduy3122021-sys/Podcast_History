@@ -1,8 +1,11 @@
 package com.prmteam7.podcasthistory.service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -26,6 +29,7 @@ import com.prmteam7.podcasthistory.model.ProducerProfile;
 import com.prmteam7.podcasthistory.model.Series;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.CategoryRepository;
+import com.prmteam7.podcasthistory.repository.ListeningHistoryRepository;
 import com.prmteam7.podcasthistory.repository.PodcastRepository;
 import com.prmteam7.podcasthistory.repository.ProducerProfileRepository;
 import com.prmteam7.podcasthistory.repository.SeriesRepository;
@@ -38,6 +42,7 @@ public class CreatorFlowService {
     private final CategoryRepository categoryRepository;
     private final SeriesRepository seriesRepository;
     private final PodcastRepository podcastRepository;
+    private final ListeningHistoryRepository listeningHistoryRepository;
     private final MediaUploadService mediaUploadService;
     private final R2PlaybackUrlService playbackUrlService;
     private final CreatorSystemPlanService creatorSystemPlans;
@@ -50,6 +55,7 @@ public class CreatorFlowService {
             CategoryRepository categoryRepository,
             SeriesRepository seriesRepository,
             PodcastRepository podcastRepository,
+            ListeningHistoryRepository listeningHistoryRepository,
             MediaUploadService mediaUploadService,
             R2PlaybackUrlService playbackUrlService,
             CreatorSystemPlanService creatorSystemPlans,
@@ -60,6 +66,7 @@ public class CreatorFlowService {
         this.categoryRepository = categoryRepository;
         this.seriesRepository = seriesRepository;
         this.podcastRepository = podcastRepository;
+        this.listeningHistoryRepository = listeningHistoryRepository;
         this.mediaUploadService = mediaUploadService;
         this.playbackUrlService = playbackUrlService;
         this.creatorSystemPlans = creatorSystemPlans;
@@ -85,8 +92,7 @@ public class CreatorFlowService {
     public List<PodcastItem> listSeriesPodcasts(UUID userId, UUID seriesId) {
         ProducerProfile profile = approvedCreator(userId);
         ownedSeries(seriesId, profile.getProducerProfileId());
-        return podcastRepository.findAllBySeries_SeriesId(seriesId).stream()
-                .map(this::toPodcastItem).toList();
+        return toPodcastItems(podcastRepository.findAllBySeries_SeriesId(seriesId));
     }
 
     @Transactional
@@ -142,10 +148,9 @@ public class CreatorFlowService {
     @Transactional(readOnly = true)
     public List<PodcastItem> listPodcasts(UUID userId) {
         ProducerProfile profile = approvedCreator(userId);
-        return podcastRepository
+        return toPodcastItems(podcastRepository
                 .findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(
-                        profile.getProducerProfileId())
-                .stream().map(this::toPodcastItem).toList();
+                        profile.getProducerProfileId()));
     }
 
     @Transactional(readOnly = true)
@@ -419,10 +424,16 @@ public class CreatorFlowService {
     }
 
     private PodcastItem toPodcastItem(Podcast podcast) {
-        return toPodcastItem(podcast, false);
+        return toPodcastItem(podcast, false,
+                listenCounts(List.of(podcast)).getOrDefault(podcast.getPodcastId(), 0L));
     }
 
     private PodcastItem toPodcastItem(Podcast podcast, boolean includeVideoUrl) {
+        return toPodcastItem(podcast, includeVideoUrl,
+                listenCounts(List.of(podcast)).getOrDefault(podcast.getPodcastId(), 0L));
+    }
+
+    private PodcastItem toPodcastItem(Podcast podcast, boolean includeVideoUrl, long listenCount) {
         Series series = podcast.getSeries();
         R2PlaybackUrlService.PlaybackUrl video = null;
         if (includeVideoUrl && !"DELETED".equalsIgnoreCase(podcast.getStatus())
@@ -449,6 +460,30 @@ public class CreatorFlowService {
                 podcast.getStatus(),
                 podcast.getPublishedAt(),
                 podcast.getCreatedAt(),
-                podcast.getUpdatedAt());
+                podcast.getUpdatedAt(),
+                listenCount);
+    }
+
+    private List<PodcastItem> toPodcastItems(List<Podcast> podcasts) {
+        Map<UUID, Long> listenCounts = listenCounts(podcasts);
+        return podcasts.stream()
+                .map(podcast -> toPodcastItem(
+                        podcast, false, listenCounts.getOrDefault(podcast.getPodcastId(), 0L)))
+                .toList();
+    }
+
+    private Map<UUID, Long> listenCounts(List<Podcast> podcasts) {
+        Map<UUID, Long> result = new HashMap<>();
+        List<UUID> podcastIds = podcasts.stream()
+                .map(Podcast::getPodcastId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (podcastIds.isEmpty()) return result;
+        for (Object[] row : listeningHistoryRepository.sumListenCountsByPodcastIds(podcastIds)) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] instanceof Number count) {
+                result.put((UUID) row[0], count.longValue());
+            }
+        }
+        return result;
     }
 }

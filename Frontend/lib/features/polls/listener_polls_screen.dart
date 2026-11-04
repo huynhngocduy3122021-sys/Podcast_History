@@ -126,10 +126,6 @@ class _ListenerPollsScreenState extends State<ListenerPollsScreen> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
             ),
-            IconButton(
-              onPressed: _loading ? null : _load,
-              icon: const Icon(Icons.refresh),
-            ),
           ],
         ),
         const SizedBox(height: 18),

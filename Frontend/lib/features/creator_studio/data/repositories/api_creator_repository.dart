@@ -320,9 +320,7 @@ class ApiCreatorRepository implements CreatorRepository {
                 eraTag: mapped.eraTag.isNotEmpty
                     ? mapped.eraTag
                     : existing.eraTag,
-                listensCount: existing.listensCount > 0
-                    ? existing.listensCount
-                    : mapped.listensCount,
+                listensCount: mapped.listensCount,
                 likesCount: existing.likesCount,
                 likedByMe: existing.likedByMe,
                 commentsCount: existing.commentsCount,
@@ -403,46 +401,6 @@ class ApiCreatorRepository implements CreatorRepository {
           }
         }
 
-        // Fetch dashboard metrics to synchronize creator's total listens with podcasts
-        int totalCreatorListens = 0;
-        try {
-          final dashRes = await _apiClient.get(
-            ApiEndpoints.creatorDashboard(period: '7d'),
-            headers: const {'ngrok-skip-browser-warning': '1'},
-          );
-          if (dashRes is Map<String, dynamic> &&
-              dashRes['metrics'] is Map<String, dynamic>) {
-            final m = dashRes['metrics'] as Map<String, dynamic>;
-            totalCreatorListens =
-                (m['totalListens'] as num?)?.toInt() ??
-                (m['views'] as num?)?.toInt() ??
-                0;
-          }
-        } catch (_) {}
-
-        if (totalCreatorListens > 0) {
-          final publishedIndices = <int>[];
-          for (int i = 0; i < list.length; i++) {
-            if (list[i].status == PodcastStatus.published) {
-              publishedIndices.add(i);
-            }
-          }
-
-          if (publishedIndices.length == 1) {
-            final idx = publishedIndices.first;
-            list[idx] = list[idx].copyWith(listensCount: totalCreatorListens);
-          } else if (publishedIndices.length > 1) {
-            final totalCurrent = publishedIndices.fold<int>(
-              0,
-              (sum, i) => sum + list[i].listensCount,
-            );
-            if (totalCurrent == 0) {
-              final idx = publishedIndices.first;
-              list[idx] = list[idx].copyWith(listensCount: totalCreatorListens);
-            }
-          }
-        }
-
         _cachedPodcasts.clear();
         _cachedPodcasts.addAll(list);
       }
@@ -470,9 +428,7 @@ class ApiCreatorRepository implements CreatorRepository {
             likesCount: existing.likesCount,
             likedByMe: existing.likedByMe,
             commentsCount: existing.commentsCount,
-            listensCount: existing.listensCount > 0
-                ? existing.listensCount
-                : mapped.listensCount,
+            listensCount: mapped.listensCount,
           );
           _cachedPodcasts[idx] = resolved;
           return resolved;
@@ -1450,6 +1406,21 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) async {
+    await _apiClient.post(
+      ApiEndpoints.contractDispute(contractId),
+      body: {
+        'reason': reason.trim(),
+        if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+      },
+    );
+  }
+
+  @override
   Future<ContractTerminationStatus?> getTerminationRequest(
     String requestId,
   ) async {
@@ -1533,9 +1504,9 @@ class ApiCreatorRepository implements CreatorRepository {
     String? milestoneId,
   }) async {
     var uploadedDraft = false;
+    String? targetMilestoneId = milestoneId;
     try {
       final req = await getRequestById(id);
-      String? targetMilestoneId = milestoneId;
       if (targetMilestoneId == null || targetMilestoneId.isEmpty) {
         if (req != null && req.milestones.isNotEmpty) {
           final pendingMilestone = req.milestones.firstWhere(
@@ -1591,9 +1562,16 @@ class ApiCreatorRepository implements CreatorRepository {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
               final mStatus = (m['status'] as String? ?? 'SUBMITTED')
                   .toUpperCase();
+              final mid = m['milestoneId']?.toString() ?? '';
+              final isTarget = mid.isNotEmpty && mid == targetMilestoneId;
+              final existingM = _cachedRequests[index]
+                  .milestones
+                  .where((em) => em.id == mid)
+                  .firstOrNull;
+
               updatedMilestones.add(
                 RequestMilestone(
-                  id: m['milestoneId']?.toString() ?? '',
+                  id: mid,
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
                   dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
@@ -1606,8 +1584,8 @@ class ApiCreatorRepository implements CreatorRepository {
                   status: mStatus,
                   isCompleted: mStatus == 'APPROVED' || mStatus == 'SUBMITTED',
                   isApproved: mStatus == 'APPROVED',
-                  publicUrl: fileUrl,
-                  submissionNote: note,
+                  publicUrl: isTarget ? fileUrl : existingM?.publicUrl,
+                  submissionNote: isTarget ? note : existingM?.submissionNote,
                 ),
               );
             }
@@ -1775,7 +1753,7 @@ class ApiCreatorRepository implements CreatorRepository {
         typeStr == 'MEMBERSHIP_EARNING' ||
         typeStr == 'MEMBERSHIP_FEE' ||
         typeStr == 'SUBSCRIPTION') {
-      return ('Thu nhập hội viên', 'Đăng ký gói hội viên kênh');
+      return ('Thu nhập thành viên', 'Đăng ký gói thành viên kênh');
     }
     if (typeStr == 'WALLET_TOPUP' || typeStr == 'TOP_UP') {
       return ('Nạp tiền vào ví', 'Nạp tiền thành công');
@@ -2015,7 +1993,7 @@ class ApiCreatorRepository implements CreatorRepository {
       body: {'amount': amount, 'payoutAccountId': bankAccountId},
     );
     if (response is! Map<String, dynamic> ||
-        response['status'] != 'PENDING' ||
+        response['status']?.toString().toUpperCase() != 'PENDING' ||
         response['withdrawalRequestId'] == null) {
       throw Exception(
         'Cần kiểm tra lại trạng thái yêu cầu rút tiền trên máy chủ.',
@@ -2025,12 +2003,17 @@ class ApiCreatorRepository implements CreatorRepository {
       id: response['withdrawalRequestId'].toString(),
       title: 'Yêu cầu rút tiền về ngân hàng',
       type: TransactionType.withdrawal,
+      rawType: 'WITHDRAWAL_HOLD',
+      direction: 'DEBIT',
       amount: -amount,
+      currency: response['currency']?.toString() ?? 'VND',
       status: TransactionStatus.holding,
+      rawStatus: 'PENDING',
       createdAt:
           DateTime.tryParse(response['requestedAt']?.toString() ?? '') ??
           DateTime.now(),
-      note: 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      note: response['note']?.toString() ?? 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      payoutAccountMasked: response['payoutAccountMasked']?.toString(),
     );
   }
 
@@ -2160,18 +2143,37 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<Map<String, dynamic>?> getPlayback(String podcastId) async {
+    try {
+      final res = await _apiClient.get(
+        ApiEndpoints.podcastPlayback(podcastId),
+        headers: const {'ngrok-skip-browser-warning': '1'},
+      );
+      if (res is Map<String, dynamic>) {
+        return res;
+      }
+    } catch (e) {
+      debugPrint('[getPlayback] Error: $e');
+    }
+    return null;
+  }
+
+  @override
   Future<void> recordListeningProgress({
     required String podcastId,
     required int progressSeconds,
     bool completed = false,
   }) async {
     try {
+      debugPrint('[ListeningProgress] PUT /api/podcasts/$podcastId/listening-progress -> {progressSeconds: $progressSeconds, completed: $completed}');
       await _apiClient.put(
         ApiEndpoints.podcastListeningProgress(podcastId),
         body: {'progressSeconds': progressSeconds, 'completed': completed},
         headers: const {'ngrok-skip-browser-warning': '1'},
       );
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[ListeningProgress] Error: $e');
+    }
   }
 
   @override
@@ -2776,11 +2778,15 @@ class ApiCreatorRepository implements CreatorRepository {
     String? podcastId,
   }) async {
     final queryParams = <String, String>{};
-    if (status != null && status.isNotEmpty) queryParams['status'] = status;
-    if (seriesId != null && seriesId.isNotEmpty)
+    if (status != null && status.isNotEmpty) {
+      queryParams['status'] = status;
+    }
+    if (seriesId != null && seriesId.isNotEmpty) {
       queryParams['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    }
+    if (podcastId != null && podcastId.isNotEmpty) {
       queryParams['podcastId'] = podcastId;
+    }
     queryParams['page'] = '0';
     queryParams['size'] = '50';
 
@@ -2846,8 +2852,9 @@ class ApiCreatorRepository implements CreatorRepository {
           .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    if (podcastId != null && podcastId.isNotEmpty) {
       body['podcastId'] = podcastId;
+    }
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 
@@ -2887,8 +2894,9 @@ class ApiCreatorRepository implements CreatorRepository {
           .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    if (podcastId != null && podcastId.isNotEmpty) {
       body['podcastId'] = podcastId;
+    }
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 

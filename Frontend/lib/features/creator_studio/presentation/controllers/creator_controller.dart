@@ -23,16 +23,27 @@ final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
   final token = ref.watch(creatorAccessTokenProvider);
   if (token == null || token.isEmpty) return null;
   final socket = NotificationSocket(
-    url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
+    url: '${apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws')}/ws',
     accessToken: token,
     onNotification: (json) {
       ref
           .read(creatorNotificationsProvider.notifier)
           .receiveRealtimeNotification(json);
     },
-    onRealtime: (_) {},
+    onRealtime: (event) {
+      final type = '${event['type'] ?? ''}'.toUpperCase();
+      if (type == 'CONTRACT_SIGNED' ||
+          type == 'CONTRACT_PROPOSED' ||
+          type == 'CONTRACT_CANCELLED' ||
+          type == 'CONTRACT_DISPUTED' ||
+          type == 'API_CHANGED' ||
+          type == 'REQUEST_UPDATED') {
+        ref.read(creatorRequestsProvider.notifier).loadRequests();
+      }
+    },
     onReconnected: () {
       ref.read(creatorNotificationsProvider.notifier).loadNotifications();
+      ref.read(creatorRequestsProvider.notifier).loadRequests();
     },
   );
   ref.onDispose(socket.dispose);
@@ -361,12 +372,11 @@ class CreatorPodcastsNotifier
       final likeCount = (likesRes['likeCount'] as num?)?.toInt();
       final likedByMe = likesRes['likedByMe'] as bool?;
 
-      // Đồng bộ lượt nghe từ Dashboard Metrics
       int? listens;
       try {
-        final dash = await _repo.getDashboard(period: '7d');
-        if (dash.metrics.views > 0) {
-          listens = dash.metrics.views;
+        final pod = await _repo.getPodcastById(podcastId);
+        if (pod != null) {
+          listens = pod.listensCount;
         }
       } catch (_) {}
 
@@ -435,6 +445,24 @@ class CreatorPodcastsNotifier
         state = AsyncValue.data(revertList);
       }
     }
+  }
+
+  Future<void> recordListeningProgress({
+    required String podcastId,
+    required int progressSeconds,
+    bool completed = false,
+  }) async {
+    try {
+      await _repo.recordListeningProgress(
+        podcastId: podcastId,
+        progressSeconds: progressSeconds,
+        completed: completed,
+      );
+      if (completed) {
+        await refreshPodcastStats(podcastId);
+        ref.invalidate(creatorDashboardProvider);
+      }
+    } catch (_) {}
   }
 }
 
@@ -526,6 +554,19 @@ class CreatorRequestsNotifier
   }) async {
     await _repo.requestTermination(
       requestId,
+      reason: reason,
+      listenerWinAction: listenerWinAction,
+    );
+    await loadRequests();
+  }
+
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) async {
+    await _repo.openContractDispute(
+      contractId,
       reason: reason,
       listenerWinAction: listenerWinAction,
     );
