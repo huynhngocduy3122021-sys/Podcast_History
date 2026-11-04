@@ -19,42 +19,6 @@ const dashboardMoney = z.union([
   z.string().regex(/^(?:\d+(?:\.\d*)?|\.\d+)$/, 'Số tiền không hợp lệ'),
   z.number().nonnegative(),
 ]).transform(value => String(value))
-const revenueBreakdownSchema = z.object({
-  currency: z.string().min(1),
-  grossCollected: dashboardMoney,
-  platformFees: dashboardMoney,
-  netRevenue: dashboardMoney,
-})
-const revenueDetailSchema = z.object({
-  paymentId: z.uuid(),
-  sourceType: z.string().min(1),
-  sourceLabel: z.string().min(1),
-  amount: dashboardMoney,
-  platformFee: dashboardMoney,
-  netRevenue: dashboardMoney,
-  currency: z.string().length(3),
-  status: z.enum(['PAID', 'SUCCESS', 'COMPLETED']),
-  paymentMethod: z.string().nullable(),
-  provider: z.string().nullable(),
-  providerTransactionId: z.string().nullable(),
-  createdAt: z.string(),
-  paidAt: z.string().nullable(),
-  buyerId: z.uuid().nullable(),
-  buyerName: z.string().nullable(),
-  buyerEmail: z.string().nullable(),
-  creatorProfileId: z.uuid().nullable(),
-  creatorUserId: z.uuid().nullable(),
-  creatorName: z.string().nullable(),
-  creatorChannelName: z.string().nullable(),
-  contractId: z.uuid().nullable(),
-  requestId: z.uuid().nullable(),
-  requestTitle: z.string().nullable(),
-  stageId: z.uuid().nullable(),
-  stageName: z.string().nullable(),
-  stageOrder: z.number().int().nullable(),
-  membershipPlanId: z.uuid().nullable(),
-  membershipPlanName: z.string().nullable(),
-})
 export const dashboardSchema = z.object({
   users: count, activeUsers: count, creators: count, pendingCreators: count,
   podcasts: count, pendingPodcasts: count, pendingReports: count,
@@ -76,11 +40,6 @@ export const revenueDetailsPageSchema = pageSchema(z.object({
 }))
 export type User = z.infer<typeof userSchema>
 export type Tokens = z.infer<typeof tokenSchema>
-export type Dashboard = z.infer<typeof dashboardSchema>
-export type RevenueBreakdown = z.infer<typeof revenueBreakdownSchema>
-export type RevenueDetail = z.infer<typeof revenueDetailSchema>
-export const revenueDetailsPageSchema = pageSchema(revenueDetailSchema)
-export type RevenueDetailsPage = z.infer<typeof revenueDetailsPageSchema>
 
 export const notificationSchema = z.object({
   notificationId: z.string(),
