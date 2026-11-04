@@ -1328,8 +1328,14 @@ class _ShellState extends State<Shell> {
                 durationSeconds: show.durationSeconds ?? 0,
               );
               final cached = commentsByPodcast.putIfAbsent(show.id!, () => []);
+              final alreadyCached = cached.any((item) => item.id == comment.id);
               cached.removeWhere((item) => item.id == comment.id);
               cached.insert(0, comment);
+              if (!alreadyCached) {
+                final previousCount =
+                    commentCountsByPodcast[show.id!] ?? cached.length - 1;
+                commentCountsByPodcast[show.id!] = previousCount + 1;
+              }
               return comment;
             },
       onLikedChanged: (value) => updateLiked(show, value),
@@ -3102,7 +3108,7 @@ class _LibraryPageState extends State<LibraryPage> {
             segments: const [
               ButtonSegment(value: 'liked', label: Text('Đã thích')),
               ButtonSegment(value: 'playlist', label: Text('Playlist')),
-              ButtonSegment(value: 'creators', label: Text('Content Creator')),
+              ButtonSegment(value: 'creators', label: Text('Kênh đang theo dõi')),
             ],
             selected: {selected},
             onSelectionChanged: (value) =>
@@ -3154,7 +3160,7 @@ class _LibraryPageState extends State<LibraryPage> {
             child: Padding(
               padding: EdgeInsets.all(28),
               child: Center(
-                child: Text('Bạn chưa theo dõi Content Creator nào.'),
+                child: Text('Bạn chưa theo dõi kênh nào.'),
               ),
             ),
           )
@@ -4453,7 +4459,7 @@ class _ListenerCreatorContactsPageState
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Nhắn tin với CC')),
+    appBar: AppBar(title: const Text('Nhắn tin với Content creater')),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: future,
       builder: (context, snapshot) {
@@ -4810,7 +4816,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          'Nhắn tin với CC',
+                          'Nhắn tin với Content creater',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -4919,7 +4925,7 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                             if (mounted) setSheetState(() {});
                           },
                           decoration: const InputDecoration(
-                            hintText: 'Nhập tin nhắn cho CC',
+                            hintText: 'Nhập tin nhắn cho Content creater',
                           ),
                         ),
                       ),
@@ -8292,7 +8298,6 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
     final durationController = TextEditingController(text: '10 phút');
     final criteriaController = TextEditingController();
     String productType = 'AUDIO';
-    bool autoAcceptEnabled = false;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => StatefulBuilder(
@@ -8381,19 +8386,6 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                     hintText: 'Ví dụ: âm thanh rõ, không rè, đúng chủ đề',
                   ),
                 ),
-                const SizedBox(height: 4),
-                CheckboxListTile(
-                  value: autoAcceptEnabled,
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  onChanged: (value) =>
-                      setDialogState(() => autoAcceptEnabled = value ?? false),
-                  title: const Text('Tự nghiệm thu sau 3 ngày im lặng'),
-                  subtitle: const Text(
-                    'Chỉ bật nếu bạn đồng ý tự duyệt bản bàn giao đủ điều kiện.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
               ],
             ),
           ),
@@ -8433,7 +8425,7 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                       'fileFormat': 'MP3',
                       'duration': durationController.text.trim(),
                       'criteria': criteriaController.text.trim(),
-                      'autoAcceptEnabled': autoAcceptEnabled,
+                      'autoAcceptEnabled': false,
                     }),
               child: const Text('Gửi yêu cầu'),
             ),
@@ -8754,45 +8746,6 @@ class _CreatorProfilePanelState extends State<CreatorProfilePanel> {
                 color: Colors.white,
               ),
               onTap: () => widget.onOpen(audio),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Playlist của creator',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const CircleAvatar(
-              backgroundColor: Colors.white12,
-              child: Icon(Icons.queue_music, color: Colors.white),
-            ),
-            title: const Text(
-              'Lịch sử Việt Nam',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              '${creatorShows.length} audio',
-              style: const TextStyle(color: Colors.white60),
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const CircleAvatar(
-              backgroundColor: Colors.white12,
-              child: Icon(Icons.queue_music, color: Colors.white),
-            ),
-            title: const Text(
-              'Tuyển tập nổi bật',
-              style: TextStyle(color: Colors.white),
-            ),
-            subtitle: const Text(
-              'Playlist công khai',
-              style: TextStyle(color: Colors.white60),
             ),
           ),
         ],
