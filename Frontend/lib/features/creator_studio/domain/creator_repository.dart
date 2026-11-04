@@ -180,10 +180,11 @@ abstract class CreatorRepository {
   );
   Future<void> releaseFunds();
 
-  // Likes & History
+  // Likes & History & Playback
   Future<Map<String, dynamic>> getPodcastLikes(String podcastId);
   Future<Map<String, dynamic>> likePodcast(String podcastId);
   Future<Map<String, dynamic>> unlikePodcast(String podcastId);
+  Future<Map<String, dynamic>?> getPlayback(String podcastId);
   Future<void> recordListeningProgress({
     required String podcastId,
     required int progressSeconds,

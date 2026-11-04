@@ -436,6 +436,24 @@ class CreatorPodcastsNotifier
       }
     }
   }
+
+  Future<void> recordListeningProgress({
+    required String podcastId,
+    required int progressSeconds,
+    bool completed = false,
+  }) async {
+    try {
+      await _repo.recordListeningProgress(
+        podcastId: podcastId,
+        progressSeconds: progressSeconds,
+        completed: completed,
+      );
+      if (completed) {
+        await refreshPodcastStats(podcastId);
+        ref.invalidate(creatorDashboardProvider);
+      }
+    } catch (_) {}
+  }
 }
 
 final creatorPodcastsProvider =
