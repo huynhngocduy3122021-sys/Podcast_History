@@ -30,7 +30,7 @@ public class AdminDashboardController {
   }
 
   @GetMapping("/revenue-details")
-  @Operation(summary = "Chi tiết từng khoản thu theo membership, hợp đồng và đợt")
+  @Operation(summary = "Chi tiết từng khoản thu theo membership, hợp đồng, đợt và gói Premium CC")
   public Page<RevenueDetail> revenueDetails(
       @AuthenticationPrincipal Jwt jwt,
       @RequestParam(defaultValue = "0") int page,

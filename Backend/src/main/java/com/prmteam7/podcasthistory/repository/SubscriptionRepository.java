@@ -12,6 +12,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
+  @Query("""
+      select distinct s.user from Subscription s
+      where s.membershipPlan.producerProfile.producerProfileId = :creatorId
+        and upper(s.status) = 'ACTIVE'
+        and s.startAt <= :now and s.endAt > :now
+        and s.user.isActive = true
+        and s.user.role.roleCode = 'LISTENER'
+      """)
+  List<com.prmteam7.podcasthistory.model.AppUser> findActiveChannelListeners(
+      @Param("creatorId") UUID creatorId, @Param("now") Instant now);
+
   @Query(value = """
       select s from Subscription s
       join fetch s.user member

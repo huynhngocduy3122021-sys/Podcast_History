@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,11 +19,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.prmteam7.podcasthistory.enums.ContractStageStatus;
+import com.prmteam7.podcasthistory.dto.response.ContractWorkflowResponses;
 import com.prmteam7.podcasthistory.exception.PodcastWorkflowException;
 import com.prmteam7.podcasthistory.model.AppUser;
 import com.prmteam7.podcasthistory.model.Contract;
 import com.prmteam7.podcasthistory.model.ContractStage;
 import com.prmteam7.podcasthistory.model.MilestoneRevision;
+import com.prmteam7.podcasthistory.model.ProducerProfile;
 import com.prmteam7.podcasthistory.model.Role;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.ContractStageRepository;
@@ -37,6 +40,7 @@ class PodcastRequestRevisionTest {
     @Mock private ContractRepository contractRepository;
     @Mock private ContractEscrowService escrowService;
     @Mock private MilestoneRevisionRepository revisionRepository;
+    @Mock private AdminSupportService notificationSupport;
     @InjectMocks private PodcastRequestService service;
 
     private final UUID listenerId = UUID.randomUUID();
@@ -54,9 +58,15 @@ class PodcastRequestRevisionTest {
         Contract contract = new Contract();
         contract.setContractId(UUID.randomUUID());
         contract.setUser(listener);
+        AppUser creator = new AppUser();
+        creator.setUserId(UUID.randomUUID());
+        ProducerProfile profile = new ProducerProfile();
+        profile.setUser(creator);
+        contract.setProducerProfile(profile);
         stage = new ContractStage();
         stage.setContractStageId(stageId);
         stage.setContract(contract);
+        stage.setStageName("Đợt 1");
         stage.setStatus(ContractStageStatus.SUBMITTED.name());
         when(userRepository.findById(listenerId)).thenReturn(Optional.of(listener));
         when(stageRepository.findById(stageId)).thenReturn(Optional.of(stage));
@@ -75,6 +85,8 @@ class PodcastRequestRevisionTest {
         assertEquals(ContractStageStatus.REVISION_REQUESTED.name(), stage.getStatus());
         verify(revisionRepository).save(any(MilestoneRevision.class));
         verify(stageRepository).save(stage);
+        verify(notificationSupport).notify(contractCreator(), "MILESTONE_REVISION_REQUESTED",
+                "Cập nhật đợt bàn giao: Đợt 1", "Listener yêu cầu làm lại: Âm thanh chưa đạt");
     }
 
     @Test
@@ -88,5 +100,31 @@ class PodcastRequestRevisionTest {
         assertEquals(ContractStageStatus.SUBMITTED.name(), stage.getStatus());
         verify(revisionRepository, never()).save(any());
         verify(stageRepository, never()).save(any());
+        verify(notificationSupport, never()).notify(any(), any(), any(), any());
+    }
+
+    @Test
+    void approvingMilestoneNotifiesCreatorOnce() {
+        when(escrowService.isEscrowContract(stage.getContract())).thenReturn(true);
+        when(escrowService.settle(stage)).thenReturn(new ContractWorkflowResponses.Settlement(
+                stageId, UUID.randomUUID(), new BigDecimal("40000"),
+                new BigDecimal("32000"), new BigDecimal("8000"),
+                BigDecimal.ZERO, "PAID"));
+
+        service.approveMilestone(listenerId, stageId);
+
+        assertEquals(ContractStageStatus.APPROVED.name(), stage.getStatus());
+        verify(notificationSupport).notify(contractCreator(), "MILESTONE_APPROVED",
+                "Cập nhật đợt bàn giao: Đợt 1",
+                "Listener đã chấp nhận và thanh toán đợt bàn giao.");
+        assertThrows(PodcastWorkflowException.class,
+                () -> service.approveMilestone(listenerId, stageId));
+        verify(notificationSupport).notify(contractCreator(), "MILESTONE_APPROVED",
+                "Cập nhật đợt bàn giao: Đợt 1",
+                "Listener đã chấp nhận và thanh toán đợt bàn giao.");
+    }
+
+    private AppUser contractCreator() {
+        return stage.getContract().getProducerProfile().getUser();
     }
 }

@@ -57,6 +57,7 @@ public class CreatorWalletService {
     private final WithdrawalRequestRepository withdrawalRepository;
     private final WalletTransactionRepository transactionRepository;
     private final PayoutPaymentRepository payoutPaymentRepository;
+    private final WalletTransactionRealtimePublisher walletRealtime;
 
     public CreatorWalletService(
             AppUserRepository userRepository,
@@ -65,7 +66,8 @@ public class CreatorWalletService {
             CreatorPayoutAccountRepository payoutAccountRepository,
             WithdrawalRequestRepository withdrawalRepository,
             WalletTransactionRepository transactionRepository,
-            PayoutPaymentRepository payoutPaymentRepository) {
+            PayoutPaymentRepository payoutPaymentRepository,
+            WalletTransactionRealtimePublisher walletRealtime) {
         this.userRepository = userRepository;
         this.creatorRepository = creatorRepository;
         this.walletRepository = walletRepository;
@@ -73,6 +75,7 @@ public class CreatorWalletService {
         this.withdrawalRepository = withdrawalRepository;
         this.transactionRepository = transactionRepository;
         this.payoutPaymentRepository = payoutPaymentRepository;
+        this.walletRealtime = walletRealtime;
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +137,13 @@ public class CreatorWalletService {
                 description = "Tiền CC thực nhận từ gói thành viên sau phí nền tảng.";
                 movement = "AVAILABLE_CREDIT";
                 availableChange = amount;
+                heldChange = ZERO;
+            }
+            case "CREATOR_PLAN_PURCHASE" -> {
+                title = "Thanh toán gói Studio Premium";
+                description = "Tiền mua gói CC đã trừ từ số dư khả dụng của ví.";
+                movement = "AVAILABLE_DEBIT";
+                availableChange = amount.negate();
                 heldChange = ZERO;
             }
             case "WITHDRAWAL_HOLD" -> {
@@ -212,6 +222,7 @@ public class CreatorWalletService {
             transactionRepository.save(createTransaction(
                     wallet, payment, null, "RELEASE_FUNDS", "CREDIT", amount,
                     "COMPLETED", wallet.getBalance(), wallet.getHeldBalance()));
+            walletRealtime.changed(wallet);
         }
         walletRepository.save(wallet);
         return new ReleaseFundsResponse(
@@ -275,6 +286,7 @@ public class CreatorWalletService {
         transactionRepository.save(createTransaction(
                 wallet, null, savedWithdrawal, "WITHDRAWAL_HOLD", "DEBIT", amount,
                 "PENDING", wallet.getBalance(), wallet.getHeldBalance()));
+        walletRealtime.changed(wallet);
         return toWithdrawalResponse(savedWithdrawal);
     }
 
@@ -351,6 +363,7 @@ public class CreatorWalletService {
         withdrawal.setProcessedAt(Instant.now());
         walletRepository.save(wallet);
         transactionRepository.save(holdTransaction);
+        walletRealtime.changed(wallet);
         return toWithdrawalResponse(withdrawalRepository.save(withdrawal));
     }
 

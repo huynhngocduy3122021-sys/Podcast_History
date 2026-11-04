@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.model.AppUser;
 import com.prmteam7.podcasthistory.model.Notification;
+import com.prmteam7.podcasthistory.model.Livestream;
 import com.prmteam7.podcasthistory.model.Poll;
 import com.prmteam7.podcasthistory.model.Podcast;
 import com.prmteam7.podcasthistory.config.PackageFeatures;
@@ -11,6 +12,7 @@ import com.prmteam7.podcasthistory.repository.SubscriptionRepository;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.LinkedHashMap;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
@@ -52,6 +54,21 @@ public class AudienceNotificationService {
           channelName + " vừa đăng: " + podcast.getTitle(),
           Map.of("podcastId", podcast.getPodcastId(), "creatorId", creatorId));
     }
+  }
+
+  /** Notify each active follower or channel member once when the stream goes live. */
+  public void newLivestream(Livestream live) {
+    UUID creatorId = live.getProducerProfile().getProducerProfileId();
+    Map<UUID, AppUser> recipients = new LinkedHashMap<>();
+    for (AppUser listener : follows.findActiveListenersByCreatorId(creatorId))
+      recipients.put(listener.getUserId(), listener);
+    for (AppUser member : subscriptions.findActiveChannelListeners(creatorId, Instant.now()))
+      recipients.putIfAbsent(member.getUserId(), member);
+    String channelName = live.getProducerProfile().getChannelName();
+    for (AppUser listener : recipients.values())
+      send(listener, "LIVESTREAM_STARTED", channelName + " đang phát trực tiếp",
+          channelName + " vừa bắt đầu livestream: " + live.getTitle(),
+          Map.of("livestreamId", live.getLivestreamId(), "creatorId", creatorId));
   }
 
   public void newFollower(AppUser creator, AppUser listener, UUID creatorId) {

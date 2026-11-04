@@ -36,6 +36,7 @@ class ContractEscrowServiceTest {
     @Mock PaymentRepository payments;
     @Mock PaymentMethodRepository paymentMethods;
     @Mock ListenerWalletService listenerWallets;
+    @Mock WalletTransactionRealtimePublisher walletRealtime;
     @Mock ContractDisputeRepository contractDisputes;
     @Mock MilestoneSubmissionRepository submissions;
     @Mock AdminDisputeService adminDisputes;

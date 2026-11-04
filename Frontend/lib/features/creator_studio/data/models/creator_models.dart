@@ -18,7 +18,7 @@ enum CustomRequestStatus {
   disputed,
 }
 
-enum TransactionType { requestEarning, membership, withdrawal, refund }
+enum TransactionType { requestEarning, membership, premiumPurchase, withdrawal, refund }
 
 enum TransactionStatus { success, processing, holding, failed }
 

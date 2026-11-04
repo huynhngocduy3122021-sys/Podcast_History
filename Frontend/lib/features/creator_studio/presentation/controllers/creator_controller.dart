@@ -29,9 +29,17 @@ final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
       ref
           .read(creatorNotificationsProvider.notifier)
           .receiveRealtimeNotification(json);
+      final type = '${json['type'] ?? ''}'.toUpperCase();
+      if (type == 'MILESTONE_REVISION_REQUESTED' ||
+          type == 'MILESTONE_APPROVED') {
+        ref.read(creatorRequestsProvider.notifier).loadRequests();
+      }
     },
     onRealtime: (event) {
       final type = '${event['type'] ?? ''}'.toUpperCase();
+      if (type == 'WALLET_TRANSACTIONS_CHANGED') {
+        ref.read(walletProvider.notifier).loadWallet();
+      }
       if (type == 'CONTRACT_SIGNED' ||
           type == 'CONTRACT_PROPOSED' ||
           type == 'CONTRACT_CANCELLED' ||
@@ -44,6 +52,7 @@ final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
     onReconnected: () {
       ref.read(creatorNotificationsProvider.notifier).loadNotifications();
       ref.read(creatorRequestsProvider.notifier).loadRequests();
+      ref.read(walletProvider.notifier).loadWallet();
     },
   );
   ref.onDispose(socket.dispose);

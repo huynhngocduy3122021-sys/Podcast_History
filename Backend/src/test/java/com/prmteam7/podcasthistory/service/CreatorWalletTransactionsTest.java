@@ -30,6 +30,7 @@ class CreatorWalletTransactionsTest {
     @Mock CreatorPayoutAccountRepository payoutAccounts;
     @Mock WithdrawalRequestRepository withdrawals;
     @Mock WalletTransactionRepository transactions;
+    @Mock WalletTransactionRealtimePublisher walletRealtime;
     @Mock PayoutPaymentRepository payments;
     @InjectMocks CreatorWalletService service;
 

@@ -44,7 +44,10 @@ public final class ContractWorkflowResponses {
     public record TerminationRequestStatus(UUID disputeId, UUID contractId, String status,
                                            String decision, Instant createdAt,
                                            Instant negotiationEndsAt, Instant resolvedAt,
-                                           Instant opponentConfirmedAt, String listenerWinAction) {}
+                                           Instant opponentConfirmedAt, String listenerWinAction,
+                                           UUID openedByUserId, String openedByName,
+                                           String openedByEmail, String openedByRole,
+                                           String openedByRoleLabel) {}
 
     public record MediaUrl(UUID submissionId, String url, Instant expiresAt) {}
 }
