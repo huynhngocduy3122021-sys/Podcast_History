@@ -215,7 +215,9 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
-  Future<CreatorCheckoutPayment> subscribeSystemPlanWithWallet(String planId) async {
+  Future<CreatorCheckoutPayment> subscribeSystemPlanWithWallet(
+    String planId,
+  ) async {
     final response = await _apiClient.post(
       ApiEndpoints.creatorSystemPlanSubscribeWallet(planId),
     );
@@ -1578,8 +1580,7 @@ class ApiCreatorRepository implements CreatorRepository {
                   .toUpperCase();
               final mid = m['milestoneId']?.toString() ?? '';
               final isTarget = mid.isNotEmpty && mid == targetMilestoneId;
-              final existingM = _cachedRequests[index]
-                  .milestones
+              final existingM = _cachedRequests[index].milestones
                   .where((em) => em.id == mid)
                   .firstOrNull;
 
@@ -1773,7 +1774,10 @@ class ApiCreatorRepository implements CreatorRepository {
       return ('Nạp tiền vào ví', 'Nạp tiền thành công');
     }
     if (typeStr == 'CREATOR_PLAN_PURCHASE') {
-      return ('Thanh toán gói Studio Premium', 'Đã trừ từ số dư khả dụng của ví CC');
+      return (
+        'Thanh toán gói Studio Premium',
+        'Đã trừ từ số dư khả dụng của ví CC',
+      );
     }
     if (typeStr == 'REFUND') {
       return ('Hoàn tiền ví', note?.toString() ?? 'Hoàn tiền giao dịch');
@@ -1955,17 +1959,20 @@ class ApiCreatorRepository implements CreatorRepository {
         };
         final isVerified = item['verified'] == true;
         final isActive = item['active'] == true;
+        final masked = item['accountMasked']?.toString() ?? 'Chưa cập nhật';
+        final maskedParts = masked.split(' · ');
         return BankAccount(
           id:
               item['payoutAccountId']?.toString() ??
               item['creatorPayoutAccountId']?.toString() ??
               _uuid.v4(),
-          bankName: bankNameDisplay,
-          accountNumber: item['accountMasked']?.toString() ?? 'Chưa cập nhật',
-          accountHolder:
-              item['accountReference']?.toString() ??
-              item['currency']?.toString() ??
-              'VND',
+          bankName: maskedParts.length >= 3
+              ? maskedParts.first
+              : bankNameDisplay,
+          accountNumber: maskedParts.length >= 3 ? maskedParts.last : masked,
+          accountHolder: maskedParts.length >= 3
+              ? maskedParts.sublist(1, maskedParts.length - 1).join(' · ')
+              : '',
           isDefault: isActive && isVerified,
           payoutMethod: payoutMethod,
           currency: item['currency']?.toString() ?? 'VND',
@@ -1988,9 +1995,22 @@ class ApiCreatorRepository implements CreatorRepository {
     String accountNumber,
     String accountHolder,
   ) async {
-    throw UnsupportedError(
-      'Tài khoản nhận tiền cần được Admin xác minh và đăng ký trên hệ thống.',
+    if (!_apiClient.isAuthenticated) {
+      throw Exception('Vui lòng đăng nhập để thêm tài khoản nhận tiền.');
+    }
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorBankAccounts,
+      body: {
+        'bankCode': bankName.trim().toUpperCase(),
+        'accountNumber': accountNumber.trim(),
+        'accountHolderName': accountHolder.trim(),
+      },
     );
+    if (response is! Map<String, dynamic> ||
+        response['payoutAccountId'] == null ||
+        response['verified'] != false) {
+      throw Exception('Không xác nhận được tài khoản mới trên máy chủ.');
+    }
   }
 
   @override
@@ -2031,7 +2051,9 @@ class ApiCreatorRepository implements CreatorRepository {
       createdAt:
           DateTime.tryParse(response['requestedAt']?.toString() ?? '') ??
           DateTime.now(),
-      note: response['note']?.toString() ?? 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      note:
+          response['note']?.toString() ??
+          'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
       payoutAccountMasked: response['payoutAccountMasked']?.toString(),
     );
   }
@@ -2184,7 +2206,9 @@ class ApiCreatorRepository implements CreatorRepository {
     bool completed = false,
   }) async {
     try {
-      debugPrint('[ListeningProgress] PUT /api/podcasts/$podcastId/listening-progress -> {progressSeconds: $progressSeconds, completed: $completed}');
+      debugPrint(
+        '[ListeningProgress] PUT /api/podcasts/$podcastId/listening-progress -> {progressSeconds: $progressSeconds, completed: $completed}',
+      );
       await _apiClient.put(
         ApiEndpoints.podcastListeningProgress(podcastId),
         body: {'progressSeconds': progressSeconds, 'completed': completed},

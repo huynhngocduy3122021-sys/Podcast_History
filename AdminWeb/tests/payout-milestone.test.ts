@@ -60,6 +60,18 @@ test('payout result never reports success for the wrong authoritative status', a
   )
 })
 
+test('bank account verification accepts the actual Backend response without list-only owner fields', async () => {
+  const account = { payoutAccountId: withdrawalId, creatorProfileId: creatorId,
+    payoutMethod: 'BANK_TRANSFER', accountMasked: 'VCB · ****6789', currency: 'VND', verified: true, active: true }
+  const tx = transport([{ data: account }])
+
+  const verified = await tx.backend.verifyCreatorPayoutAccount(creatorId, withdrawalId)
+
+  assert.equal(verified.verified, true)
+  assert.equal(tx.calls[0].url,
+    `/api/admin/payouts/creators/${creatorId}/accounts/${withdrawalId}/verify`)
+})
+
 test('milestone dispute flow loads evidence through signed media URLs and resolves supported decisions', async () => {
   const dispute = {
     disputeId, milestoneId, raisedByUserId: creatorId, reason: 'needs review', status: 'OPEN', decision: null,

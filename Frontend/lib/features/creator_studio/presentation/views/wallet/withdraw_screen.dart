@@ -43,10 +43,10 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         .trim();
     final amount = int.tryParse(rawText) ?? 0;
 
-    if (amount < 50000) {
+    if (amount <= 0) {
       ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
-          content: Text('Số tiền rút tối thiểu là 50.000 ₫'),
+          content: Text('Số tiền rút phải lớn hơn 0 ₫'),
           backgroundColor: AppColors.warning,
         ),
       );
@@ -189,7 +189,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                     // Nhập số tiền
                     AppTextField(
                       label: 'Số tiền muốn rút (VND)',
-                      hint: 'Tối thiểu 50.000 ₫',
+                      hint: 'Nhập số tiền muốn rút',
                       controller: _amountController,
                       keyboardType: TextInputType.number,
                       prefixIcon: const Icon(Icons.attach_money_rounded),
@@ -256,7 +256,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              'Tài khoản nhận tiền cần được Admin cấp và xác minh để đảm bảo an toàn giao dịch.',
+                              'Bạn có thể thêm tài khoản ngân hàng. Admin sẽ đối soát trước khi cho phép rút tiền.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -264,9 +264,14 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                             ),
                             const SizedBox(height: AppSpacing.sm),
                             OutlinedButton.icon(
-                              icon: const Icon(Icons.refresh_rounded, size: 16),
-                              label: const Text('Tải lại tài khoản'),
-                              onPressed: () => ref.read(bankAccountsProvider.notifier).loadAccounts(),
+                              icon: const Icon(Icons.add_rounded, size: 16),
+                              label: const Text('Thêm tài khoản'),
+                              onPressed: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => const BankAccountsScreen()),
+                                );
+                                ref.read(bankAccountsProvider.notifier).loadAccounts();
+                              },
                             ),
                           ],
                         ),
@@ -333,7 +338,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                           const SizedBox(height: 6),
                           _buildSummaryRow('Hình thức xử lý', 'Admin duyệt & chuyển khoản vào STK'),
                           const SizedBox(height: 6),
-                          _buildSummaryRow('Thời gian xử lý', 'Từ 1 - 24 giờ làm việc'),
+                          _buildSummaryRow('Thời gian xử lý', 'Sau khi Admin đối soát'),
                         ],
                       ),
                     ),
@@ -346,7 +351,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                           ScaffoldMessenger.of(context).showTopSnackBar(
                             const SnackBar(
                               content: Text(
-                                'Chưa có tài khoản nhận tiền. Vui lòng liên hệ Quản trị viên để cấp và xác minh tài khoản.',
+                                'Chưa có tài khoản nhận tiền. Hãy thêm tài khoản ngân hàng trước.',
                               ),
                               backgroundColor: AppColors.warning,
                             ),
