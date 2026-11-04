@@ -193,28 +193,37 @@ public class AdminFinanceService {
 
   public Page<WalletItem> wallets(UUID actor, String q, String role, int page, int size) {
     support.actor(actor, true);
-    String normalizedQuery = q == null || q.isBlank() ? null : q.trim();
-    String normalizedRole = role == null || role.isBlank() ? null : role.trim().toUpperCase(Locale.ROOT);
+    String normalizedQuery = q == null || q.isBlank() ? "" : q.trim();
+    String normalizedRole = role == null || role.isBlank() ? "" : role.trim().toUpperCase(Locale.ROOT);
     return wallets
         .findAllForAdmin(normalizedQuery, normalizedRole, AdminSupportService.page(page, size))
-        .map(
-            w ->
-                new WalletItem(
-                    w.getUserWalletId(),
-                    w.getUser().getUserId(),
-                    w.getUser().getUsername(),
-                    w.getUser().getEmail(),
-                    w.getUser().getDisplayName(),
-                    w.getUser().getRole().getRoleCode(),
-                    Boolean.TRUE.equals(w.getUser().getIsActive()),
-                    Boolean.TRUE.equals(w.getUser().getIsVerified()),
-                    w.getBalance(),
-                    w.getHeldBalance(),
-                    w.getBalance().add(w.getHeldBalance()),
-                    w.getCurrency(),
-                    w.getStatus(),
-                    w.getCreatedAt(),
-                    w.getUpdatedAt()));
+        .map(this::walletItem);
+  }
+
+  public WalletItem wallet(UUID actor, UUID walletId) {
+    support.actor(actor, true);
+    UserWallet wallet = wallets.findById(walletId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy ví."));
+    return walletItem(wallet);
+  }
+
+  private WalletItem walletItem(UserWallet wallet) {
+    return new WalletItem(
+        wallet.getUserWalletId(),
+        wallet.getUser().getUserId(),
+        wallet.getUser().getUsername(),
+        wallet.getUser().getEmail(),
+        wallet.getUser().getDisplayName(),
+        wallet.getUser().getRole().getRoleCode(),
+        Boolean.TRUE.equals(wallet.getUser().getIsActive()),
+        Boolean.TRUE.equals(wallet.getUser().getIsVerified()),
+        wallet.getBalance(),
+        wallet.getHeldBalance(),
+        wallet.getBalance().add(wallet.getHeldBalance()),
+        wallet.getCurrency(),
+        wallet.getStatus(),
+        wallet.getCreatedAt(),
+        wallet.getUpdatedAt());
   }
 
   public Page<TransactionItem> transactions(
