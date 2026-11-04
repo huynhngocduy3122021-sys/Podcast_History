@@ -43,7 +43,8 @@ public final class CreatorResponses {
             String status,
             Instant publishedAt,
             Instant createdAt,
-            Instant updatedAt) {
+            Instant updatedAt,
+            long listenCount) {
     }
 
     public record PodcastVideoItem(

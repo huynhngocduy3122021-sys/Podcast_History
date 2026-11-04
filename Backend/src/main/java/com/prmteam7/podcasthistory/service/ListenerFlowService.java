@@ -67,6 +67,7 @@ import java.util.UUID;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 import org.springframework.data.domain.Page;
@@ -167,9 +168,11 @@ public class ListenerFlowService {
         search == null || search.isBlank()
             ? null
             : "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
-    return podcastRepository
-        .searchPublished(query, categoryId, creatorId, seriesId, pageRequest(page, size))
-        .map(this::toPodcastItem);
+    Page<Podcast> podcasts = podcastRepository.searchPublished(
+        query, categoryId, creatorId, seriesId, pageRequest(page, size));
+    Map<UUID, Long> listenCounts = listenCounts(podcasts.getContent());
+    return podcasts.map(podcast -> toPodcastItem(
+        podcast, listenCounts.getOrDefault(podcast.getPodcastId(), 0L)));
   }
 
   @Transactional(readOnly = true)
@@ -858,6 +861,11 @@ public class ListenerFlowService {
   }
 
   private PodcastItem toPodcastItem(Podcast podcast) {
+    return toPodcastItem(podcast, listenCounts(List.of(podcast))
+        .getOrDefault(podcast.getPodcastId(), 0L));
+  }
+
+  private PodcastItem toPodcastItem(Podcast podcast, long listenCount) {
     var series = podcast.getSeries();
     var creator = podcast.getProducerProfile();
     var category = podcast.getCategory();
@@ -878,7 +886,23 @@ public class ListenerFlowService {
         category.getCategoryId(),
         category.getName(),
         creator.getProducerProfileId(),
-        creator.getChannelName());
+        creator.getChannelName(),
+        listenCount);
+  }
+
+  private Map<UUID, Long> listenCounts(List<Podcast> podcasts) {
+    Map<UUID, Long> result = new HashMap<>();
+    List<UUID> podcastIds = podcasts.stream()
+        .map(Podcast::getPodcastId)
+        .filter(Objects::nonNull)
+        .toList();
+    if (podcastIds.isEmpty()) return result;
+    for (Object[] row : listeningHistoryRepository.sumListenCountsByPodcastIds(podcastIds)) {
+      if (row != null && row.length >= 2 && row[0] != null && row[1] instanceof Number count) {
+        result.put((UUID) row[0], count.longValue());
+      }
+    }
+    return result;
   }
 
   private CategoryItem toCategoryItem(Category category) {
