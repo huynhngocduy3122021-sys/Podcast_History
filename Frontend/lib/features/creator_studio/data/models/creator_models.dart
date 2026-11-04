@@ -706,7 +706,7 @@ class PodcastRequest {
       case CustomRequestStatus.inProduction:
         return 'Đang thực hiện';
       case CustomRequestStatus.delivered:
-        return 'Đã nộp bài';
+        return 'Đã nộp bản ghi';
       case CustomRequestStatus.approved:
         return 'Người nghe đã duyệt';
       case CustomRequestStatus.revisionRequested:
@@ -795,6 +795,16 @@ class BankAccount {
     this.verified = true,
     this.active = true,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BankAccount &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class WalletTransaction {

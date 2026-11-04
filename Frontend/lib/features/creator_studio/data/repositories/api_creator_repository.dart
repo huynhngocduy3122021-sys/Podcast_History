@@ -1489,9 +1489,9 @@ class ApiCreatorRepository implements CreatorRepository {
     String? milestoneId,
   }) async {
     var uploadedDraft = false;
+    String? targetMilestoneId = milestoneId;
     try {
       final req = await getRequestById(id);
-      String? targetMilestoneId = milestoneId;
       if (targetMilestoneId == null || targetMilestoneId.isEmpty) {
         if (req != null && req.milestones.isNotEmpty) {
           final pendingMilestone = req.milestones.firstWhere(
@@ -1547,9 +1547,16 @@ class ApiCreatorRepository implements CreatorRepository {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
               final mStatus = (m['status'] as String? ?? 'SUBMITTED')
                   .toUpperCase();
+              final mid = m['milestoneId']?.toString() ?? '';
+              final isTarget = mid.isNotEmpty && mid == targetMilestoneId;
+              final existingM = _cachedRequests[index]
+                  .milestones
+                  .where((em) => em.id == mid)
+                  .firstOrNull;
+
               updatedMilestones.add(
                 RequestMilestone(
-                  id: m['milestoneId']?.toString() ?? '',
+                  id: mid,
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
                   dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
@@ -1562,8 +1569,8 @@ class ApiCreatorRepository implements CreatorRepository {
                   status: mStatus,
                   isCompleted: mStatus == 'APPROVED' || mStatus == 'SUBMITTED',
                   isApproved: mStatus == 'APPROVED',
-                  publicUrl: fileUrl,
-                  submissionNote: note,
+                  publicUrl: isTarget ? fileUrl : existingM?.publicUrl,
+                  submissionNote: isTarget ? note : existingM?.submissionNote,
                 ),
               );
             }
@@ -1971,7 +1978,7 @@ class ApiCreatorRepository implements CreatorRepository {
       body: {'amount': amount, 'payoutAccountId': bankAccountId},
     );
     if (response is! Map<String, dynamic> ||
-        response['status'] != 'PENDING' ||
+        response['status']?.toString().toUpperCase() != 'PENDING' ||
         response['withdrawalRequestId'] == null) {
       throw Exception(
         'Cần kiểm tra lại trạng thái yêu cầu rút tiền trên máy chủ.',
@@ -1981,12 +1988,17 @@ class ApiCreatorRepository implements CreatorRepository {
       id: response['withdrawalRequestId'].toString(),
       title: 'Yêu cầu rút tiền về ngân hàng',
       type: TransactionType.withdrawal,
+      rawType: 'WITHDRAWAL_HOLD',
+      direction: 'DEBIT',
       amount: -amount,
+      currency: response['currency']?.toString() ?? 'VND',
       status: TransactionStatus.holding,
+      rawStatus: 'PENDING',
       createdAt:
           DateTime.tryParse(response['requestedAt']?.toString() ?? '') ??
           DateTime.now(),
-      note: 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      note: response['note']?.toString() ?? 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      payoutAccountMasked: response['payoutAccountMasked']?.toString(),
     );
   }
 
@@ -2751,11 +2763,15 @@ class ApiCreatorRepository implements CreatorRepository {
     String? podcastId,
   }) async {
     final queryParams = <String, String>{};
-    if (status != null && status.isNotEmpty) queryParams['status'] = status;
-    if (seriesId != null && seriesId.isNotEmpty)
+    if (status != null && status.isNotEmpty) {
+      queryParams['status'] = status;
+    }
+    if (seriesId != null && seriesId.isNotEmpty) {
       queryParams['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    }
+    if (podcastId != null && podcastId.isNotEmpty) {
       queryParams['podcastId'] = podcastId;
+    }
     queryParams['page'] = '0';
     queryParams['size'] = '50';
 
@@ -2821,8 +2837,9 @@ class ApiCreatorRepository implements CreatorRepository {
           .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    if (podcastId != null && podcastId.isNotEmpty) {
       body['podcastId'] = podcastId;
+    }
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 
@@ -2862,8 +2879,9 @@ class ApiCreatorRepository implements CreatorRepository {
           .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    if (podcastId != null && podcastId.isNotEmpty) {
       body['podcastId'] = podcastId;
+    }
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 

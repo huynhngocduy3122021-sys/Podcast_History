@@ -60,8 +60,6 @@ class _CreatorLivestreamScreenState
   final _descController = TextEditingController(
     text: 'Cùng thảo luận về các sự kiện hào hùng, giải đáp thắc mắc và chia sẻ góc nhìn lịch sử mới mẻ.',
   );
-  bool _isScheduled = false;
-  DateTime? _scheduledDateTime;
 
   // Filter for livestream list
   String _selectedFilter = 'ALL'; // ALL, DRAFT, LIVE, ENDED
@@ -251,7 +249,6 @@ class _CreatorLivestreamScreenState
           .createLivestream(
             title: title,
             description: _descController.text.trim(),
-            scheduledAt: _isScheduled ? _scheduledDateTime : null,
           );
 
       // 2. Gọi /start để chuyển sang LIVE và nhận AgoraJoin credentials
@@ -344,7 +341,6 @@ class _CreatorLivestreamScreenState
           .createLivestream(
             title: title,
             description: _descController.text.trim(),
-            scheduledAt: _isScheduled ? _scheduledDateTime : null,
           );
       setState(() => _isLoading = false);
       if (mounted) {
@@ -426,44 +422,6 @@ class _CreatorLivestreamScreenState
           backgroundColor: AppColors.success,
         ),
       );
-    }
-  }
-
-  Future<void> _handleScheduleToggle(bool val) async {
-    if (val) {
-      final now = DateTime.now();
-      final pickedDate = await showDatePicker(
-        context: context,
-        initialDate: now.add(const Duration(hours: 1)),
-        firstDate: now,
-        lastDate: now.add(const Duration(days: 30)),
-      );
-      if (pickedDate != null && mounted) {
-        final pickedTime = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.fromDateTime(
-            now.add(const Duration(hours: 1)),
-          ),
-        );
-        if (pickedTime != null && mounted) {
-          setState(() {
-            _isScheduled = true;
-            _scheduledDateTime = DateTime(
-              pickedDate.year,
-              pickedDate.month,
-              pickedDate.day,
-              pickedTime.hour,
-              pickedTime.minute,
-            );
-          });
-          return;
-        }
-      }
-    } else {
-      setState(() {
-        _isScheduled = false;
-        _scheduledDateTime = null;
-      });
     }
   }
 
@@ -1421,50 +1379,6 @@ class _CreatorLivestreamScreenState
             controller: _descController,
             hint: 'Tóm tắt nội dung sẽ thảo luận cùng thính giả...',
             maxLines: 3,
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          // Lên lịch phát sóng
-          InkWell(
-            onTap: () => _handleScheduleToggle(!_isScheduled),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Lên lịch phát sóng sau',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _isScheduled && _scheduledDateTime != null
-                              ? 'Thời gian: ${DateFormat('dd/MM/yyyy HH:mm').format(_scheduledDateTime!.toLocal())}'
-                              : 'Đặt trước thời gian dự kiến phát trực tiếp',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? AppColors.onSurfaceMutedDark
-                                : AppColors.onSurfaceMutedLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch.adaptive(
-                    value: _isScheduled,
-                    onChanged: _handleScheduleToggle,
-                  ),
-                ],
-              ),
-            ),
           ),
           const SizedBox(height: AppSpacing.md),
 
