@@ -23,6 +23,25 @@ function transport(data: unknown, status = 200) {
   return { backend: createAdminApi(http), calls }
 }
 
+test('dashboard client uses the current Backend endpoints and preserves page params', async () => {
+  const dashboard = transport({
+    users: 1, activeUsers: 1, creators: 1, pendingCreators: 0, podcasts: 1, pendingPodcasts: 0,
+    pendingReports: 0, pendingWithdrawals: 0, openDisputes: 0, podcastStatuses: [], collectedPayments: [], revenueBreakdown: [],
+  })
+  await dashboard.backend.dashboard()
+  assert.equal(dashboard.calls[0].method, 'get')
+  assert.equal(dashboard.calls[0].url, '/api/admin/dashboard')
+  assert.equal(dashboard.calls[0].params, undefined)
+
+  const details = transport({ content: [], number: 2, size: 20, totalElements: 40, totalPages: 2 })
+  const signal = new AbortController().signal
+  const page = await details.backend.revenueDetails(2, 20, signal)
+  assert.equal(page.number, 2)
+  assert.equal(details.calls[0].url, '/api/admin/dashboard/revenue-details')
+  assert.deepEqual(details.calls[0].params, { page: 2, size: 20 })
+  assert.equal(details.calls[0].signal, signal)
+})
+
 test('creator list/detail use admin endpoints, zero-based params and profile ID, not applicant ID', async () => {
   const list = transport({ content: [application], number: 2, size: 20, totalElements: 41, totalPages: 3 })
   const signal = new AbortController().signal
