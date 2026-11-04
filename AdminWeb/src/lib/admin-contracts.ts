@@ -256,6 +256,13 @@ export const payoutAccountSchema = z.object({
   verified: z.boolean(),
   active: z.boolean(),
 })
+export const adminPayoutAccountSchema = payoutAccountSchema.extend({
+  accountReference: z.string(),
+  channelName: z.string(),
+  creatorName: z.string(),
+  creatorEmail: z.string(),
+})
+export const adminPayoutAccountsSchema = z.array(adminPayoutAccountSchema)
 export const payoutAccountWriteSchema = z.object({
   payoutMethod: textWithLimit(40, 'Phương thức tối đa 40 ký tự').trim().min(1, 'Nhập phương thức nhận tiền'),
   accountReference: textWithLimit(255, 'Tài khoản tối đa 255 ký tự').trim().min(1, 'Nhập tham chiếu tài khoản'),
@@ -392,6 +399,7 @@ export type WithdrawalReview = z.infer<typeof withdrawalReviewSchema>
 export type PayoutWithdrawal = z.infer<typeof payoutWithdrawalSchema>
 export type PayoutResultWrite = z.infer<typeof payoutResultWriteSchema>
 export type PayoutAccountWrite = z.infer<typeof payoutAccountWriteSchema>
+export type AdminPayoutAccount = z.infer<typeof adminPayoutAccountSchema>
 export type Wallet = z.infer<typeof walletSchema>
 export type Transaction = z.infer<typeof transactionSchema>
 export type ContractStatus = z.infer<typeof contractStatusSchema>

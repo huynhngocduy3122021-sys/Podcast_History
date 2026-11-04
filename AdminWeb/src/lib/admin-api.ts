@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios'
-import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, creatorSystemPlanSchema, creatorSystemPlansSchema, creatorSystemPlanWriteSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema, payoutAccountSchema, payoutAccountWriteSchema, payoutResultWriteSchema, payoutResultResponseSchema, payoutWithdrawalsSchema, milestoneDisputeSchema, milestoneDisputesSchema, resolveMilestoneDisputeSchema, milestoneSubmissionsSchema, mediaUrlSchema } from './admin-contracts.ts'
+import { adminPayoutAccountsSchema, approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, creatorSystemPlanSchema, creatorSystemPlansSchema, creatorSystemPlanWriteSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema, payoutAccountSchema, payoutAccountWriteSchema, payoutResultWriteSchema, payoutResultResponseSchema, payoutWithdrawalsSchema, milestoneDisputeSchema, milestoneDisputesSchema, resolveMilestoneDisputeSchema, milestoneSubmissionsSchema, mediaUrlSchema } from './admin-contracts.ts'
 import type { ApproveWithdrawal, CategoryForm, CompleteWithdrawal, CreatorStatus, AdminUserRole, PaymentReconcile, PaymentRefund, PaymentStatus, PlanWrite, WithdrawalNote, WithdrawalStatus, PayoutAccountWrite, PayoutResultWrite } from './admin-contracts.ts'
 import { dashboardSchema, revenueDetailsPageSchema } from './contracts.ts'
 import { confirmedMutation } from './api-mutation.ts'
@@ -220,6 +220,16 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
       const body = payoutAccountWriteSchema.parse(values)
       return confirmedMutation(() => client.post(`/api/admin/payouts/creators/${encodeURIComponent(creatorProfileId)}/accounts`, body), payoutAccountSchema, 201,
         data => data.creatorProfileId === creatorProfileId && data.verified && data.active)
+    },
+    async creatorPayoutAccounts(creatorProfileId: string, signal?: AbortSignal) {
+      return adminPayoutAccountsSchema.parse((await client.get(`/api/admin/payouts/creators/${encodeURIComponent(creatorProfileId)}/accounts`, { signal })).data)
+    },
+    async allCreatorPayoutAccounts(signal?: AbortSignal) {
+      return adminPayoutAccountsSchema.parse((await client.get('/api/admin/payouts/accounts', { signal })).data)
+    },
+    async verifyCreatorPayoutAccount(creatorProfileId: string, accountId: string) {
+      return confirmedMutation(() => client.post(`/api/admin/payouts/creators/${encodeURIComponent(creatorProfileId)}/accounts/${encodeURIComponent(accountId)}/verify`), payoutAccountSchema, 200,
+        data => data.payoutAccountId === accountId && data.creatorProfileId === creatorProfileId && data.verified && data.active)
     },
     async milestoneDisputes(status = 'OPEN', signal?: AbortSignal) {
       return milestoneDisputesSchema.parse((await client.get('/api/admin/milestone-disputes', { params: { status }, signal })).data)

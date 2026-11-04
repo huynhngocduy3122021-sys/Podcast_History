@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prmteam7.podcasthistory.dto.request.WithdrawalRequestInput;
+import com.prmteam7.podcasthistory.dto.request.CreateBankPayoutAccountRequest;
 import com.prmteam7.podcasthistory.dto.response.PayoutAccountResponse;
 import com.prmteam7.podcasthistory.dto.response.ReleaseFundsResponse;
 import com.prmteam7.podcasthistory.dto.response.WalletBalanceResponse;
@@ -65,6 +66,15 @@ public class CreatorWalletController {
     @Operation(summary = "Xem các tài khoản nhận tiền đang hoạt động")
     public List<PayoutAccountResponse> getPayoutAccounts(@AuthenticationPrincipal Jwt jwt) {
         return walletService.getPayoutAccounts(userId(jwt));
+    }
+
+    @PostMapping("/payout-accounts")
+    @Operation(summary = "CC khai báo tài khoản ngân hàng nhận tiền; Admin cần xác minh trước khi rút")
+    public ResponseEntity<PayoutAccountResponse> createPayoutAccount(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody CreateBankPayoutAccountRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(walletService.createBankPayoutAccount(userId(jwt), request));
     }
 
     @PostMapping("/withdrawals")
