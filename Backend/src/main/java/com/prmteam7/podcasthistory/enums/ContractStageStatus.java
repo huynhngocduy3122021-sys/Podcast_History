@@ -5,5 +5,6 @@ public enum ContractStageStatus {
     SUBMITTED,
     REVISION_REQUESTED,
     DISPUTED,
-    APPROVED
+    APPROVED,
+    SKIPPED_REFUNDED
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/services/audio_player/audio_player_service.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -116,7 +117,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
 
   void _handleLikeToggle() {
     if (widget.podcast.status != PodcastStatus.published) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text(
             'Tập podcast chỉ có thể thích hoặc nhận bình luận sau khi đã phát hành.',
@@ -259,7 +260,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                                 message = 'Tập podcast "${pod.title}" chưa có tệp âm thanh trên máy chủ.';
                               }
 
-                              ScaffoldMessenger.of(context).showSnackBar(
+                              ScaffoldMessenger.of(context).showTopSnackBar(
                                 SnackBar(
                                   content: Text(message),
                                   backgroundColor: AppColors.error,
@@ -354,7 +355,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                           if (kPackagesEnabled && pod.isExclusive) ...[
                             const SizedBox(width: AppSpacing.xs),
                             const StatusChip(
-                              label: 'Độc quyền 🔒',
+                              label: 'Độc quyền',
                               type: StatusType.locked,
                             ),
                           ],
@@ -382,7 +383,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                             const Icon(Icons.send_rounded, size: 16, color: AppColors.primaryLight),
                             const SizedBox(width: 8),
                             Text(
-                              widget.podcast.status == PodcastStatus.rejected ? 'Gửi lại Admin duyệt' : 'Chờ Admin duyệt',
+                              widget.podcast.status == PodcastStatus.rejected ? 'Gửi lại duyệt' : 'Chờ duyệt',
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ],
@@ -487,7 +488,7 @@ class _SoundCloudPodcastCardState extends ConsumerState<SoundCloudPodcastCard> {
                   ),
                   onPressed: () {
                     setState(() => _isReposted = !_isReposted);
-                    ScaffoldMessenger.of(context).showSnackBar(
+                    ScaffoldMessenger.of(context).showTopSnackBar(
                       SnackBar(content: Text(_isReposted ? 'Đã repost tập lên trang cá nhân!' : 'Đã gỡ repost')),
                     );
                   },

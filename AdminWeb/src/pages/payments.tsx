@@ -20,12 +20,12 @@ const pageSize = 20
 const sessionChangedMessage = 'Phiên đăng nhập đã thay đổi. Vui lòng tải lại dữ liệu trước khi tiếp tục.'
 const statusOptions: Array<{ value: PaymentStatus | ''; label: string }> = [
   { value: '', label: 'Mọi trạng thái' },
-  { value: 'PENDING', label: 'PENDING · Chờ đối soát' },
-  { value: 'PAID', label: 'PAID · Đã thu' },
-  { value: 'SUCCESS', label: 'SUCCESS · Đã thu (legacy)' },
-  { value: 'COMPLETED', label: 'COMPLETED · Đã thu (legacy)' },
-  { value: 'FAILED', label: 'FAILED · Thất bại' },
-  { value: 'REFUNDED', label: 'REFUNDED · Đã hoàn' },
+  { value: 'PENDING', label: 'Chờ đối soát' },
+  { value: 'PAID', label: 'Đã thu' },
+  { value: 'SUCCESS', label: 'Đã thu' },
+  { value: 'COMPLETED', label: 'Đã thu' },
+  { value: 'FAILED', label: 'Thất bại' },
+  { value: 'REFUNDED', label: 'Đã hoàn tiền' },
 ]
 
 function formatDate(value: string | null) {
@@ -83,8 +83,8 @@ function ReconcileAction({ payment }: { payment: Payment }) {
     <div className="space-y-4">
       <label className="field-label" htmlFor={`payment-result-${payment.paymentId}`}>Kết quả *</label>
       <select id={`payment-result-${payment.paymentId}`} className="field" value={result} onChange={event => setResult(event.target.value as PaymentReconcile['result'])}>
-        <option value="PAID">PAID · Đã xác minh chuyển khoản</option>
-        <option value="FAILED">FAILED · Không nhận được tiền</option>
+        <option value="PAID">Đã xác minh chuyển khoản</option>
+        <option value="FAILED">Không nhận được tiền</option>
       </select>
       <div>
         <label className="field-label" htmlFor={`payment-reference-${payment.paymentId}`}>Mã giao dịch ngân hàng {result === 'PAID' ? '*' : ''}</label>
@@ -172,14 +172,15 @@ function PaymentDetail({ paymentId, fallback, onClose }: { paymentId: string; fa
 export function PaymentsPage() {
   const { user } = useAuth()
   const [status, setStatus] = useState<PaymentStatus | ''>('PENDING')
+  const [search, setSearch] = useState('')
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const query = useQuery({ queryKey: adminKeys.paymentList(user?.id, status, page, pageSize), enabled: user?.role === 'ADMIN', queryFn: ({ signal }) => backend.payments({ status, page, size: pageSize }, signal) })
   const totalPages = Math.max(1, query.data?.totalPages || 0)
   return <><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Tài chính</p><h1 className="mt-2 text-3xl font-bold">Payments & Refunds</h1><p className="mt-2 text-sm text-muted-foreground">Đối soát thanh toán và ghi nhận hoàn tiền thủ công theo contract Backend.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { void query.refetch() }}><RefreshCw className={`size-4 ${query.isFetching ? 'motion-safe:animate-spin' : ''}`} />Làm mới</Button></div>
-    <section className="panel mb-6"><div className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_220px]"><div><p className="text-xs leading-5 text-muted-foreground">Không gửi lệnh chuyển tiền. Chỉ Admin được truy cập và mọi thay đổi phải được Backend xác nhận.</p></div><label><span className="sr-only">Lọc trạng thái payment</span><select className="field" value={status} onChange={event => { setStatus(event.target.value as PaymentStatus | ''); setPage(0); setSelected(null) }}>{statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div></section>
+    <section className="panel mb-6"><div className="filter-bar grid gap-3 p-5 md:grid-cols-[minmax(0,1fr)_240px]"><label className="w-full"><span className="sr-only">Tìm mã thanh toán hoặc mã người dùng</span><input className="field" value={search} onChange={event => { setSearch(event.target.value); setPage(0); setSelected(null) }} placeholder="Tìm mã thanh toán hoặc mã người dùng" /></label><label><span className="sr-only">Lọc trạng thái payment</span><select className="field" value={status} onChange={event => { setStatus(event.target.value as PaymentStatus | ''); setPage(0); setSelected(null) }}>{statusOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></div></section>
     <div><section className="panel"><div className="panel-heading"><div><h2 className="font-semibold">Danh sách payment</h2><p className="mt-1 text-xs text-muted-foreground">{query.data ? `${query.data.totalElements} payment · trang ${query.data.number + 1}/${totalPages}` : 'Phân trang từ Backend'}</p></div></div>
-      {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data?.content.length ? <><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Payment</th><th>Người dùng</th><th>Số tiền</th><th>Trạng thái</th><th>Ngày tạo</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{query.data.content.map(payment => <Fragment key={payment.paymentId}><tr className={selected === payment.paymentId ? 'bg-muted/40' : ''}><td><p className="font-semibold">{payment.paymentId.slice(0, 8)}…</p><p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{payment.providerTransactionId || 'Chưa có mã giao dịch'}</p></td><td className="max-w-44 break-all font-mono text-[11px]">{payment.userId}</td><td className="whitespace-nowrap font-semibold">{formatMoney(payment.amount, payment.currency)}</td><td><span className={`badge ${statusClass(payment.status)}`}>{payment.status}</span></td><td className="whitespace-nowrap text-xs">{formatDate(payment.createdAt)}</td><td><Button variant="outline" onClick={() => setSelected(payment.paymentId)}><Eye className="size-4" />Chi tiết</Button></td></tr>{selected === payment.paymentId && <tr><td colSpan={6} className="p-0"><PaymentDetail paymentId={selected} fallback={query.data?.content.find(item => item.paymentId === selected)} onClose={() => setSelected(null)} /></td></tr>}</Fragment>)}</tbody></table></div><div className="flex items-center justify-between border-t border-border/60 px-5 py-4 text-sm"><Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</Button><span className="text-muted-foreground">Trang {page + 1}/{totalPages}</span><Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}>Sau</Button></div></> : <EmptyState title="Chưa có payment" message="Không có payment phù hợp với trạng thái hiện tại." />}
+      {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data?.content.length ? <><div className="overflow-x-auto"><table className="data-table"><thead><tr><th>Payment</th><th>Người dùng</th><th>Số tiền</th><th>Trạng thái</th><th>Ngày tạo</th><th><span className="sr-only">Thao tác</span></th></tr></thead><tbody>{query.data.content.filter(item => JSON.stringify(item).toLowerCase().includes(search.trim().toLowerCase())).map(payment => <Fragment key={payment.paymentId}><tr className={selected === payment.paymentId ? 'bg-muted/40' : ''}><td><p className="font-semibold">{payment.paymentId.slice(0, 8)}…</p><p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{payment.providerTransactionId || 'Chưa có mã giao dịch'}</p></td><td className="max-w-44 break-all font-mono text-[11px]">{payment.userId}</td><td className="whitespace-nowrap font-semibold">{formatMoney(payment.amount, payment.currency)}</td><td><span className={`badge ${statusClass(payment.status)}`}>{payment.status}</span></td><td className="whitespace-nowrap text-xs">{formatDate(payment.createdAt)}</td><td><Button variant="outline" onClick={() => setSelected(payment.paymentId)}><Eye className="size-4" />Chi tiết</Button></td></tr>{selected === payment.paymentId && <tr><td colSpan={6} className="p-0"><PaymentDetail paymentId={selected} fallback={query.data?.content.find(item => item.paymentId === selected)} onClose={() => setSelected(null)} /></td></tr>}</Fragment>)}</tbody></table></div><div className="flex items-center justify-between border-t border-border/60 px-5 py-4 text-sm"><Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</Button><span className="text-muted-foreground">Trang {page + 1}/{totalPages}</span><Button variant="outline" disabled={page + 1 >= totalPages} onClick={() => setPage(page + 1)}>Sau</Button></div></> : <EmptyState title="Chưa có payment" message="Không có payment phù hợp với trạng thái hiện tại." />}
     </section></div>
     <p className="mt-4 text-xs text-muted-foreground">Refund chỉ được ghi nhận sau khi Admin đã chuyển trả toàn bộ tiền bên ngoài hệ thống; Backend sẽ từ chối nếu payment đã giải ngân vào ví.</p>
   </>

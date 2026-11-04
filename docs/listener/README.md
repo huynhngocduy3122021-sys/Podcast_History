@@ -31,8 +31,8 @@ Khi `POST /api/auth/login` trả `401`, frontend đọc trường `message`: `T�
 |---:|---|---|---|
 | 1 | `GET /api/categories` | Không | `categoryId`, `name` để lọc |
 | 2 | `GET /api/creators?q=lich%20su` | `q` tên kênh tùy chọn | `creatorProfileId`, `channelName` |
-| 3 | `GET /api/podcasts?q=...&categoryId=...&creatorId=...&seriesId=...&page=0&size=20` | Mọi filter tùy chọn; bỏ tham số trống | `content[]` có `podcastId`, `title`, `thumbnailUrl`, `visibility`, `creatorProfileId` |
-| 4 | `GET /api/podcasts/{podcastId}` | ID từ bước 3 | Chi tiết tập |
+| 3 | `GET /api/podcasts?q=...&categoryId=...&creatorId=...&seriesId=...&page=0&size=20` | Mọi filter tùy chọn; bỏ tham số trống | `content[]` có `podcastId`, `title`, `thumbnailUrl`, `visibility`, `creatorProfileId`, `listenCount` |
+| 4 | `GET /api/podcasts/{podcastId}` | ID từ bước 3 | Chi tiết tập, gồm `listenCount` |
 | 5 | `GET /api/podcasts/{podcastId}/playback` | Không body | `playbackUrl`, `expiresAt`, `resumeFromSeconds`, `durationSeconds` |
 | 6 | `PUT /api/podcasts/{podcastId}/listening-progress` | `progressSeconds` integer 0–86.400, `completed` boolean | Tiến độ đã lưu |
 | Lần mở sau | `GET /api/me/listening-history/{podcastId}` hoặc `GET /api/me/listening-history?page=0&size=20` | Không body | Vị trí đã nghe, danh sách lịch sử |
@@ -42,6 +42,8 @@ Khi `POST /api/auth/login` trả `401`, frontend đọc trường `message`: `T�
 ```
 
 Khi phát hết, gửi `completed: true`. Signed `playbackUrl` có thể hết hạn; lấy lại bằng `/playback` khi cần. `DELETE /api/me/listening-history/{podcastId}` xóa lịch sử của chính người nghe. Danh sách tìm kiếm chỉ gồm podcast đã duyệt/xuất bản; bản nháp không công khai.
+
+API tiến độ nghe giữ nguyên đúng body trên, không thêm `sessionId` hoặc trường mới. Frontend có thể gọi định kỳ trong lúc phát và gửi `completed: true` khi kết thúc; backend tự cập nhật số phiên nghe dùng cho `metrics.totalListens` trên dashboard Creator. Không cần gọi thêm API đếm lượt nghe.
 
 ### Xem transcript
 
@@ -81,7 +83,9 @@ Like comment chỉ áp dụng cho bình luận còn hiển thị của podcast �
 | Thông báo | `GET /api/me/notifications?page=0&size=20` | Page thông báo |
 | Đánh dấu đã đọc | `PUT /api/me/notifications/{notificationId}/read` | Không body; `204` |
 
-Khi kênh đang theo dõi có podcast mới được duyệt mà listener có quyền nghe, listener nhận thông báo `NEW_PODCAST`. Khi gói membership đang tắt, cả tập `MEMBERS_ONLY` cũng nghe được theo luồng playback hiện tại. Mỗi phần tử trong `content[]` của API thông báo có `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt` và `payload`. Với `NEW_PODCAST`, `payload` có `podcastId` và `creatorId`; dùng `podcastId` để mở chi tiết. Frontend gọi lại API danh sách để cập nhật thông báo; hiện chưa có luồng push riêng.
+Khi kênh đang theo dõi có podcast mới được duyệt mà listener có quyền nghe, listener nhận thông báo `NEW_PODCAST`. Khi gói membership đang tắt, cả tập `MEMBERS_ONLY` cũng nghe được theo luồng playback hiện tại. Mỗi phần tử trong `content[]` của API thông báo có `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt` và `payload`. Với `NEW_PODCAST`, `payload` có `podcastId` và `creatorId`; dùng `podcastId` để mở chi tiết.
+
+Để nhận thông báo ngay khi có bản ghi mới, mở STOMP tại `/ws` bằng Bearer token trong frame `CONNECT`, sau đó subscribe `/user/queue/notifications`. REST ở trên vẫn là fallback bắt buộc khi mở màn hình và sau mỗi lần reconnect. Xem contract đầy đủ, schema, reconnect và các loại thông báo theo role tại [docs/notifications/README.md](../notifications/README.md).
 
 ```json
 {"targetType":"PODCAST","targetId":"<podcastId>","reasonCode":"INAPPROPRIATE","description":"Lý do cụ thể"}

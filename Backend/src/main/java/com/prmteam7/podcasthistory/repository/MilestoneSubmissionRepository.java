@@ -2,6 +2,7 @@ package com.prmteam7.podcasthistory.repository;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -12,4 +13,5 @@ public interface MilestoneSubmissionRepository extends JpaRepository<MilestoneSu
     List<MilestoneSubmission> findAllByContractStage_ContractStageIdOrderByRevisionNumberAsc(UUID stageId);
 
     long countByContractStage_ContractStageId(UUID stageId);
+    Optional<MilestoneSubmission> findFirstByContractStage_ContractStageIdOrderBySubmittedAtDesc(UUID stageId);
 }

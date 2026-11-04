@@ -2,6 +2,7 @@
 // No tokens, credentials or personal response data are printed or written to disk.
 import { readFileSync } from 'node:fs'
 import { tokenSchema, meSchema, dashboardSchema } from '../src/lib/contracts.ts'
+import { milestoneDisputesSchema, disputesPageSchema, payoutWithdrawalsSchema, plansPageSchema } from '../src/lib/admin-contracts.ts'
 import { apiHeaders } from '../src/lib/api-config.ts'
 
 const env = readFileSync(new URL('../.env', import.meta.url), 'utf8')
@@ -19,6 +20,28 @@ async function request(method, path, body, accessToken, expected = 200, extraHea
   console.log(`${method} ${path}: HTTP ${response.status}${response.status === expected ? ' OK' : ` (expected ${expected})`}`)
   if (response.status !== expected) { failures++; return { ok: false, response } }
   return { ok: true, response }
+}
+async function requestJson(method, path, accessToken, schema) {
+  const result = await request(method, path, undefined, accessToken)
+  if (!result.ok) return
+  try { schema.parse(await result.response.json()) }
+  catch (error) { failures++; console.log(`Schema verification failed for ${method} ${path}: ${error.name || 'Error'}`) }
+}
+async function checkWebSocket(accessToken) {
+  if (typeof WebSocket !== 'function') { failures++; console.log('WebSocket check unavailable in this Node runtime'); return }
+  await new Promise(resolve => {
+    const url = `${base.replace(/^http/, 'ws')}/ws`
+    const socket = new WebSocket(url)
+    let connected = false
+    const timer = setTimeout(() => { if (!connected) failures++; socket.close(); resolve() }, 10000)
+    socket.addEventListener('open', () => socket.send('CONNECT\naccept-version:1.2\nAuthorization:Bearer ' + accessToken + '\n\n\0'))
+    socket.addEventListener('message', event => {
+      if (typeof event.data === 'string' && event.data.includes('CONNECTED')) {
+        connected = true; clearTimeout(timer); console.log('WebSocket /ws STOMP CONNECT: OK'); socket.close(); resolve()
+      }
+    })
+    socket.addEventListener('error', () => { if (!connected) { failures++; clearTimeout(timer); socket.close(); resolve() } })
+  })
 }
 const health = await request('GET', '/api/health')
 if (!health.ok) process.exit(1)
@@ -54,6 +77,13 @@ for (const [role, name] of [['ADMIN', 'ph_admin'], ['STAFF', 'ph_staff01']]) {
       await request('GET', `${prefix}${path}`, undefined, pair.accessToken)
     }
     await request('GET', '/api/me/notifications?size=1', undefined, pair.accessToken)
+    await requestJson('GET', '/api/admin/disputes?status=OPEN&page=0&size=1', pair.accessToken, disputesPageSchema)
+    await requestJson('GET', '/api/admin/milestone-disputes?status=OPEN', pair.accessToken, milestoneDisputesSchema)
+    if (role === 'ADMIN') {
+      await requestJson('GET', '/api/admin/membership-plans?page=0&size=1', pair.accessToken, plansPageSchema)
+      await requestJson('GET', '/api/admin/payouts/withdrawals/pending', pair.accessToken, payoutWithdrawalsSchema)
+      await checkWebSocket(pair.accessToken)
+    }
     if (role === 'STAFF') await request('GET', '/api/admin/users?size=1', undefined, pair.accessToken, 403)
     const refreshed = await request('POST', '/api/auth/refresh', { refreshToken: pair.refreshToken })
     if (refreshed.ok) {

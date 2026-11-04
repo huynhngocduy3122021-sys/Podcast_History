@@ -37,7 +37,8 @@ public final class ListenerResponses {
             UUID categoryId,
             String categoryName,
             UUID creatorProfileId,
-            String creatorChannelName) {
+            String creatorChannelName,
+            long listenCount) {
     }
 
     public record PlaybackItem(
@@ -68,7 +69,16 @@ public final class ListenerResponses {
             String referenceCode,
             BigDecimal balanceAfter,
             BigDecimal heldBalanceAfter,
-            Instant createdAt) {
+            Instant createdAt,
+            String title,
+            String description,
+            String movement,
+            BigDecimal availableBalanceChange,
+            BigDecimal heldBalanceChange,
+            UUID requestId,
+            String requestTitle,
+            UUID milestoneId,
+            String milestoneName) {
     }
 
     public record LikeSummary(UUID podcastId, long likeCount, boolean likedByMe) {

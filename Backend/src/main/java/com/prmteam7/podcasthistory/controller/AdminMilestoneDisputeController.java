@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prmteam7.podcasthistory.dto.request.ResolveDisputeRequest;
@@ -22,7 +23,7 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/admin/milestone-disputes")
-@Tag(name = "Admin - podcast milestone disputes")
+@Tag(name = "Staff/Admin - podcast milestone disputes")
 @SecurityRequirement(name = "bearerAuth")
 public class AdminMilestoneDisputeController {
 
@@ -33,13 +34,20 @@ public class AdminMilestoneDisputeController {
     }
 
     @GetMapping("/open")
-    @Operation(summary = "Admin xem các tranh chấp đang chờ")
+    @Operation(summary = "Staff/Admin xem các tranh chấp đợt đang chờ")
     public List<DisputeResponse> getOpen(@AuthenticationPrincipal Jwt jwt) {
         return podcastRequestService.getOpenDisputes(userId(jwt));
     }
 
+    @GetMapping
+    @Operation(summary = "Staff/Admin xem tranh chấp đợt theo trạng thái")
+    public List<DisputeResponse> list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(defaultValue = "OPEN") String status) {
+        return podcastRequestService.getDisputes(userId(jwt), status);
+    }
+
     @PostMapping("/{disputeId}/resolve")
-    @Operation(summary = "Admin duyệt mốc hoặc yêu cầu Creator chỉnh sửa")
+    @Operation(summary = "Staff/Admin duyệt đợt hoặc yêu cầu Creator chỉnh sửa")
     public DisputeResponse resolve(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID disputeId,

@@ -29,11 +29,11 @@ public class AdminMembershipPlanService {
     this.subscriptions = subscriptions;
   }
 
-  public Page<PlanItem> list(UUID actor, UUID creatorId, String status, int page, int size) {
+  public Page<PlanItem> list(UUID actor, UUID creatorId, int page, int size) {
     support.actor(actor, true);
     return plans
         .findAll(
-            AdminSupportService.<MembershipPlan>status(status)
+            AdminSupportService.<MembershipPlan>status("ACTIVE")
                 .and(
                     (r, q, c) ->
                         creatorId == null

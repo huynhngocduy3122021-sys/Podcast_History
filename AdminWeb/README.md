@@ -43,7 +43,7 @@ Khi dùng ngrok, đặt `VITE_API_BASE_URL` trong **`AdminWeb/.env`**, ví dụ 
 
 ## Hợp đồng đã xác minh
 
-Nguồn chính: [ADMIN_STAFF_API.md](../docs/ADMIN_STAFF_API.md), đối chiếu controller/DTO/service/security hiện tại trong `Backend/src/main/java/com/prmteam7/podcasthistory/`.
+Nguồn chính: [admin workflow](../docs/admin/README.md), [staff workflow](../docs/staff/README.md), [contract API guide](../docs/CONTRACT_API_GUIDE.md) và [realtime API updates](../docs/REALTIME_API_UPDATES.md); đối chiếu thêm controller/DTO/service/security hiện tại trong `Backend/src/main/java/com/prmteam7/podcasthistory/`.
 
 | Method | Endpoint thực sự được ứng dụng gọi | Hợp đồng |
 |---|---|---|
@@ -76,7 +76,7 @@ Nguồn chính: [ADMIN_STAFF_API.md](../docs/ADMIN_STAFF_API.md), đối chiếu
 ## Quyền và trạng thái phiên
 
 - Backend là nguồn chuẩn: `SecurityConfig` cho phép ADMIN và STAFF gọi các nhóm dùng chung `/api/admin/dashboard`, `/api/admin/podcasts/**`, `/api/admin/reports/**`, `/api/admin/podcast-appeals/**`; các `/api/admin/**` khác chỉ ADMIN. `AccountJwtValidator` kiểm tra user active, role hiện tại, token_version và token_type mỗi request.
-- ADMIN thấy đủ 16 mục. STAFF chỉ thấy Dashboard, Podcast Moderation, Reports, Appeals và thông báo cá nhân. Gõ trực tiếp URL riêng ADMIN bị route guard chặn. 403 không refresh và được hiển thị rõ.
+- ADMIN thấy toàn bộ 18 route nghiệp vụ. STAFF thấy Dashboard, Podcast Moderation, Reports, Appeals, Contracts detail, Disputes, Milestone Disputes và thông báo cá nhân; các route quản trị riêng vẫn bị route guard chặn. 403 không refresh và được hiển thị rõ.
 - Client không tự suy quyền qua JWT decode. Sau login/refresh đều gọi `/api/auth/me` trước khi công bố user.
 - Access token chỉ lưu trong memory. Refresh token lưu `sessionStorage` theo tab để giữ phiên qua reload; nếu storage bị chặn thì dùng memory. Không lưu mật khẩu, không có “remember me”. Storage này có thể bị đọc bởi JavaScript cùng origin; không render HTML từ API, không ghi token vào log. Backend hiện trả token trong JSON, chưa có HttpOnly-cookie contract.
 - Dùng một promise refresh cho các 401 đồng thời; 401 đến muộn của access token cũ dùng token đã xoay vòng. Request chỉ retry **một lần**; TanStack Query không tự retry. Login/refresh/logout dùng Axios riêng, không đi qua interceptor.
@@ -160,8 +160,19 @@ Các route và API đều được bảo vệ bằng role guard hiện có; STAF
 - Phản hồi mutation sai hợp đồng/trạng thái, mất kết nối/timeout hoặc lỗi 5xx được coi là chưa xác nhận kết quả. UI không báo thành công, làm mới dữ liệu liên quan và yêu cầu kiểm tra trước khi thử lại; không tự gửi lại mutation vì các lỗi này.
 - Giữ thông báo nghiệp vụ 400/403/404/409 và mapping lỗi trường đã xác minh. Login 401 dùng thông báo sai thông tin đăng nhập an toàn, không gọi đó là phiên hết hạn. Validation login dùng giới hạn UTF-16 như DTO Java; không trim mật khẩu.
 - Lỗi phiên lúc chạy được giữ để trang login hiển thị; login thành công xóa lỗi cũ. Kiểm tra lại identity/role sau khi chờ invalidation trước khi hiển thị thành công.
-- Kiểm tra sau cập nhật: **43/43 test đạt**, typecheck, lint và production build đạt. Tests dùng adapter offline, không tạo phiên hoặc sửa dữ liệu trên Backend thật. Chưa QA browser/HTTP cho các thay đổi Phase 2.1.
+- Kiểm tra sau cập nhật: bộ test hiện tại được báo cáo ở phần Kiểm thử và giới hạn môi trường bên dưới; các test mock không tạo phiên hoặc sửa dữ liệu trên Backend thật.
 - Build còn cảnh báo annotation của Zod và bundle trên 500 kB. Test client dùng `stripTypeScriptTypes` của Node để chạy source thật trong memory và có cảnh báo experimental; không cần thêm dependency.
+
+## Đồng bộ Backend hiện tại
+
+- Payout dùng `GET /api/admin/payouts/withdrawals/pending`, `POST /api/admin/payouts/withdrawals/{withdrawalId}/result` và đăng ký payout account qua `POST /api/admin/payouts/creators/{creatorProfileId}/accounts`. UI chỉ hiển thị số tiền/tiền tệ do Backend trả về; SUCCESS bắt buộc provider reference, FAILED không tự tính số dư.
+- Membership Plans chỉ gửi `creatorId`, `page`, `size`; không còn filter ACTIVE/INACTIVE giả. Deactivate dùng DELETE với note và chỉ đóng gói khi Backend trả `INACTIVE`.
+- Staff/Admin dùng chung contract dispute và milestone dispute. Dispute đã xác nhận chỉ cho phép `LISTENER_WINS`/`CREATOR_WINS`; milestone evidence lấy signed URL tạm thời từ Backend, không dùng raw object key/public URL làm quyền truy cập.
+- Realtime dùng STOMP `GET /ws`, CONNECT header `Authorization: Bearer <access_token>`, subscribe các queue `/user/queue/notifications`, `/user/queue/api-changes`, `/user/queue/realtime`, `/user/queue/contract-chat`. Mất kết nối tự reconnect và REST vẫn là nguồn đồng bộ cuối cùng.
+
+### Kiểm thử và giới hạn môi trường
+
+`npm test` là unit/integration test qua Axios adapter mock; `npm run test:e2e` là mock E2E đi xuyên qua API layer cho payout và milestone, không phải browser E2E với Backend thật. `npm run check:api` và `npm run check:phase2` là smoke/integration scripts cần Backend và tài khoản test được cấp phép. Repo hiện chưa có Playwright/browser runner và môi trường hiện tại chưa cung cấp Backend/database test ổn định, nên không ghi nhận full real-Backend/browser E2E khi chưa chạy được.
 
 ## Giai đoạn tiếp theo
 
@@ -173,4 +184,4 @@ Phase 3 đã triển khai ba route nghiệp vụ:
 
 API Phase 3 được kiểm tra bằng Zod ở response boundary. Mutation có body ghi chú tối đa 5.000 đơn vị UTF-16; approve/reject/claim/resolve yêu cầu response 200 đúng ID/trạng thái; hide/restore/delete yêu cầu 204 và không parse body. Conflict 409, lỗi quyền, lỗi media/R2, response malformed hoặc mất kết nối không báo thành công; dữ liệu liên quan được tải lại khi có thể.
 
-Tests offline hiện tại: **47/47 đạt**, typecheck, lint và production build đạt. Build còn cảnh báo annotation từ Zod và bundle khoảng 635 kB. Chưa chạy login/CRUD thật trên Backend hoặc QA browser; signed URL, R2 expiry và race 409 cần xác minh thêm trên môi trường test được phép. Không triển khai payment gateway, AI moderation, tự chuyển khoản hoặc các luồng Backend chưa hỗ trợ.
+Tests offline của Phase 3 là các test mock qua Axios adapter; các kết quả cuối cùng phải lấy từ lệnh kiểm tra sau implementation. Chưa chạy login/CRUD thật trên Backend hoặc QA browser trong môi trường này; signed URL, R2 expiry và race 409 cần xác minh thêm trên môi trường test được phép. Không triển khai payment gateway, AI moderation, tự chuyển khoản hoặc các luồng Backend chưa hỗ trợ.

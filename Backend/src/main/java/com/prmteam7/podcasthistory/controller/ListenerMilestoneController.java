@@ -32,7 +32,7 @@ public class ListenerMilestoneController {
     }
 
     @PostMapping("/{milestoneId}/approve")
-    @Operation(summary = "Listener chấp nhận sản phẩm và tạo Payment PENDING")
+    @Operation(summary = "Listener nghiệm thu đợt; hợp đồng escrow giải ngân ví và ghi Payment PAID")
     public MilestoneApprovalResponse approve(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId) {
@@ -42,6 +42,16 @@ public class ListenerMilestoneController {
     @PostMapping("/{milestoneId}/revision")
     @Operation(summary = "Listener yêu cầu Creator chỉnh sửa mốc")
     public ResponseEntity<Void> requestRevision(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID milestoneId,
+            @Valid @RequestBody MilestoneRevisionRequest request) {
+        podcastRequestService.requestMilestoneRevision(userId(jwt), milestoneId, request.reason());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{milestoneId}/reject")
+    @Operation(summary = "Listener từ chối lần bàn giao hiện tại, yêu cầu Creator làm lại (tối đa 3 lượt mỗi đợt)")
+    public ResponseEntity<Void> rejectSubmission(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId,
             @Valid @RequestBody MilestoneRevisionRequest request) {

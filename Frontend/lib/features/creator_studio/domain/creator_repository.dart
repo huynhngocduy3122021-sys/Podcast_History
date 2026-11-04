@@ -86,29 +86,97 @@ abstract class CreatorRepository {
     required String filename,
   });
 
-  // Custom Requests (Podcast theo yêu cầu)
+  // Custom Requests (Podcast theo yêu cầu & Hợp đồng Escrow)
   Future<List<PodcastRequest>> getRequests();
   Future<PodcastRequest?> getRequestById(String id);
-  Future<void> acceptRequest(String id);
+  Future<void> acceptRequest(
+    String id, {
+    String? responseText,
+    List<Map<String, dynamic>>? milestones,
+  });
   Future<void> rejectRequest(String id, String reason);
+  Future<ContractAgreement> proposeContract(
+    String requestId, {
+    required String responseText,
+    required List<ContractProposalStageInput> milestones,
+  });
+  Future<ContractAgreement?> getContractAgreement(String requestId);
+  Future<ContractAgreement> signContract(
+    String requestId, {
+    required int contractVersion,
+    required String contentHash,
+  });
   Future<void> deliverWork(
     String id,
     String fileUrl,
     String note, {
     List<int>? fileBytes,
     String? filename,
+    String? milestoneId,
+  });
+  Future<List<MilestoneSubmissionItem>> getMilestoneSubmissions(
+    String milestoneId,
+  );
+  Future<String?> getMilestoneMediaUrl(String milestoneId, String submissionId);
+  Future<void> requestTermination(
+    String requestId, {
+    required String reason,
+    String? listenerWinAction,
+  });
+  Future<void> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  });
+  Future<ContractTerminationStatus?> getTerminationRequest(String requestId);
+  Future<void> confirmContractDispute(
+    String disputeId, {
+    String? listenerWinAction,
+  });
+  Future<void> withdrawContractDispute(String disputeId);
+  Future<void> disputeMilestone(
+    String milestoneId, {
+    required String reason,
+    String? listenerWinAction,
+  });
+  Future<void> confirmMilestoneDispute(
+    String milestoneId,
+    String disputeId, {
+    String? listenerWinAction,
+  });
+  Future<void> withdrawMilestoneDispute(String milestoneId, String disputeId);
+  Future<List<Map<String, dynamic>>> getChatMessages(
+    String requestId, {
+    int page = 0,
+    int size = 20,
   });
   Future<void> sendChatMessage(String requestId, String message);
 
   // Wallet & Withdraw
   Future<Map<String, int>> getWalletBalance();
-  Future<List<WalletTransaction>> getTransactions();
+  Future<List<WalletTransaction>> getTransactions({
+    String? status,
+    int page = 0,
+    int size = 20,
+  });
   Future<List<BankAccount>> getBankAccounts();
   Future<void> addBankAccount(
     String bankName,
     String accountNumber,
     String accountHolder,
   );
+  Future<List<Map<String, dynamic>>> getMilestoneDrafts(String milestoneId);
+  Future<Map<String, dynamic>> uploadMilestoneDraft(
+    String milestoneId, {
+    required List<int> fileBytes,
+    required String filename,
+    String? note,
+  });
+  Future<Map<String, dynamic>> deliverMilestoneDraft(
+    String milestoneId,
+    String draftId,
+  );
+  Future<void> cancelMilestoneDraft(String milestoneId, String draftId);
   Future<void> deleteBankAccount(String id);
   Future<WalletTransaction> withdrawMoney(
     int amount,
@@ -117,10 +185,11 @@ abstract class CreatorRepository {
   );
   Future<void> releaseFunds();
 
-  // Likes & History
+  // Likes & History & Playback
   Future<Map<String, dynamic>> getPodcastLikes(String podcastId);
   Future<Map<String, dynamic>> likePodcast(String podcastId);
   Future<Map<String, dynamic>> unlikePodcast(String podcastId);
+  Future<Map<String, dynamic>?> getPlayback(String podcastId);
   Future<void> recordListeningProgress({
     required String podcastId,
     required int progressSeconds,
@@ -129,7 +198,11 @@ abstract class CreatorRepository {
 
   // Comments
   Future<List<StudioComment>> getComments();
-  Future<List<StudioComment>> getPodcastComments(String podcastId, {int page = 0, int size = 50});
+  Future<List<StudioComment>> getPodcastComments(
+    String podcastId, {
+    int page = 0,
+    int size = 50,
+  });
   Future<int> getPodcastCommentsCount(String podcastId);
   Future<StudioComment?> addCommentToPodcast({
     required String podcastId,
@@ -179,6 +252,32 @@ abstract class CreatorRepository {
     List<FormQuestion> questions,
   );
 
+  // Polls (/api/creator/polls)
+  Future<List<CreatorPoll>> getPolls({String? status, String? seriesId, String? podcastId});
+  Future<CreatorPoll> getPollDetail(String pollId);
+  Future<CreatorPoll> createPoll({
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  });
+  Future<CreatorPoll> updatePoll(
+    String pollId, {
+    required String question,
+    required List<String> options,
+    String? seriesId,
+    String? podcastId,
+    DateTime? startsAt,
+    DateTime? endsAt,
+  });
+  Future<void> deletePoll(String pollId);
+  Future<CreatorPoll> publishPoll(String pollId);
+  Future<CreatorPoll> closePoll(String pollId);
+  Future<PollResultsData> getPollResults(String pollId);
+  Future<List<PollResponseUserItem>> getPollResponses(String pollId);
+
   // Livestreams (Agora)
   Future<List<CreatorLivestreamItem>> getLivestreams();
   Future<CreatorLivestreamItem> getLivestreamById(String livestreamId);
@@ -195,9 +294,20 @@ abstract class CreatorRepository {
   Future<List<CreatorChannelPlan>> getMyChannelMembershipPlans();
   Future<List<CreatorPlanTemplate>> getMembershipPlanTemplates();
   Future<CreatorChannelPlan> selectMembershipTemplate(String templateCode);
-  Future<CreatorChannelPlan> updateMembershipPlanPrice(String planId, double price);
+  Future<CreatorChannelPlan> updateMembershipPlanPrice(
+    String planId,
+    double price,
+  );
+  Future<PageCreatorMembers> getCreatorMemberships({
+    String status = 'ACTIVE',
+    int page = 0,
+    int size = 20,
+  });
 
   // Notifications
-  Future<List<CreatorStudioNotification>> getNotifications({int page = 0, int size = 30});
+  Future<List<CreatorStudioNotification>> getNotifications({
+    int page = 0,
+    int size = 30,
+  });
   Future<void> markNotificationAsRead(String notificationId);
 }

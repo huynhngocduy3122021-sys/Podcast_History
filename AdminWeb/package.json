@@ -11,6 +11,8 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test": "node --test tests/*.test.ts",
+    "test:e2e": "node --test tests/e2e/*.test.ts",
+    "test:all": "npm test && npm run test:e2e",
     "check:api": "node scripts/check-api.mjs",
     "check:phase2": "node scripts/check-phase2.mjs"
   },

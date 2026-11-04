@@ -71,6 +71,7 @@ export const staffCreateSchema = z.object({
 export const auditSchema = z.object({
   auditId: uuid,
   actorId: uuid,
+  actorName: z.string().nullable().optional(),
   action: z.string(),
   resourceType: z.string(),
   resourceId: uuid,
@@ -101,11 +102,57 @@ export const planWriteSchema = z.object({
   description: textWithLimit(10000, 'Mô tả tối đa 10.000 ký tự'),
   price: money,
   currency: z.string().regex(/^[A-Z]{3}$/, 'Tiền tệ dùng 3 chữ in hoa'),
-  durationDays: z.preprocess(value => typeof value === 'string' && value.trim() ? Number(value) : value,
+  durationDays: z.preprocess(value => typeof value === 'string' ? (value.trim() ? Number(value) : null) : value,
     z.number().int().min(1, 'Thời hạn tối thiểu 1 ngày').max(3650, 'Thời hạn tối đa 3.650 ngày')),
   status: planStatusSchema,
 })
 export const planDeactivateSchema = z.object({ note: noteSchema })
+
+export const creatorSystemPlanStatusSchema = z.enum(['ACTIVE', 'INACTIVE'])
+export const creatorSystemBenefitSchema = z.object({
+  key: z.string(), value: z.string(), description: z.string().nullable(),
+})
+export const creatorSystemPlanSchema = z.object({
+  planId: uuid,
+  code: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  price: decimalSchema,
+  currency: z.string().length(3),
+  durationDays: z.number().int().nullable(),
+  status: creatorSystemPlanStatusSchema,
+  benefits: z.array(creatorSystemBenefitSchema),
+})
+export const creatorSystemPlansSchema = z.array(creatorSystemPlanSchema)
+const creatorSystemBenefitWriteSchema = z.object({
+  key: textWithLimit(60, 'Mã quyền lợi tối đa 60 ký tự').trim().min(1, 'Nhập mã quyền lợi')
+    .regex(/^[A-Za-z][A-Za-z0-9_]*$/, 'Mã quyền lợi không hợp lệ'),
+  value: textWithLimit(200, 'Giá trị quyền lợi tối đa 200 ký tự').trim().min(1, 'Nhập giá trị quyền lợi'),
+  description: textWithLimit(500, 'Mô tả quyền lợi tối đa 500 ký tự'),
+})
+const creatorSystemPrice = textWithLimit(13, 'Giá tối đa 10 chữ số và 2 chữ số thập phân').trim()
+  .refine(value => /^\d{1,10}(?:\.\d{1,2})?$/.test(value), 'Giá phải là số không âm, tối đa 2 chữ số thập phân')
+export const creatorSystemPlanWriteSchema = z.object({
+  code: textWithLimit(60, 'Mã gói tối đa 60 ký tự').trim().regex(/^[A-Za-z][A-Za-z0-9_]{1,59}$/, 'Mã gói không hợp lệ'),
+  name: textWithLimit(150, 'Tên gói tối đa 150 ký tự').trim().min(1, 'Nhập tên gói'),
+  description: textWithLimit(10000, 'Mô tả tối đa 10.000 ký tự'),
+  price: creatorSystemPrice,
+  currency: z.string().regex(/^[A-Z]{3}$/, 'Tiền tệ dùng 3 chữ in hoa'),
+  durationDays: z.preprocess(value => typeof value === 'string' && value.trim() ? Number(value) : value,
+    z.number().int().min(1, 'Thời hạn tối thiểu 1 ngày').max(3650, 'Thời hạn tối đa 3.650 ngày').nullable()),
+  status: creatorSystemPlanStatusSchema,
+  benefits: z.array(creatorSystemBenefitWriteSchema).max(30, 'Tối đa 30 quyền lợi'),
+}).superRefine((value, context) => {
+  const isFree = value.code.trim().toUpperCase() === 'FREE'
+  if (isFree && (value.price !== '0' || value.durationDays !== null || value.status !== 'ACTIVE')) {
+    context.addIssue({ code: 'custom', path: ['price'], message: 'Gói FREE phải có giá 0, không thời hạn và luôn ACTIVE' })
+  }
+  if (!isFree && (Number(value.price) <= 0 || value.durationDays === null)) {
+    context.addIssue({ code: 'custom', path: ['price'], message: 'Gói trả phí cần giá dương và thời hạn' })
+  }
+})
+export type CreatorSystemPlan = z.infer<typeof creatorSystemPlanSchema>
+export type CreatorSystemPlanWrite = z.infer<typeof creatorSystemPlanWriteSchema>
 
 export const paymentStatusSchema = z.enum(['PENDING', 'PAID', 'FAILED', 'REFUNDED', 'SUCCESS', 'COMPLETED'])
 export const paymentSchema = z.object({
@@ -164,12 +211,73 @@ export const withdrawalReviewSchema = z.object({
   reviewedAt: z.string(),
 })
 export const withdrawalReviewsPageSchema = pageSchema(withdrawalReviewSchema)
+export const payoutStatusSchema = z.enum(['PENDING', 'COMPLETED', 'FAILED'])
+export const payoutWithdrawalSchema = z.object({
+  withdrawalRequestId: uuid,
+  creatorProfileId: uuid,
+  amount: decimalSchema,
+  currency: z.string().length(3),
+  payoutMethod: z.string(),
+  payoutAccountMasked: z.string(),
+  payoutAccountReference: z.string().nullable(),
+  status: payoutStatusSchema,
+  requestedAt: z.string(),
+  note: z.string().nullable(),
+})
+export const payoutWithdrawalsSchema = z.array(payoutWithdrawalSchema)
+export const payoutResultResponseSchema = z.object({
+  withdrawalRequestId: uuid,
+  amount: decimalSchema,
+  currency: z.string().length(3),
+  payoutMethod: z.string(),
+  payoutAccountMasked: z.string(),
+  providerReference: z.string().nullable(),
+  status: payoutStatusSchema,
+  requestedAt: z.string(),
+  processedAt: z.string().nullable(),
+  note: z.string().nullable(),
+})
+export const payoutResultSchema = z.enum(['SUCCESS', 'FAILED'])
+export const payoutResultWriteSchema = z.object({
+  result: payoutResultSchema,
+  providerReference: textWithLimit(180, 'Mã giao dịch tối đa 180 ký tự').trim().optional(),
+  note: textWithLimit(5000, 'Ghi chú tối đa 5.000 ký tự').trim().optional(),
+}).superRefine((value, context) => {
+  if (value.result === 'SUCCESS' && !value.providerReference) {
+    context.addIssue({ code: 'custom', path: ['providerReference'], message: 'Nhập mã giao dịch khi ghi nhận thành công' })
+  }
+})
+export const payoutAccountSchema = z.object({
+  payoutAccountId: uuid,
+  creatorProfileId: uuid,
+  payoutMethod: z.string(),
+  accountMasked: z.string(),
+  currency: z.string().length(3),
+  verified: z.boolean(),
+  active: z.boolean(),
+})
+export const payoutAccountWriteSchema = z.object({
+  payoutMethod: textWithLimit(40, 'Phương thức tối đa 40 ký tự').trim().min(1, 'Nhập phương thức nhận tiền'),
+  accountReference: textWithLimit(255, 'Tài khoản tối đa 255 ký tự').trim().min(1, 'Nhập tham chiếu tài khoản'),
+  accountMasked: textWithLimit(160, 'Tài khoản hiển thị tối đa 160 ký tự').trim().min(1, 'Nhập tài khoản đã che'),
+  currency: z.string().regex(/^[A-Za-z]{3}$/, 'Tiền tệ dùng 3 chữ cái'),
+})
 export const walletSchema = z.object({
   walletId: uuid,
   userId: uuid,
+  username: z.string().optional(),
+  email: z.string().optional(),
+  displayName: z.string().optional(),
+  role: z.string().optional(),
+  active: z.boolean().optional(),
+  verified: z.boolean().optional(),
   availableBalance: decimalSchema,
+  heldBalance: decimalSchema.optional(),
+  totalBalance: decimalSchema.optional(),
   currency: z.string().length(3),
   status: z.string(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
 })
 export const walletsPageSchema = pageSchema(walletSchema)
 export const transactionSchema = z.object({
@@ -198,29 +306,66 @@ export const contractSchema = z.object({
   contractId: uuid,
   listenerId: uuid,
   creatorId: uuid,
+  listenerName: z.string().nullable().optional(),
+  creatorName: z.string().nullable().optional(),
   status: contractStatusSchema,
   createdAt: z.string(),
   stages: z.array(contractStageSchema),
 })
 export const contractsPageSchema = pageSchema(contractSchema)
 export const disputeStatusSchema = z.string().min(1)
-export const disputeDecisionSchema = z.enum(['RESUME_CONTRACT', 'CANCEL_CONTRACT', 'COMPLETE_CONTRACT'])
+export const disputeDecisionSchema = z.enum(['RESUME_CONTRACT', 'CANCEL_CONTRACT', 'COMPLETE_CONTRACT', 'LISTENER_WINS', 'CREATOR_WINS'])
 export const disputeSchema = z.object({
   disputeId: uuid,
   contractId: uuid,
   openedById: uuid,
+  openedByName: z.string().nullable().optional(),
   reason: z.string(),
   previousContractStatus: z.string(),
   status: disputeStatusSchema,
   decision: z.string().nullable(),
   note: z.string().nullable(),
   reviewerId: uuid.nullable(),
+  reviewerName: z.string().nullable().optional(),
   createdAt: z.string(),
   resolvedAt: z.string().nullable(),
+  responseDeadlineAt: z.string().nullable().optional(),
+  opponentConfirmedAt: z.string().nullable().optional(),
+  listenerWinAction: z.string().nullable().optional(),
 })
 export const disputesPageSchema = pageSchema(disputeSchema)
 export const openDisputeSchema = z.object({ note: noteSchema })
+export const milestoneDisputeDecisionSchema = z.enum(['APPROVE_MILESTONE', 'REQUEST_REVISION', 'LISTENER_WINS', 'CREATOR_WINS'])
+export const milestoneDisputeSchema = z.object({
+  disputeId: uuid,
+  milestoneId: uuid,
+  raisedByUserId: uuid,
+  reason: z.string(),
+  status: z.string(),
+  decision: z.string().nullable(),
+  resolutionNote: z.string().nullable(),
+  reviewedByUserId: uuid.nullable(),
+  createdAt: z.string(),
+  resolvedAt: z.string().nullable(),
+  responseDeadlineAt: z.string().nullable(),
+  opponentConfirmedAt: z.string().nullable(),
+  listenerWinAction: z.string().nullable(),
+})
+export const milestoneDisputesSchema = z.array(milestoneDisputeSchema)
 export const resolveDisputeSchema = z.object({ decision: disputeDecisionSchema, note: noteSchema })
+export const resolveMilestoneDisputeSchema = z.object({ decision: milestoneDisputeDecisionSchema, note: noteSchema })
+export const milestoneSubmissionSchema = z.object({
+  submissionId: uuid,
+  milestoneId: uuid,
+  revisionNumber: z.number().int().positive(),
+  objectKey: z.string().nullable(),
+  publicUrl: z.string().nullable(),
+  contentType: z.string().nullable(),
+  note: z.string().nullable(),
+  submittedAt: z.string(),
+})
+export const milestoneSubmissionsSchema = z.array(milestoneSubmissionSchema)
+export const mediaUrlSchema = z.object({ submissionId: uuid, url: z.string().url(), expiresAt: z.string() })
 export const approveWithdrawalSchema = z.object({ payoutAccountVerified: z.literal(true), note: noteSchema })
 export const withdrawalNoteSchema = z.object({ note: noteSchema })
 export const completeWithdrawalSchema = z.object({
@@ -244,6 +389,9 @@ export type PaymentRefund = z.infer<typeof paymentRefundSchema>
 export type WithdrawalStatus = z.infer<typeof withdrawalStatusSchema>
 export type Withdrawal = z.infer<typeof withdrawalSchema>
 export type WithdrawalReview = z.infer<typeof withdrawalReviewSchema>
+export type PayoutWithdrawal = z.infer<typeof payoutWithdrawalSchema>
+export type PayoutResultWrite = z.infer<typeof payoutResultWriteSchema>
+export type PayoutAccountWrite = z.infer<typeof payoutAccountWriteSchema>
 export type Wallet = z.infer<typeof walletSchema>
 export type Transaction = z.infer<typeof transactionSchema>
 export type ContractStatus = z.infer<typeof contractStatusSchema>
@@ -254,6 +402,8 @@ export type DisputeDecision = z.infer<typeof disputeDecisionSchema>
 export type Dispute = z.infer<typeof disputeSchema>
 export type OpenDispute = z.infer<typeof openDisputeSchema>
 export type ResolveDispute = z.infer<typeof resolveDisputeSchema>
+export type MilestoneDispute = z.infer<typeof milestoneDisputeSchema>
+export type ResolveMilestoneDispute = z.infer<typeof resolveMilestoneDisputeSchema>
 export type ApproveWithdrawal = z.infer<typeof approveWithdrawalSchema>
 export type WithdrawalNote = z.infer<typeof withdrawalNoteSchema>
 export type CompleteWithdrawal = z.infer<typeof completeWithdrawalSchema>

@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Bell, X } from "lucide-react";
 import { useAuth } from "../auth";
 import { errorMessage } from "../lib/client";
-import { createNotificationApi, notificationKeys } from "../lib/notifications";
+import { countUnreadNotifications, createNotificationApi, notificationKeys } from "../lib/notifications";
 import { useNotificationRead } from "../lib/notification-state";
 import { api } from "../lib/client";
 import { Button } from "./ui/button";
@@ -38,9 +38,10 @@ export function NotificationDropdown() {
   const read = useNotificationRead();
   const query = useQuery({
     queryKey: user ? notificationKeys.page(user.id, 0, size) : ["notifications", "anonymous", "page", 0, size],
-    enabled: open && !!user,
+    enabled: !!user,
     queryFn: ({ signal }) => backend.list(0, size, signal),
   });
+  const unreadCount = countUnreadNotifications(query.data);
   useLayoutEffect(() => {
     if (!open) return;
     const alignToBell = () => {
@@ -90,12 +91,17 @@ export function NotificationDropdown() {
         ref={trigger}
         variant="ghost"
         className="px-2"
-        aria-label={`Thông báo cá nhân${query.data ? `, ${query.data.content.filter(item => !item.read).length} chưa đọc` : ""}`}
+        aria-label={`Thông báo cá nhân${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         onClick={() => setOpen((current) => !current)}
       >
-        <Bell className="size-5" />
+        <span className="relative inline-flex">
+          <Bell className="size-5" />
+          {unreadCount > 0 && <span aria-label={`${unreadCount} thông báo chưa đọc`} className="absolute -right-2 -top-2 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-on-primary">
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>}
+        </span>
       </Button>
       {open && (
         <section

@@ -14,6 +14,11 @@ import com.prmteam7.podcasthistory.dto.response.ListenerResponses.CommentItem;
 public class CommentRealtimeHub {
 
     private final ConcurrentHashMap<UUID, CopyOnWriteArrayList<SseEmitter>> listeners = new ConcurrentHashMap<>();
+    private final RealtimeEventPublisher realtime;
+
+    public CommentRealtimeHub(RealtimeEventPublisher realtime) {
+        this.realtime = realtime;
+    }
 
     public SseEmitter subscribe(UUID podcastId) {
         SseEmitter emitter = new SseEmitter(0L);
@@ -34,6 +39,7 @@ public class CommentRealtimeHub {
     }
 
     public void publish(UUID podcastId, CommentItem comment) {
+        realtime.publishTopic("/topic/podcasts/" + podcastId + "/comments", "COMMENT_CREATED", comment);
         CopyOnWriteArrayList<SseEmitter> podcastListeners = listeners.get(podcastId);
         if (podcastListeners == null) {
             return;

@@ -13,5 +13,21 @@ public record DisputeResponse(
         String resolutionNote,
         UUID reviewedByUserId,
         Instant createdAt,
-        Instant resolvedAt) {
+        Instant resolvedAt,
+        Instant responseDeadlineAt,
+        Instant opponentConfirmedAt,
+        String listenerWinAction,
+        UUID contractId,
+        UUID requestId,
+        String requestTitle,
+        String milestoneName,
+        UUID listenerId,
+        String listenerName,
+        UUID creatorId,
+        String creatorChannelName,
+        String raisedByName,
+        String reviewedByName,
+        String raisedByEmail,
+        String raisedByRole,
+        String raisedByRoleLabel) {
 }

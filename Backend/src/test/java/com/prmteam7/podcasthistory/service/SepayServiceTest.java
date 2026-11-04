@@ -52,6 +52,8 @@ class SepayServiceTest {
   @Mock private UserWalletRepository wallets;
   @Mock private WalletTransactionRepository walletTransactions;
   @Mock private PaymentMethodRepository paymentMethods;
+  @Mock private RealtimeEventPublisher realtime;
+  @Mock private MembershipRevenueService membershipRevenueService;
 
   private SepayService sepayService;
 
@@ -60,7 +62,8 @@ class SepayServiceTest {
     SepayProperties properties = new SepayProperties();
     properties.setWebhookApiKey(API_KEY);
     sepayService = new SepayService(paymentRepository, subscriptionRepository,
-        checkoutRepository, creatorSubscriptions, wallets, walletTransactions, paymentMethods, properties);
+        checkoutRepository, creatorSubscriptions, wallets, walletTransactions, paymentMethods, properties,
+        realtime, membershipRevenueService);
   }
 
   @Test
@@ -157,6 +160,7 @@ class SepayServiceTest {
         payment.getSubscription().getEndAt());
     verify(paymentRepository).save(payment);
     verify(subscriptionRepository).save(payment.getSubscription());
+    verify(membershipRevenueService).creditPaidMembership(payment);
   }
 
   @Test

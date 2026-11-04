@@ -267,16 +267,24 @@ public class AdminContentService {
             : r.getComment() != null
                 ? r.getComment().getCommentId()
                 : r.getLivestream().getLivestreamId();
+    String targetName =
+        r.getPodcast() != null
+            ? r.getPodcast().getTitle()
+            : r.getComment() != null
+                ? commentSummary(r.getComment().getContent())
+                : r.getLivestream().getTitle();
     return new ReportItem(
         r.getReportId(),
         r.getUser().getUserId(),
         r.getUser().getDisplayName(),
         type,
         target,
+        targetName,
         r.getReasonCode(),
         r.getDescription(),
         r.getStatus(),
         r.getAssignedTo() == null ? null : r.getAssignedTo().getUserId(),
+        r.getAssignedTo() == null ? null : r.getAssignedTo().getDisplayName(),
         r.getCreatedAt(),
         r.getResolvedAt(),
         detail
@@ -284,6 +292,12 @@ public class AdminContentService {
                 .map(this::reviewItem)
                 .toList()
             : List.of());
+  }
+
+  private String commentSummary(String content) {
+    if (content == null) return "Bình luận không còn nội dung";
+    String normalized = content.replaceAll("\\s+", " ").trim();
+    return normalized.length() > 120 ? normalized.substring(0, 120) + "…" : normalized;
   }
 
   private AppealItem appealItem(PodcastAppeal a) {

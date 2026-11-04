@@ -102,6 +102,9 @@ class _CreatorNotificationSheetState
     if (t.contains('COMMENT') || t.contains('LIKE')) {
       return Icons.chat_bubble_outline_rounded;
     }
+    if (t.contains('POLL')) {
+      return Icons.poll_outlined;
+    }
     if (t.contains('REQUEST') || t.contains('SERIES')) {
       return Icons.assignment_outlined;
     }

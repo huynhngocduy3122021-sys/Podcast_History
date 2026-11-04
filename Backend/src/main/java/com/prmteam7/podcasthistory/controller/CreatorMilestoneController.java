@@ -33,7 +33,7 @@ public class CreatorMilestoneController {
     }
 
     @PostMapping(path = "/{milestoneId}/submissions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Creator nộp sản phẩm hoặc bản chỉnh sửa cho một mốc")
+    @Operation(summary = "Nộp sản phẩm của hợp đồng cũ; hợp đồng giữ tiền dùng API drafts và deliver sau khi AI duyệt")
     public ResponseEntity<MilestoneSubmissionResponse> submit(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID milestoneId,

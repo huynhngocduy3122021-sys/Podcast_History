@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:developer' as dev;
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+
 import 'api_endpoints.dart';
 
 class ApiException implements Exception {
@@ -10,11 +12,7 @@ class ApiException implements Exception {
   final String message;
   final dynamic details;
 
-  ApiException({
-    required this.statusCode,
-    required this.message,
-    this.details,
-  });
+  ApiException({required this.statusCode, required this.message, this.details});
 
   @override
   String toString() => 'ApiException [$statusCode]: $message';
@@ -24,7 +22,8 @@ class ApiClient {
   String _baseUrl;
   String? _accessToken;
   String? _refreshToken;
-  final void Function(String newAccessToken, String newRefreshToken)? onTokensRefreshed;
+  final void Function(String newAccessToken, String newRefreshToken)?
+  onTokensRefreshed;
   final VoidCallback? onSessionExpired;
   final http.Client _client;
   static Future<bool>? _staticRefreshFuture;
@@ -38,10 +37,10 @@ class ApiClient {
     this.onTokensRefreshed,
     this.onSessionExpired,
     http.Client? client,
-  })  : _baseUrl = baseUrl ?? _resolveDefaultBaseUrl(),
-        _accessToken = initialToken,
-        _refreshToken = initialRefreshToken,
-        _client = client ?? http.Client() {
+  }) : _baseUrl = baseUrl ?? _resolveDefaultBaseUrl(),
+       _accessToken = initialToken,
+       _refreshToken = initialRefreshToken,
+       _client = client ?? http.Client() {
     if (initialToken != null && initialToken.isNotEmpty) {
       _latestAccessToken = initialToken;
     }
@@ -63,6 +62,7 @@ class ApiClient {
   }
 
   String? get accessToken => _accessToken;
+
   void setToken(String? token) {
     _accessToken = token;
     if (token != null && token.isNotEmpty) {
@@ -141,7 +141,9 @@ class ApiClient {
         );
 
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+          final data = jsonDecode(
+            utf8.decode(response.bodyBytes),
+          ) as Map<String, dynamic>;
           final newAccess = data['accessToken']?.toString();
           final newRefresh = data['refreshToken']?.toString();
           if (newAccess != null && newAccess.isNotEmpty) {
@@ -151,12 +153,17 @@ class ApiClient {
               _refreshToken = newRefresh;
               _latestRefreshToken = newRefresh;
             }
-            _log('Token refresh successful! New accessToken: ${_accessToken!.substring(0, 10)}...');
+            _log(
+              'Token refresh successful! New accessToken: ${_accessToken!.substring(0, 10)}...',
+            );
             onTokensRefreshed?.call(_accessToken!, _refreshToken ?? '');
             return true;
           }
         } else {
-          _logError('Refresh token response ${response.statusCode}', response.body);
+          _logError(
+            'Refresh token response ${response.statusCode}',
+            response.body,
+          );
         }
       } catch (e) {
         _logError('Token refresh failed', e);
@@ -182,7 +189,8 @@ class ApiClient {
       rethrow;
     }
 
-    final hasRefreshToken = (_refreshToken != null && _refreshToken!.isNotEmpty) ||
+    final hasRefreshToken =
+        (_refreshToken != null && _refreshToken!.isNotEmpty) ||
         (_latestRefreshToken != null && _latestRefreshToken!.isNotEmpty);
 
     if (response.statusCode == 401 && hasRefreshToken) {
@@ -251,10 +259,7 @@ class ApiClient {
     );
   }
 
-  Future<dynamic> delete(
-    String endpoint, {
-    Map<String, String>? headers,
-  }) {
+  Future<dynamic> delete(String endpoint, {Map<String, String>? headers}) {
     final uri = _buildUri(endpoint);
     _log('DELETE $uri');
     return _requestWithRetry(
@@ -279,7 +284,9 @@ class ApiClient {
     Future<http.Response> sendMultipart() async {
       final request = http.MultipartRequest('POST', uri);
       final requestHeaders = _buildHeaders(headers);
-      requestHeaders.remove('Content-Type'); // MultipartRequest sets boundary automatically
+      requestHeaders.remove(
+        'Content-Type',
+      ); // MultipartRequest sets boundary automatically
       request.headers.addAll(requestHeaders);
 
       if (fields != null) {
@@ -335,7 +342,11 @@ class ApiClient {
     try {
       final decoded = jsonDecode(utf8.decode(response.bodyBytes));
       if (decoded is Map<String, dynamic>) {
-        errorMessage = decoded['message'] ?? decoded['error'] ?? decoded['detail'] ?? errorMessage;
+        errorMessage =
+            decoded['message'] ??
+            decoded['error'] ??
+            decoded['detail'] ??
+            errorMessage;
         errorDetails = decoded;
       }
     } catch (_) {

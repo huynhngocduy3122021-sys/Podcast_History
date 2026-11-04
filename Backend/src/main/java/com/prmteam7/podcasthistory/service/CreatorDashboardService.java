@@ -92,6 +92,8 @@ public class CreatorDashboardService {
                 : wallet.getCurrency().trim().toUpperCase(Locale.ROOT);
         BigDecimal monthlyRevenue = money(paymentRepository.sumCreatorContractRevenue(
                 creatorId, currency, monthFrom, monthTo))
+                .add(money(paymentRepository.sumCreatorDisputeRevenue(
+                        creatorId, currency, monthFrom, monthTo)))
                 .add(money(paymentRepository.sumCreatorMembershipRevenue(
                         creatorId, currency, monthFrom, monthTo)));
 

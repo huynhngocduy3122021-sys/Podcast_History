@@ -24,7 +24,7 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
 
   final List<String> _tabs = [
     'Tất cả',
-    'Mới nhận',
+    'Chờ xử lý',
     'Đang làm',
     'Hoàn tất',
   ];
@@ -49,7 +49,7 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Đơn đặt Podcast (Custom Request)'),
+        title: const Text('Đơn đặt Podcast (Hợp đồng Escrow)'),
         actions: const [
           CreatorNotificationButton(),
           SizedBox(width: 8),
@@ -71,10 +71,10 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
           return TabBarView(
             controller: _tabController,
             children: [
-              _buildList(requests, null, isDark),
-              _buildList(requests, CustomRequestStatus.sent, isDark),
-              _buildList(requests, CustomRequestStatus.inProduction, isDark),
-              _buildList(requests, CustomRequestStatus.completed, isDark),
+              _buildList(requests, 0, isDark),
+              _buildList(requests, 1, isDark),
+              _buildList(requests, 2, isDark),
+              _buildList(requests, 3, isDark),
             ],
           );
         },
@@ -82,25 +82,62 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
     );
   }
 
-  Widget _buildList(List<PodcastRequest> all, CustomRequestStatus? filter, bool isDark) {
-    final list = filter == null ? all : all.where((r) => r.status == filter).toList();
+  Widget _buildList(List<PodcastRequest> all, int tabIndex, bool isDark) {
+    List<PodcastRequest> list;
+    switch (tabIndex) {
+      case 1: // Chờ xử lý (Chờ đề xuất hoặc chờ ký)
+        list = all.where((r) {
+          if (r.status == CustomRequestStatus.sent) return true;
+          if (r.hasEscrow && (r.contract == null || r.contract!.isPendingSignature)) return true;
+          return false;
+        }).toList();
+        break;
+      case 2: // Đang làm
+        list = all.where((r) {
+          if (r.hasEscrow && r.contract != null && r.contract!.isInProgress) return true;
+          return r.status == CustomRequestStatus.inProduction ||
+              r.status == CustomRequestStatus.accepted ||
+              r.status == CustomRequestStatus.delivered ||
+              r.status == CustomRequestStatus.revisionRequested;
+        }).toList();
+        break;
+      case 3: // Hoàn tất
+        list = all.where((r) {
+          if (r.hasEscrow && r.contract != null && r.contract!.isCompleted) return true;
+          return r.status == CustomRequestStatus.completed || r.status == CustomRequestStatus.approved;
+        }).toList();
+        break;
+      default:
+        list = all;
+    }
 
     if (list.isEmpty) {
-      return const EmptyStateWidget(
-        icon: Icons.assignment_outlined,
-        title: 'Hộp thư trống',
-        description: 'Chưa có đơn đặt podcast nào trong mục này.',
+      return RefreshIndicator(
+        onRefresh: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
+        child: ListView(
+          children: const [
+            SizedBox(height: 100),
+            EmptyStateWidget(
+              icon: Icons.assignment_outlined,
+              title: 'Hộp thư trống',
+              description: 'Chưa có đơn đặt podcast nào trong mục này.',
+            ),
+          ],
+        ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(AppSpacing.screenMargin),
-      itemCount: list.length,
-      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-      itemBuilder: (context, index) {
-        final req = list[index];
-        return _buildRequestCard(req, isDark);
-      },
+    return RefreshIndicator(
+      onRefresh: () => ref.read(creatorRequestsProvider.notifier).loadRequests(),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(AppSpacing.screenMargin),
+        itemCount: list.length,
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+        itemBuilder: (context, index) {
+          final req = list[index];
+          return _buildRequestCard(req, isDark);
+        },
+      ),
     );
   }
 
@@ -127,38 +164,83 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundImage: req.listenerAvatar.isNotEmpty
-                          ? NetworkImage(req.listenerAvatar)
-                          : null,
-                      onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
-                      child: const Icon(Icons.person, size: 16),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          req.listenerName,
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                Expanded(
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundImage: req.listenerAvatar.isNotEmpty
+                            ? NetworkImage(req.listenerAvatar)
+                            : null,
+                        onBackgroundImageError: req.listenerAvatar.isNotEmpty ? (_, _) {} : null,
+                        child: const Icon(Icons.person, size: 16),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              req.listenerName,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              AppFormatters.timeAgo(req.createdAt),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        Text(
-                          AppFormatters.timeAgo(req.createdAt),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (req.hasEscrow) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: (isDark ? AppColors.primaryDark : AppColors.primaryLight).withValues(alpha: 0.3),
                           ),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.verified_user_outlined,
+                              size: 11,
+                              color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              'ESCROW',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                                color: isDark ? AppColors.primaryDark : AppColors.primaryLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    StatusChip(
+                      label: req.statusDisplay,
+                      type: req.statusType,
                     ),
                   ],
-                ),
-                StatusChip(
-                  label: req.statusDisplay,
-                  type: req.statusType,
                 ),
               ],
             ),
@@ -184,23 +266,31 @@ class _RequestListScreenState extends ConsumerState<RequestListScreen> with Sing
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.timer_outlined, size: 14, color: AppColors.tertiaryLight),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${req.targetDurationMinutes} phút',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(width: AppSpacing.lg),
-                    const Icon(Icons.event_outlined, size: 14, color: AppColors.tertiaryLight),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Hạn: ${AppFormatters.formatDate(req.deadline)}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ],
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(Icons.schedule_rounded, size: 14, color: AppColors.tertiaryLight),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          AppFormatters.timeAgo(req.createdAt),
+                          style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceMutedLight),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (req.milestones.isNotEmpty) ...[
+                        const SizedBox(width: AppSpacing.sm),
+                        const Icon(Icons.layers_outlined, size: 14, color: AppColors.tertiaryLight),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${req.milestones.length} mốc',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   AppFormatters.formatVND(req.totalBudget),
                   style: AppTypography.tabularNumbers(

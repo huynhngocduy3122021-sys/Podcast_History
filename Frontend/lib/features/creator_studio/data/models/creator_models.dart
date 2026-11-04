@@ -226,7 +226,7 @@ class CreatorPodcast {
       case PodcastStatus.aiModerating:
         return 'AI đang kiểm duyệt';
       case PodcastStatus.pendingAdmin:
-        return 'Chờ Admin duyệt';
+        return 'Chờ duyệt';
       case PodcastStatus.rejected:
         return 'Bị từ chối';
       case PodcastStatus.draft:
@@ -260,31 +260,297 @@ class CreatorPodcast {
 
 // --- CUSTOM PODCAST REQUEST (ESCROW & STATE MACHINE) ---
 
+class ContractStageModel {
+  final String milestoneId;
+  final String name;
+  final String description;
+  final DateTime? dueAt;
+  final int amount;
+  final String status; // 'NOT_STARTED', 'SUBMITTED', 'REVISION_REQUESTED', 'DISPUTED', 'APPROVED', 'CANCELLED'
+
+  const ContractStageModel({
+    required this.milestoneId,
+    required this.name,
+    required this.description,
+    this.dueAt,
+    required this.amount,
+    required this.status,
+  });
+
+  factory ContractStageModel.fromJson(Map<String, dynamic> json) {
+    return ContractStageModel(
+      milestoneId: json['milestoneId']?.toString() ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      dueAt: DateTime.tryParse(json['dueAt']?.toString() ?? ''),
+      amount: (json['amount'] as num?)?.toInt() ?? 0,
+      status: (json['status'] as String? ?? 'NOT_STARTED').toUpperCase(),
+    );
+  }
+
+  bool get isApproved => status == 'APPROVED';
+  bool get isSubmitted => status == 'SUBMITTED';
+  bool get isRevisionRequested => status == 'REVISION_REQUESTED';
+  bool get isDisputed => status == 'DISPUTED';
+  bool get isNotStarted => status == 'NOT_STARTED';
+  bool get isCancelled => status == 'CANCELLED';
+}
+
+class ContractAgreement {
+  final String requestId;
+  final String contractId;
+  final String contractStatus; // PENDING_SIGNATURE, IN_PROGRESS, DISPUTED, COMPLETED, TERMINATED, CANCELLED
+  final int contractVersion;
+  final String contentHash;
+  final String contentSnapshot;
+  final DateTime? creatorSignedAt;
+  final DateTime? listenerSignedAt;
+  final int budgetAmount;
+  final int remainingHeld;
+  final List<ContractStageModel> milestones;
+
+  const ContractAgreement({
+    required this.requestId,
+    required this.contractId,
+    required this.contractStatus,
+    required this.contractVersion,
+    required this.contentHash,
+    required this.contentSnapshot,
+    this.creatorSignedAt,
+    this.listenerSignedAt,
+    required this.budgetAmount,
+    required this.remainingHeld,
+    this.milestones = const [],
+  });
+
+  factory ContractAgreement.fromJson(Map<String, dynamic> json) {
+    final stagesJson = json['milestones'];
+    final stages = <ContractStageModel>[];
+    if (stagesJson is List) {
+      for (final s in stagesJson) {
+        if (s is Map<String, dynamic>) {
+          stages.add(ContractStageModel.fromJson(s));
+        }
+      }
+    }
+    return ContractAgreement(
+      requestId: json['requestId']?.toString() ?? '',
+      contractId: json['contractId']?.toString() ?? '',
+      contractStatus: (json['contractStatus'] as String? ?? 'PENDING_SIGNATURE')
+          .toUpperCase(),
+      contractVersion: (json['contractVersion'] as num?)?.toInt() ?? 1,
+      contentHash: json['contentHash'] as String? ?? '',
+      contentSnapshot: json['contentSnapshot'] as String? ?? '',
+      creatorSignedAt: json['creatorSignedAt'] != null
+          ? DateTime.tryParse(json['creatorSignedAt'].toString())
+          : null,
+      listenerSignedAt: json['listenerSignedAt'] != null
+          ? DateTime.tryParse(json['listenerSignedAt'].toString())
+          : null,
+      budgetAmount: (json['budgetAmount'] as num?)?.toInt() ?? 0,
+      remainingHeld: (json['remainingHeld'] as num?)?.toInt() ?? 0,
+      milestones: stages,
+    );
+  }
+
+  bool get isCreatorSigned => creatorSignedAt != null;
+  bool get isListenerSigned => listenerSignedAt != null;
+  bool get isBothSigned => isCreatorSigned && isListenerSigned;
+  bool get isPendingSignature => contractStatus == 'PENDING_SIGNATURE';
+  bool get isInProgress => contractStatus == 'IN_PROGRESS';
+  bool get isCompleted => contractStatus == 'COMPLETED';
+  bool get isDisputed => contractStatus == 'DISPUTED';
+  bool get isTerminated => contractStatus == 'TERMINATED';
+  bool get isCancelled => contractStatus == 'CANCELLED';
+}
+
+class ContractProposalStageInput {
+  final String name;
+  final String description;
+  final DateTime dueAt;
+  final int amount;
+
+  const ContractProposalStageInput({
+    required this.name,
+    required this.description,
+    required this.dueAt,
+    required this.amount,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'description': description,
+      'dueAt': dueAt.toUtc().toIso8601String(),
+      'amount': amount,
+    };
+  }
+}
+
+class ContractTerminationStatus {
+  final String disputeId;
+  final String contractId;
+  final String status;
+  final String? decision;
+  final DateTime createdAt;
+  final DateTime negotiationEndsAt;
+  final DateTime? resolvedAt;
+  final DateTime? opponentConfirmedAt;
+  final String? listenerWinAction;
+  final String? openedByRole;
+  final String? openedByUserId;
+
+  const ContractTerminationStatus({
+    required this.disputeId,
+    required this.contractId,
+    required this.status,
+    this.decision,
+    required this.createdAt,
+    required this.negotiationEndsAt,
+    this.resolvedAt,
+    this.opponentConfirmedAt,
+    this.listenerWinAction,
+    this.openedByRole,
+    this.openedByUserId,
+  });
+
+  factory ContractTerminationStatus.fromJson(Map<String, dynamic> json) {
+    return ContractTerminationStatus(
+      disputeId: json['disputeId']?.toString() ?? '',
+      contractId: json['contractId']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      decision: json['decision'] as String?,
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+      negotiationEndsAt:
+          DateTime.tryParse(json['negotiationEndsAt']?.toString() ?? '') ??
+          DateTime.now(),
+      resolvedAt: json['resolvedAt'] != null
+          ? DateTime.tryParse(json['resolvedAt'].toString())
+          : null,
+      opponentConfirmedAt: json['opponentConfirmedAt'] != null
+          ? DateTime.tryParse(json['opponentConfirmedAt'].toString())
+          : null,
+      listenerWinAction: json['listenerWinAction']?.toString(),
+      openedByRole: json['openedByRole']?.toString().toUpperCase(),
+      openedByUserId: json['openedByUserId']?.toString() ??
+          json['openedById']?.toString(),
+    );
+  }
+}
+
+class MilestoneSubmissionItem {
+  final String submissionId;
+  final String milestoneId;
+  final int revisionNumber;
+  final DateTime submittedAt;
+  final String? note;
+  final String? fileKey;
+  final String? mediaUrl;
+  final String? contentType;
+
+  const MilestoneSubmissionItem({
+    required this.submissionId,
+    required this.milestoneId,
+    required this.revisionNumber,
+    required this.submittedAt,
+    this.note,
+    this.fileKey,
+    this.mediaUrl,
+    this.contentType,
+  });
+
+  factory MilestoneSubmissionItem.fromJson(Map<String, dynamic> json) {
+    return MilestoneSubmissionItem(
+      submissionId: json['submissionId']?.toString() ?? '',
+      milestoneId: json['milestoneId']?.toString() ?? '',
+      revisionNumber: (json['revisionNumber'] as num?)?.toInt() ?? 1,
+      submittedAt:
+          DateTime.tryParse(json['submittedAt']?.toString() ?? '') ??
+          DateTime.now(),
+      note: json['note'] as String?,
+      fileKey: json['fileKey'] as String?,
+      mediaUrl: json['publicUrl'] as String?,
+      contentType: json['contentType'] as String?,
+    );
+  }
+
+  MilestoneSubmissionItem copyWith({String? mediaUrl}) {
+    return MilestoneSubmissionItem(
+      submissionId: submissionId,
+      milestoneId: milestoneId,
+      revisionNumber: revisionNumber,
+      submittedAt: submittedAt,
+      note: note,
+      fileKey: fileKey,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      contentType: contentType,
+    );
+  }
+}
+
 class RequestMilestone {
   final String id;
   final String title;
+  final String? description;
+  final DateTime? dueAt;
+  final int order;
   final int percentage;
   final int amount;
+  final String status; // 'NOT_STARTED', 'SUBMITTED', 'REVISION_REQUESTED', 'DISPUTED', 'APPROVED'
   final bool isCompleted;
   final bool isApproved;
+  final String? publicUrl;
+  final String? submissionNote;
 
   const RequestMilestone({
     required this.id,
     required this.title,
+    this.description,
+    this.dueAt,
+    this.order = 1,
     required this.percentage,
     required this.amount,
-    required this.isCompleted,
-    required this.isApproved,
+    this.status = 'NOT_STARTED',
+    this.isCompleted = false,
+    this.isApproved = false,
+    this.publicUrl,
+    this.submissionNote,
   });
 
-  RequestMilestone copyWith({bool? isCompleted, bool? isApproved}) {
+  bool get isSubmitted => status == 'SUBMITTED';
+  bool get isRevisionRequested => status == 'REVISION_REQUESTED';
+  bool get isDisputed => status == 'DISPUTED';
+  bool get isNotStarted => status == 'NOT_STARTED';
+
+  RequestMilestone copyWith({
+    String? id,
+    String? title,
+    String? description,
+    DateTime? dueAt,
+    int? order,
+    int? percentage,
+    int? amount,
+    String? status,
+    bool? isCompleted,
+    bool? isApproved,
+    String? publicUrl,
+    String? submissionNote,
+  }) {
     return RequestMilestone(
-      id: id,
-      title: title,
-      percentage: percentage,
-      amount: amount,
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      dueAt: dueAt ?? this.dueAt,
+      order: order ?? this.order,
+      percentage: percentage ?? this.percentage,
+      amount: amount ?? this.amount,
+      status: status ?? this.status,
       isCompleted: isCompleted ?? this.isCompleted,
       isApproved: isApproved ?? this.isApproved,
+      publicUrl: publicUrl ?? this.publicUrl,
+      submissionNote: submissionNote ?? this.submissionNote,
     );
   }
 }
@@ -313,8 +579,8 @@ class PodcastRequest {
   final String listenerAvatar;
   final String topic;
   final String description;
-  final int targetDurationMinutes;
-  final DateTime deadline;
+  final int? targetDurationMinutes;
+  final DateTime? deadline;
   final int totalBudget; // VND
   final List<RequestMilestone> milestones;
   final CustomRequestStatus status;
@@ -325,14 +591,25 @@ class PodcastRequest {
   final DateTime createdAt;
   final List<RequestChatMessage> messages;
 
+  // Escrow & Contract fields
+  final bool hasEscrow;
+  final ContractAgreement? contract;
+  final ContractTerminationStatus? termination;
+  final String? productType;
+  final String? fileFormat;
+  final String? duration;
+  final String? acceptanceCriteria;
+  final bool autoAcceptEnabled;
+  final List<MilestoneSubmissionItem> submissions;
+
   const PodcastRequest({
     required this.id,
     required this.listenerName,
     required this.listenerAvatar,
     required this.topic,
     required this.description,
-    required this.targetDurationMinutes,
-    required this.deadline,
+    this.targetDurationMinutes,
+    this.deadline,
     required this.totalBudget,
     required this.milestones,
     required this.status,
@@ -342,9 +619,34 @@ class PodcastRequest {
     this.deliveryNote,
     required this.createdAt,
     this.messages = const [],
+    this.hasEscrow = false,
+    this.contract,
+    this.termination,
+    this.productType,
+    this.fileFormat,
+    this.duration,
+    this.acceptanceCriteria,
+    this.autoAcceptEnabled = false,
+    this.submissions = const [],
   });
 
   StatusType get statusType {
+    if (hasEscrow && contract != null) {
+      if (contract!.isPendingSignature) {
+        return contract!.isCreatorSigned ? StatusType.info : StatusType.warning;
+      }
+      if (contract!.isInProgress) {
+        if (milestones.any((m) => m.isRevisionRequested))
+          return StatusType.error;
+        if (milestones.any((m) => m.isSubmitted)) return StatusType.warning;
+        return StatusType.info;
+      }
+      if (contract!.isCompleted) return StatusType.success;
+      if (contract!.isDisputed || contract!.isTerminated)
+        return StatusType.error;
+      if (contract!.isCancelled) return StatusType.error;
+    }
+
     switch (status) {
       case CustomRequestStatus.completed:
       case CustomRequestStatus.approved:
@@ -364,6 +666,45 @@ class PodcastRequest {
   }
 
   String get statusDisplay {
+    if (hasEscrow) {
+      if (status == CustomRequestStatus.rejected) {
+        return 'Đã từ chối';
+      }
+      if (contract == null) {
+        return 'Chờ đề xuất mốc (Escrow)';
+      }
+      if (contract!.isPendingSignature) {
+        if (contract!.isCreatorSigned && !contract!.isListenerSigned) {
+          return 'Chờ người nghe ký';
+        }
+        if (!contract!.isCreatorSigned) {
+          return 'Cần ký hợp đồng';
+        }
+        return 'Hợp đồng đã ký';
+      }
+      if (contract!.isInProgress) {
+        if (milestones.any((m) => m.isRevisionRequested)) {
+          return 'Cần sửa đổi';
+        }
+        if (milestones.any((m) => m.isSubmitted)) {
+          return 'Chờ nghiệm thu';
+        }
+        return 'Đang thực hiện';
+      }
+      if (contract!.isCompleted) {
+        return 'Đã hoàn tất';
+      }
+      if (contract!.isDisputed) {
+        return 'Đang tranh chấp';
+      }
+      if (contract!.isTerminated) {
+        return 'Đã chấm dứt';
+      }
+      if (contract!.isCancelled) {
+        return 'Đã hủy';
+      }
+    }
+
     switch (status) {
       case CustomRequestStatus.sent:
         return 'Yêu cầu mới';
@@ -372,7 +713,7 @@ class PodcastRequest {
       case CustomRequestStatus.inProduction:
         return 'Đang thực hiện';
       case CustomRequestStatus.delivered:
-        return 'Đã nộp bài';
+        return 'Đã nộp bản ghi';
       case CustomRequestStatus.approved:
         return 'Người nghe đã duyệt';
       case CustomRequestStatus.revisionRequested:
@@ -394,6 +735,17 @@ class PodcastRequest {
     String? deliveryNote,
     List<RequestMilestone>? milestones,
     List<RequestChatMessage>? messages,
+    int? targetDurationMinutes,
+    DateTime? deadline,
+    bool? hasEscrow,
+    ContractAgreement? contract,
+    ContractTerminationStatus? termination,
+    String? productType,
+    String? fileFormat,
+    String? duration,
+    String? acceptanceCriteria,
+    bool? autoAcceptEnabled,
+    List<MilestoneSubmissionItem>? submissions,
   }) {
     return PodcastRequest(
       id: id,
@@ -401,8 +753,9 @@ class PodcastRequest {
       listenerAvatar: listenerAvatar,
       topic: topic,
       description: description,
-      targetDurationMinutes: targetDurationMinutes,
-      deadline: deadline,
+      targetDurationMinutes:
+          targetDurationMinutes ?? this.targetDurationMinutes,
+      deadline: deadline ?? this.deadline,
       totalBudget: totalBudget,
       milestones: milestones ?? this.milestones,
       status: status ?? this.status,
@@ -412,6 +765,15 @@ class PodcastRequest {
       deliveryNote: deliveryNote ?? this.deliveryNote,
       createdAt: createdAt,
       messages: messages ?? this.messages,
+      hasEscrow: hasEscrow ?? this.hasEscrow,
+      contract: contract ?? this.contract,
+      termination: termination ?? this.termination,
+      productType: productType ?? this.productType,
+      fileFormat: fileFormat ?? this.fileFormat,
+      duration: duration ?? this.duration,
+      acceptanceCriteria: acceptanceCriteria ?? this.acceptanceCriteria,
+      autoAcceptEnabled: autoAcceptEnabled ?? this.autoAcceptEnabled,
+      submissions: submissions ?? this.submissions,
     );
   }
 }
@@ -424,6 +786,10 @@ class BankAccount {
   final String accountNumber;
   final String accountHolder;
   final bool isDefault;
+  final String payoutMethod;
+  final String currency;
+  final bool verified;
+  final bool active;
 
   const BankAccount({
     required this.id,
@@ -431,29 +797,102 @@ class BankAccount {
     required this.accountNumber,
     required this.accountHolder,
     this.isDefault = false,
+    this.payoutMethod = 'BANK_TRANSFER',
+    this.currency = 'VND',
+    this.verified = true,
+    this.active = true,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BankAccount &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class WalletTransaction {
   final String id;
   final String title;
+  final String? subtitle;
   final TransactionType type;
-  final int amount; // VND
+  final String? rawType;
+  final String? direction; // 'CREDIT' or 'DEBIT'
+  final int amount; // VND (+ for credit, - for debit)
+  final String currency; // 'VND'
   final TransactionStatus status;
+  final String? rawStatus; // 'COMPLETED', 'PENDING', 'FAILED', etc.
+  final String? referenceCode; // e.g. 'CONTRACT_CREATOR:<milestoneId>'
+  final int? balanceAfter;
+  final int? heldBalanceAfter;
   final DateTime createdAt;
   final String? note;
+
+  // Trường mở rộng chi tiết theo CONTRACT_API_GUIDE & backend CreatorWalletTransactionItem:
+  final String? movement;
+  final int? availableBalanceChange;
+  final int? heldBalanceChange;
+  final String? requestId;
+  final String? requestTitle;
+  final String? milestoneId;
+  final String? milestoneName;
+  final String? withdrawalId;
+  final String? payoutAccountMasked;
+  final String? membershipPlanName;
 
   const WalletTransaction({
     required this.id,
     required this.title,
+    this.subtitle,
     required this.type,
+    this.rawType,
+    this.direction,
     required this.amount,
+    this.currency = 'VND',
     required this.status,
+    this.rawStatus,
+    this.referenceCode,
+    this.balanceAfter,
+    this.heldBalanceAfter,
     required this.createdAt,
     this.note,
+    this.movement,
+    this.availableBalanceChange,
+    this.heldBalanceChange,
+    this.requestId,
+    this.requestTitle,
+    this.milestoneId,
+    this.milestoneName,
+    this.withdrawalId,
+    this.payoutAccountMasked,
+    this.membershipPlanName,
   });
 
+  bool get isCredit => (direction?.toUpperCase() == 'CREDIT') || amount > 0;
+
+  bool get isDebit => (direction?.toUpperCase() == 'DEBIT') || amount < 0;
+
+  bool get isContractRelated =>
+      referenceCode != null &&
+          (referenceCode!.startsWith('CONTRACT_') ||
+              referenceCode!.startsWith('CONTRACT_CREATOR:')) ||
+      rawType == 'RELEASE_FUNDS';
+
   StatusType get statusType {
+    final s = (rawStatus ?? '').toUpperCase();
+    if (s == 'COMPLETED' || s == 'SUCCESS' || s == 'PAID') {
+      return StatusType.success;
+    }
+    if (s == 'FAILED' || s == 'REJECTED' || s == 'CANCELLED') {
+      return StatusType.error;
+    }
+    if (s == 'PENDING' || s == 'HOLDING') {
+      return StatusType.info;
+    }
+
     switch (status) {
       case TransactionStatus.success:
         return StatusType.success;
@@ -467,6 +906,20 @@ class WalletTransaction {
   }
 
   String get statusDisplay {
+    final s = (rawStatus ?? '').toUpperCase();
+    if (s == 'COMPLETED' || s == 'SUCCESS' || s == 'PAID') {
+      return 'Thành công';
+    }
+    if (s == 'PENDING' || s == 'HOLDING') {
+      return 'Đang giữ';
+    }
+    if (s == 'PROCESSING') {
+      return 'Đang xử lý';
+    }
+    if (s == 'FAILED' || s == 'REJECTED' || s == 'CANCELLED') {
+      return 'Thất bại';
+    }
+
     switch (status) {
       case TransactionStatus.success:
         return 'Thành công';
@@ -549,21 +1002,27 @@ class StudioComment {
     final statusStr = json['status']?.toString().toUpperCase() ?? '';
     return StudioComment(
       id: json['commentId']?.toString() ?? json['id']?.toString() ?? '',
-      podcastTitle: json['podcastTitle']?.toString() ?? fallbackPodcastTitle ?? 'Podcast',
+      podcastTitle:
+          json['podcastTitle']?.toString() ?? fallbackPodcastTitle ?? 'Podcast',
       podcastId: json['podcastId']?.toString() ?? fallbackPodcastId,
-      authorName: json['displayName']?.toString() ??
+      authorName:
+          json['displayName']?.toString() ??
           json['username']?.toString() ??
           json['authorName']?.toString() ??
           'Thính giả',
-      authorAvatar: json['avatarUrl']?.toString() ??
+      authorAvatar:
+          json['avatarUrl']?.toString() ??
           json['authorAvatar']?.toString() ??
           '',
       content: json['content']?.toString() ?? '',
       timestampSeconds: (json['timestampSeconds'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
       isPinned: json['isPinned'] == true,
       isHidden: statusStr == 'HIDDEN' || json['isHidden'] == true,
-      likesCount: (json['likeCount'] as num?)?.toInt() ??
+      likesCount:
+          (json['likeCount'] as num?)?.toInt() ??
           (json['likesCount'] as num?)?.toInt() ??
           0,
       likedByMe: json['likedByMe'] == true,
@@ -607,6 +1066,195 @@ class InteractiveForm {
     required this.createdAt,
     this.isActive = true,
   });
+}
+
+// --- CREATOR POLLS (SWAGGER /api/creator/polls) ---
+
+class CreatorPollOption {
+  final String optionId;
+  final String text;
+  final int sortOrder;
+
+  const CreatorPollOption({
+    required this.optionId,
+    required this.text,
+    required this.sortOrder,
+  });
+
+  factory CreatorPollOption.fromJson(Map<String, dynamic> json) {
+    return CreatorPollOption(
+      optionId: json['optionId']?.toString() ?? '',
+      text: json['text']?.toString() ?? '',
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+class CreatorPoll {
+  final String pollId;
+  final String? creatorProfileId;
+  final String? channelName;
+  final String? seriesId;
+  final String? podcastId;
+  final String question;
+  final String status; // DRAFT, OPEN, CLOSED, DELETED
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final bool acceptingResponses;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final List<CreatorPollOption> options;
+
+  const CreatorPoll({
+    required this.pollId,
+    this.creatorProfileId,
+    this.channelName,
+    this.seriesId,
+    this.podcastId,
+    required this.question,
+    required this.status,
+    this.startsAt,
+    this.endsAt,
+    this.acceptingResponses = false,
+    this.createdAt,
+    this.updatedAt,
+    this.options = const [],
+  });
+
+  bool get isDraft => status.toUpperCase() == 'DRAFT';
+  bool get isOpen => status.toUpperCase() == 'OPEN';
+  bool get isClosed => status.toUpperCase() == 'CLOSED';
+  bool get isDeleted => status.toUpperCase() == 'DELETED';
+
+  factory CreatorPoll.fromJson(
+    Map<String, dynamic> json, {
+    List<CreatorPollOption>? options,
+  }) {
+    final opts =
+        options ??
+        ((json['options'] is List)
+            ? (json['options'] as List)
+                  .map(
+                    (e) =>
+                        CreatorPollOption.fromJson(e as Map<String, dynamic>),
+                  )
+                  .toList()
+            : <CreatorPollOption>[]);
+
+    return CreatorPoll(
+      pollId: json['pollId']?.toString() ?? '',
+      creatorProfileId: json['creatorProfileId']?.toString(),
+      channelName: json['channelName']?.toString(),
+      seriesId: json['seriesId']?.toString(),
+      podcastId: json['podcastId']?.toString(),
+      question: json['question']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'DRAFT',
+      startsAt: json['startsAt'] != null
+          ? DateTime.tryParse(json['startsAt'].toString())
+          : null,
+      endsAt: json['endsAt'] != null
+          ? DateTime.tryParse(json['endsAt'].toString())
+          : null,
+      acceptingResponses: json['acceptingResponses'] == true,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'].toString())
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'].toString())
+          : null,
+      options: opts,
+    );
+  }
+}
+
+class PollOptionResultItem {
+  final String optionId;
+  final String text;
+  final int sortOrder;
+  final int responseCount;
+  final double percentage;
+
+  const PollOptionResultItem({
+    required this.optionId,
+    required this.text,
+    required this.sortOrder,
+    required this.responseCount,
+    required this.percentage,
+  });
+
+  factory PollOptionResultItem.fromJson(Map<String, dynamic> json) {
+    return PollOptionResultItem(
+      optionId: json['optionId']?.toString() ?? '',
+      text: json['text']?.toString() ?? '',
+      sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
+      responseCount: (json['responseCount'] as num?)?.toInt() ?? 0,
+      percentage: (json['percentage'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class PollResultsData {
+  final String pollId;
+  final String question;
+  final int totalResponses;
+  final List<PollOptionResultItem> options;
+
+  const PollResultsData({
+    required this.pollId,
+    required this.question,
+    required this.totalResponses,
+    required this.options,
+  });
+
+  factory PollResultsData.fromJson(Map<String, dynamic> json) {
+    return PollResultsData(
+      pollId: json['pollId']?.toString() ?? '',
+      question: json['question']?.toString() ?? '',
+      totalResponses: (json['totalResponses'] as num?)?.toInt() ?? 0,
+      options: (json['options'] is List)
+          ? (json['options'] as List)
+                .map(
+                  (e) =>
+                      PollOptionResultItem.fromJson(e as Map<String, dynamic>),
+                )
+                .toList()
+          : const [],
+    );
+  }
+}
+
+class PollResponseUserItem {
+  final String responseId;
+  final String pollId;
+  final String userId;
+  final String displayName;
+  final String optionId;
+  final String optionText;
+  final DateTime? submittedAt;
+
+  const PollResponseUserItem({
+    required this.responseId,
+    required this.pollId,
+    required this.userId,
+    required this.displayName,
+    required this.optionId,
+    required this.optionText,
+    this.submittedAt,
+  });
+
+  factory PollResponseUserItem.fromJson(Map<String, dynamic> json) {
+    return PollResponseUserItem(
+      responseId: json['responseId']?.toString() ?? '',
+      pollId: json['pollId']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? 'Thính giả',
+      optionId: json['optionId']?.toString() ?? '',
+      optionText: json['optionText']?.toString() ?? '',
+      submittedAt: json['submittedAt'] != null
+          ? DateTime.tryParse(json['submittedAt'].toString())
+          : null,
+    );
+  }
 }
 
 // --- CREATOR SERIES ---
@@ -687,7 +1335,8 @@ class GrowthDataPoint {
   factory GrowthDataPoint.fromJson(Map<String, dynamic> json) {
     return GrowthDataPoint(
       date: json['label'] as String? ?? json['date'] as String? ?? '',
-      value: (json['listens'] as num?)?.toDouble() ??
+      value:
+          (json['listens'] as num?)?.toDouble() ??
           (json['value'] as num?)?.toDouble() ??
           0.0,
     );
@@ -721,14 +1370,17 @@ class DashboardMetrics {
 
   factory DashboardMetrics.fromJson(Map<String, dynamic> json) {
     return DashboardMetrics(
-      views: (json['totalListens'] as num?)?.toInt() ??
+      views:
+          (json['totalListens'] as num?)?.toInt() ??
           (json['views'] as num?)?.toInt() ??
           0,
       likes: (json['likes'] as num?)?.toInt() ?? 0,
-      followers: (json['followerCount'] as num?)?.toInt() ??
+      followers:
+          (json['followerCount'] as num?)?.toInt() ??
           (json['followers'] as num?)?.toInt() ??
           0,
-      earnings: (json['monthlyRevenue'] as num?)?.toDouble() ??
+      earnings:
+          (json['monthlyRevenue'] as num?)?.toDouble() ??
           (json['earnings'] as num?)?.toDouble() ??
           0.0,
       growthRate: (json['growthRate'] as num?)?.toDouble() ?? 0.0,
@@ -764,7 +1416,8 @@ class CreatorDashboardData {
     final prof = json['profile'] as Map<String, dynamic>? ?? {};
     final met = json['metrics'] as Map<String, dynamic>? ?? {};
     final rawGrowth = (json['growth'] ?? json['growthSeries']) as List?;
-    final seriesList = rawGrowth
+    final seriesList =
+        rawGrowth
             ?.whereType<Map<String, dynamic>>()
             .map(GrowthDataPoint.fromJson)
             .toList() ??
@@ -1008,7 +1661,7 @@ class CreatorChannelPlan {
       planId: json['planId']?.toString() ?? '',
       creatorId: json['creatorId']?.toString() ?? '',
       templateCode: json['templateCode']?.toString() ?? '',
-      name: json['name'] as String? ?? 'Gói Hội viên Kênh',
+      name: json['name'] as String? ?? 'Gói Thành viên Kênh',
       description: json['description'] as String? ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       currency: json['currency'] as String? ?? 'VND',
@@ -1041,7 +1694,11 @@ class CreatorPlanTemplate {
       parsedBenefit = json['benefit'].toString();
     } else if (json['benefits'] is List) {
       parsedBenefit = (json['benefits'] as List)
-          .map((b) => b is Map ? (b['description'] ?? b['name'] ?? '').toString() : b.toString())
+          .map(
+            (b) => b is Map
+                ? (b['description'] ?? b['name'] ?? '').toString()
+                : b.toString(),
+          )
           .where((s) => s.isNotEmpty)
           .join(' • ');
     }
@@ -1049,7 +1706,8 @@ class CreatorPlanTemplate {
     return CreatorPlanTemplate(
       code: json['code']?.toString() ?? json['templateCode']?.toString() ?? '',
       name: json['name'] as String? ?? '',
-      suggestedPrice: (json['suggestedPrice'] as num?)?.toDouble() ??
+      suggestedPrice:
+          (json['suggestedPrice'] as num?)?.toDouble() ??
           (json['price'] as num?)?.toDouble() ??
           0.0,
       currency: json['currency'] as String? ?? 'VND',
@@ -1096,7 +1754,10 @@ class CreatorStudioNotification {
   factory CreatorStudioNotification.fromJson(Map<String, dynamic> json) {
     return CreatorStudioNotification(
       id: json['notificationId']?.toString() ?? json['id']?.toString() ?? '',
-      type: json['notificationType']?.toString() ?? json['type']?.toString() ?? 'SYSTEM',
+      type:
+          json['notificationType']?.toString() ??
+          json['type']?.toString() ??
+          'SYSTEM',
       title: json['title'] as String? ?? 'Thông báo Studio',
       message: json['message'] as String? ?? '',
       read: json['read'] == true || json['isRead'] == true,
@@ -1113,3 +1774,92 @@ class CreatorStudioNotification {
   }
 }
 
+class CreatorMemberItem {
+  final String subscriptionId;
+  final String listenerId;
+  final String username;
+  final String displayName;
+  final String avatarUrl;
+  final String membershipPlanId;
+  final String planName;
+  final double price;
+  final String currency;
+  final String status;
+  final DateTime? startAt;
+  final DateTime? endAt;
+
+  const CreatorMemberItem({
+    required this.subscriptionId,
+    required this.listenerId,
+    required this.username,
+    required this.displayName,
+    required this.avatarUrl,
+    required this.membershipPlanId,
+    required this.planName,
+    required this.price,
+    required this.currency,
+    required this.status,
+    this.startAt,
+    this.endAt,
+  });
+
+  bool get isActive => status.toUpperCase() == 'ACTIVE';
+
+  factory CreatorMemberItem.fromJson(Map<String, dynamic> json) {
+    return CreatorMemberItem(
+      subscriptionId: json['subscriptionId']?.toString() ?? '',
+      listenerId: json['listenerId']?.toString() ?? '',
+      username: json['username']?.toString() ?? '',
+      displayName:
+          json['displayName']?.toString() ??
+          json['username']?.toString() ??
+          'Thính giả',
+      avatarUrl: json['avatarUrl']?.toString() ?? '',
+      membershipPlanId: json['membershipPlanId']?.toString() ?? '',
+      planName: json['planName']?.toString() ?? 'Gói thành viên',
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
+      currency: json['currency']?.toString() ?? 'VND',
+      status: json['status']?.toString() ?? 'ACTIVE',
+      startAt: json['startAt'] != null
+          ? DateTime.tryParse(json['startAt'].toString())?.toLocal()
+          : null,
+      endAt: json['endAt'] != null
+          ? DateTime.tryParse(json['endAt'].toString())?.toLocal()
+          : null,
+    );
+  }
+}
+
+class PageCreatorMembers {
+  final int totalPages;
+  final int totalElements;
+  final int size;
+  final int number;
+  final List<CreatorMemberItem> content;
+
+  const PageCreatorMembers({
+    required this.totalPages,
+    required this.totalElements,
+    required this.size,
+    required this.number,
+    required this.content,
+  });
+
+  factory PageCreatorMembers.fromJson(Map<String, dynamic> json) {
+    final rawList = json['content'];
+    final content = (rawList is List)
+        ? rawList
+              .whereType<Map<String, dynamic>>()
+              .map(CreatorMemberItem.fromJson)
+              .toList()
+        : <CreatorMemberItem>[];
+
+    return PageCreatorMembers(
+      totalPages: (json['totalPages'] as num?)?.toInt() ?? 0,
+      totalElements: (json['totalElements'] as num?)?.toInt() ?? content.length,
+      size: (json['size'] as num?)?.toInt() ?? 20,
+      number: (json['number'] as num?)?.toInt() ?? 0,
+      content: content,
+    );
+  }
+}

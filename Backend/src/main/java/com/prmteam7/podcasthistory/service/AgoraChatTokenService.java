@@ -21,11 +21,13 @@ public class AgoraChatTokenService {
     properties.requireConfigured();
     String userId = user.getUserId().toString().replace("-", "");
     int ttl = properties.tokenTtlSeconds();
+    Instant expiresAt = Instant.now().plusSeconds(ttl);
+    int expireAt = Math.toIntExact(expiresAt.getEpochSecond());
     String token = new RtmTokenBuilder2().buildToken(
-        properties.appId(), properties.appCertificate(), userId, ttl);
+        properties.appId(), properties.appCertificate(), userId, expireAt);
     if (token == null || token.isBlank()) throw new AgoraNotConfiguredException();
     return new ChatJoin(live.getLivestreamId(), properties.appId(),
         "chat_" + live.getStreamReference(), userId, user.getDisplayName(), token,
-        Instant.now().plusSeconds(ttl));
+        expiresAt);
   }
 }

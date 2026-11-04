@@ -7,7 +7,10 @@ Tài khoản đăng nhập mẫu cho backend local: [TEST_ACCOUNTS.md](../TEST_A
 - Các API bên dưới cần Bearer access token có role `ADMIN`; base URL lấy theo môi trường backend (`http://localhost:8081` khi chạy local). JSON gửi `Content-Type: application/json`.
 - Các nhóm dashboard, podcast moderation, reports và podcast appeals tại `/api/admin/...` cũng cho phép role `STAFF`; nhóm người dùng, danh mục, tài chính và gói vẫn chỉ dành cho Admin.
 - API phân trang trả trực tiếp Spring `Page`: dùng `content[]`, `number`, `totalElements`, `totalPages`, với `page` bắt đầu từ `0`. Không giả định response có wrapper `data`.
-- `GET /api/admin/dashboard` cung cấp số liệu tổng quan. ID lấy từ danh sách/chi tiết, không dùng tên hiển thị làm ID.
+- `GET /api/admin/dashboard` cung cấp số liệu tổng quan, tổng tiền gộp, phí nền tảng và doanh thu ròng theo tiền tệ. ID lấy từ danh sách/chi tiết, không dùng tên hiển thị làm ID.
+- `GET /api/admin/dashboard/revenue-details?page=0&size=20` trả chi tiết từng khoản thu đã hoàn tất (`PAID`, `SUCCESS`, `COMPLETED`): nguồn `MEMBERSHIP`, `CONTRACT_STAGE`, `CONTRACT_DISPUTE`, `CONTRACT_COMPENSATION`, payment, người mua, CC/kênh, hợp đồng, request, đợt, số tiền gộp, phí nền tảng và doanh thu ròng. Dùng `contractId`, `requestId`, `stageId` hoặc `membershipPlanId` trong response để mở màn hình chi tiết tương ứng.
+- Response có thêm các trường tiếng Việt để FE hiển thị rõ nghiệp vụ: `sourceTypeLabel`, `statusLabel`, `paymentMethodLabel`, `amountDescription`, `platformFeeDescription`, `creatorNetAmount`, `creatorNetDescription`, `platformFeePercent` và `paymentDescription`. `amount` là tổng tiền giao dịch; `platformFee` là phí app; `creatorNetAmount = amount - platformFee`; `netRevenue` là doanh thu ròng app (hiện bằng `platformFee`).
+- `WALLET_ESCROW` nghĩa là quyết toán từ tiền Listener đã giữ trong ví, không phải SePay; vì vậy `provider` và `providerTransactionId` có thể để trống. `statusLabel = "Đã thu và quyết toán"` tương ứng với các trạng thái `PAID`, `SUCCESS` hoặc `COMPLETED`.
 
 ## 1. Duyệt đơn Content Creator
 
@@ -66,9 +69,11 @@ Whisper xử lý nền sau khi Creator upload audio/video; submit vẫn nhận `
 3. `POST /api/admin/payments/{paymentId}/refund` với `{ "refundReference": "mã-hoàn-tiền", "note": "Lý do" }`.
 4. `GET /api/admin/wallets?page=0&size=20`, `GET /api/admin/wallet-transactions?page=0&size=20` (có thể lọc `walletId`, `status`) để kiểm tra sổ ví.
 5. Tạo phương thức nhận tiền cho Creator: `POST /api/admin/payouts/creators/{creatorProfileId}/accounts` với `{ "payoutMethod": "BANK", "accountReference": "số/tài khoản", "accountMasked": "****1234", "currency": "VND" }`. Giới hạn lần lượt 40, 255, 160; `currency` đúng 3 chữ cái.
-6. Yêu cầu rút tiền tạo từ `POST /api/creator/wallet/withdrawals` đã giữ tiền ngay. Dùng **`GET /api/admin/payouts/withdrawals/pending`** và **`POST /api/admin/payouts/withdrawals/{withdrawalId}/result`** với `{ "result": "SUCCESS", "providerReference": "mã-chuyển-tiền", "note": "..." }`. `result` là `SUCCESS` hoặc `FAILED`; `providerReference` bắt buộc khi `SUCCESS`.
+6. Yêu cầu rút tiền tạo từ `POST /api/creator/wallet/withdrawals` đã giữ tiền ngay. Dùng **`GET /api/admin/payouts/withdrawals/pending`** và **`POST /api/admin/payouts/withdrawals/{withdrawalId}/result`** với `{ "result": "SUCCESS", "providerReference": "mã-chuyển-tiền", "note": "..." }`. Chỉ ghi `SUCCESS` **sau khi Admin đã chuyển khoản bên ngoài và đối soát**; Backend không tự gọi ngân hàng. `result` là `SUCCESS` hoặc `FAILED`; `providerReference` bắt buộc khi `SUCCESS`. Response của API ghi kết quả là `WithdrawalResponse`, gồm `withdrawalRequestId`, `amount`, `currency`, `payoutMethod`, `payoutAccountMasked`, `providerReference`, `status`, `requestedAt`, `processedAt`, `note`; danh sách đang chờ dùng `AdminWithdrawalResponse` có thêm `creatorProfileId` và `payoutAccountReference`.
 
-Luồng `POST /api/admin/withdrawals/{id}/approve` cũ giả định chưa giữ tiền, có thể trả `409` đối với withdrawal Creator mới. Frontend Admin nên dùng cặp API `/api/admin/payouts/withdrawals/...` ở bước 6.
+Luồng `POST /api/admin/withdrawals/{id}/approve` và `/reject` cũ giả định chưa giữ tiền; Backend trả `409` với yêu cầu có giao dịch `WITHDRAWAL_HOLD` của luồng mới. Dùng cặp API `/api/admin/payouts/withdrawals/...` ở bước 6.
+
+Membership thanh toán bằng ví hoặc SePay sau khi thành `PAID` sẽ tạo bút toán `MEMBERSHIP_EARNING` cộng **80% giá gói** vào ví CC và `PLATFORM_FEE` **20%**. `monthlyRevenue` trên Dashboard vẫn là tổng doanh thu gộp theo Payment của tháng, không phải số dư khả dụng. Payment membership đã `PAID` trước thay đổi này cần đối soát riêng trước khi ghi bù, tránh cộng trùng các khoản đã chi thủ công.
 
 ## 7. Hợp đồng và tranh chấp
 
@@ -82,8 +87,19 @@ Luồng `POST /api/admin/withdrawals/{id}/approve` cũ giả định chưa giữ
 Hai cờ `CREATOR_PLANS_ENABLED=true` và `MEMBERSHIPS_ENABLED=true` bật tính năng gói mặc định. Admin có thể quản lý dữ liệu gói:
 
 - `POST /api/admin/membership-plans` với `{ "creatorId": "UUID", "name": "Tên gói", "description": "...", "price": 100000, "currency": "VND", "durationDays": 30, "status": "ACTIVE" }`; `price` dương, `durationDays` 1–3650, `status` là `ACTIVE`/`INACTIVE`.
+- `GET /api/admin/membership-plans?creatorId=<UUID>&page=0&size=20` chỉ trả các gói đang `ACTIVE`; bỏ `creatorId` để xem gói ACTIVE của tất cả kênh. Gói `INACTIVE` không nằm trong danh sách này.
 - `POST /api/admin/creator-system-plans` với `{ "code": "PRO", "name": "Gói Pro", "description": "...", "price": 100000, "currency": "VND", "durationDays": 30, "status": "ACTIVE", "benefits": [{ "key": "BENEFIT_KEY", "value": "giá trị", "description": "..." }] }`.
 - Các endpoint CRUD cùng nhóm `/api/admin/membership-plans` và `/api/admin/creator-system-plans` phục vụ quản trị. Đặt cờ tương ứng thành `false` nếu cần tạm tắt một loại gói.
+
+## 9. Thông báo của tài khoản Admin
+
+Admin không có endpoint feed riêng dưới `/api/admin/notifications`. Nếu màn hình Admin cần đọc thông báo gắn với chính tài khoản đang đăng nhập, dùng:
+
+- `GET /api/me/notifications?page=0&size=20` — đọc `content[]` và các field `notificationId`, `type`, `title`, `message`, `read`, `createdAt`, `readAt`, `payload`.
+- `PUT /api/me/notifications/{notificationId}/read` — body rỗng, thành công `204`.
+- Realtime: STOMP `ws://<backend-host>/ws`, gửi `Authorization: Bearer <accessToken>` trong frame `CONNECT`, subscribe `/user/queue/notifications`.
+
+Các API `/api/admin/...` vẫn dùng để đọc trạng thái nghiệp vụ (payment, report, podcast, gói); không dùng chúng để lấy danh sách notification. Contract WebSocket, reconnect và phân loại event xem tại [docs/notifications/README.md](../notifications/README.md).
 
 ## Lỗi thường gặp
 

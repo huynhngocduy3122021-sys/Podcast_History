@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -29,7 +30,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
   final List<String> _tabs = [
     'Tất cả',
     'Đã đăng',
-    'Chờ Admin duyệt',
+    'Chờ duyệt',
     'Nháp',
     'Bị từ chối',
   ];
@@ -284,7 +285,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
       await ref.read(creatorPodcastsProvider.notifier).submitPodcast(pod.id);
       await ref.read(creatorPodcastsProvider.notifier).loadPodcasts();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           SnackBar(
             content: Text(
               pod.status == PodcastStatus.rejected
@@ -307,7 +308,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showTopSnackBar(
             SnackBar(
               content: Text('Lỗi khi gửi duyệt: $e'),
               backgroundColor: AppColors.error,
@@ -486,7 +487,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                                   Navigator.of(ctx).pop();
                                 }
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  ScaffoldMessenger.of(context).showTopSnackBar(
                                     SnackBar(
                                       content: Text('Đã tải lên tệp và gửi tập "${pod.title}" đến Admin kiểm duyệt thành công!'),
                                       backgroundColor: AppColors.success,
@@ -574,7 +575,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
               // Podcast đã đăng chỉnh sửa -> chuyển qua mục Nháp (Tab 3)
               _tabController.animateTo(3);
             } else if (res == 'resubmitted' || res == 'submitted') {
-              // Bị từ chối hoặc gửi duyệt -> chuyển sang mục Chờ Admin duyệt (Tab 2)
+              // Bị từ chối hoặc gửi duyệt -> chuyển sang mục Chờ duyệt (Tab 2)
               _tabController.animateTo(2);
             }
           },
@@ -584,7 +585,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
               : null,
         ),
 
-        // Hiển thị nút "Chờ Admin duyệt" khi podcast đang ở trạng thái Nháp (DRAFT)
+        // Hiển thị nút "Chờ duyệt" khi podcast đang ở trạng thái Nháp (DRAFT)
         if (pod.status == PodcastStatus.draft) ...[
           const SizedBox(height: AppSpacing.xs),
           Container(
@@ -636,7 +637,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                         )
                       : const Icon(Icons.send_rounded, size: 14),
                   label: const Text(
-                    'Chờ Admin duyệt',
+                    'Chờ duyệt',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -654,7 +655,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
           ),
         ],
 
-        // Hiển thị trạng thái Chờ Admin duyệt
+        // Hiển thị trạng thái Chờ duyệt
         if (pod.status == PodcastStatus.pendingAdmin) ...[
           const SizedBox(height: AppSpacing.xs),
           Container(
@@ -672,7 +673,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
-                    'Đang chờ Admin duyệt nội dung trước khi xuất bản.',
+                    'Đang chờ duyệt nội dung trước khi xuất bản.',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? const Color(0xFFFFCA28) : AppColors.warning,
@@ -768,7 +769,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
         try {
           await ref.read(creatorPodcastsProvider.notifier).deletePodcast(pod.id);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context).showTopSnackBar(
               SnackBar(
                 content: Text('Đã xóa tập "${pod.title}" thành công'),
                 backgroundColor: AppColors.success,
@@ -777,7 +778,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(context).showTopSnackBar(
               SnackBar(
                 content: Text('Lỗi khi xóa: $e'),
                 backgroundColor: AppColors.error,
@@ -839,7 +840,7 @@ class _PodcastListScreenState extends ConsumerState<PodcastListScreen> with Sing
                 await repo.submitPodcastAppeal(podcastId: pod.id, note: note);
                 if (ctx.mounted) Navigator.of(ctx).pop();
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(context).showTopSnackBar(
                     const SnackBar(
                       content:
                           Text('Đã gửi khiếu nại đến ban quản trị VietCast.'),

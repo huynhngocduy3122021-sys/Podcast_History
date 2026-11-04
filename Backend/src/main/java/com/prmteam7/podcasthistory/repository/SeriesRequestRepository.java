@@ -3,6 +3,8 @@ package com.prmteam7.podcasthistory.repository;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +20,11 @@ public interface SeriesRequestRepository extends JpaRepository<SeriesRequest, UU
 
     List<SeriesRequest> findAllByProducerProfile_User_UserIdAndStatusOrderByCreatedAtAsc(
             UUID creatorUserId, String status);
+
+    Page<SeriesRequest> findAllByProducerProfile_User_UserId(UUID creatorUserId, Pageable page);
+
+    Page<SeriesRequest> findAllByProducerProfile_User_UserIdAndStatus(
+            UUID creatorUserId, String status, Pageable page);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select request from SeriesRequest request where request.seriesRequestId = :requestId")

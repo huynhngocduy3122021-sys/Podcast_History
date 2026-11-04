@@ -10,5 +10,13 @@ public record MilestoneApprovalResponse(
         String paymentStatus,
         BigDecimal amount,
         String currency,
-        String message) {
+        String message,
+        BigDecimal creatorNet,
+        BigDecimal platformFee,
+        BigDecimal remainingHeld) {
+    public MilestoneApprovalResponse(UUID milestoneId, String milestoneStatus, UUID paymentId,
+            String paymentStatus, BigDecimal amount, String currency, String message) {
+        this(milestoneId, milestoneStatus, paymentId, paymentStatus, amount, currency, message,
+                null, null, null);
+    }
 }

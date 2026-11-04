@@ -27,11 +27,15 @@ export function extractApiError(error: unknown): ApiFailure {
     const parsed = apiErrorSchema.safeParse(error.response.data)
     // Display verified business errors only; do not expose arbitrary server exceptions.
     const login = error.config?.url?.split('?')[0].endsWith('/api/auth/login')
-    // The login business message is deliberately generic about credentials/account state.
-    const safeLoginMessage = 'Username/email hoặc mật khẩu không đúng, hoặc tài khoản đã bị khóa.'
+    // These are the business messages currently returned by Backend AuthService.
+    const loginMessages = new Set([
+      'Tài khoản không tồn tại.',
+      'Sai mật khẩu. Vui lòng thử lại.',
+      'Tài khoản của bạn đã bị khóa.',
+    ])
     if (status === 401 && login) return {
       status, fieldErrors: {},
-      message: parsed.success && parsed.data.status === status && parsed.data.message === safeLoginMessage
+      message: parsed.success && parsed.data.status === status && loginMessages.has(parsed.data.message)
         ? parsed.data.message : 'Không thể đăng nhập. Vui lòng kiểm tra thông tin đăng nhập và thử lại.',
     }
     // Backend 502/503 messages may mention R2 configuration or infrastructure details.

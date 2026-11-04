@@ -24,7 +24,30 @@ Chat trong livestream dùng Agora Signaling, không lưu tin nhắn ở backend:
 | --- | --- |
 | `GET /api/creator/dashboard?period=7d` | Tổng quan; `period` nhận `7d`, `4w`, `12m`. Đọc `profile`, `metrics`, `growth`, `recentPodcasts`, `incomingRequests`. |
 | `GET /api/categories` | Danh mục đang hoạt động để chọn `categoryId`; không cần token. |
-| `GET /api/creator/podcasts` | Trả `List` podcast của kênh hiện tại, không phân trang. |
+| `GET /api/creator/podcasts` | Trả `List` podcast của kênh hiện tại, không phân trang; mỗi podcast có `listenCount` được gom từ `listening_history` theo `podcastId`. |
+
+### Lượt nghe trên dashboard
+
+Frontend chỉ cần gọi `GET /api/creator/dashboard?period=7d` (hoặc `4w`, `12m`) như trên, không cần thêm endpoint hay thay đổi request. Tổng lượt nghe nằm ở `metrics.totalListens`; `metrics.monthlyListens` và `growth[].listens` là số liệu theo kỳ dùng cho biểu đồ.
+
+Ví dụ phần response:
+
+```json
+{
+  "metrics": {
+    "trackCount": 5,
+    "followerCount": 12,
+    "totalListens": 38,
+    "monthlyListens": 7,
+    "monthlyRevenue": 240000,
+    "availableBalance": 120000,
+    "pendingRelease": 50000,
+    "currency": "VND"
+  }
+}
+```
+
+Số tổng được backend cập nhật qua API nghe hiện có `PUT /api/podcasts/{podcastId}/listening-progress` với body chỉ gồm `progressSeconds` và `completed`; frontend **không gửi `sessionId`**. Các lần cập nhật tiến độ liên tục của cùng một lượt nghe không làm tăng tổng. Backend tự nhận diện lượt nghe mới khi người nghe tua lại đáng kể, phát lại từ đầu sau khi đã hoàn tất, hoặc tiếp tục sau một khoảng gián đoạn dài. Các dòng lịch sử cũ được tính tối thiểu là một lượt nghe.
 
 ## 3. Tạo và phát hành podcast
 
@@ -84,7 +107,7 @@ Gọi các bước theo thứ tự sau. `podcastId` là ID trả về từ bư�
    `responseText` bắt buộc, tối đa 5000. Có 1–30 milestone; mỗi `name` bắt buộc tối đa 150, `description` tối đa 3000, `amount` dương tối đa 2 chữ số thập phân. Muốn từ chối: `POST /api/creator/requests/{requestId}/reject` với `{ "responseText": "Lý do" }`.
 3. Nộp sản phẩm milestone: `POST /api/creator/milestones/{milestoneId}/submissions`, multipart `file` audio/video và `note` tùy chọn (tối đa 5000). Xem bằng `GET /api/milestones/{milestoneId}/submissions`.
 4. Khi listener chấp nhận sản phẩm và Admin đối soát thanh toán thành `PAID`, gọi `POST /api/creator/wallet/release-funds` (không body). `GET /api/creator/wallet/balance` trả `availableBalance`, `heldBalance`, `pendingRelease`, `currency`; số dư được tính theo thanh toán và phương thức thanh toán, không tự cộng khi chỉ có yêu cầu.
-5. `GET /api/creator/wallet/payout-accounts` để chọn tài khoản nhận tiền do Admin cấp. `POST /api/creator/wallet/withdrawals` với `{ "amount": 100000, "payoutAccountId": "UUID" }`; amount phải dương và không vượt số dư khả dụng. `GET /api/creator/wallet/withdrawals` để theo dõi; tiền được giữ ngay khi tạo yêu cầu và Admin xử lý kết quả qua luồng payout.
+5. `GET /api/creator/wallet/payout-accounts` để chọn tài khoản nhận tiền do Admin cấp và xác minh; Creator hiện không tự đăng ký/xóa tài khoản qua API. `POST /api/creator/wallet/withdrawals` với `{ "amount": 100000, "payoutAccountId": "UUID" }`; amount phải dương và không vượt số dư khả dụng. Response `PENDING` nghĩa là tiền đã được giữ, **chưa chuyển khoản**. `GET /api/creator/wallet/withdrawals` để theo dõi; Admin chuyển khoản bên ngoài rồi ghi `COMPLETED` hoặc `FAILED` qua luồng payout. Với membership đã thanh toán, ví CC được cộng 80% giá gói, nền tảng ghi phí 20%; giao dịch ví mang loại `MEMBERSHIP_EARNING`.
 
 ## 6. Quản lý gói hội viên & gói Creator
 
@@ -112,7 +135,7 @@ Gói hệ thống hỗ trợ nâng cấp tài khoản Creator để mở quyền
 | `NEW_COMMENT` | Listener bình luận vào podcast của Creator | `podcastId`, `commentId`, `listenerId` |
 | `NEW_MEMBERSHIP` | Admin xác nhận thanh toán và membership chuyển `ACTIVE` | `creatorId`, `subscriptionId`, `membershipPlanId`, `listenerId` |
 
-`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Frontend tải lại danh sách thông báo để cập nhật, hiện chưa có luồng push riêng.
+`NEW_MEMBERSHIP` chưa phát sinh khi `MEMBERSHIPS_ENABLED=false`; tạo checkout `PENDING` cũng chưa được tính là mua thành công. Để nhận realtime, Frontend mở STOMP tại `/ws` với Bearer token trong frame `CONNECT`, rồi subscribe `/user/queue/notifications`; REST vẫn phải được gọi lúc mở màn hình và sau reconnect. Contract chi tiết, schema và cách xử lý theo role xem tại [docs/notifications/README.md](../notifications/README.md).
 
 ## Xử lý lỗi thường gặp
 

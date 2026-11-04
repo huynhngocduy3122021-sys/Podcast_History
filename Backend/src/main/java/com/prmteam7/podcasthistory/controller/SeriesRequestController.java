@@ -15,7 +15,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.prmteam7.podcasthistory.dto.request.CreateSeriesRequest;
+import com.prmteam7.podcasthistory.dto.request.SendSeriesRequestMessage;
 import com.prmteam7.podcasthistory.dto.response.MilestoneResponse;
+import com.prmteam7.podcasthistory.dto.response.SeriesRequestMessageResponse;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestResponse;
 import com.prmteam7.podcasthistory.service.PodcastRequestService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -56,6 +58,22 @@ public class SeriesRequestController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID requestId) {
         return podcastRequestService.getRequestMilestones(userId(jwt), requestId);
+    }
+
+    @GetMapping("/{requestId}/messages")
+    public List<SeriesRequestMessageResponse> getMessages(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID requestId) {
+        return podcastRequestService.getRequestMessages(userId(jwt), requestId);
+    }
+
+    @PostMapping("/{requestId}/messages")
+    public ResponseEntity<SeriesRequestMessageResponse> sendMessage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID requestId,
+            @Valid @RequestBody SendSeriesRequestMessage request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(podcastRequestService.sendRequestMessage(userId(jwt), requestId, request));
     }
 
     private UUID userId(Jwt jwt) {

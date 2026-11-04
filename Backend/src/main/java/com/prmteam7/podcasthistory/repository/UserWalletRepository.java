@@ -6,7 +6,6 @@ import java.util.UUID;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -16,13 +15,12 @@ import com.prmteam7.podcasthistory.model.UserWallet;
 
 public interface UserWalletRepository extends JpaRepository<UserWallet, UUID> {
 
-    @EntityGraph(attributePaths = {"user", "user.role"})
-    @Query("select wallet from UserWallet wallet")
-    Page<UserWallet> findAllForAdmin(Pageable pageable);
-
-    @EntityGraph(attributePaths = {"user", "user.role"})
-    @Query("select wallet from UserWallet wallet where wallet.userWalletId = :id")
-    Optional<UserWallet> findAdminById(@Param("id") UUID id);
+    @Query("select wallet from UserWallet wallet where "
+        + "(lower(coalesce(wallet.user.displayName, '')) like lower(concat('%', :q, '%')) "
+        + "or lower(coalesce(wallet.user.username, '')) like lower(concat('%', :q, '%')) "
+        + "or lower(coalesce(wallet.user.email, '')) like lower(concat('%', :q, '%'))) "
+        + "and (:role = '' or wallet.user.role.roleCode = :role)")
+    Page<UserWallet> findAllForAdmin(@Param("q") String q, @Param("role") String role, Pageable pageable);
 
     Optional<UserWallet> findByUser_UserId(UUID userId);
 

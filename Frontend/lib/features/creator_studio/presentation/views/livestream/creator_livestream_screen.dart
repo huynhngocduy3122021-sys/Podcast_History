@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -59,8 +60,6 @@ class _CreatorLivestreamScreenState
   final _descController = TextEditingController(
     text: 'Cùng thảo luận về các sự kiện hào hùng, giải đáp thắc mắc và chia sẻ góc nhìn lịch sử mới mẻ.',
   );
-  bool _isScheduled = false;
-  DateTime? _scheduledDateTime;
 
   // Filter for livestream list
   String _selectedFilter = 'ALL'; // ALL, DRAFT, LIVE, ENDED
@@ -213,7 +212,7 @@ class _CreatorLivestreamScreenState
           .renewToken(_activeLivestreamId!);
       await _engine!.renewToken(response.token);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã tự động gia hạn Agora Token thành công.'),
             duration: Duration(seconds: 2),
@@ -230,7 +229,7 @@ class _CreatorLivestreamScreenState
   Future<void> _startNewLivestream() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi Livestream.');
+      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi livestream.');
       return;
     }
     if (title.length > 220) {
@@ -250,7 +249,6 @@ class _CreatorLivestreamScreenState
           .createLivestream(
             title: title,
             description: _descController.text.trim(),
-            scheduledAt: _isScheduled ? _scheduledDateTime : null,
           );
 
       // 2. Gọi /start để chuyển sang LIVE và nhận AgoraJoin credentials
@@ -332,7 +330,7 @@ class _CreatorLivestreamScreenState
   Future<void> _saveDraftOnly() async {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
-      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi Livestream.');
+      _showErrorSnackBar('Vui lòng nhập tiêu đề cho buổi livestream.');
       return;
     }
 
@@ -343,11 +341,10 @@ class _CreatorLivestreamScreenState
           .createLivestream(
             title: title,
             description: _descController.text.trim(),
-            scheduledAt: _isScheduled ? _scheduledDateTime : null,
           );
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        ScaffoldMessenger.of(context).showTopSnackBar(
           const SnackBar(
             content: Text('Đã lưu bản nháp livestream thành công!'),
             backgroundColor: AppColors.success,
@@ -419,50 +416,12 @@ class _CreatorLivestreamScreenState
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text('Đã kết thúc buổi Livestream.'),
           backgroundColor: AppColors.success,
         ),
       );
-    }
-  }
-
-  Future<void> _handleScheduleToggle(bool val) async {
-    if (val) {
-      final now = DateTime.now();
-      final pickedDate = await showDatePicker(
-        context: context,
-        initialDate: now.add(const Duration(hours: 1)),
-        firstDate: now,
-        lastDate: now.add(const Duration(days: 30)),
-      );
-      if (pickedDate != null && mounted) {
-        final pickedTime = await showTimePicker(
-          context: context,
-          initialTime: TimeOfDay.fromDateTime(
-            now.add(const Duration(hours: 1)),
-          ),
-        );
-        if (pickedTime != null && mounted) {
-          setState(() {
-            _isScheduled = true;
-            _scheduledDateTime = DateTime(
-              pickedDate.year,
-              pickedDate.month,
-              pickedDate.day,
-              pickedTime.hour,
-              pickedTime.minute,
-            );
-          });
-          return;
-        }
-      }
-    } else {
-      setState(() {
-        _isScheduled = false;
-        _scheduledDateTime = null;
-      });
     }
   }
 
@@ -474,7 +433,7 @@ class _CreatorLivestreamScreenState
     await _engine!.muteLocalAudioStream(nextState);
     setState(() => _isMuted = nextState);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(_isMuted ? 'Đã tắt Micro' : 'Đã bật Micro'),
           duration: const Duration(seconds: 1),
@@ -527,7 +486,7 @@ class _CreatorLivestreamScreenState
       _cameraUnavailable = false;
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(_isVideoDisabled ? 'Đã tắt Camera' : 'Đã bật Camera'),
           duration: const Duration(seconds: 1),
@@ -580,7 +539,7 @@ class _CreatorLivestreamScreenState
   }
 
   void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context).showTopSnackBar(
       SnackBar(content: Text(message), backgroundColor: AppColors.error),
     );
   }
@@ -1420,50 +1379,6 @@ class _CreatorLivestreamScreenState
             controller: _descController,
             hint: 'Tóm tắt nội dung sẽ thảo luận cùng thính giả...',
             maxLines: 3,
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          // Lên lịch phát sóng
-          InkWell(
-            onTap: () => _handleScheduleToggle(!_isScheduled),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Lên lịch phát sóng sau',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _isScheduled && _scheduledDateTime != null
-                              ? 'Thời gian: ${DateFormat('dd/MM/yyyy HH:mm').format(_scheduledDateTime!.toLocal())}'
-                              : 'Đặt trước thời gian dự kiến phát trực tiếp',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? AppColors.onSurfaceMutedDark
-                                : AppColors.onSurfaceMutedLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Switch.adaptive(
-                    value: _isScheduled,
-                    onChanged: _handleScheduleToggle,
-                  ),
-                ],
-              ),
-            ),
           ),
           const SizedBox(height: AppSpacing.md),
 

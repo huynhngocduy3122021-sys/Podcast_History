@@ -12,6 +12,9 @@ public interface AiModerationResultRepository extends JpaRepository<AiModeration
     Page<AiModerationResult> findAllByPodcast_PodcastIdOrderByCreatedAtDesc(
             UUID podcastId, Pageable pageable);
 
+    List<AiModerationResult> findAllByPodcast_PodcastIdAndSourceHashAndMediaKeyOrderByCreatedAtDesc(
+            UUID podcastId, String sourceHash, String mediaKey);
+
     Optional<AiModerationResult> findFirstByPodcast_PodcastIdAndStatusAndSourceHashOrderByCreatedAtDesc(
             UUID podcastId, String status, String sourceHash);
 
@@ -24,6 +27,6 @@ public interface AiModerationResultRepository extends JpaRepository<AiModeration
             "update AiModerationResult r set r.status = 'PROCESSING' where r.moderationResultId = :id and r.status = 'PENDING'")
     int claim(@org.springframework.data.repository.query.Param("id") UUID id);
 
-    List<AiModerationResult> findAllByPodcast_PodcastIdAndStatusAndMediaKey(
+    List<AiModerationResult> findAllByPodcast_PodcastIdAndStatusAndMediaKeyOrderByCreatedAtDesc(
             UUID podcastId, String status, String mediaKey);
 }

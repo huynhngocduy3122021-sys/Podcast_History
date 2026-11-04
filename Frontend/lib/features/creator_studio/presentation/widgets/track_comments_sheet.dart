@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
@@ -142,7 +143,7 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
     }
     await ref.read(creatorCommentsProvider.notifier).deleteComment(c.id);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Đã xóa bình luận')),
       );
     }
@@ -150,7 +151,7 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
 
   Future<void> _sendComment() async {
     if (widget.podcast.status != PodcastStatus.published) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(
           content: Text(
             'Tập podcast chỉ có thể gửi bình luận sau khi đã được xuất bản.',
@@ -205,7 +206,7 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(
             _attachTimestamp
@@ -455,7 +456,7 @@ class _TrackCommentsSheetState extends ConsumerState<TrackCommentsSheet> {
                                                   widget.onSeek!(frac);
                                                   ScaffoldMessenger.of(
                                                     context,
-                                                  ).showSnackBar(
+                                                  ).showTopSnackBar(
                                                     SnackBar(
                                                       content: Text(
                                                         'Đã nhảy đến mốc $timeStr',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
@@ -6,6 +7,7 @@ import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/utils/formatters.dart';
 import 'package:podcast_history/features/creator_studio/data/models/creator_models.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
+import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_members_list_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/wallet/wallet_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/widgets/creator_notification_button.dart';
 
@@ -29,7 +31,7 @@ class _CreatorMembershipPlansScreenState
           .read(creatorChannelPlansProvider.notifier)
           .selectTemplate(template.code);
       if (!mounted) return;
-      messenger.showSnackBar(
+      messenger.showTopSnackBar(
         const SnackBar(
           backgroundColor: AppColors.success,
           content: Text('Đã kích hoạt Gói thành viên cho kênh!'),
@@ -37,7 +39,7 @@ class _CreatorMembershipPlansScreenState
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(
+      messenger.showTopSnackBar(
         SnackBar(
           backgroundColor: AppColors.error,
           content: Text('Không thể kích hoạt gói: $e'),
@@ -102,7 +104,7 @@ class _CreatorMembershipPlansScreenState
                   onPressed: () async {
                     final price = double.tryParse(controller.text.trim()) ?? 0.0;
                     if (price < 1000) {
-                      ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context).showTopSnackBar(
                         const SnackBar(content: Text('Giá gói tối thiểu là 1.000 VNĐ.')),
                       );
                       return;
@@ -115,7 +117,7 @@ class _CreatorMembershipPlansScreenState
                           .read(creatorChannelPlansProvider.notifier)
                           .updatePrice(plan.planId, price);
                       if (!mounted) return;
-                      messenger.showSnackBar(
+                      messenger.showTopSnackBar(
                         SnackBar(
                           backgroundColor: AppColors.success,
                           content: Text('Đã cập nhật giá Gói thành viên thành ${AppFormatters.formatVND(price.toInt())}!'),
@@ -123,7 +125,7 @@ class _CreatorMembershipPlansScreenState
                       );
                     } catch (e) {
                       if (!mounted) return;
-                      messenger.showSnackBar(
+                      messenger.showTopSnackBar(
                         SnackBar(
                           backgroundColor: AppColors.error,
                           content: Text('Cập nhật giá thất bại: $e'),
@@ -149,10 +151,11 @@ class _CreatorMembershipPlansScreenState
     final isDark = theme.brightness == Brightness.dark;
     final myPlansAsync = ref.watch(creatorChannelPlansProvider);
     final templatesAsync = ref.watch(creatorPlanTemplatesProvider);
+    final membersAsync = ref.watch(creatorMembershipsProvider('ACTIVE'));
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gói Hội viên Kênh'),
+        title: const Text('Gói Thành viên Kênh'),
         actions: const [
           CreatorNotificationButton(),
           SizedBox(width: 8),
@@ -164,6 +167,7 @@ class _CreatorMembershipPlansScreenState
             onRefresh: () async {
               await ref.read(creatorChannelPlansProvider.notifier).loadPlans();
               ref.invalidate(creatorPlanTemplatesProvider);
+              ref.invalidate(creatorMembershipsProvider('ACTIVE'));
             },
             child: ListView(
               padding: const EdgeInsets.all(AppSpacing.screenMargin),
@@ -202,14 +206,14 @@ class _CreatorMembershipPlansScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Hội viên Kênh (Channel Membership)',
+                              'Thành viên Kênh (Channel Membership)',
                               style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Mở bán các gói hội viên để người nghe đăng ký theo tháng. Hội viên được nghe podcast độc quyền (Members-Only) và gửi yêu cầu nội dung.',
+                              'Mở bán các gói thành viên để người nghe đăng ký theo tháng. Thành viên được nghe podcast độc quyền (Members-Only) và gửi yêu cầu nội dung.',
                               style: TextStyle(
                                 fontSize: 12.5,
                                 color: isDark ? Colors.white70 : Colors.black87,
@@ -387,6 +391,112 @@ class _CreatorMembershipPlansScreenState
                 ),
                 const SizedBox(height: AppSpacing.lg),
 
+                // Card xem danh sách thành viên kênh
+                InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CreatorMembersListScreen(),
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF211F1D)
+                          : const Color(0xFFF9F7F3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF4C3626)
+                            : const Color(0xFFEAD8C7),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color:
+                                AppColors.primaryLight.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.people_alt_rounded,
+                            color: AppColors.primaryLight,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Danh sách thành viên kênh',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  membersAsync.when(
+                                    data: (p) => p.totalElements > 0
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 7,
+                                              vertical: 1.5,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primaryLight,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              '${p.totalElements}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          )
+                                        : const SizedBox.shrink(),
+                                    loading: () => const SizedBox.shrink(),
+                                    error: (_, _) => const SizedBox.shrink(),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                membersAsync.when(
+                                  data: (p) => p.totalElements > 0
+                                      ? 'Có ${p.totalElements} thành viên đang tham gia gói của kênh'
+                                      : 'Xem thính giả đăng ký gói thành viên của kênh',
+                                  loading: () =>
+                                      'Đang tải thông tin thành viên...',
+                                  error: (_, _) =>
+                                      'Nhấn để xem danh sách thành viên',
+                                ),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color:
+                                      isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.chevron_right_rounded, size: 20),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 // Card điều hướng sang ví
                 InkWell(
                   onTap: () => Navigator.of(context).push(
@@ -408,7 +518,7 @@ class _CreatorMembershipPlansScreenState
                         const SizedBox(width: 12),
                         const Expanded(
                           child: Text(
-                            'Kiểm tra doanh thu & số dư hội viên trong Ví Creator',
+                            'Kiểm tra doanh thu & số dư thành viên trong Ví Creator',
                             style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
                           ),
                         ),

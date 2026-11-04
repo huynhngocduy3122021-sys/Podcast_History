@@ -17,6 +17,11 @@ public interface MembershipPlanRepository
   List<MembershipPlan> findAllByProducerProfile_ProducerProfileIdAndStatusIgnoreCaseOrderByPriceAsc(
       UUID creatorId, String status);
 
+  boolean existsByProducerProfile_ProducerProfileIdAndTemplateCode(
+      UUID creatorId, String templateCode);
+
+  List<MembershipPlan> findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(UUID creatorId);
+
   Optional<MembershipPlan>
       findByMembershipPlanIdAndProducerProfile_ProducerProfileIdAndStatusIgnoreCase(
           UUID planId, UUID creatorId, String status);

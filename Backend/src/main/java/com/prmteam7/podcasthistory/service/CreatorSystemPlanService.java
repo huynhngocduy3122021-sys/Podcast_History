@@ -161,6 +161,30 @@ public class CreatorSystemPlanService {
   }
 
   @Transactional
+  public CheckoutPaymentView cancelPendingCheckout(UUID userId) {
+    var profile = approvedCreator(userId, true);
+    var pending = checkouts
+        .findFirstByCreatorSubscription_ProducerProfile_ProducerProfileIdAndStatusOrderByCreatedAtDesc(
+            profile.getProducerProfileId(), "PENDING")
+        .orElseThrow(() -> new ResourceNotFoundException("Không có checkout gói CC đang chờ."));
+    var checkout = checkouts.lockById(pending.getCheckoutId()).orElseThrow();
+    if (!"PENDING".equals(checkout.getStatus()))
+      throw new ResourceConflictException("Checkout đã được xử lý; vui lòng tải lại trạng thái.");
+    var subscription = subscriptions.findById(checkout.getCreatorSubscription().getSubscriptionId())
+        .orElseThrow();
+    if (!"PENDING".equals(subscription.getPaymentStatus()))
+      throw new ResourceConflictException("Gói CC đã được xử lý; vui lòng tải lại trạng thái.");
+    checkout.setStatus("CANCELLED");
+    subscription.setPaymentStatus("CANCELLED");
+    subscriptions.save(subscription);
+    checkouts.save(checkout);
+    return new CheckoutPaymentView(checkout.getCheckoutId(), subscription.getSubscriptionId(),
+        checkout.getPurpose(), checkout.getPaymentCode(), null,
+        checkout.getAmount(), checkout.getCurrency(), checkout.getStatus(), checkout.getPaidAt(),
+        checkout.getCreatedAt().plus(30, ChronoUnit.MINUTES));
+  }
+
+  @Transactional
   public void assertCanUpload(UUID creatorProfileId) {
     if (!packageFeatures.creatorPlansEnabled()) return;
     // Serialize upload quota checks for one channel while the media transaction is open.

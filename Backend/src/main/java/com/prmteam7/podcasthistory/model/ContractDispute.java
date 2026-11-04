@@ -1,6 +1,7 @@
 package com.prmteam7.podcasthistory.model;
 
 import jakarta.persistence.*;
+import com.prmteam7.podcasthistory.enums.ListenerWinAction;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -42,6 +43,13 @@ public class ContractDispute extends BaseEntity {
 
   @Column(name = "resolved_at")
   private Instant resolvedAt;
+
+  @Column(name = "opponent_confirmed_at")
+  private Instant opponentConfirmedAt;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "listener_win_action", length = 30)
+  private ListenerWinAction listenerWinAction;
 
   @PrePersist
   void assignId() {
@@ -123,4 +131,9 @@ public class ContractDispute extends BaseEntity {
   public void setResolvedAt(Instant v) {
     resolvedAt = v;
   }
+
+  public Instant getOpponentConfirmedAt() { return opponentConfirmedAt; }
+  public void setOpponentConfirmedAt(Instant value) { opponentConfirmedAt = value; }
+  public ListenerWinAction getListenerWinAction() { return listenerWinAction; }
+  public void setListenerWinAction(ListenerWinAction value) { listenerWinAction = value; }
 }

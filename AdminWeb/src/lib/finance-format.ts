@@ -40,8 +40,22 @@ export function formatDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
+export function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    PENDING: 'Chờ xử lý', PROCESSING: 'Đang xử lý', COMPLETED: 'Đã hoàn tất', FAILED: 'Thất bại',
+    REJECTED: 'Đã từ chối', REFUNDED: 'Đã hoàn tiền', PAID: 'Đã thu', SUCCESS: 'Thành công',
+    ACTIVE: 'Đang hoạt động', INACTIVE: 'Ngừng hoạt động', OPEN: 'Đang mở', RESOLVED: 'Đã giải quyết',
+    DISPUTED: 'Đang tranh chấp', CANCELLED: 'Đã hủy', IN_PROGRESS: 'Đang xử lý', ACCEPTED: 'Đã chấp nhận',
+    SIGNED: 'Đã ký', CREATED: 'Đã tạo',
+  }
+  return labels[status] || status
+}
+
 export function statusClass(status: string) {
-  if (['COMPLETED', 'PAID', 'ACTIVE'].includes(status)) return 'bg-success/10 text-success'
-  if (['FAILED', 'REJECTED', 'REFUNDED', 'INACTIVE'].includes(status)) return 'bg-destructive/10 text-destructive'
-  return ''
+  const tone = ['COMPLETED', 'PAID', 'ACTIVE'].includes(status)
+    ? 'bg-success/10 text-success'
+    : ['FAILED', 'REJECTED', 'REFUNDED', 'INACTIVE'].includes(status)
+      ? 'bg-destructive/10 text-destructive'
+      : ''
+  return `${tone} status-${status.toLowerCase()}`.trim()
 }

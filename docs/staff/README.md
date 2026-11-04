@@ -42,6 +42,16 @@ Nếu xử lý nền lỗi, Staff có thể gọi `POST /api/admin/podcasts/{pod
 
 `GET /api/admin/podcast-appeals?page=0&size=20` để xem hàng; `GET /api/admin/podcast-appeals/{appealId}` để đọc nội dung và podcast liên quan. `POST /api/admin/podcast-appeals/{appealId}/resolve` với `{ "decision": "ACCEPT", "note": "Giải thích quyết định" }`; `decision` nhận `ACCEPT` hoặc `REJECT`, `note` cần ghi lý do rõ ràng. Tải lại chi tiết/hàng sau khi xử lý.
 
+## 5. Thông báo của Staff
+
+Staff dùng chung API thông báo cá nhân với các role khác; backend hiện không có `/api/admin/notifications` riêng:
+
+- `GET /api/me/notifications?page=0&size=20` — response là Spring `Page`, đọc danh sách trong `content[]`.
+- `PUT /api/me/notifications/{notificationId}/read` — không có body, thành công `204`.
+- Realtime: kết nối STOMP tới `ws://<backend-host>/ws`, gửi Bearer token trong `CONNECT`, rồi subscribe `/user/queue/notifications`.
+
+Xem schema, reconnect và danh sách loại thông báo theo từng role tại [docs/notifications/README.md](../notifications/README.md).
+
 ## Lỗi thường gặp
 
 `401`: token không hợp lệ/hết hạn. `403`: token thiếu role `STAFF` hoặc không có quyền trên thao tác. `404`: ID không tồn tại. `409`: trạng thái đã thay đổi hoặc tác vụ đang/đã được xử lý. `400`: dữ liệu quyết định thiếu/sai giá trị.

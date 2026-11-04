@@ -41,5 +41,11 @@ public class CreatorSystemPlanController {
     return service.subscribe(id(jwt), planId);
   }
 
+  @DeleteMapping("/me/pending-checkout")
+  @Operation(summary = "Hủy checkout gói CC đang chờ để có thể tạo checkout mới; không hoàn tiền")
+  public CheckoutPaymentView cancelPendingCheckout(@AuthenticationPrincipal Jwt jwt) {
+    return service.cancelPendingCheckout(id(jwt));
+  }
+
   private UUID id(Jwt jwt) { return UUID.fromString(jwt.getClaimAsString("user_id")); }
 }

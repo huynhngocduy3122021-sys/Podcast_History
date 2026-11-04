@@ -16,7 +16,10 @@ import com.prmteam7.podcasthistory.dto.request.AcceptSeriesRequest;
 import com.prmteam7.podcasthistory.dto.request.RejectSeriesRequest;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestDecisionResponse;
 import com.prmteam7.podcasthistory.dto.response.SeriesRequestResponse;
+import com.prmteam7.podcasthistory.dto.response.CreatorRequestListItem;
 import com.prmteam7.podcasthistory.service.PodcastRequestService;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.RequestParam;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +35,15 @@ public class CreatorRequestController {
 
     public CreatorRequestController(PodcastRequestService podcastRequestService) {
         this.podcastRequestService = podcastRequestService;
+    }
+
+    @GetMapping
+    @Operation(summary = "Creator xem tất cả yêu cầu của kênh, gồm yêu cầu cũ và hợp đồng giữ tiền")
+    public Page<CreatorRequestListItem> getAll(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return podcastRequestService.getCreatorRequests(userId(jwt), status, page, size);
     }
 
     @GetMapping("/incoming")

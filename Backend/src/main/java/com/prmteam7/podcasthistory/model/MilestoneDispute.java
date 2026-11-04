@@ -1,6 +1,9 @@
 package com.prmteam7.podcasthistory.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import com.prmteam7.podcasthistory.enums.ListenerWinAction;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
@@ -49,6 +52,16 @@ public class MilestoneDispute extends BaseEntity {
     @Column(name = "resolved_at")
     private Instant resolvedAt;
 
+    @Column(name = "opponent_confirmed_at")
+    private Instant opponentConfirmedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "listener_win_action", length = 30)
+    private ListenerWinAction listenerWinAction;
+
+    @Column(name = "previous_stage_status", length = 30)
+    private String previousStageStatus;
+
     public MilestoneDispute() {}
 
     public UUID getMilestoneDisputeId() { return milestoneDisputeId; }
@@ -69,6 +82,12 @@ public class MilestoneDispute extends BaseEntity {
     public void setResolutionNote(String resolutionNote) { this.resolutionNote = resolutionNote; }
     public Instant getResolvedAt() { return resolvedAt; }
     public void setResolvedAt(Instant resolvedAt) { this.resolvedAt = resolvedAt; }
+    public Instant getOpponentConfirmedAt() { return opponentConfirmedAt; }
+    public void setOpponentConfirmedAt(Instant value) { opponentConfirmedAt = value; }
+    public ListenerWinAction getListenerWinAction() { return listenerWinAction; }
+    public void setListenerWinAction(ListenerWinAction value) { listenerWinAction = value; }
+    public String getPreviousStageStatus() { return previousStageStatus; }
+    public void setPreviousStageStatus(String value) { previousStageStatus = value; }
 
     @PrePersist
     private void assignId() {

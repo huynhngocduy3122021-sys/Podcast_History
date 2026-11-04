@@ -13,6 +13,54 @@ public final class AdminResponses {
 
   public record Revenue(String currency, BigDecimal amount) {}
 
+  public record RevenueBreakdown(
+      String currency,
+      BigDecimal grossCollected,
+      BigDecimal platformFees,
+      BigDecimal netRevenue,
+      String grossCollectedDescription,
+      String platformFeesDescription,
+      String netRevenueDescription) {}
+
+  public record RevenueDetail(
+      UUID paymentId,
+      String sourceType,
+      String sourceLabel,
+      BigDecimal amount,
+      BigDecimal platformFee,
+      BigDecimal netRevenue,
+      String currency,
+      String status,
+      String paymentMethod,
+      String provider,
+      String providerTransactionId,
+      Instant createdAt,
+      Instant paidAt,
+      UUID buyerId,
+      String buyerName,
+      String buyerEmail,
+      UUID creatorProfileId,
+      UUID creatorUserId,
+      String creatorName,
+      String creatorChannelName,
+      UUID contractId,
+      UUID requestId,
+      String requestTitle,
+      UUID stageId,
+      String stageName,
+      Integer stageOrder,
+      UUID membershipPlanId,
+      String membershipPlanName,
+      String sourceTypeLabel,
+      String statusLabel,
+      String paymentMethodLabel,
+      BigDecimal creatorNetAmount,
+      BigDecimal platformFeePercent,
+      String amountDescription,
+      String platformFeeDescription,
+      String creatorNetDescription,
+      String paymentDescription) {}
+
   public record Dashboard(
       long users,
       long activeUsers,
@@ -24,7 +72,8 @@ public final class AdminResponses {
       long pendingWithdrawals,
       long openDisputes,
       List<CountByStatus> podcastStatuses,
-      List<Revenue> collectedPayments) {}
+      List<Revenue> collectedPayments,
+      List<RevenueBreakdown> revenueBreakdown) {}
 
   public record UserItem(
       UUID userId,
@@ -57,10 +106,12 @@ public final class AdminResponses {
       String reporterName,
       String targetType,
       UUID targetId,
+      String targetName,
       String reasonCode,
       String description,
       String status,
       UUID assigneeId,
+      String assigneeName,
       Instant createdAt,
       Instant resolvedAt,
       List<ReviewItem> reviews) {}
@@ -87,7 +138,25 @@ public final class AdminResponses {
       String note,
       UUID reviewerId,
       Instant createdAt,
-      Instant resolvedAt) {}
+      Instant resolvedAt,
+      Instant responseDeadlineAt,
+      Instant opponentConfirmedAt,
+      String listenerWinAction,
+      UUID listenerId,
+      String listenerName,
+      String listenerAvatarUrl,
+      UUID creatorId,
+      String creatorName,
+      String creatorChannelName,
+      String creatorAvatarUrl,
+      UUID requestId,
+      String requestTitle,
+      String openedByName,
+      String reviewerName,
+      UUID openedByUserId,
+      String openedByEmail,
+      String openedByRole,
+      String openedByRoleLabel) {}
 
   public record StageItem(UUID stageId, String name, int order, String status) {}
 
@@ -97,7 +166,15 @@ public final class AdminResponses {
       UUID creatorId,
       String status,
       Instant createdAt,
-      List<StageItem> stages) {}
+      List<StageItem> stages,
+      UUID requestId,
+      String requestTitle,
+      String listenerName,
+      String listenerAvatarUrl,
+      UUID creatorUserId,
+      String creatorName,
+      String creatorChannelName,
+      String creatorAvatarUrl) {}
 
   public record PaymentItem(
       UUID paymentId,
@@ -140,8 +217,8 @@ public final class AdminResponses {
       String email,
       String displayName,
       String role,
-      Boolean active,
-      Boolean verified,
+      boolean active,
+      boolean verified,
       BigDecimal availableBalance,
       BigDecimal heldBalance,
       BigDecimal totalBalance,

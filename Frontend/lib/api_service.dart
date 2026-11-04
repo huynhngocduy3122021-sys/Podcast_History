@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
+import 'package:podcast_history/core/network/api_endpoints.dart';
 import 'package:podcast_history/features/livestream/chat_credentials.dart';
 
 const apiBaseUrl = String.fromEnvironment(
@@ -184,6 +186,7 @@ class ListenerPodcast {
     required this.categoryId,
     required this.categoryName,
     required this.visibility,
+    this.listenCount = 0,
   });
 
   final String id;
@@ -197,6 +200,7 @@ class ListenerPodcast {
   final String? categoryId;
   final String categoryName;
   final String visibility;
+  final int listenCount;
 
   factory ListenerPodcast.fromJson(Map<String, dynamic> json) =>
       ListenerPodcast(
@@ -211,6 +215,7 @@ class ListenerPodcast {
         categoryId: json['categoryId']?.toString(),
         categoryName: '${json['categoryName'] ?? ''}',
         visibility: '${json['visibility'] ?? 'PUBLIC'}',
+        listenCount: (json['listenCount'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -227,6 +232,21 @@ class ListenerApi {
   final void Function(AuthSession)? onSessionRefreshed;
   static Future<AuthSession>? _globalRefreshing;
   final http.Client _client;
+
+  String? get currentUserId {
+    final parts = accessToken.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      if (payload is Map<String, dynamic>) {
+        return '${payload['userId'] ?? payload['user_id'] ?? payload['sub'] ?? ''}'
+            .trim();
+      }
+    } catch (_) {}
+    return null;
+  }
 
   Future<List<ListenerPodcast>> searchPodcasts({
     String? query,
@@ -293,6 +313,56 @@ class ListenerApi {
 
   Future<Map<String, dynamic>> creator(String creatorId) =>
       _sendMap('GET', '/api/creators/$creatorId');
+
+  Future<List<Map<String, dynamic>>> listenerPolls(
+    String creatorId, {
+    String? seriesId,
+    String? podcastId,
+    int page = 0,
+    int size = 20,
+  }) async => _pageItems(
+    await _send(
+      'GET',
+      ApiEndpoints.listenerCreatorPolls(creatorId),
+      queryParameters: {
+        'page': '$page',
+        'size': '$size',
+        if (seriesId?.isNotEmpty == true) 'seriesId': seriesId!,
+        if (podcastId?.isNotEmpty == true) 'podcastId': podcastId!,
+      },
+    ),
+  );
+
+  Future<Map<String, dynamic>> listenerPoll(String pollId) =>
+      _sendMap('GET', ApiEndpoints.listenerPoll(pollId));
+
+  Future<Map<String, dynamic>> listenerPollResults(String pollId) =>
+      _sendMap('GET', ApiEndpoints.listenerPollResults(pollId));
+
+  Future<Map<String, dynamic>> answerListenerPoll(
+    String pollId,
+    String optionId,
+  ) => _sendMap(
+    'POST',
+    ApiEndpoints.listenerPollResponse(pollId),
+    body: {'optionId': optionId},
+  );
+
+  Future<Map<String, dynamic>> changeListenerPollAnswer(
+    String pollId,
+    String optionId,
+  ) => _sendMap(
+    'PUT',
+    ApiEndpoints.listenerMyPollResponse(pollId),
+    body: {'optionId': optionId},
+  );
+
+  Future<Map<String, dynamic>> myListenerPollResponse(String pollId) =>
+      _sendMap('GET', ApiEndpoints.listenerMyPollResponse(pollId));
+
+  Future<void> withdrawListenerPollResponse(String pollId) async {
+    await _send('DELETE', ApiEndpoints.listenerMyPollResponse(pollId));
+  }
 
   Future<ListenerPodcast> podcast(String podcastId) async =>
       ListenerPodcast.fromJson(await _send('GET', '/api/podcasts/$podcastId'));
@@ -515,6 +585,55 @@ class ListenerApi {
   Future<Map<String, dynamic>> wallet() =>
       _sendMap('GET', '/api/listener/wallet');
 
+  Future<Map<String, dynamic>> createContractRequest({
+    required String creatorProfileId,
+    required String requestedTitle,
+    required String description,
+    required int budgetAmount,
+    required String productType,
+    required String fileFormat,
+    required String duration,
+    required String acceptanceCriteria,
+    bool autoAcceptEnabled = false,
+    String? idempotencyKey,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.createContractRequest,
+    body: {
+      'idempotencyKey': idempotencyKey ?? const Uuid().v4(),
+      'creatorProfileId': creatorProfileId,
+      'requestedTitle': requestedTitle.trim(),
+      'description': description.trim(),
+      'budgetAmount': budgetAmount,
+      'productType': productType,
+      'fileFormat': fileFormat,
+      'duration': duration.trim(),
+      'acceptanceCriteria': acceptanceCriteria.trim(),
+      'autoAcceptEnabled': autoAcceptEnabled,
+    },
+  );
+
+  Future<Map<String, dynamic>> contractRequest(String requestId) =>
+      _sendMap('GET', ApiEndpoints.contractRequestDetail(requestId));
+
+  Future<void> cancelContractRequest(String requestId) async {
+    await _send('POST', ApiEndpoints.cancelContractRequest(requestId));
+  }
+
+  Future<List<Map<String, dynamic>>> walletTransactions({
+    String? status,
+    int page = 0,
+    int size = 20,
+  }) => _list(
+    'GET',
+    '/api/listener/wallet/transactions',
+    queryParameters: {
+      'page': '$page',
+      'size': '$size',
+      if (status != null && status.isNotEmpty) 'status': status,
+    },
+  );
+
   Future<Map<String, dynamic>> topUpWallet(int amount) => _sendMap(
     'POST',
     '/api/listener/wallet/top-ups',
@@ -523,6 +642,20 @@ class ListenerApi {
 
   Future<Map<String, dynamic>> checkoutStatus(String checkoutId) =>
       _sendMap('GET', '/api/me/checkouts/$checkoutId');
+
+  Future<List<Map<String, dynamic>>> checkouts({
+    String? status,
+    int page = 0,
+    int size = 20,
+  }) => _list(
+    'GET',
+    '/api/me/checkouts',
+    queryParameters: {
+      'page': '$page',
+      'size': '$size',
+      if (status != null && status.isNotEmpty) 'status': status,
+    },
+  );
 
   Future<Map<String, dynamic>> checkout(
     String membershipPlanId, {
@@ -545,6 +678,164 @@ class ListenerApi {
 
   Future<List<Map<String, dynamic>>> seriesRequests() =>
       _list('GET', '/api/me/series-requests');
+
+  Future<List<Map<String, dynamic>>> requestFlowRequests() =>
+      _list('GET', '/api/requests/me');
+
+  Future<List<Map<String, dynamic>>> requestMilestones(String requestId) =>
+      _list('GET', '/api/requests/$requestId/milestones');
+
+  Future<Map<String, dynamic>?> contractAgreement(String requestId) async {
+    try {
+      final response = await _sendMap(
+        'GET',
+        ApiEndpoints.requestContract(requestId),
+      );
+      return response;
+    } on ApiException catch (error) {
+      // A request without a creator proposal returns 409 by design.
+      if (error.statusCode == 409 || error.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> signContract(
+    String requestId, {
+    required int contractVersion,
+    required String contentHash,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.signContract(requestId),
+    body: {
+      'contractVersion': contractVersion,
+      'contentHash': contentHash,
+      'accepted': true,
+    },
+  );
+
+  Future<List<Map<String, dynamic>>> milestoneSubmissions(String milestoneId) =>
+      _list('GET', '/api/milestones/$milestoneId/submissions');
+
+  Future<Map<String, dynamic>> milestoneSubmissionMedia(
+    String milestoneId,
+    String submissionId,
+  ) => _sendMap(
+    'GET',
+    '/api/milestones/$milestoneId/submissions/$submissionId/media',
+  );
+
+  Future<Map<String, dynamic>> approveMilestone(String milestoneId) =>
+      _sendMap('POST', '/api/listener/milestones/$milestoneId/approve');
+
+  Future<void> requestMilestoneRevision(
+    String milestoneId,
+    String reason,
+  ) async {
+    await _send(
+      'POST',
+      '/api/listener/milestones/$milestoneId/revision',
+      body: {'reason': reason},
+    );
+  }
+
+  Future<Map<String, dynamic>> requestContractTermination(
+    String requestId, {
+    required String reason,
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    '/api/requests/$requestId/termination-requests',
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> disputeMilestone(
+    String milestoneId, {
+    required String reason,
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    '/api/milestones/$milestoneId/disputes',
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> contractTermination(String requestId) =>
+      _sendMap('GET', ApiEndpoints.getContractTerminationRequest(requestId));
+
+  Future<Map<String, dynamic>> confirmContractDispute(
+    String disputeId, {
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.contractDisputeConfirm(disputeId),
+    body: {
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> withdrawContractDispute(String disputeId) =>
+      _sendMap('POST', ApiEndpoints.contractDisputeWithdraw(disputeId));
+
+  Future<Map<String, dynamic>> confirmMilestoneDispute(
+    String milestoneId,
+    String disputeId, {
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.milestoneDisputeConfirm(milestoneId, disputeId),
+    body: {
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<Map<String, dynamic>> withdrawMilestoneDispute(
+    String milestoneId,
+    String disputeId,
+  ) => _sendMap(
+    'POST',
+    ApiEndpoints.milestoneDisputeWithdraw(milestoneId, disputeId),
+  );
+
+  Future<Map<String, dynamic>> openContractDispute(
+    String contractId, {
+    required String reason,
+    String? listenerWinAction,
+  }) => _sendMap(
+    'POST',
+    ApiEndpoints.contractDispute(contractId),
+    body: {
+      'reason': reason.trim(),
+      if (listenerWinAction != null) 'listenerWinAction': listenerWinAction,
+    },
+  );
+
+  Future<List<Map<String, dynamic>>> requestMessages(
+    String requestId, {
+    int page = 0,
+    int size = 20,
+  }) => _list(
+    'GET',
+    '/api/requests/$requestId/chat/messages',
+    queryParameters: {'page': '$page', 'size': '$size'},
+  );
+
+  Future<Map<String, dynamic>> sendRequestMessage(
+    String requestId,
+    String content, {
+    String? clientMessageId,
+  }) => _sendMap(
+    'POST',
+    '/api/requests/$requestId/chat/messages',
+    body: {
+      'clientMessageId': clientMessageId ?? const Uuid().v4(),
+      'content': content,
+    },
+  );
 
   Future<Map<String, dynamic>> createSeriesRequest(
     String creatorId, {

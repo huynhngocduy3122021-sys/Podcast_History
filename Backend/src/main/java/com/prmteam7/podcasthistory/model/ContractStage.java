@@ -10,6 +10,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -43,6 +44,9 @@ public class ContractStage extends UpdatedEntity {
     @Column(name = "amount", nullable = false, precision = 12, scale = 2,
             columnDefinition = "numeric(12,2) default 0.00")
     private BigDecimal amount;
+
+    @Column(name = "due_at")
+    private Instant dueAt;
 
     public ContractStage() {
     }
@@ -109,4 +113,7 @@ public class ContractStage extends UpdatedEntity {
     public void setAmount(BigDecimal amount) {
         this.amount = amount;
     }
+
+    public Instant getDueAt() { return dueAt; }
+    public void setDueAt(Instant dueAt) { this.dueAt = dueAt; }
 }

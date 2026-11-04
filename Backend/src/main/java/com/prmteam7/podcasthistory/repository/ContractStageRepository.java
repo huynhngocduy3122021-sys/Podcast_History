@@ -17,6 +17,11 @@ public interface ContractStageRepository extends JpaRepository<ContractStage, UU
     List<ContractStage> findAllByContract_ContractIdOrderByStageOrder(UUID contractId);
 
     List<ContractStage> findAllByContract_ContractIdOrderByStageOrderAsc(UUID contractId);
+    List<ContractStage> findAllByStatus(String status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select stage from ContractStage stage where stage.contract.contractId = :contractId order by stage.stageOrder")
+    List<ContractStage> lockAllByContractId(@Param("contractId") UUID contractId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select stage from ContractStage stage where stage.contractStageId = :stageId")

@@ -61,11 +61,13 @@ import com.prmteam7.podcasthistory.repository.SeriesRequestRepository;
 import com.prmteam7.podcasthistory.repository.SubscriptionRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 import org.springframework.data.domain.Page;
@@ -101,10 +103,12 @@ public class ListenerFlowService {
   private final SeriesRequestRepository seriesRequestRepository;
   private final SepayService sepayService;
   private final ListenerWalletService listenerWalletService;
+  private final MembershipRevenueService membershipRevenueService;
   private final R2PlaybackUrlService playbackUrlService;
   private final CommentRealtimeHub commentRealtimeHub;
   private final PackageFeatures packageFeatures;
   private final AudienceNotificationService audienceNotifications;
+  private final ContractEscrowService contractEscrowService;
 
   public ListenerFlowService(
       AppUserRepository userRepository,
@@ -125,10 +129,12 @@ public class ListenerFlowService {
       SeriesRequestRepository seriesRequestRepository,
       SepayService sepayService,
       ListenerWalletService listenerWalletService,
+      MembershipRevenueService membershipRevenueService,
       R2PlaybackUrlService playbackUrlService,
       CommentRealtimeHub commentRealtimeHub,
       PackageFeatures packageFeatures,
-      AudienceNotificationService audienceNotifications) {
+      AudienceNotificationService audienceNotifications,
+      ContractEscrowService contractEscrowService) {
     this.userRepository = userRepository;
     this.categoryRepository = categoryRepository;
     this.producerProfileRepository = producerProfileRepository;
@@ -147,10 +153,12 @@ public class ListenerFlowService {
     this.seriesRequestRepository = seriesRequestRepository;
     this.sepayService = sepayService;
     this.listenerWalletService = listenerWalletService;
+    this.membershipRevenueService = membershipRevenueService;
     this.playbackUrlService = playbackUrlService;
     this.commentRealtimeHub = commentRealtimeHub;
     this.packageFeatures = packageFeatures;
     this.audienceNotifications = audienceNotifications;
+    this.contractEscrowService = contractEscrowService;
   }
 
   @Transactional(readOnly = true)
@@ -160,9 +168,11 @@ public class ListenerFlowService {
         search == null || search.isBlank()
             ? null
             : "%" + search.trim().toLowerCase(Locale.ROOT) + "%";
-    return podcastRepository
-        .searchPublished(query, categoryId, creatorId, seriesId, pageRequest(page, size))
-        .map(this::toPodcastItem);
+    Page<Podcast> podcasts = podcastRepository.searchPublished(
+        query, categoryId, creatorId, seriesId, pageRequest(page, size));
+    Map<UUID, Long> listenCounts = listenCounts(podcasts.getContent());
+    return podcasts.map(podcast -> toPodcastItem(
+        podcast, listenCounts.getOrDefault(podcast.getPodcastId(), 0L)));
   }
 
   @Transactional(readOnly = true)
@@ -220,8 +230,26 @@ public class ListenerFlowService {
         listeningHistoryRepository
             .findByUser_UserIdAndPodcast_PodcastId(userId, podcastId)
             .orElseGet(ListeningHistory::new);
+    boolean newHistory = history.getListeningHistoryId() == null;
+    Integer previousProgress = history.getProgressSeconds();
+    Instant previousListenedAt = history.getLastListenedAt();
+    Instant now = Instant.now();
+    boolean progressReset = previousProgress != null
+        && request.progressSeconds() + 10 < previousProgress;
+    boolean replayAfterCompletion = Boolean.TRUE.equals(history.getCompleted())
+        && request.progressSeconds() <= 5;
+    boolean resumedAfterLongPause = previousListenedAt != null
+        && previousListenedAt.isBefore(now.minus(30, ChronoUnit.MINUTES));
+    boolean newListeningSession = newHistory
+        || progressReset
+        || replayAfterCompletion
+        || resumedAfterLongPause;
     history.setUser(user);
     history.setPodcast(podcast);
+    if (history.getListenCount() == null) history.setListenCount(1);
+    if (newListeningSession && !newHistory) {
+      history.setListenCount(history.getListenCount() + 1);
+    }
     int max =
         podcast.getDurationSeconds() == null
             ? request.progressSeconds()
@@ -231,7 +259,7 @@ public class ListenerFlowService {
     history.setCompleted(
         Boolean.TRUE.equals(request.completed())
             || (podcast.getDurationSeconds() != null && progress >= podcast.getDurationSeconds()));
-    history.setLastListenedAt(Instant.now());
+    history.setLastListenedAt(now);
     return toListeningItem(listeningHistoryRepository.save(history));
   }
 
@@ -593,6 +621,7 @@ public class ListenerFlowService {
     payment = paymentRepository.save(payment);
     if ("WALLET".equals(method)) {
       listenerWalletService.debit(listenerWalletService.walletForLockedUser(buyer), payment);
+      membershipRevenueService.creditPaidMembership(payment);
     }
     return new MembershipCheckoutItem(
         subscription.getSubscriptionId(),
@@ -679,7 +708,12 @@ public class ListenerFlowService {
   @Transactional
   public SeriesRequestItem updateSeriesRequest(
       UUID userId, UUID requestId, SeriesRequestUpdate request) {
-    SeriesRequest seriesRequest = requireSeriesRequest(userId, requestId);
+    SeriesRequest seriesRequest = seriesRequestRepository.findByIdForUpdate(requestId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu podcast."));
+    assertOwner(userId, seriesRequest.getUser().getUserId(), "Bạn không có quyền truy cập yêu cầu này.");
+    if (contractEscrowService.isEscrowRequest(requestId)) {
+      throw new ResourceConflictException("Yêu cầu hợp đồng không thể sửa trực tiếp; hãy hủy rồi tạo lại. Nếu ngân sách đã giữ, Backend sẽ hoàn tiền khi hủy.");
+    }
     requirePending(seriesRequest.getStatus(), "Chỉ sửa được yêu cầu đang chờ creator phản hồi.");
     seriesRequest.setRequestedTitle(request.requestedTitle().trim());
     seriesRequest.setDescription(request.description().trim());
@@ -688,8 +722,14 @@ public class ListenerFlowService {
 
   @Transactional
   public void cancelSeriesRequest(UUID userId, UUID requestId) {
-    SeriesRequest seriesRequest = requireSeriesRequest(userId, requestId);
+    SeriesRequest seriesRequest = seriesRequestRepository.findByIdForUpdate(requestId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy yêu cầu podcast."));
+    assertOwner(userId, seriesRequest.getUser().getUserId(), "Bạn không có quyền truy cập yêu cầu này.");
     requirePending(seriesRequest.getStatus(), "Chỉ hủy được yêu cầu đang chờ creator phản hồi.");
+    if (contractEscrowService.isEscrowRequest(requestId)) {
+      contractEscrowService.cancel(userId, requestId);
+      return;
+    }
     seriesRequest.setStatus("CANCELLED");
     seriesRequestRepository.save(seriesRequest);
   }
@@ -821,6 +861,11 @@ public class ListenerFlowService {
   }
 
   private PodcastItem toPodcastItem(Podcast podcast) {
+    return toPodcastItem(podcast, listenCounts(List.of(podcast))
+        .getOrDefault(podcast.getPodcastId(), 0L));
+  }
+
+  private PodcastItem toPodcastItem(Podcast podcast, long listenCount) {
     var series = podcast.getSeries();
     var creator = podcast.getProducerProfile();
     var category = podcast.getCategory();
@@ -841,7 +886,23 @@ public class ListenerFlowService {
         category.getCategoryId(),
         category.getName(),
         creator.getProducerProfileId(),
-        creator.getChannelName());
+        creator.getChannelName(),
+        listenCount);
+  }
+
+  private Map<UUID, Long> listenCounts(List<Podcast> podcasts) {
+    Map<UUID, Long> result = new HashMap<>();
+    List<UUID> podcastIds = podcasts.stream()
+        .map(Podcast::getPodcastId)
+        .filter(Objects::nonNull)
+        .toList();
+    if (podcastIds.isEmpty()) return result;
+    for (Object[] row : listeningHistoryRepository.sumListenCountsByPodcastIds(podcastIds)) {
+      if (row != null && row.length >= 2 && row[0] != null && row[1] instanceof Number count) {
+        result.put((UUID) row[0], count.longValue());
+      }
+    }
+    return result;
   }
 
   private CategoryItem toCategoryItem(Category category) {

@@ -26,12 +26,14 @@ public class AgoraRtcTokenService {
     String channel = livestream.getStreamReference();
     String account = userId.toString();
     int ttl = properties.tokenTtlSeconds();
+    Instant expiresAt = Instant.now().plusSeconds(ttl);
+    int expireAt = Math.toIntExact(expiresAt.getEpochSecond());
     String token = new RtcTokenBuilder2().buildTokenWithUserAccount(
         properties.appId(), properties.appCertificate(), channel, account,
         host ? RtcTokenBuilder2.Role.ROLE_PUBLISHER : RtcTokenBuilder2.Role.ROLE_SUBSCRIBER,
-        ttl, ttl);
+        expireAt, expireAt);
     if (token == null || token.isBlank()) throw new AgoraNotConfiguredException();
     return new AgoraJoin(livestream.getLivestreamId(), properties.appId(), channel, account,
-        host ? "host" : "audience", token, Instant.now().plusSeconds(ttl));
+        host ? "host" : "audience", token, expiresAt);
   }
 }

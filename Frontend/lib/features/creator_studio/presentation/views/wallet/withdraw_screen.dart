@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:podcast_history/core/network/api_client.dart';
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/core/theme/app_typography.dart';
@@ -19,42 +21,63 @@ class WithdrawScreen extends ConsumerStatefulWidget {
 
 class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _pinController = TextEditingController();
   BankAccount? _selectedBank;
+  BankAccount? _completedBank;
+  int _completedAmount = 0;
   bool _isProcessing = false;
-  String _currentStepState = 'FORM'; // FORM -> VALIDATING -> PROCESSING -> SUCCESS
+  String _currentStepState = 'FORM'; // FORM -> VALIDATING -> SUCCESS
   String? _transactionId;
 
   @override
   void dispose() {
     _amountController.dispose();
-    _pinController.dispose();
     super.dispose();
   }
 
-  Future<void> _processWithdrawal(int available) async {
-    final amount = int.tryParse(_amountController.text.replaceAll('.', '').replaceAll(' ', '')) ?? 0;
+  Future<void> _processWithdrawal(int available, BankAccount? bank) async {
+    final rawText = _amountController.text
+        .replaceAll('.', '')
+        .replaceAll(',', '')
+        .replaceAll(' ', '')
+        .replaceAll('₫', '')
+        .trim();
+    final amount = int.tryParse(rawText) ?? 0;
+
     if (amount < 50000) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Số tiền rút tối thiểu là 50.000 ₫')),
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(
+          content: Text('Số tiền rút tối thiểu là 50.000 ₫'),
+          backgroundColor: AppColors.warning,
+        ),
       );
       return;
     }
     if (amount > available) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Số tiền rút vượt quá số dư khả dụng')),
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(
+          content: Text('Số tiền rút vượt quá số dư khả dụng hiện tại'),
+          backgroundColor: AppColors.error,
+        ),
       );
       return;
     }
-    if (_selectedBank == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng chọn tài khoản ngân hàng nhận tiền')),
+    if (bank == null) {
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng chọn tài khoản ngân hàng nhận tiền'),
+          backgroundColor: AppColors.warning,
+        ),
       );
       return;
     }
-    if (_pinController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vui lòng nhập mã PIN bảo mật 6 số')),
+    if (!bank.verified) {
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tài khoản này chưa được Admin xác minh. Vui lòng chọn tài khoản đã xác minh để rút tiền.',
+          ),
+          backgroundColor: AppColors.warning,
+        ),
       );
       return;
     }
@@ -66,30 +89,20 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
       _currentStepState = 'VALIDATING';
     });
 
-    // Mô phỏng State Machine: VALIDATING -> HOLDING -> PROCESSING -> SUCCESS
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _currentStepState = 'HOLDING');
-
-    await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    setState(() => _currentStepState = 'PROCESSING');
-
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-
     try {
-      await ref.read(walletProvider.notifier).withdrawMoney(
+      final transaction = await ref.read(walletProvider.notifier).withdrawMoney(
             amount,
-            _selectedBank!.id,
-            _pinController.text,
+            bank.id,
+            '',
           );
 
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
         _currentStepState = 'SUCCESS';
-        _transactionId = 'VC-WD-${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+        _transactionId = transaction.id;
+        _completedBank = bank;
+        _completedAmount = amount;
       });
     } catch (e) {
       if (!mounted) return;
@@ -97,10 +110,21 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         _isProcessing = false;
         _currentStepState = 'FORM';
       });
-      messenger.showSnackBar(
-        SnackBar(content: Text('Rút tiền thất bại: $e. Số tiền đã được hoàn lại ví.')),
+      final errorMsg = e is ApiException
+          ? e.message
+          : e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      messenger.showTopSnackBar(
+        SnackBar(
+          content: Text('Không thể xác nhận yêu cầu rút tiền: $errorMsg'),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
+  }
+
+  void _setAmount(int amount, int available) {
+    final clamped = amount.clamp(0, available);
+    _amountController.text = clamped.toString();
   }
 
   @override
@@ -110,11 +134,14 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    if (_selectedBank == null && accounts.isNotEmpty) {
-      _selectedBank = accounts.firstWhere((a) => a.isDefault, orElse: () => accounts.first);
-    }
-
     final available = wallet?.available ?? 0;
+
+    final verifiedAccounts = accounts.where((a) => a.verified && a.active).toList();
+    final activeSelectedBank = _selectedBank != null && accounts.any((a) => a.id == _selectedBank!.id)
+        ? accounts.firstWhere((a) => a.id == _selectedBank!.id)
+        : (verifiedAccounts.isNotEmpty
+            ? verifiedAccounts.firstWhere((a) => a.isDefault, orElse: () => verifiedAccounts.first)
+            : (accounts.isNotEmpty ? accounts.first : null));
 
     return Scaffold(
       appBar: AppBar(
@@ -168,16 +195,19 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                       prefixIcon: const Icon(Icons.attach_money_rounded),
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            _amountController.text = available.toString();
-                          },
-                          child: const Text('Rút toàn bộ số dư'),
-                        ),
-                      ],
+
+                    // Preset chips nhanh
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildPresetChip('50.000 ₫', () => _setAmount(50000, available)),
+                          _buildPresetChip('100.000 ₫', () => _setAmount(100000, available)),
+                          _buildPresetChip('200.000 ₫', () => _setAmount(200000, available)),
+                          _buildPresetChip('500.000 ₫', () => _setAmount(500000, available)),
+                          _buildPresetChip('Toàn bộ số dư', () => _setAmount(available, available), isHighlight: true),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.md),
 
@@ -185,14 +215,19 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Tài khoản nhận tiền', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
+                        const Text(
+                          'Tài khoản nhận tiền',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.settings_outlined, size: 16),
+                          label: const Text('Quản lý TK'),
+                          onPressed: () async {
+                            await Navigator.of(context).push(
                               MaterialPageRoute(builder: (_) => const BankAccountsScreen()),
                             );
+                            ref.read(bankAccountsProvider.notifier).loadAccounts();
                           },
-                          child: const Text('Quản lý TK'),
                         ),
                       ],
                     ),
@@ -200,37 +235,90 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                       Container(
                         padding: const EdgeInsets.all(AppSpacing.md),
                         decoration: BoxDecoration(
-                          color: AppColors.warningContainer,
+                          color: isDark ? AppColors.surfaceVariantDark : AppColors.surfaceVariantLight,
                           borderRadius: AppSpacing.roundedMd,
+                          border: Border.all(
+                            color: AppColors.warning.withValues(alpha: 0.5),
+                          ),
                         ),
-                        child: const Text('Chưa có tài khoản ngân hàng. Vui lòng bấm Quản lý TK để thêm.'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.info_outline_rounded, color: AppColors.warning, size: 20),
+                                SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'Chưa có tài khoản nhận tiền',
+                                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Tài khoản nhận tiền cần được Admin cấp và xác minh để đảm bảo an toàn giao dịch.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('Tải lại tài khoản'),
+                              onPressed: () => ref.read(bankAccountsProvider.notifier).loadAccounts(),
+                            ),
+                          ],
+                        ),
                       )
                     else
                       DropdownButtonFormField<BankAccount>(
-                        initialValue: _selectedBank,
+                        key: ValueKey(activeSelectedBank?.id ?? 'no_bank'),
+                        isExpanded: true,
+                        initialValue: activeSelectedBank,
                         decoration: const InputDecoration(
                           prefixIcon: Icon(Icons.account_balance_rounded),
                         ),
                         items: accounts.map((acc) {
                           return DropdownMenuItem<BankAccount>(
                             value: acc,
-                            child: Text('${acc.bankName} - ${acc.accountNumber}', overflow: TextOverflow.ellipsis),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '${acc.bankName} - ${acc.accountNumber}',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (acc.verified)
+                                  const Text(
+                                    ' (Đã xác minh)',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.info,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  )
+                                else
+                                  const Text(
+                                    ' (Chờ duyệt)',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.warning,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           );
                         }).toList(),
-                        onChanged: (val) => setState(() => _selectedBank = val),
+                        onChanged: (val) {
+                          setState(() {
+                            _selectedBank = val;
+                          });
+                        },
                       ),
                     const SizedBox(height: AppSpacing.lg),
-
-                    // Xác thực PIN bảo mật
-                    AppTextField(
-                      label: 'Mã PIN bảo mật rút tiền (6 chữ số)',
-                      hint: 'Nhập mã PIN...',
-                      controller: _pinController,
-                      keyboardType: TextInputType.number,
-                      obscureText: true,
-                      prefixIcon: const Icon(Icons.pin_rounded),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
 
                     // Tóm tắt giao dịch
                     Container(
@@ -243,7 +331,9 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
                         children: [
                           _buildSummaryRow('Phí dịch vụ rút tiền', 'Miễn phí (0 ₫)'),
                           const SizedBox(height: 6),
-                          _buildSummaryRow('Thời gian xử lý dự kiến', '24h làm việc (24/7)'),
+                          _buildSummaryRow('Hình thức xử lý', 'Admin duyệt & chuyển khoản vào STK'),
+                          const SizedBox(height: 6),
+                          _buildSummaryRow('Thời gian xử lý', 'Từ 1 - 24 giờ làm việc'),
                         ],
                       ),
                     ),
@@ -251,10 +341,40 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
 
                     AppButton(
                       label: 'Xác nhận rút tiền',
-                      onPressed: () => _processWithdrawal(available),
+                      onPressed: () {
+                        if (accounts.isEmpty) {
+                          ScaffoldMessenger.of(context).showTopSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Chưa có tài khoản nhận tiền. Vui lòng liên hệ Quản trị viên để cấp và xác minh tài khoản.',
+                              ),
+                              backgroundColor: AppColors.warning,
+                            ),
+                          );
+                          return;
+                        }
+                        _processWithdrawal(available, activeSelectedBank);
+                      },
                     ),
                   ],
                 )),
+    );
+  }
+
+  Widget _buildPresetChip(String label, VoidCallback onTap, {bool isHighlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: AppSpacing.xs),
+      child: ActionChip(
+        label: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isHighlight ? FontWeight.w700 : FontWeight.w500,
+            color: isHighlight ? AppColors.primaryLight : null,
+          ),
+        ),
+        onPressed: onTap,
+      ),
     );
   }
 
@@ -277,14 +397,14 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
           children: [
             const CircularProgressIndicator(),
             const SizedBox(height: AppSpacing.xl),
-            Text(
-              _getProcessingStatusTitle(),
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            const Text(
+              'Đang gửi yêu cầu và giữ số dư trong ví...',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              'Hệ thống đang tiến hành đối soát và tạm giữ giao dịch theo State Machine an toàn.',
+              'Hệ thống đang tiến hành đối soát và giữ an toàn giao dịch.',
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? AppColors.onSurfaceMutedDark : AppColors.onSurfaceMutedLight,
@@ -295,19 +415,6 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
         ),
       ),
     );
-  }
-
-  String _getProcessingStatusTitle() {
-    switch (_currentStepState) {
-      case 'VALIDATING':
-        return '1/3: Đang xác thực số dư và tài khoản ngân hàng...';
-      case 'HOLDING':
-        return '2/3: Đang tạm giữ tiền trong quỹ thanh khoản...';
-      case 'PROCESSING':
-        return '3/3: Đang gửi lệnh chuyển khoản Napas 247...';
-      default:
-        return 'Đang xử lý giao dịch...';
-    }
   }
 
   Widget _buildSuccessReceipt(bool isDark) {
@@ -332,7 +439,7 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Mã giao dịch: $_transactionId',
+            'Mã yêu cầu: ${_transactionId ?? ''}',
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.tertiaryLight),
             textAlign: TextAlign.center,
           ),
@@ -347,17 +454,23 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
             ),
             child: Column(
               children: [
-                _buildReceiptRow('Số tiền rút', '${_amountController.text} ₫', isBold: true),
+                _buildReceiptRow(
+                  'Số tiền rút',
+                  AppFormatters.formatVND(_completedAmount),
+                  isBold: true,
+                ),
                 const Divider(),
-                _buildReceiptRow('Ngân hàng nhận', _selectedBank?.bankName ?? ''),
+                _buildReceiptRow('Phương thức nhận', _completedBank?.bankName ?? ''),
                 const SizedBox(height: 6),
-                _buildReceiptRow('Số tài khoản', _selectedBank?.accountNumber ?? ''),
+                _buildReceiptRow('Số tài khoản', _completedBank?.accountNumber ?? ''),
                 const SizedBox(height: 6),
-                _buildReceiptRow('Chủ tài khoản', _selectedBank?.accountHolder ?? ''),
+                _buildReceiptRow('Chủ tài khoản', _completedBank?.accountHolder ?? ''),
+                const SizedBox(height: 6),
+                _buildReceiptRow('Loại tiền tệ', _completedBank?.currency ?? 'VND'),
                 const SizedBox(height: 6),
                 _buildReceiptRow('Thời gian tạo lệnh', AppFormatters.formatDateTime(DateTime.now())),
                 const SizedBox(height: 6),
-                _buildReceiptRow('Trạng thái', 'Đang giải ngân', color: AppColors.warning),
+                _buildReceiptRow('Trạng thái', 'Đang chờ Admin chuyển khoản', color: AppColors.warning),
               ],
             ),
           ),
@@ -365,7 +478,10 @@ class _WithdrawScreenState extends ConsumerState<WithdrawScreen> {
 
           AppButton(
             label: 'Về trang Ví Creator',
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              ref.read(walletProvider.notifier).loadWallet();
+              Navigator.of(context).pop();
+            },
           ),
         ],
       ),
