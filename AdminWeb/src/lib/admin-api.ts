@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import { approveWithdrawalSchema, categoriesSchema, categoryFormSchema, categorySchema, completeWithdrawalSchema, contractSchema, contractsPageSchema, contractStatusSchema, creatorApplicationSchema, creatorApplicationsPageSchema, approveCreatorSchema, rejectCreatorSchema, auditsPageSchema, creatorSystemPlanSchema, creatorSystemPlansSchema, creatorSystemPlanWriteSchema, disputeSchema, disputesPageSchema, disputeStatusSchema, openDisputeSchema, paymentReconcileSchema, paymentRefundSchema, paymentSchema, paymentStatusSchema, paymentsPageSchema, planDeactivateSchema, planSchema, planWriteSchema, plansPageSchema, resolveDisputeSchema, staffCreateSchema, transactionsPageSchema, userAccessSchema, userProfileSchema, userRoleChangeSchema, userSchema, userVerificationSchema, usersPageSchema, uuidFilterSchema, walletsPageSchema, withdrawalNoteSchema, withdrawalReviewsPageSchema, withdrawalSchema, withdrawalStatusSchema, withdrawalsPageSchema, payoutAccountSchema, payoutAccountWriteSchema, payoutResultWriteSchema, payoutResultResponseSchema, payoutWithdrawalsSchema, milestoneDisputeSchema, milestoneDisputesSchema, resolveMilestoneDisputeSchema, milestoneSubmissionsSchema, mediaUrlSchema } from './admin-contracts.ts'
 import type { ApproveWithdrawal, CategoryForm, CompleteWithdrawal, CreatorStatus, AdminUserRole, PaymentReconcile, PaymentRefund, PaymentStatus, PlanWrite, WithdrawalNote, WithdrawalStatus, PayoutAccountWrite, PayoutResultWrite } from './admin-contracts.ts'
+import { dashboardSchema, revenueDetailsPageSchema } from './contracts.ts'
 import { confirmedMutation } from './api-mutation.ts'
 
 // Inject the existing authenticated transport; tests use an Axios adapter, not a second runtime client.
@@ -9,6 +10,14 @@ export function createAdminApi(client: Pick<AxiosInstance, 'get' | 'post' | 'put
   const categories = '/api/admin/categories'
   const payments = '/api/admin/payments'
   return {
+    async dashboard(signal?: AbortSignal) {
+      return dashboardSchema.parse((await client.get('/api/admin/dashboard', { signal })).data)
+    },
+    async revenueDetails(page = 0, size = 20, signal?: AbortSignal) {
+      return revenueDetailsPageSchema.parse((await client.get('/api/admin/dashboard/revenue-details', {
+        params: { page, size }, signal,
+      })).data)
+    },
     async applications(status: CreatorStatus | '', page: number, size: number, signal?: AbortSignal) {
       return creatorApplicationsPageSchema.parse((await client.get(applications, { params: { status: status || undefined, page, size }, signal })).data)
     },
