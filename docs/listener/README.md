@@ -31,8 +31,8 @@ Khi `POST /api/auth/login` trả `401`, frontend đọc trường `message`: `T�
 |---:|---|---|---|
 | 1 | `GET /api/categories` | Không | `categoryId`, `name` để lọc |
 | 2 | `GET /api/creators?q=lich%20su` | `q` tên kênh tùy chọn | `creatorProfileId`, `channelName` |
-| 3 | `GET /api/podcasts?q=...&categoryId=...&creatorId=...&seriesId=...&page=0&size=20` | Mọi filter tùy chọn; bỏ tham số trống | `content[]` có `podcastId`, `title`, `thumbnailUrl`, `visibility`, `creatorProfileId` |
-| 4 | `GET /api/podcasts/{podcastId}` | ID từ bước 3 | Chi tiết tập |
+| 3 | `GET /api/podcasts?q=...&categoryId=...&creatorId=...&seriesId=...&page=0&size=20` | Mọi filter tùy chọn; bỏ tham số trống | `content[]` có `podcastId`, `title`, `thumbnailUrl`, `visibility`, `creatorProfileId`, `listenCount` |
+| 4 | `GET /api/podcasts/{podcastId}` | ID từ bước 3 | Chi tiết tập, gồm `listenCount` |
 | 5 | `GET /api/podcasts/{podcastId}/playback` | Không body | `playbackUrl`, `expiresAt`, `resumeFromSeconds`, `durationSeconds` |
 | 6 | `PUT /api/podcasts/{podcastId}/listening-progress` | `progressSeconds` integer 0–86.400, `completed` boolean | Tiến độ đã lưu |
 | Lần mở sau | `GET /api/me/listening-history/{podcastId}` hoặc `GET /api/me/listening-history?page=0&size=20` | Không body | Vị trí đã nghe, danh sách lịch sử |

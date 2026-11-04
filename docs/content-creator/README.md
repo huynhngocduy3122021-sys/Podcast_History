@@ -24,7 +24,7 @@ Chat trong livestream dùng Agora Signaling, không lưu tin nhắn ở backend:
 | --- | --- |
 | `GET /api/creator/dashboard?period=7d` | Tổng quan; `period` nhận `7d`, `4w`, `12m`. Đọc `profile`, `metrics`, `growth`, `recentPodcasts`, `incomingRequests`. |
 | `GET /api/categories` | Danh mục đang hoạt động để chọn `categoryId`; không cần token. |
-| `GET /api/creator/podcasts` | Trả `List` podcast của kênh hiện tại, không phân trang. |
+| `GET /api/creator/podcasts` | Trả `List` podcast của kênh hiện tại, không phân trang; mỗi podcast có `listenCount` được gom từ `listening_history` theo `podcastId`. |
 
 ### Lượt nghe trên dashboard
 
