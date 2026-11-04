@@ -148,6 +148,8 @@ class ApiEndpoints {
       '/api/creator/system-plans/me/pending-checkout';
   static String creatorSystemPlanSubscribe(String planId) =>
       '/api/creator/system-plans/$planId/subscribe';
+  static String creatorSystemPlanSubscribeWallet(String planId) =>
+      '/api/creator/system-plans/$planId/subscribe-wallet';
   static String meCheckout(String checkoutId) =>
       '/api/me/checkouts/$checkoutId';
 

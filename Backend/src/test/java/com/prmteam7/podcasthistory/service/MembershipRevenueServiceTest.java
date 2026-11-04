@@ -18,7 +18,8 @@ class MembershipRevenueServiceTest {
     AppUserRepository users = mock(AppUserRepository.class);
     UserWalletRepository wallets = mock(UserWalletRepository.class);
     WalletTransactionRepository transactions = mock(WalletTransactionRepository.class);
-    MembershipRevenueService service = new MembershipRevenueService(users, wallets, transactions);
+    MembershipRevenueService service = new MembershipRevenueService(users, wallets, transactions,
+        mock(WalletTransactionRealtimePublisher.class));
     AppUser creator = new AppUser();
     creator.setUserId(UUID.randomUUID());
     ProducerProfile profile = new ProducerProfile();

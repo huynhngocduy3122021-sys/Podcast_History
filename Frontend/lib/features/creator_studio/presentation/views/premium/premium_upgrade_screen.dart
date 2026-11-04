@@ -31,15 +31,39 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
   }
 
   Future<void> _upgradeToPlan(CreatorSystemPlan plan) async {
+    final useWallet = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Chọn cách thanh toán'),
+        content: Text('Gói ${plan.name}: ${NumberFormat('#,###', 'vi_VN').format(plan.price)} VND'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Hủy'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Chuyển khoản SePay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Trừ tiền ví CC'),
+          ),
+        ],
+      ),
+    );
+    if (useWallet == null || !mounted) return;
     setState(() => _isSubscribing = true);
     final messenger = ScaffoldMessenger.of(context);
     try {
       final repo = ref.read(creatorRepositoryProvider);
       CreatorCheckoutPayment checkout;
       try {
-        checkout = await repo.subscribeSystemPlan(plan.planId);
+        checkout = useWallet
+            ? await repo.subscribeSystemPlanWithWallet(plan.planId)
+            : await repo.subscribeSystemPlan(plan.planId);
       } on ApiException catch (e) {
-        if (e.statusCode == 409) {
+        if (e.statusCode == 409 && e.message.contains('đang chờ')) {
           // Xung đột: Có thanh toán gói CC cũ đang PENDING
           if (!mounted) return;
           final shouldCancelAndRetry = await showDialog<bool>(
@@ -65,7 +89,9 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
 
           if (shouldCancelAndRetry == true) {
             await repo.cancelPendingCheckout();
-            checkout = await repo.subscribeSystemPlan(plan.planId);
+            checkout = useWallet
+                ? await repo.subscribeSystemPlanWithWallet(plan.planId)
+                : await repo.subscribeSystemPlan(plan.planId);
           } else {
             return;
           }
@@ -76,17 +102,22 @@ class _PremiumUpgradeScreenState extends ConsumerState<PremiumUpgradeScreen> {
 
       if (!mounted) return;
 
-      final success = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => CreatorPaymentDialog(
-          checkout: checkout,
-          planName: plan.name,
-        ),
-      );
+      final success = useWallet
+          ? checkout.isPaid
+          : await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (_) => CreatorPaymentDialog(
+                checkout: checkout,
+                planName: plan.name,
+              ),
+            );
 
       if (success == true && mounted) {
         await _handleRefresh();
+        if (useWallet) {
+          await ref.read(walletProvider.notifier).loadWallet();
+        }
         if (!mounted) return;
         messenger.showTopSnackBar(
           SnackBar(

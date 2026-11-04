@@ -35,7 +35,9 @@ class AiModerationNotificationTest {
         when(fixture.gemini.analyze(any(), any(), any())).thenReturn(
                 new GeminiModerationClient.ModerationResponse(new ObjectMapper().readTree("""
                         {"label":"UNSAFE","recommendation":"REJECT","confidence":0.95,
-                         "reason":"Lời nói không an toàn","evidence":[]}
+                         "reason":"Lời nói không an toàn","evidence":[],
+                         "historicalRelevance":"UNCERTAIN",
+                         "historicalRelevanceReason":"Không thể đánh giá chủ đề khi lời nói không an toàn"}
                         """), "test"));
 
         fixture.service.onRequested(new AiModerationService.Requested(fixture.job.getModerationResultId()));
@@ -57,6 +59,30 @@ class AiModerationNotificationTest {
 
         assertEquals("FAILED", fixture.job.getStatus());
         assertEquals("PENDING_REVIEW", fixture.podcast.getStatus());
+        verify(fixture.support).notify(eq(fixture.creator), eq("PODCAST_REVIEW"),
+                contains("AI chưa thể duyệt"), contains("chờ Admin/Staff"));
+    }
+
+    @Test
+    void safeButUnrelatedPodcastStaysPendingForHumanReview() throws Exception {
+        Fixture fixture = new Fixture();
+        fixture.transcript.setStatus("COMPLETED");
+        fixture.transcript.setFullText("Nền tảng review quán ăn và địa điểm du lịch");
+        when(fixture.gemini.configured()).thenReturn(true);
+        when(fixture.gemini.analyze(any(), any(), any())).thenReturn(
+                new GeminiModerationClient.ModerationResponse(new ObjectMapper().readTree("""
+                        {"label":"SAFE","recommendation":"APPROVE","confidence":1.0,
+                         "reason":"Lời nói an toàn","evidence":[],
+                         "historicalRelevance":"IRRELEVANT",
+                         "historicalRelevanceReason":"Chỉ nói về review quán ăn, không có nội dung lịch sử"}
+                        """), "test"));
+
+        fixture.service.onRequested(new AiModerationService.Requested(fixture.job.getModerationResultId()));
+
+        assertEquals("COMPLETED", fixture.job.getStatus());
+        assertEquals("REVIEW", fixture.job.getRecommendation());
+        assertEquals("PENDING_REVIEW", fixture.podcast.getStatus());
+        verify(fixture.reviews, never()).autoApprove(any());
         verify(fixture.support).notify(eq(fixture.creator), eq("PODCAST_REVIEW"),
                 contains("AI chưa thể duyệt"), contains("chờ Admin/Staff"));
     }

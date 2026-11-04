@@ -25,7 +25,8 @@ class LegacyWithdrawalGuardTest {
         mock(PaymentRepository.class), mock(PaymentMethodRepository.class),
         mock(SubscriptionRepository.class), mock(AppUserRepository.class),
         mock(ContractRepository.class), mock(PackageFeatures.class),
-        mock(AudienceNotificationService.class), mock(MembershipRevenueService.class));
+        mock(AudienceNotificationService.class), mock(MembershipRevenueService.class),
+        mock(WalletTransactionRealtimePublisher.class));
     UUID id = UUID.randomUUID();
     UUID actor = UUID.randomUUID();
     WithdrawalRequest withdrawal = new WithdrawalRequest();

@@ -79,7 +79,7 @@ class AiModerationDeduplicationTest {
     }
 
     @Test
-    void resubmittingAlreadyApprovedVersionTriggersApprovalAfterCommit() {
+    void resubmittingAlreadyApprovedVersionTriggersApprovalAfterCommit() throws Exception {
         Fixture fixture = new Fixture();
         AiModerationService service = fixture.service();
         service.enqueue(fixture.podcast);
@@ -89,6 +89,8 @@ class AiModerationDeduplicationTest {
         completed.setOverallLabel("SAFE");
         completed.setRecommendation("APPROVE");
         completed.setConfidenceScore(new BigDecimal("0.95"));
+        completed.setRawResult(new tools.jackson.databind.ObjectMapper().readTree(
+                "{\"historicalRelevance\":\"RELEVANT\"}"));
         completed.setTranscriptHash(AiModerationService.hashText(fixture.transcript.getFullText()));
 
         service.enqueue(fixture.podcast);

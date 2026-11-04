@@ -39,12 +39,13 @@ class ModerationResponseValidatorTest {
     }
 
     @Test
-    void onlyConfidenceAtOrAboveConfiguredThresholdCanAutoApprove() {
+    void onlyConfidenceAtOrAboveConfiguredThresholdCanAutoApprove() throws Exception {
         var result = new AiModerationResult();
         result.setStatus("COMPLETED");
         result.setOverallLabel("SAFE");
         result.setRecommendation("APPROVE");
         result.setConfidenceScore(new BigDecimal("0.90"));
+        result.setRawResult(mapper.readTree("{\"historicalRelevance\":\"RELEVANT\"}"));
 
         assertEquals(true, AiModerationService.isAutoApproveEligible(result, new BigDecimal("0.90")));
         result.setConfidenceScore(new BigDecimal("0.8999"));
@@ -57,6 +58,19 @@ class ModerationResponseValidatorTest {
         result.setOverallLabel("SAFE");
         result.setRecommendation("REVIEW");
         assertEquals(false, AiModerationService.isAutoApproveEligible(result, new BigDecimal("0.90")));
+        result.setRecommendation("APPROVE");
+        result.setRawResult(mapper.readTree("{\"historicalRelevance\":\"IRRELEVANT\"}"));
+        assertEquals(false, AiModerationService.isAutoApproveEligible(result, new BigDecimal("0.90")));
+    }
+
+    @Test
+    void podcastRelevanceMustBeExplicitAndValid() throws Exception {
+        assertEquals("RELEVANT", ModerationResponseValidator.podcastRelevance(mapper.readTree(
+                "{\"historicalRelevance\":\"RELEVANT\",\"historicalRelevanceReason\":\"Nói về năm 1945\"}")));
+        assertThrows(IllegalArgumentException.class, () -> ModerationResponseValidator.podcastRelevance(
+                mapper.readTree("{\"historicalRelevance\":\"RELEVANT\"}")));
+        assertThrows(IllegalArgumentException.class, () -> ModerationResponseValidator.podcastRelevance(
+                mapper.readTree("{\"historicalRelevance\":\"YES\",\"historicalRelevanceReason\":\"ok\"}")));
     }
 
     private void assertInvalid(String json) {

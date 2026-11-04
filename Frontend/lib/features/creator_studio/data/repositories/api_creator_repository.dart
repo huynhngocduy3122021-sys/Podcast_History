@@ -215,6 +215,20 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<CreatorCheckoutPayment> subscribeSystemPlanWithWallet(String planId) async {
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorSystemPlanSubscribeWallet(planId),
+    );
+    if (response is Map<String, dynamic>) {
+      return CreatorCheckoutPayment.fromJson(response);
+    }
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi thanh toán ví không hợp lệ.',
+    );
+  }
+
+  @override
   Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId) async {
     final response = await _apiClient.get(ApiEndpoints.meCheckout(checkoutId));
     if (response is Map<String, dynamic>) {
@@ -1758,6 +1772,9 @@ class ApiCreatorRepository implements CreatorRepository {
     if (typeStr == 'WALLET_TOPUP' || typeStr == 'TOP_UP') {
       return ('Nạp tiền vào ví', 'Nạp tiền thành công');
     }
+    if (typeStr == 'CREATOR_PLAN_PURCHASE') {
+      return ('Thanh toán gói Studio Premium', 'Đã trừ từ số dư khả dụng của ví CC');
+    }
     if (typeStr == 'REFUND') {
       return ('Hoàn tiền ví', note?.toString() ?? 'Hoàn tiền giao dịch');
     }
@@ -1779,6 +1796,8 @@ class ApiCreatorRepository implements CreatorRepository {
       case 'REFUND':
       case 'WITHDRAWAL_REFUND':
         return TransactionType.refund;
+      case 'CREATOR_PLAN_PURCHASE':
+        return TransactionType.premiumPurchase;
       default:
         return TransactionType.withdrawal;
     }

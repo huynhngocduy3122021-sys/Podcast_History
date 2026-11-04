@@ -626,6 +626,9 @@ class _ShellState extends State<Shell> {
         if (type == 'PAYMENT_UPDATED' || type == 'WALLET_UPDATED') {
           unawaited(_refreshNotifications());
         }
+        if (type == 'WALLET_TRANSACTIONS_CHANGED') {
+          unawaited(_refreshWalletBalance());
+        }
       },
       onReconnected: () => unawaited(_refreshNotifications()),
     )..connect();
@@ -1504,8 +1507,36 @@ class _ShellState extends State<Shell> {
       builder: (_) => NotificationPanel(
         notifications: notifications,
         onRead: (id) => unawaited(_markNotificationRead(id)),
+        onOpenLivestream: (item) => unawaited(_openNotificationLivestream(item)),
       ),
     );
+  }
+
+  Future<void> _openNotificationLivestream(AppNotification item) async {
+    final livestreamId = item.livestreamId;
+    if (livestreamId == null || livestreamId.isEmpty) return;
+    Navigator.of(context).pop();
+    try {
+      final live = await api.livestream(livestreamId);
+      if (!mounted) return;
+      if (live.status.toUpperCase() != 'LIVE') {
+        throw StateError('Livestream đã kết thúc.');
+      }
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ListenerLivestreamFeedPage(
+            api: api,
+            livestreams: [live],
+            initialIndex: 0,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(content: Text('Livestream không còn phát trực tiếp.')),
+      );
+    }
   }
 
   Future<void> _openWallet() async {
@@ -1531,6 +1562,18 @@ class _ShellState extends State<Shell> {
         ),
       ),
     );
+  }
+
+  Future<void> _refreshWalletBalance() async {
+    try {
+      final wallet = await api.wallet();
+      if (!mounted) return;
+      setState(() {
+        walletBalance = (wallet['availableBalance'] as num?)?.round() ?? walletBalance;
+      });
+    } catch (_) {
+      // The wallet page reloads its own balance and history on reconnect.
+    }
   }
 
   void openPlayer() => _showPlayer(current!);
@@ -4028,10 +4071,12 @@ class AppNotification {
     required this.title,
     required this.subtitle,
     required this.icon,
+    this.livestreamId,
     this.read = false,
   });
   final String id, title, subtitle;
   final IconData icon;
+  final String? livestreamId;
   final bool read;
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
@@ -4040,12 +4085,18 @@ class AppNotification {
         ?.toLocal();
     final message = '${json['message'] ?? ''}'.trim();
     final time = _notificationTime(createdAt);
+    final payload = json['payload'];
+    final livestreamId = type == 'LIVESTREAM_STARTED' && payload is Map
+        ? payload['livestreamId']?.toString()
+        : null;
     return AppNotification(
       id: '${json['notificationId'] ?? ''}',
       title: '${json['title'] ?? 'Thông báo'}',
       subtitle: [message, time].where((item) => item.isNotEmpty).join(' • '),
       icon: type.contains('COMMENT') || type.contains('LIKE')
           ? Icons.favorite_border
+          : type == 'LIVESTREAM_STARTED'
+          ? Icons.live_tv_outlined
           : type.contains('POLL')
           ? Icons.poll_outlined
           : type.contains('MEMBERSHIP')
@@ -4053,6 +4104,7 @@ class AppNotification {
           : type.contains('PODCAST')
           ? Icons.mic_none
           : Icons.notifications_none,
+      livestreamId: livestreamId,
       read: json['read'] == true,
     );
   }
@@ -4062,6 +4114,7 @@ class AppNotification {
     title: title,
     subtitle: subtitle,
     icon: icon,
+    livestreamId: livestreamId,
     read: read ?? this.read,
   );
 }
@@ -4081,9 +4134,11 @@ class NotificationPanel extends StatefulWidget {
     super.key,
     required this.notifications,
     required this.onRead,
+    required this.onOpenLivestream,
   });
   final List<AppNotification> notifications;
   final ValueChanged<String> onRead;
+  final ValueChanged<AppNotification> onOpenLivestream;
 
   @override
   State<NotificationPanel> createState() => _NotificationPanelState();
@@ -4122,7 +4177,10 @@ class _NotificationPanelState extends State<NotificationPanel> {
       else
         ...items.map(
           (item) => InkWell(
-            onTap: () => markRead(item),
+            onTap: () {
+              markRead(item);
+              if (item.livestreamId != null) widget.onOpenLivestream(item);
+            },
             borderRadius: BorderRadius.circular(16),
             child: Container(
               margin: const EdgeInsets.only(bottom: 8),
@@ -4287,21 +4345,27 @@ class _ListenerWalletPageState extends State<ListenerWalletPage> {
   bool showAllWalletTransactions = false;
   bool showWalletTransactionsTab = false;
   void Function()? removeRealtimeListener;
+  void Function()? removeReconnectListener;
 
   @override
   void initState() {
     super.initState();
     removeRealtimeListener = widget.socket.addRealtimeListener((event) {
-      if ('${event['type'] ?? ''}'.toUpperCase() == 'PAYMENT_UPDATED') {
+      final type = '${event['type'] ?? ''}'.toUpperCase();
+      if (type == 'PAYMENT_UPDATED' || type == 'WALLET_TRANSACTIONS_CHANGED') {
         unawaited(_loadWalletAndHistory());
       }
     });
+    removeReconnectListener = widget.socket.addReconnectListener(
+      () => unawaited(_loadWalletAndHistory()),
+    );
     _loadWalletAndHistory();
   }
 
   @override
   void dispose() {
     removeRealtimeListener?.call();
+    removeReconnectListener?.call();
     super.dispose();
   }
 

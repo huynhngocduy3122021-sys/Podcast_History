@@ -28,10 +28,12 @@ public class ListenerWalletService {
   private final PaymentMethodRepository paymentMethods;
   private final SeriesRequestRepository requests;
   private final SepayService sepay;
+  private final WalletTransactionRealtimePublisher walletRealtime;
 
   public ListenerWalletService(AppUserRepository users, UserWalletRepository wallets,
       WalletTransactionRepository transactions, CheckoutPaymentRepository checkouts,
-      PaymentMethodRepository paymentMethods, SeriesRequestRepository requests, SepayService sepay) {
+      PaymentMethodRepository paymentMethods, SeriesRequestRepository requests, SepayService sepay,
+      WalletTransactionRealtimePublisher walletRealtime) {
     this.users = users;
     this.wallets = wallets;
     this.transactions = transactions;
@@ -39,6 +41,7 @@ public class ListenerWalletService {
     this.paymentMethods = paymentMethods;
     this.requests = requests;
     this.sepay = sepay;
+    this.walletRealtime = walletRealtime;
   }
 
   @Transactional
@@ -268,5 +271,6 @@ public class ListenerWalletService {
     transaction.setBalanceAfter(wallet.getBalance());
     transaction.setHeldBalanceAfter(wallet.getHeldBalance());
     transactions.save(transaction);
+    walletRealtime.changed(wallet);
   }
 }
