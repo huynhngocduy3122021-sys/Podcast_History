@@ -26,5 +26,8 @@ public record DisputeResponse(
         UUID creatorId,
         String creatorChannelName,
         String raisedByName,
-        String reviewedByName) {
+        String reviewedByName,
+        String raisedByEmail,
+        String raisedByRole,
+        String raisedByRoleLabel) {
 }

@@ -792,7 +792,26 @@ public class PodcastRequestService {
                 contract.getProducerProfile().getProducerProfileId(),
                 contract.getProducerProfile().getChannelName(),
                 displayName(dispute.getRaisedBy()),
-                dispute.getReviewedBy() == null ? null : displayName(dispute.getReviewedBy()));
+                dispute.getReviewedBy() == null ? null : displayName(dispute.getReviewedBy()),
+                dispute.getRaisedBy().getEmail(),
+                roleCode(dispute.getRaisedBy()),
+                roleLabel(dispute.getRaisedBy()));
+    }
+
+    private String roleCode(AppUser user) {
+        return user == null || user.getRole() == null ? null : user.getRole().getRoleCode();
+    }
+
+    private String roleLabel(AppUser user) {
+        String role = roleCode(user);
+        if (role == null) return "Không xác định";
+        return switch (role.toUpperCase(Locale.ROOT)) {
+            case "LISTENER" -> "Listener";
+            case "CREATOR" -> "Content Creator";
+            case "STAFF" -> "Staff";
+            case "ADMIN" -> "Admin";
+            default -> role;
+        };
     }
 
     private ProducerProfile requireCreatorProfile(UUID userId) {

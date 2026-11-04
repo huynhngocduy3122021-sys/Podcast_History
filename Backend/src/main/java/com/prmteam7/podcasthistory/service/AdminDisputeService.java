@@ -354,7 +354,27 @@ public class AdminDisputeService {
         contract.getProducerProfile().getAvatarUrl(),
         request == null ? null : request.getSeriesRequestId(),
         request == null ? null : request.getRequestedTitle(),
-        displayName(d.getOpenedBy()), d.getReviewer() == null ? null : displayName(d.getReviewer()));
+        displayName(d.getOpenedBy()), d.getReviewer() == null ? null : displayName(d.getReviewer()),
+        d.getOpenedBy().getUserId(),
+        d.getOpenedBy().getEmail(),
+        roleCode(d.getOpenedBy()),
+        roleLabel(d.getOpenedBy()));
+  }
+
+  private String roleCode(AppUser user) {
+    return user == null || user.getRole() == null ? null : user.getRole().getRoleCode();
+  }
+
+  private String roleLabel(AppUser user) {
+    String role = roleCode(user);
+    if (role == null) return "Không xác định";
+    return switch (role.toUpperCase(java.util.Locale.ROOT)) {
+      case "LISTENER" -> "Listener";
+      case "CREATOR" -> "Content Creator";
+      case "STAFF" -> "Staff";
+      case "ADMIN" -> "Admin";
+      default -> role;
+    };
   }
 
   private String displayName(AppUser user) {
