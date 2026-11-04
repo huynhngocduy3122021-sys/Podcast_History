@@ -9,6 +9,8 @@ Tài khoản đăng nhập mẫu cho backend local: [TEST_ACCOUNTS.md](../TEST_A
 - API phân trang trả trực tiếp Spring `Page`: dùng `content[]`, `number`, `totalElements`, `totalPages`, với `page` bắt đầu từ `0`. Không giả định response có wrapper `data`.
 - `GET /api/admin/dashboard` cung cấp số liệu tổng quan, tổng tiền gộp, phí nền tảng và doanh thu ròng theo tiền tệ. ID lấy từ danh sách/chi tiết, không dùng tên hiển thị làm ID.
 - `GET /api/admin/dashboard/revenue-details?page=0&size=20` trả chi tiết từng khoản thu đã hoàn tất (`PAID`, `SUCCESS`, `COMPLETED`): nguồn `MEMBERSHIP`, `CONTRACT_STAGE`, `CONTRACT_DISPUTE`, `CONTRACT_COMPENSATION`, payment, người mua, CC/kênh, hợp đồng, request, đợt, số tiền gộp, phí nền tảng và doanh thu ròng. Dùng `contractId`, `requestId`, `stageId` hoặc `membershipPlanId` trong response để mở màn hình chi tiết tương ứng.
+- Response có thêm các trường tiếng Việt để FE hiển thị rõ nghiệp vụ: `sourceTypeLabel`, `statusLabel`, `paymentMethodLabel`, `amountDescription`, `platformFeeDescription`, `creatorNetAmount`, `creatorNetDescription`, `platformFeePercent` và `paymentDescription`. `amount` là tổng tiền giao dịch; `platformFee` là phí app; `creatorNetAmount = amount - platformFee`; `netRevenue` là doanh thu ròng app (hiện bằng `platformFee`).
+- `WALLET_ESCROW` nghĩa là quyết toán từ tiền Listener đã giữ trong ví, không phải SePay; vì vậy `provider` và `providerTransactionId` có thể để trống. `statusLabel = "Đã thu và quyết toán"` tương ứng với các trạng thái `PAID`, `SUCCESS` hoặc `COMPLETED`.
 
 ## 1. Duyệt đơn Content Creator
 

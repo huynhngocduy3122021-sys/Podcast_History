@@ -17,7 +17,10 @@ public final class AdminResponses {
       String currency,
       BigDecimal grossCollected,
       BigDecimal platformFees,
-      BigDecimal netRevenue) {}
+      BigDecimal netRevenue,
+      String grossCollectedDescription,
+      String platformFeesDescription,
+      String netRevenueDescription) {}
 
   public record RevenueDetail(
       UUID paymentId,
@@ -47,7 +50,16 @@ public final class AdminResponses {
       String stageName,
       Integer stageOrder,
       UUID membershipPlanId,
-      String membershipPlanName) {}
+      String membershipPlanName,
+      String sourceTypeLabel,
+      String statusLabel,
+      String paymentMethodLabel,
+      BigDecimal creatorNetAmount,
+      BigDecimal platformFeePercent,
+      String amountDescription,
+      String platformFeeDescription,
+      String creatorNetDescription,
+      String paymentDescription) {}
 
   public record Dashboard(
       long users,
@@ -140,7 +152,11 @@ public final class AdminResponses {
       UUID requestId,
       String requestTitle,
       String openedByName,
-      String reviewerName) {}
+      String reviewerName,
+      UUID openedByUserId,
+      String openedByEmail,
+      String openedByRole,
+      String openedByRoleLabel) {}
 
   public record StageItem(UUID stageId, String name, int order, String status) {}
 
