@@ -23,16 +23,27 @@ final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
   final token = ref.watch(creatorAccessTokenProvider);
   if (token == null || token.isEmpty) return null;
   final socket = NotificationSocket(
-    url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
+    url: '${apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws')}/ws',
     accessToken: token,
     onNotification: (json) {
       ref
           .read(creatorNotificationsProvider.notifier)
           .receiveRealtimeNotification(json);
     },
-    onRealtime: (_) {},
+    onRealtime: (event) {
+      final type = '${event['type'] ?? ''}'.toUpperCase();
+      if (type == 'CONTRACT_SIGNED' ||
+          type == 'CONTRACT_PROPOSED' ||
+          type == 'CONTRACT_CANCELLED' ||
+          type == 'CONTRACT_DISPUTED' ||
+          type == 'API_CHANGED' ||
+          type == 'REQUEST_UPDATED') {
+        ref.read(creatorRequestsProvider.notifier).loadRequests();
+      }
+    },
     onReconnected: () {
       ref.read(creatorNotificationsProvider.notifier).loadNotifications();
+      ref.read(creatorRequestsProvider.notifier).loadRequests();
     },
   );
   ref.onDispose(socket.dispose);

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'core/services/session_storage/session_storage.dart';
 import 'core/package_features.dart';
@@ -5438,6 +5439,19 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     if (reason == null || reason.isEmpty) return;
     try {
       await widget.api.requestMilestoneRevision(milestoneId, reason);
+      // Tự động gửi ghi chú vào chat hợp đồng để cả Creator và người nghe đều xem được chi tiết
+      try {
+        await widget.api.sendRequestMessage(
+          requestId,
+          '📌 [YÊU CẦU CHỈNH SỬA]: $reason',
+        );
+      } catch (_) {}
+      // Lưu vào SharedPreferences để hiển thị tức thì
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('revision_note_$requestId', reason);
+        await prefs.setString('revision_note_$milestoneId', reason);
+      } catch (_) {}
       if (mounted) {
         setState(() {
           milestones = _loadMilestones();
@@ -6477,8 +6491,11 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
                 future: widget.api.milestoneSubmissions(id),
                 builder: (_, snapshot) {
                   final submissions = snapshot.data ?? const [];
+                  // Mỗi đợt chỉ hiển thị duy nhất 1 bản nộp mới nhất của giai đoạn đó
+                  final displaySubmissions =
+                      submissions.isNotEmpty ? [submissions.last] : const [];
                   return Column(
-                    children: submissions
+                    children: displaySubmissions
                         .map((s) => _submissionAudio(id, s))
                         .toList(),
                   );
