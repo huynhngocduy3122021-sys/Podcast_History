@@ -5006,7 +5006,11 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     if (reason == null || reason.isEmpty) return;
     try {
       await widget.api.requestMilestoneRevision(milestoneId, reason);
-      if (mounted) setState(() => milestones = _loadMilestones());
+      if (mounted) {
+        setState(() {
+          milestones = _loadMilestones();
+        });
+      }
     } catch (error) {
       if (mounted)
         ScaffoldMessenger.of(context).showTopSnackBar(
@@ -5019,7 +5023,9 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     try {
       final result = await widget.api.approveMilestone(milestoneId);
       if (!mounted) return;
-      setState(() => milestones = _loadMilestones());
+      setState(() {
+        milestones = _loadMilestones();
+      });
       ScaffoldMessenger.of(context).showTopSnackBar(
         SnackBar(
           content: Text(
@@ -5077,7 +5083,9 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
         contentHash: hash,
       );
       if (!mounted) return;
-      setState(() => contract = _loadContract());
+      setState(() {
+        contract = _loadContract();
+      });
       ScaffoldMessenger.of(context).showTopSnackBar(
         const SnackBar(content: Text('Đã ký hợp đồng thành công.')),
       );
@@ -5369,7 +5377,11 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
     if (disputeId == null || disputeId.isEmpty) return;
     try {
       await widget.api.withdrawContractDispute(disputeId);
-      if (mounted) setState(() => termination = _loadTermination());
+      if (mounted) {
+        setState(() {
+          termination = _loadTermination();
+        });
+      }
     } catch (error) {
       if (mounted)
         ScaffoldMessenger.of(context).showTopSnackBar(
@@ -5388,7 +5400,11 @@ class _ListenerRequestDetailPageState extends State<ListenerRequestDetailPage> {
         disputeId,
         listenerWinAction: action,
       );
-      if (mounted) setState(() => termination = _loadTermination());
+      if (mounted) {
+        setState(() {
+          termination = _loadTermination();
+        });
+      }
     } catch (error) {
       if (mounted)
         ScaffoldMessenger.of(context).showTopSnackBar(

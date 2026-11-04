@@ -16,10 +16,10 @@ import com.prmteam7.podcasthistory.model.UserWallet;
 public interface UserWalletRepository extends JpaRepository<UserWallet, UUID> {
 
     @Query("select wallet from UserWallet wallet where "
-        + "(:q is null or lower(wallet.user.displayName) like lower(concat('%', :q, '%')) "
-        + "or lower(wallet.user.username) like lower(concat('%', :q, '%')) "
-        + "or lower(wallet.user.email) like lower(concat('%', :q, '%'))) "
-        + "and (:role is null or wallet.user.role.roleCode = :role)")
+        + "(lower(coalesce(wallet.user.displayName, '')) like lower(concat('%', :q, '%')) "
+        + "or lower(coalesce(wallet.user.username, '')) like lower(concat('%', :q, '%')) "
+        + "or lower(coalesce(wallet.user.email, '')) like lower(concat('%', :q, '%'))) "
+        + "and (:role = '' or wallet.user.role.roleCode = :role)")
     Page<UserWallet> findAllForAdmin(@Param("q") String q, @Param("role") String role, Pageable pageable);
 
     Optional<UserWallet> findByUser_UserId(UUID userId);

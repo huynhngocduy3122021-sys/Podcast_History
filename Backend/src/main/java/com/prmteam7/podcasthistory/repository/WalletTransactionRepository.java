@@ -2,6 +2,8 @@ package com.prmteam7.podcasthistory.repository;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Collection;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -27,6 +29,27 @@ public interface WalletTransactionRepository
 
     boolean existsByPayment_PaymentIdAndTransactionType(UUID paymentId, String transactionType);
     boolean existsByReferenceCode(String referenceCode);
+
+    @Query("""
+            select transaction.currency, coalesce(sum(transaction.amount), 0)
+            from WalletTransaction transaction
+            where upper(transaction.transactionType) = 'PLATFORM_FEE'
+              and upper(transaction.direction) = 'CREDIT'
+              and upper(transaction.status) = 'COMPLETED'
+            group by transaction.currency
+            """)
+    List<Object[]> platformFeesByCurrency();
+
+    @Query("""
+            select transaction.payment.paymentId, coalesce(sum(transaction.amount), 0)
+            from WalletTransaction transaction
+            where transaction.payment.paymentId in :paymentIds
+              and upper(transaction.transactionType) = 'PLATFORM_FEE'
+              and upper(transaction.direction) = 'CREDIT'
+              and upper(transaction.status) = 'COMPLETED'
+            group by transaction.payment.paymentId
+            """)
+    List<Object[]> platformFeesByPaymentIds(@Param("paymentIds") Collection<UUID> paymentIds);
 
     boolean existsByPayment_PaymentIdAndStatus(UUID paymentId, String status);
 

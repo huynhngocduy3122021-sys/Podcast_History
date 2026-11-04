@@ -13,6 +13,42 @@ public final class AdminResponses {
 
   public record Revenue(String currency, BigDecimal amount) {}
 
+  public record RevenueBreakdown(
+      String currency,
+      BigDecimal grossCollected,
+      BigDecimal platformFees,
+      BigDecimal netRevenue) {}
+
+  public record RevenueDetail(
+      UUID paymentId,
+      String sourceType,
+      String sourceLabel,
+      BigDecimal amount,
+      BigDecimal platformFee,
+      BigDecimal netRevenue,
+      String currency,
+      String status,
+      String paymentMethod,
+      String provider,
+      String providerTransactionId,
+      Instant createdAt,
+      Instant paidAt,
+      UUID buyerId,
+      String buyerName,
+      String buyerEmail,
+      UUID creatorProfileId,
+      UUID creatorUserId,
+      String creatorName,
+      String creatorChannelName,
+      UUID contractId,
+      UUID requestId,
+      String requestTitle,
+      UUID stageId,
+      String stageName,
+      Integer stageOrder,
+      UUID membershipPlanId,
+      String membershipPlanName) {}
+
   public record Dashboard(
       long users,
       long activeUsers,
@@ -24,7 +60,8 @@ public final class AdminResponses {
       long pendingWithdrawals,
       long openDisputes,
       List<CountByStatus> podcastStatuses,
-      List<Revenue> collectedPayments) {}
+      List<Revenue> collectedPayments,
+      List<RevenueBreakdown> revenueBreakdown) {}
 
   public record UserItem(
       UUID userId,

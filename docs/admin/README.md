@@ -7,7 +7,8 @@ Tài khoản đăng nhập mẫu cho backend local: [TEST_ACCOUNTS.md](../TEST_A
 - Các API bên dưới cần Bearer access token có role `ADMIN`; base URL lấy theo môi trường backend (`http://localhost:8081` khi chạy local). JSON gửi `Content-Type: application/json`.
 - Các nhóm dashboard, podcast moderation, reports và podcast appeals tại `/api/admin/...` cũng cho phép role `STAFF`; nhóm người dùng, danh mục, tài chính và gói vẫn chỉ dành cho Admin.
 - API phân trang trả trực tiếp Spring `Page`: dùng `content[]`, `number`, `totalElements`, `totalPages`, với `page` bắt đầu từ `0`. Không giả định response có wrapper `data`.
-- `GET /api/admin/dashboard` cung cấp số liệu tổng quan. ID lấy từ danh sách/chi tiết, không dùng tên hiển thị làm ID.
+- `GET /api/admin/dashboard` cung cấp số liệu tổng quan, tổng tiền gộp, phí nền tảng và doanh thu ròng theo tiền tệ. ID lấy từ danh sách/chi tiết, không dùng tên hiển thị làm ID.
+- `GET /api/admin/dashboard/revenue-details?page=0&size=20` trả chi tiết từng khoản thu đã hoàn tất (`PAID`, `SUCCESS`, `COMPLETED`): nguồn `MEMBERSHIP`, `CONTRACT_STAGE`, `CONTRACT_DISPUTE`, `CONTRACT_COMPENSATION`, payment, người mua, CC/kênh, hợp đồng, request, đợt, số tiền gộp, phí nền tảng và doanh thu ròng. Dùng `contractId`, `requestId`, `stageId` hoặc `membershipPlanId` trong response để mở màn hình chi tiết tương ứng.
 
 ## 1. Duyệt đơn Content Creator
 
