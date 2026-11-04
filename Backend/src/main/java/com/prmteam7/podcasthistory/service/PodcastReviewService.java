@@ -170,7 +170,8 @@ public class PodcastReviewService {
     var result = aiResults.findById(moderationResultId).orElse(null);
     if (result == null || !"COMPLETED".equals(result.getStatus())
         || !"SAFE".equals(result.getOverallLabel())
-        || !"APPROVE".equals(result.getRecommendation())) return;
+        || !"APPROVE".equals(result.getRecommendation())
+        || !AiModerationService.hasHistoricalRelevance(result.getRawResult())) return;
 
     Podcast podcast = podcastRepository.lockById(result.getPodcast().getPodcastId()).orElse(null);
     if (podcast == null || !"PENDING_REVIEW".equalsIgnoreCase(podcast.getStatus())

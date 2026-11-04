@@ -26,6 +26,9 @@ public class CreatorSystemPlanService {
   private final PackageFeatures packageFeatures;
   private final CheckoutPaymentRepository checkouts;
   private final SepayService sepay;
+  private final UserWalletRepository wallets;
+  private final WalletTransactionRepository walletTransactions;
+  private final WalletTransactionRealtimePublisher walletRealtime;
 
   public CreatorSystemPlanService(
       CreatorSystemPlanRepository plans,
@@ -33,7 +36,9 @@ public class CreatorSystemPlanService {
       ProducerProfileRepository creators,
       PodcastRepository podcasts,
       AdminSupportService adminSupport,
-      PackageFeatures packageFeatures, CheckoutPaymentRepository checkouts, SepayService sepay) {
+      PackageFeatures packageFeatures, CheckoutPaymentRepository checkouts, SepayService sepay,
+      UserWalletRepository wallets, WalletTransactionRepository walletTransactions,
+      WalletTransactionRealtimePublisher walletRealtime) {
     this.plans = plans;
     this.subscriptions = subscriptions;
     this.creators = creators;
@@ -42,6 +47,9 @@ public class CreatorSystemPlanService {
     this.packageFeatures = packageFeatures;
     this.checkouts = checkouts;
     this.sepay = sepay;
+    this.wallets = wallets;
+    this.walletTransactions = walletTransactions;
+    this.walletRealtime = walletRealtime;
   }
 
   public List<CreatorSystemPlanView> available() {
@@ -158,6 +166,77 @@ public class CreatorSystemPlanService {
     return new CheckoutPaymentView(checkout.getCheckoutId(), subscription.getSubscriptionId(),
         checkout.getPurpose(), paymentCode, qrImageUrl, checkout.getAmount(), checkout.getCurrency(),
         checkout.getStatus(), null, checkout.getCreatedAt().plus(30, ChronoUnit.MINUTES));
+  }
+
+  @Transactional
+  public CheckoutPaymentView subscribeWithWallet(UUID userId, UUID planId) {
+    packageFeatures.requireCreatorPlans();
+    // The creator row serializes concurrent purchases for the same channel.
+    var profile = approvedCreator(userId, true);
+    var now = Instant.now();
+    if (activeSubscription(profile.getProducerProfileId(), now).isPresent())
+      throw new ResourceConflictException("Gói CC hiện tại còn hiệu lực; hãy đăng ký sau khi hết hạn.");
+    checkouts.findFirstByCreatorSubscription_ProducerProfile_ProducerProfileIdAndStatusOrderByCreatedAtDesc(
+        profile.getProducerProfileId(), "PENDING")
+        .ifPresent(checkout -> sepay.getCheckoutStatus(userId, checkout.getCheckoutId()));
+    if (subscriptions.existsByProducerProfile_ProducerProfileIdAndPaymentStatus(
+        profile.getProducerProfileId(), "PENDING"))
+      throw new ResourceConflictException("Đã có thanh toán gói CC đang chờ.");
+    var plan = requirePlan(planId);
+    if (!"ACTIVE".equals(plan.getStatus()) || plan.getPrice().signum() <= 0)
+      throw new ResourceConflictException("Chỉ có thể đăng ký gói trả phí đang hoạt động.");
+    if (!"VND".equalsIgnoreCase(plan.getCurrency().trim()))
+      throw new InvalidFlowRequestException("Ví chỉ hỗ trợ thanh toán gói bằng VND.");
+    var wallet = wallets.findByUserIdForUpdate(userId)
+        .orElseThrow(() -> new ResourceConflictException("Chưa có ví CC để thanh toán."));
+    if (!"ACTIVE".equalsIgnoreCase(wallet.getStatus())
+        || !"VND".equalsIgnoreCase(wallet.getCurrency().trim()))
+      throw new ResourceConflictException("Ví CC chưa hoạt động hoặc không dùng VND.");
+    if (wallet.getBalance().compareTo(plan.getPrice()) < 0)
+      throw new ResourceConflictException("Số dư khả dụng của ví CC không đủ để mua gói.");
+
+    String code = "WALLET:" + UUID.randomUUID();
+    var subscription = new CreatorSystemSubscription();
+    subscription.setProducerProfile(profile);
+    subscription.setPlan(plan);
+    subscription.setStartAt(now);
+    subscription.setEndAt(now.plus(plan.getDurationDays(), ChronoUnit.DAYS));
+    subscription.setAmount(plan.getPrice());
+    subscription.setCurrency(plan.getCurrency());
+    subscription.setPaymentStatus("SUCCEEDED");
+    subscription.setPaymentReference(code);
+    subscription.setBenefits(new ArrayList<>(plan.getBenefits().stream()
+        .map(b -> new CreatorSystemBenefit(b.getKey(), b.getValue(), b.getDescription())).toList()));
+    subscription = subscriptions.saveAndFlush(subscription);
+
+    var checkout = new CheckoutPayment();
+    checkout.setUser(profile.getUser());
+    checkout.setCreatorSubscription(subscription);
+    checkout.setPurpose("CREATOR_PLAN");
+    checkout.setAmount(plan.getPrice());
+    checkout.setCurrency("VND");
+    checkout.setPaymentCode(code);
+    checkout.setStatus("PAID");
+    checkout.setPaidAt(now);
+    checkout = checkouts.saveAndFlush(checkout);
+
+    wallet.setBalance(wallet.getBalance().subtract(plan.getPrice()));
+    wallets.save(wallet);
+    var transaction = new WalletTransaction();
+    transaction.setUserWallet(wallet);
+    transaction.setTransactionType("CREATOR_PLAN_PURCHASE");
+    transaction.setDirection("DEBIT");
+    transaction.setAmount(plan.getPrice());
+    transaction.setCurrency("VND");
+    transaction.setReferenceCode("CREATOR_PLAN:" + checkout.getCheckoutId());
+    transaction.setStatus("COMPLETED");
+    transaction.setBalanceAfter(wallet.getBalance());
+    transaction.setHeldBalanceAfter(wallet.getHeldBalance());
+    walletTransactions.save(transaction);
+    walletRealtime.changed(wallet);
+    return new CheckoutPaymentView(checkout.getCheckoutId(), subscription.getSubscriptionId(),
+        checkout.getPurpose(), code, null, checkout.getAmount(), checkout.getCurrency(),
+        checkout.getStatus(), checkout.getPaidAt(), null);
   }
 
   @Transactional

@@ -65,6 +65,7 @@ public class SepayService {
   private final SepayProperties properties;
   private final RealtimeEventPublisher realtime;
   private final MembershipRevenueService membershipRevenueService;
+  private final WalletTransactionRealtimePublisher walletRealtime;
   private final SecureRandom secureRandom = new SecureRandom();
 
   public SepayService(
@@ -77,7 +78,8 @@ public class SepayService {
       PaymentMethodRepository paymentMethods,
       SepayProperties properties,
       RealtimeEventPublisher realtime,
-      MembershipRevenueService membershipRevenueService) {
+      MembershipRevenueService membershipRevenueService,
+      WalletTransactionRealtimePublisher walletRealtime) {
     this.paymentRepository = paymentRepository;
     this.subscriptionRepository = subscriptionRepository;
     this.checkoutRepository = checkoutRepository;
@@ -88,6 +90,7 @@ public class SepayService {
     this.properties = properties;
     this.realtime = realtime;
     this.membershipRevenueService = membershipRevenueService;
+    this.walletRealtime = walletRealtime;
   }
 
   public String generatePaymentCode() {
@@ -381,6 +384,7 @@ public class SepayService {
       transaction.setBalanceAfter(wallet.getBalance());
       transaction.setHeldBalanceAfter(wallet.getHeldBalance());
       walletTransactions.save(transaction);
+      walletRealtime.changed(wallet);
     } else if ("CREATOR_PLAN".equals(checkout.getPurpose())) {
       CreatorSystemSubscription subscription = creatorSubscriptions.findById(
           checkout.getCreatorSubscription().getSubscriptionId()).orElseThrow();

@@ -185,6 +185,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           'Rút tiền', TransactionType.withdrawal),
                       _buildFilterChip(
                           'Thành viên kênh', TransactionType.membership),
+                      _buildFilterChip(
+                          'Mua gói Premium', TransactionType.premiumPurchase),
                       _buildFilterChip('Hoàn tiền', TransactionType.refund),
                     ],
                   ),

@@ -1,13 +1,11 @@
 package com.prmteam7.podcasthistory.controller;
 
 import com.prmteam7.podcasthistory.dto.request.ConfirmDisputeRequest;
-import com.prmteam7.podcasthistory.dto.request.OpenContractDisputeRequest;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
 import com.prmteam7.podcasthistory.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -27,16 +25,6 @@ public class MyAdminCaseController {
       AdminDisputeService disputes, UserNotificationService notifications) {
     this.disputes = disputes;
     this.notifications = notifications;
-  }
-
-  @PostMapping("/contracts/{contractId}/disputes")
-  @ResponseStatus(HttpStatus.CREATED)
-  @Operation(summary = "Bên tham gia hợp đồng gửi tranh chấp cho Admin")
-  public DisputeItem open(
-      @AuthenticationPrincipal Jwt jwt,
-      @PathVariable UUID contractId,
-      @Valid @RequestBody OpenContractDisputeRequest body) {
-    return disputes.open(id(jwt), contractId, body.note(), body.listenerWinAction());
   }
 
   @PostMapping("/disputes/{disputeId}/confirm")

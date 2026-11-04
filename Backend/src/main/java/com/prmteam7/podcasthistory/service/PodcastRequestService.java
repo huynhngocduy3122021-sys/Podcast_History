@@ -88,6 +88,7 @@ public class PodcastRequestService {
     private final ContractEscrowService escrowService;
     private final R2PlaybackUrlService playbackUrlService;
     private final DisputeStaffNotifier staffNotifier;
+    private final AdminSupportService notificationSupport;
 
     public PodcastRequestService(
             AppUserRepository userRepository,
@@ -105,7 +106,8 @@ public class PodcastRequestService {
             MediaUploadService mediaUploadService,
             ContractEscrowService escrowService,
             R2PlaybackUrlService playbackUrlService,
-            DisputeStaffNotifier staffNotifier) {
+            DisputeStaffNotifier staffNotifier,
+            AdminSupportService notificationSupport) {
         this.userRepository = userRepository;
         this.creatorRepository = creatorRepository;
         this.requestRepository = requestRepository;
@@ -122,6 +124,7 @@ public class PodcastRequestService {
         this.escrowService = escrowService;
         this.playbackUrlService = playbackUrlService;
         this.staffNotifier = staffNotifier;
+        this.notificationSupport = notificationSupport;
     }
 
     @Transactional
@@ -390,6 +393,8 @@ public class PodcastRequestService {
             stage.setStatus(ContractStageStatus.APPROVED.name());
             stageRepository.save(stage);
             updateContractStatusIfAllApproved(stage.getContract());
+            notifyCreatorOfMilestone(stage, "MILESTONE_APPROVED",
+                    "Listener đã chấp nhận và thanh toán đợt bàn giao.");
             return new MilestoneApprovalResponse(stageId, stage.getStatus(), settlement.paymentId(),
                     settlement.status(), settlement.grossAmount(), "VND", "Đã giải ngân từ ngân sách giữ.",
                     settlement.creatorNet(), settlement.platformFee(), settlement.remainingHeld());
@@ -398,6 +403,8 @@ public class PodcastRequestService {
         stage.setStatus(ContractStageStatus.APPROVED.name());
         stageRepository.save(stage);
         updateContractStatusIfAllApproved(stage.getContract());
+        notifyCreatorOfMilestone(stage, "MILESTONE_APPROVED",
+                "Listener đã chấp nhận đợt bàn giao.");
         return toApprovalResponse(stage, payment);
     }
 
@@ -422,6 +429,8 @@ public class PodcastRequestService {
         stage.setStatus(ContractStageStatus.APPROVED.name());
         stageRepository.save(stage);
         updateContractStatusIfAllApproved(stage.getContract());
+        notifyCreatorOfMilestone(stage, "MILESTONE_APPROVED",
+                "Listener không phản hồi trong 3 ngày; đợt bàn giao đã được tự động nghiệm thu.");
     }
 
     @Transactional
@@ -441,6 +450,13 @@ public class PodcastRequestService {
         recordRevision(stage, listener, reason);
         stage.setStatus(ContractStageStatus.REVISION_REQUESTED.name());
         stageRepository.save(stage);
+        notifyCreatorOfMilestone(stage, "MILESTONE_REVISION_REQUESTED",
+                "Listener yêu cầu làm lại: " + reason.trim());
+    }
+
+    private void notifyCreatorOfMilestone(ContractStage stage, String type, String message) {
+        notificationSupport.notify(stage.getContract().getProducerProfile().getUser(), type,
+                "Cập nhật đợt bàn giao: " + stage.getStageName(), message);
     }
 
     @Transactional

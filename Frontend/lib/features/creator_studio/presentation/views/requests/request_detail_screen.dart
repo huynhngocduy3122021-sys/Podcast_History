@@ -378,12 +378,6 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
             ),
             onPressed: () => _openChat(req),
           ),
-          IconButton(
-            tooltip: 'Làm mới dữ liệu',
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () =>
-                ref.read(creatorRequestsProvider.notifier).loadRequests(),
-          ),
           if (req.hasEscrow &&
               req.contract != null &&
               (req.contract!.isInProgress || req.contract!.isDisputed))
@@ -2006,8 +2000,8 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           );
         }
 
-        // Mỗi đợt chỉ hiển thị duy nhất 1 bản nháp mới nhất ở giai đoạn này
-        final displayDrafts = drafts.isNotEmpty ? [drafts.last] : const [];
+        // Backend trả draftNumber giảm dần; phần tử đầu tiên là bản mới nhất.
+        final displayDrafts = [drafts.first];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,

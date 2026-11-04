@@ -13,6 +13,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface CheckoutPaymentRepository extends JpaRepository<CheckoutPayment, UUID> {
+  @Query("select c.currency, sum(c.amount) from CheckoutPayment c where c.purpose = 'CREATOR_PLAN' and upper(c.status) in ('PAID', 'SUCCESS', 'COMPLETED') group by c.currency")
+  java.util.List<Object[]> collectedCreatorPlansByCurrency();
+
+  long countByPurposeAndStatusIn(String purpose, java.util.Collection<String> statuses);
+
   @Modifying
   @Query("update CheckoutPayment c set c.status = 'FAILED' where c.purpose = 'WALLET_TOPUP' and c.status = 'PENDING' and c.createdAt < :cutoff")
   int failExpiredWalletTopUps(@Param("cutoff") java.time.Instant cutoff);

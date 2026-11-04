@@ -41,6 +41,13 @@ public class CreatorSystemPlanController {
     return service.subscribe(id(jwt), planId);
   }
 
+  @PostMapping("/{planId}/subscribe-wallet")
+  @Operation(summary = "Thanh toán gói CC bằng số dư khả dụng của ví và kích hoạt ngay")
+  public CheckoutPaymentView subscribeWithWallet(@AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID planId) {
+    return service.subscribeWithWallet(id(jwt), planId);
+  }
+
   @DeleteMapping("/me/pending-checkout")
   @Operation(summary = "Hủy checkout gói CC đang chờ để có thể tạo checkout mới; không hoàn tiền")
   public CheckoutPaymentView cancelPendingCheckout(@AuthenticationPrincipal Jwt jwt) {

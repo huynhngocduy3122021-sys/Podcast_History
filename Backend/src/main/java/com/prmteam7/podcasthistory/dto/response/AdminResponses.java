@@ -59,7 +59,10 @@ public final class AdminResponses {
       String amountDescription,
       String platformFeeDescription,
       String creatorNetDescription,
-      String paymentDescription) {}
+      String paymentDescription,
+      UUID checkoutId,
+      UUID creatorPlanId,
+      String creatorPlanName) {}
 
   public record Dashboard(
       long users,

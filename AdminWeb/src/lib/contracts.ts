@@ -25,7 +25,19 @@ export const dashboardSchema = z.object({
   pendingWithdrawals: count, openDisputes: count,
   podcastStatuses: z.array(z.object({ status: z.string().nullable(), count })),
   collectedPayments: z.array(z.object({ currency: z.string(), amount: dashboardMoney })),
+  revenueBreakdown: z.array(z.object({ currency: z.string(), grossCollected: dashboardMoney, platformFees: dashboardMoney, netRevenue: dashboardMoney })),
 })
+export const revenueDetailsPageSchema = pageSchema(z.object({
+  paymentId: z.string().nullable(), checkoutId: z.string().nullable(), sourceType: z.string(), sourceLabel: z.string(),
+  sourceTypeLabel: z.string().nullable(), status: z.string(), statusLabel: z.string().nullable(),
+  paymentMethod: z.string().nullable(), paymentMethodLabel: z.string().nullable(),
+  amount: dashboardMoney, platformFee: dashboardMoney, creatorNetAmount: dashboardMoney,
+  netRevenue: dashboardMoney, currency: z.string(), paidAt: z.string().nullable(),
+  buyerName: z.string().nullable(), buyerEmail: z.string().nullable(),
+  creatorName: z.string().nullable(), creatorChannelName: z.string().nullable(),
+  requestTitle: z.string().nullable(), stageName: z.string().nullable(),
+  membershipPlanName: z.string().nullable(), creatorPlanName: z.string().nullable(), paymentDescription: z.string().nullable(),
+}))
 export type User = z.infer<typeof userSchema>
 export type Tokens = z.infer<typeof tokenSchema>
 

@@ -15,6 +15,7 @@ abstract class CreatorRepository {
   Future<List<CreatorSystemPlan>> getSystemPlans();
   Future<CreatorSystemSubscription?> getMySystemSubscription();
   Future<CreatorCheckoutPayment> subscribeSystemPlan(String planId);
+  Future<CreatorCheckoutPayment> subscribeSystemPlanWithWallet(String planId);
   Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId);
   Future<void> cancelPendingCheckout();
 

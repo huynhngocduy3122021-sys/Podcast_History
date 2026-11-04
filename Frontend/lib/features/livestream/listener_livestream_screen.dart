@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:flutter/material.dart';
-import 'package:podcast_history/core/widgets/top_notification.dart';
 import 'package:podcast_history/api_service.dart';
 import 'package:podcast_history/features/livestream/livestream_chat_panel.dart';
 import 'package:podcast_history/features/notifications/notification_socket.dart';
@@ -451,13 +450,6 @@ class _ListenerLivestreamFeedPageState
                           label: 'Chat',
                           onTap: () => _showComments(item),
                         ),
-                        const SizedBox(height: 16),
-                        _LiveAction(
-                          icon: Icons.card_giftcard,
-                          label: 'Donate',
-                          onTap: _showDonateSheet,
-                          accent: true,
-                        ),
                       ],
                     ),
                   ),
@@ -524,63 +516,6 @@ class _ListenerLivestreamFeedPageState
       return;
     setState(() => _chatOpen = true);
   }
-
-  void _showDonateSheet() => showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: const Color(0xff211b19),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Ủng hộ Creator',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Chọn một mức quà để gửi lời cảm ơn.',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              children: [10000, 20000, 50000, 100000]
-                  .map(
-                    (amount) => OutlinedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(this.context).showTopSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Đã chọn ủng hộ ${amount ~/ 1000}K (chờ tích hợp thanh toán).',
-                            ),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
-                      ),
-                      child: Text('${amount ~/ 1000}K'),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
 
 class _LiveAction extends StatelessWidget {
@@ -588,12 +523,10 @@ class _LiveAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.accent = false,
   });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool accent;
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
@@ -601,7 +534,7 @@ class _LiveAction extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 24,
-          backgroundColor: accent ? Colors.redAccent : Colors.black54,
+          backgroundColor: Colors.black54,
           child: Icon(icon, color: Colors.white),
         ),
         const SizedBox(height: 4),
