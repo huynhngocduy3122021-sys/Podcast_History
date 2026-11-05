@@ -453,9 +453,9 @@ class _ListenerLivestreamFeedPageState
                         ),
                         const SizedBox(height: 16),
                         _LiveAction(
-                          icon: Icons.card_giftcard,
-                          label: 'Donate',
-                          onTap: _showDonateSheet,
+                          icon: Icons.report,
+                          label: 'Báo cáo',
+                          onTap: () => _showReportSheet(item),
                           accent: true,
                         ),
                       ],
@@ -525,59 +525,156 @@ class _ListenerLivestreamFeedPageState
     setState(() => _chatOpen = true);
   }
 
-  void _showDonateSheet() => showModalBottomSheet<void>(
+  void _showReportSheet(ListenerLivestream item) => showModalBottomSheet<void>(
     context: context,
+    isScrollControlled: true,
     backgroundColor: const Color(0xff211b19),
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Ủng hộ Creator',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
+    builder: (sheetContext) => _LivestreamReportSheet(
+      title: item.title,
+      onSubmit: (reasonCode, description) {
+        Navigator.pop(sheetContext);
+        unawaited(_submitReport(item, reasonCode, description));
+      },
+    ),
+  );
+
+  Future<void> _submitReport(
+    ListenerLivestream item,
+    String reasonCode,
+    String description,
+  ) async {
+    try {
+      await widget.api.createReport(
+        targetType: 'LIVESTREAM',
+        targetId: item.livestreamId,
+        reasonCode: reasonCode,
+        description: description.isEmpty ? null : description,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(content: Text('Đã gửi báo cáo cho admin.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(content: Text('Không thể gửi báo cáo lúc này.')),
+      );
+    }
+  }
+}
+
+class _LivestreamReportSheet extends StatefulWidget {
+  const _LivestreamReportSheet({required this.title, required this.onSubmit});
+
+  final String title;
+  final void Function(String reasonCode, String description) onSubmit;
+
+  @override
+  State<_LivestreamReportSheet> createState() => _LivestreamReportSheetState();
+}
+
+class _LivestreamReportSheetState extends State<_LivestreamReportSheet> {
+  static const reasons = <({String code, String label})>[
+    (code: 'INAPPROPRIATE', label: 'Nội dung không phù hợp'),
+    (code: 'COPYRIGHT', label: 'Vi phạm bản quyền'),
+    (code: 'HARASSMENT', label: 'Quấy rối hoặc xúc phạm'),
+    (code: 'SPAM', label: 'Spam hoặc quảng cáo'),
+    (code: 'OTHER', label: 'Khác'),
+  ];
+
+  String reasonCode = reasons.first.code;
+  final descriptionController = TextEditingController();
+
+  @override
+  void dispose() {
+    descriptionController.dispose();
+    super.dispose();
+  }
+
+  void submit() {
+    final description = descriptionController.text.trim();
+    if (reasonCode == 'OTHER' && description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập nội dung báo cáo.')),
+      );
+      return;
+    }
+    widget.onSubmit(reasonCode, description);
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        12,
+        20,
+        20 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Báo cáo livestream',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            widget.title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.white70),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: reasons
+                .map(
+                  (reason) => ChoiceChip(
+                    label: Text(reason.label),
+                    selected: reason.code == reasonCode,
+                    onSelected: (_) => setState(() => reasonCode = reason.code),
+                  ),
+                )
+                .toList(),
+          ),
+          if (reasonCode == 'OTHER') ...[
+            const SizedBox(height: 12),
+            TextField(
+              controller: descriptionController,
+              autofocus: true,
+              minLines: 3,
+              maxLines: 5,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                hintText: 'Mô tả vấn đề bạn muốn báo cáo...',
+                hintStyle: TextStyle(color: Colors.white54),
+                border: OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white38),
+                ),
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Chọn một mức quà để gửi lời cảm ơn.',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              children: [10000, 20000, 50000, 100000]
-                  .map(
-                    (amount) => OutlinedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(this.context).showTopSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Đã chọn ủng hộ ${amount ~/ 1000}K (chờ tích hợp thanh toán).',
-                            ),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: Colors.white38),
-                      ),
-                      child: Text('${amount ~/ 1000}K'),
-                    ),
-                  )
-                  .toList(),
-            ),
           ],
-        ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: submit,
+              icon: const Icon(Icons.send),
+              label: const Text('Gửi báo cáo'),
+            ),
+          ),
+        ],
       ),
     ),
   );

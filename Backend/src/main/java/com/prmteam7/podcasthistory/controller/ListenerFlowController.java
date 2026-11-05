@@ -225,7 +225,7 @@ public class ListenerFlowController {
     }
 
     @PostMapping("/reports")
-    @Operation(summary = "Báo cáo podcast hoặc bình luận")
+    @Operation(summary = "Báo cáo podcast, bình luận hoặc livestream")
     public ResponseEntity<ReportItem> createReport(
             @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody ReportCreate request) {
