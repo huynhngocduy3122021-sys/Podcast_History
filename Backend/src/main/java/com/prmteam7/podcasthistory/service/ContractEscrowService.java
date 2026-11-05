@@ -47,6 +47,7 @@ public class ContractEscrowService {
     private final ListenerWalletService listenerWallets;
     private final ContractDisputeRepository contractDisputes;
     private final MilestoneSubmissionRepository submissions;
+    private final WalletTransactionRealtimePublisher walletRealtime;
 
     public ContractEscrowService(AppUserRepository users, ProducerProfileRepository creators,
             SeriesRequestRepository requests, RequestResponseRepository responses,
@@ -54,7 +55,8 @@ public class ContractEscrowService {
             ContractEscrowRepository escrows, UserWalletRepository wallets,
             WalletTransactionRepository transactions, PaymentRepository payments,
             PaymentMethodRepository paymentMethods, ListenerWalletService listenerWallets,
-            ContractDisputeRepository contractDisputes, MilestoneSubmissionRepository submissions) {
+            ContractDisputeRepository contractDisputes, MilestoneSubmissionRepository submissions,
+            WalletTransactionRealtimePublisher walletRealtime) {
         this.users = users;
         this.creators = creators;
         this.requests = requests;
@@ -69,6 +71,7 @@ public class ContractEscrowService {
         this.listenerWallets = listenerWallets;
         this.contractDisputes = contractDisputes;
         this.submissions = submissions;
+        this.walletRealtime = walletRealtime;
     }
 
     @Transactional
@@ -250,6 +253,22 @@ public class ContractEscrowService {
         return user.getEmail();
     }
 
+    private String roleCode(AppUser user) {
+        return user == null || user.getRole() == null ? null : user.getRole().getRoleCode();
+    }
+
+    private String roleLabel(AppUser user) {
+        String role = roleCode(user);
+        if (role == null) return "Không xác định";
+        return switch (role.toUpperCase(java.util.Locale.ROOT)) {
+            case "LISTENER" -> "Listener";
+            case "CREATOR" -> "Content Creator";
+            case "STAFF" -> "Staff";
+            case "ADMIN" -> "Admin";
+            default -> role;
+        };
+    }
+
     @Transactional(readOnly = true)
     public ContractWorkflowResponses.Agreement getAgreement(UUID actorId, UUID requestId) {
         ContractEscrow escrow = escrows.findByRequest_SeriesRequestId(requestId)
@@ -343,7 +362,10 @@ public class ContractEscrowService {
                 escrow.getContract().getContractId(), dispute.getStatus(), dispute.getDecision(),
                 dispute.getCreatedAt(), dispute.getCreatedAt().plus(3, ChronoUnit.DAYS),
                 dispute.getResolvedAt(), dispute.getOpponentConfirmedAt(),
-                dispute.getListenerWinAction() == null ? null : dispute.getListenerWinAction().name());
+                dispute.getListenerWinAction() == null ? null : dispute.getListenerWinAction().name(),
+                dispute.getOpenedBy().getUserId(), displayName(dispute.getOpenedBy()),
+                dispute.getOpenedBy().getEmail(), roleCode(dispute.getOpenedBy()),
+                roleLabel(dispute.getOpenedBy()));
     }
 
     @Transactional
@@ -790,6 +812,8 @@ public class ContractEscrowService {
         transaction.setStatus("COMPLETED");
         transaction.setBalanceAfter(wallet == null ? null : wallet.getBalance());
         transaction.setHeldBalanceAfter(wallet == null ? null : wallet.getHeldBalance());
-        return transactions.save(transaction);
+        WalletTransaction saved = transactions.save(transaction);
+        walletRealtime.changed(wallet);
+        return saved;
     }
 }

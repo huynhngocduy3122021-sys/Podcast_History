@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.prmteam7.podcasthistory.dto.request.RecordPayoutResultRequest;
 import com.prmteam7.podcasthistory.dto.request.RegisterVerifiedPayoutAccountRequest;
 import com.prmteam7.podcasthistory.dto.response.AdminWithdrawalResponse;
+import com.prmteam7.podcasthistory.dto.response.AdminPayoutAccountResponse;
 import com.prmteam7.podcasthistory.dto.response.PayoutAccountResponse;
 import com.prmteam7.podcasthistory.dto.response.WithdrawalResponse;
 import com.prmteam7.podcasthistory.service.CreatorWalletService;
@@ -46,6 +47,27 @@ public class AdminPayoutController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(walletService.registerVerifiedPayoutAccount(
                         userId(jwt), creatorProfileId, request));
+    }
+
+    @GetMapping("/creators/{creatorProfileId}/accounts")
+    @Operation(summary = "Xem tài khoản nhận tiền CC đã khai báo để đối soát")
+    public List<AdminPayoutAccountResponse> getCreatorAccounts(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID creatorProfileId) {
+        return walletService.getCreatorPayoutAccounts(userId(jwt), creatorProfileId);
+    }
+
+    @GetMapping("/accounts")
+    @Operation(summary = "Danh sách tài khoản nhận tiền CC đã khai báo, chưa xác minh lên trước")
+    public List<AdminPayoutAccountResponse> getAllAccounts(@AuthenticationPrincipal Jwt jwt) {
+        return walletService.getAllPayoutAccounts(userId(jwt));
+    }
+
+    @PostMapping("/creators/{creatorProfileId}/accounts/{accountId}/verify")
+    @Operation(summary = "Admin xác minh tài khoản nhận tiền CC đã khai báo")
+    public PayoutAccountResponse verifyCreatorAccount(
+            @AuthenticationPrincipal Jwt jwt, @PathVariable UUID creatorProfileId,
+            @PathVariable UUID accountId) {
+        return walletService.verifyBankPayoutAccount(userId(jwt), creatorProfileId, accountId);
     }
 
     @GetMapping("/withdrawals/pending")

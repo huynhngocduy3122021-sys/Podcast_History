@@ -215,6 +215,22 @@ class ApiCreatorRepository implements CreatorRepository {
   }
 
   @override
+  Future<CreatorCheckoutPayment> subscribeSystemPlanWithWallet(
+    String planId,
+  ) async {
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorSystemPlanSubscribeWallet(planId),
+    );
+    if (response is Map<String, dynamic>) {
+      return CreatorCheckoutPayment.fromJson(response);
+    }
+    throw ApiException(
+      statusCode: 500,
+      message: 'Phản hồi thanh toán ví không hợp lệ.',
+    );
+  }
+
+  @override
   Future<CreatorCheckoutPayment> getCheckoutStatus(String checkoutId) async {
     final response = await _apiClient.get(ApiEndpoints.meCheckout(checkoutId));
     if (response is Map<String, dynamic>) {
@@ -1504,9 +1520,9 @@ class ApiCreatorRepository implements CreatorRepository {
     String? milestoneId,
   }) async {
     var uploadedDraft = false;
+    String? targetMilestoneId = milestoneId;
     try {
       final req = await getRequestById(id);
-      String? targetMilestoneId = milestoneId;
       if (targetMilestoneId == null || targetMilestoneId.isEmpty) {
         if (req != null && req.milestones.isNotEmpty) {
           final pendingMilestone = req.milestones.firstWhere(
@@ -1562,9 +1578,15 @@ class ApiCreatorRepository implements CreatorRepository {
               final mAmount = (m['amount'] as num?)?.toInt() ?? 0;
               final mStatus = (m['status'] as String? ?? 'SUBMITTED')
                   .toUpperCase();
+              final mid = m['milestoneId']?.toString() ?? '';
+              final isTarget = mid.isNotEmpty && mid == targetMilestoneId;
+              final existingM = _cachedRequests[index].milestones
+                  .where((em) => em.id == mid)
+                  .firstOrNull;
+
               updatedMilestones.add(
                 RequestMilestone(
-                  id: m['milestoneId']?.toString() ?? '',
+                  id: mid,
                   title: m['name'] as String? ?? 'Mốc thanh toán',
                   description: m['description'] as String?,
                   dueAt: DateTime.tryParse(m['dueAt']?.toString() ?? ''),
@@ -1577,8 +1599,8 @@ class ApiCreatorRepository implements CreatorRepository {
                   status: mStatus,
                   isCompleted: mStatus == 'APPROVED' || mStatus == 'SUBMITTED',
                   isApproved: mStatus == 'APPROVED',
-                  publicUrl: fileUrl,
-                  submissionNote: note,
+                  publicUrl: isTarget ? fileUrl : existingM?.publicUrl,
+                  submissionNote: isTarget ? note : existingM?.submissionNote,
                 ),
               );
             }
@@ -1751,6 +1773,12 @@ class ApiCreatorRepository implements CreatorRepository {
     if (typeStr == 'WALLET_TOPUP' || typeStr == 'TOP_UP') {
       return ('Nạp tiền vào ví', 'Nạp tiền thành công');
     }
+    if (typeStr == 'CREATOR_PLAN_PURCHASE') {
+      return (
+        'Thanh toán gói Studio Premium',
+        'Đã trừ từ số dư khả dụng của ví CC',
+      );
+    }
     if (typeStr == 'REFUND') {
       return ('Hoàn tiền ví', note?.toString() ?? 'Hoàn tiền giao dịch');
     }
@@ -1772,6 +1800,8 @@ class ApiCreatorRepository implements CreatorRepository {
       case 'REFUND':
       case 'WITHDRAWAL_REFUND':
         return TransactionType.refund;
+      case 'CREATOR_PLAN_PURCHASE':
+        return TransactionType.premiumPurchase;
       default:
         return TransactionType.withdrawal;
     }
@@ -1929,17 +1959,20 @@ class ApiCreatorRepository implements CreatorRepository {
         };
         final isVerified = item['verified'] == true;
         final isActive = item['active'] == true;
+        final masked = item['accountMasked']?.toString() ?? 'Chưa cập nhật';
+        final maskedParts = masked.split(' · ');
         return BankAccount(
           id:
               item['payoutAccountId']?.toString() ??
               item['creatorPayoutAccountId']?.toString() ??
               _uuid.v4(),
-          bankName: bankNameDisplay,
-          accountNumber: item['accountMasked']?.toString() ?? 'Chưa cập nhật',
-          accountHolder:
-              item['accountReference']?.toString() ??
-              item['currency']?.toString() ??
-              'VND',
+          bankName: maskedParts.length >= 3
+              ? maskedParts.first
+              : bankNameDisplay,
+          accountNumber: maskedParts.length >= 3 ? maskedParts.last : masked,
+          accountHolder: maskedParts.length >= 3
+              ? maskedParts.sublist(1, maskedParts.length - 1).join(' · ')
+              : '',
           isDefault: isActive && isVerified,
           payoutMethod: payoutMethod,
           currency: item['currency']?.toString() ?? 'VND',
@@ -1962,9 +1995,22 @@ class ApiCreatorRepository implements CreatorRepository {
     String accountNumber,
     String accountHolder,
   ) async {
-    throw UnsupportedError(
-      'Tài khoản nhận tiền cần được Admin xác minh và đăng ký trên hệ thống.',
+    if (!_apiClient.isAuthenticated) {
+      throw Exception('Vui lòng đăng nhập để thêm tài khoản nhận tiền.');
+    }
+    final response = await _apiClient.post(
+      ApiEndpoints.creatorBankAccounts,
+      body: {
+        'bankCode': bankName.trim().toUpperCase(),
+        'accountNumber': accountNumber.trim(),
+        'accountHolderName': accountHolder.trim(),
+      },
     );
+    if (response is! Map<String, dynamic> ||
+        response['payoutAccountId'] == null ||
+        response['verified'] != false) {
+      throw Exception('Không xác nhận được tài khoản mới trên máy chủ.');
+    }
   }
 
   @override
@@ -1986,7 +2032,7 @@ class ApiCreatorRepository implements CreatorRepository {
       body: {'amount': amount, 'payoutAccountId': bankAccountId},
     );
     if (response is! Map<String, dynamic> ||
-        response['status'] != 'PENDING' ||
+        response['status']?.toString().toUpperCase() != 'PENDING' ||
         response['withdrawalRequestId'] == null) {
       throw Exception(
         'Cần kiểm tra lại trạng thái yêu cầu rút tiền trên máy chủ.',
@@ -1996,12 +2042,19 @@ class ApiCreatorRepository implements CreatorRepository {
       id: response['withdrawalRequestId'].toString(),
       title: 'Yêu cầu rút tiền về ngân hàng',
       type: TransactionType.withdrawal,
+      rawType: 'WITHDRAWAL_HOLD',
+      direction: 'DEBIT',
       amount: -amount,
+      currency: response['currency']?.toString() ?? 'VND',
       status: TransactionStatus.holding,
+      rawStatus: 'PENDING',
       createdAt:
           DateTime.tryParse(response['requestedAt']?.toString() ?? '') ??
           DateTime.now(),
-      note: 'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      note:
+          response['note']?.toString() ??
+          'Đang chờ Admin ghi nhận kết quả chuyển tiền.',
+      payoutAccountMasked: response['payoutAccountMasked']?.toString(),
     );
   }
 
@@ -2153,7 +2206,9 @@ class ApiCreatorRepository implements CreatorRepository {
     bool completed = false,
   }) async {
     try {
-      debugPrint('[ListeningProgress] PUT /api/podcasts/$podcastId/listening-progress -> {progressSeconds: $progressSeconds, completed: $completed}');
+      debugPrint(
+        '[ListeningProgress] PUT /api/podcasts/$podcastId/listening-progress -> {progressSeconds: $progressSeconds, completed: $completed}',
+      );
       await _apiClient.put(
         ApiEndpoints.podcastListeningProgress(podcastId),
         body: {'progressSeconds': progressSeconds, 'completed': completed},
@@ -2766,11 +2821,15 @@ class ApiCreatorRepository implements CreatorRepository {
     String? podcastId,
   }) async {
     final queryParams = <String, String>{};
-    if (status != null && status.isNotEmpty) queryParams['status'] = status;
-    if (seriesId != null && seriesId.isNotEmpty)
+    if (status != null && status.isNotEmpty) {
+      queryParams['status'] = status;
+    }
+    if (seriesId != null && seriesId.isNotEmpty) {
       queryParams['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    }
+    if (podcastId != null && podcastId.isNotEmpty) {
       queryParams['podcastId'] = podcastId;
+    }
     queryParams['page'] = '0';
     queryParams['size'] = '50';
 
@@ -2836,8 +2895,9 @@ class ApiCreatorRepository implements CreatorRepository {
           .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    if (podcastId != null && podcastId.isNotEmpty) {
       body['podcastId'] = podcastId;
+    }
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 
@@ -2877,8 +2937,9 @@ class ApiCreatorRepository implements CreatorRepository {
           .toList(),
     };
     if (seriesId != null && seriesId.isNotEmpty) body['seriesId'] = seriesId;
-    if (podcastId != null && podcastId.isNotEmpty)
+    if (podcastId != null && podcastId.isNotEmpty) {
       body['podcastId'] = podcastId;
+    }
     if (startsAt != null) body['startsAt'] = startsAt.toUtc().toIso8601String();
     if (endsAt != null) body['endsAt'] = endsAt.toUtc().toIso8601String();
 

@@ -225,6 +225,7 @@ public class AiModerationService {
             JsonNode output = response.output();
             result.setModelName(response.modelName());
             var validated = ModerationResponseValidator.validate(output);
+            String relevance = ModerationResponseValidator.podcastRelevance(output);
             result.setConfidenceScore(validated.confidence());
             Podcast latestPodcast = podcasts.findByPodcastId(podcast.getPodcastId()).orElse(null);
             PodcastTranscript latestTranscript = latestPodcast == null ? null
@@ -238,7 +239,12 @@ public class AiModerationService {
                         "Podcast hoặc transcript đã thay đổi trong lúc AI xử lý.", null, null);
                 return;
             }
-            finish(result, "COMPLETED", validated.label(), validated.recommendation(), validated.reason(), output, null);
+            boolean relevant = "RELEVANT".equals(relevance);
+            String reason = relevant ? validated.reason()
+                    : "Chưa xác nhận nội dung lịch sử: "
+                      + output.path("historicalRelevanceReason").asText();
+            finish(result, "COMPLETED", validated.label(),
+                    relevant ? validated.recommendation() : "REVIEW", reason, output, null);
         } catch (Exception exception) {
             if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
             String message = exception.getMessage();
@@ -255,7 +261,13 @@ public class AiModerationService {
         return "COMPLETED".equals(result.getStatus())
                 && "SAFE".equals(result.getOverallLabel())
                 && "APPROVE".equals(result.getRecommendation())
+                && hasHistoricalRelevance(result.getRawResult())
                 && meetsAutoApproveConfidence(result, threshold);
+    }
+
+    static boolean hasHistoricalRelevance(JsonNode output) {
+        return output != null
+                && "RELEVANT".equals(output.path("historicalRelevance").asText());
     }
 
     private static boolean meetsAutoApproveConfidence(AiModerationResult result, BigDecimal threshold) {

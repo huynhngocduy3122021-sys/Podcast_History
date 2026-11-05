@@ -4,7 +4,6 @@ import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/package_features.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
 import 'package:podcast_history/features/creator_studio/presentation/controllers/creator_controller.dart';
-import 'package:podcast_history/features/creator_studio/presentation/views/comments/studio_comments_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_members_list_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/membership/creator_membership_plans_screen.dart';
 import 'package:podcast_history/features/creator_studio/presentation/views/premium/form_builder_screen.dart';
@@ -42,14 +41,6 @@ class CreatorMoreScreen extends ConsumerWidget {
           _buildMenuSection(
             'Tương tác & Cộng đồng',
             [
-              _MenuItem(
-                icon: Icons.chat_rounded,
-                title: 'Quản lý Bình luận thính giả',
-                subtitle: 'Ghim, ẩn và trả lời bình luận theo mốc thời gian',
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const StudioCommentsScreen()),
-                ),
-              ),
               _MenuItem(
                 icon: Icons.video_collection_rounded,
                 title: 'Quản lý Series & Tuyển tập',

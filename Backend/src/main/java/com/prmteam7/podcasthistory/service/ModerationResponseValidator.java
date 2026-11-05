@@ -56,6 +56,19 @@ final class ModerationResponseValidator {
         return new Validated(label, recommendation, confidence, reason, evidence);
     }
 
+    static String podcastRelevance(JsonNode output) {
+        if (output == null || !output.isObject()
+                || !output.has("historicalRelevance")
+                || !output.has("historicalRelevanceReason"))
+            throw new IllegalArgumentException("Gemini thiếu đánh giá mức độ liên quan lịch sử.");
+        String relevance = allowed(output.path("historicalRelevance").asText(),
+                "RELEVANT", "IRRELEVANT", "UNCERTAIN");
+        String reason = output.path("historicalRelevanceReason").asText();
+        if (relevance == null || reason.isBlank() || reason.length() > MAX_REASON_LENGTH)
+            throw new IllegalArgumentException("Gemini trả đánh giá lịch sử không hợp lệ.");
+        return relevance;
+    }
+
     private static String allowed(String value, String... choices) {
         for (String choice : choices) if (choice.equals(value)) return value;
         return null;

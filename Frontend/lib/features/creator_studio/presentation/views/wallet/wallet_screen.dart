@@ -100,12 +100,16 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                       child: AppButton(
                         label: 'Rút tiền ngay',
                         icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                        onPressed: () {
-                          Navigator.of(context).push(
+                        onPressed: () async {
+                          await Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const WithdrawScreen(),
                             ),
                           );
+                          if (context.mounted) {
+                            ref.read(walletProvider.notifier).loadWallet();
+                            ref.read(bankAccountsProvider.notifier).loadAccounts();
+                          }
                         },
                       ),
                     ),
@@ -181,6 +185,8 @@ class _WalletScreenState extends ConsumerState<WalletScreen> {
                           'Rút tiền', TransactionType.withdrawal),
                       _buildFilterChip(
                           'Thành viên kênh', TransactionType.membership),
+                      _buildFilterChip(
+                          'Mua gói Premium', TransactionType.premiumPurchase),
                       _buildFilterChip('Hoàn tiền', TransactionType.refund),
                     ],
                   ),

@@ -23,16 +23,36 @@ final creatorNotificationSocketProvider = Provider<NotificationSocket?>((ref) {
   final token = ref.watch(creatorAccessTokenProvider);
   if (token == null || token.isEmpty) return null;
   final socket = NotificationSocket(
-    url: apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws') + '/ws',
+    url: '${apiBaseUrl.replaceFirst(RegExp(r'^http'), 'ws')}/ws',
     accessToken: token,
     onNotification: (json) {
       ref
           .read(creatorNotificationsProvider.notifier)
           .receiveRealtimeNotification(json);
+      final type = '${json['type'] ?? ''}'.toUpperCase();
+      if (type == 'MILESTONE_REVISION_REQUESTED' ||
+          type == 'MILESTONE_APPROVED') {
+        ref.read(creatorRequestsProvider.notifier).loadRequests();
+      }
     },
-    onRealtime: (_) {},
+    onRealtime: (event) {
+      final type = '${event['type'] ?? ''}'.toUpperCase();
+      if (type == 'WALLET_TRANSACTIONS_CHANGED') {
+        ref.read(walletProvider.notifier).loadWallet();
+      }
+      if (type == 'CONTRACT_SIGNED' ||
+          type == 'CONTRACT_PROPOSED' ||
+          type == 'CONTRACT_CANCELLED' ||
+          type == 'CONTRACT_DISPUTED' ||
+          type == 'API_CHANGED' ||
+          type == 'REQUEST_UPDATED') {
+        ref.read(creatorRequestsProvider.notifier).loadRequests();
+      }
+    },
     onReconnected: () {
       ref.read(creatorNotificationsProvider.notifier).loadNotifications();
+      ref.read(creatorRequestsProvider.notifier).loadRequests();
+      ref.read(walletProvider.notifier).loadWallet();
     },
   );
   ref.onDispose(socket.dispose);

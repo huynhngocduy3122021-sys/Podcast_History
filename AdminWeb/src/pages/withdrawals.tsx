@@ -6,8 +6,8 @@ import { api, errorMessage, session } from '../lib/client'
 import { extractApiError } from '../lib/api-error'
 import { createAdminApi } from '../lib/admin-api'
 import { adminKeys, payoutChangeConfirmed } from '../lib/admin-cache'
-import { payoutAccountWriteSchema, payoutResultWriteSchema } from '../lib/admin-contracts'
-import type { PayoutAccountWrite, PayoutResultWrite, PayoutWithdrawal } from '../lib/admin-contracts'
+import { payoutResultWriteSchema } from '../lib/admin-contracts'
+import type { PayoutResultWrite, PayoutWithdrawal } from '../lib/admin-contracts'
 import { identityOf, sameIdentity } from '../lib/identity'
 import { formatDate, formatMoney } from '../lib/finance-format'
 import { Button } from '../components/ui/button'
@@ -18,19 +18,50 @@ import { useFeedback } from '../components/feedback'
 const backend = createAdminApi(api)
 const sessionChangedMessage = 'Phiên đăng nhập đã thay đổi. Vui lòng tải lại dữ liệu trước khi tiếp tục.'
 
-function PayoutAccountForm() {
+function CreatorDeclaredAccounts() {
   const { user } = useAuth()
   const client = useQueryClient()
   const notify = useFeedback()
-  const [creatorProfileId, setCreatorProfileId] = useState('')
-  const [values, setValues] = useState<PayoutAccountWrite>({ payoutMethod: 'BANK', accountReference: '', accountMasked: '', currency: 'VND' })
-  const mutation = useMutation({
-    mutationFn: () => backend.registerPayoutAccount(creatorProfileId, values),
-    onSuccess: async () => { await client.invalidateQueries({ queryKey: adminKeys.payouts(user?.id) }); notify('Đã đăng ký tài khoản nhận tiền đã xác minh.'); setCreatorProfileId(''); setValues({ payoutMethod: 'BANK', accountReference: '', accountMasked: '', currency: 'VND' }) },
+  const queryKey = ['creator-payout-accounts', user?.id] as const
+  const query = useQuery({
+    queryKey,
+    enabled: user?.role === 'ADMIN',
+    queryFn: ({ signal }) => backend.allCreatorPayoutAccounts(signal),
   })
-  const parsed = payoutAccountWriteSchema.safeParse(values)
-  const validCreator = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creatorProfileId)
-  return <section className="panel mb-6"><div className="panel-heading"><div><h2 className="font-semibold">Đăng ký tài khoản payout</h2><p className="mt-1 text-xs text-muted-foreground">Admin xác minh tài khoản nhận tiền trước khi đăng ký.</p></div></div><form className="grid gap-4 p-6 md:grid-cols-2" onSubmit={event => { event.preventDefault(); mutation.mutate() }}><label><span className="field-label">Creator profile ID *</span><input className="field font-mono text-xs" value={creatorProfileId} onChange={event => setCreatorProfileId(event.target.value)} />{creatorProfileId && !validCreator && <span className="field-error">UUID không hợp lệ.</span>}</label><label><span className="field-label">Phương thức *</span><input className="field" value={values.payoutMethod} onChange={event => setValues(current => ({ ...current, payoutMethod: event.target.value }))} /></label><label><span className="field-label">Account reference *</span><input className="field" value={values.accountReference} onChange={event => setValues(current => ({ ...current, accountReference: event.target.value }))} /></label><label><span className="field-label">Account masked *</span><input className="field" value={values.accountMasked} onChange={event => setValues(current => ({ ...current, accountMasked: event.target.value }))} /></label><label><span className="field-label">Currency *</span><input className="field uppercase" maxLength={3} value={values.currency} onChange={event => setValues(current => ({ ...current, currency: event.target.value }))} /></label><div className="flex items-end"><Button type="submit" disabled={!validCreator || !parsed.success || mutation.isPending}>{mutation.isPending ? 'Đang lưu…' : 'Đăng ký tài khoản'}</Button></div>{mutation.isError && <p role="alert" className="md:col-span-2 field-error">{errorMessage(mutation.error)}</p>}</form></section>
+  const verification = useMutation({
+    mutationFn: (account: { creatorProfileId: string; payoutAccountId: string }) =>
+      backend.verifyCreatorPayoutAccount(account.creatorProfileId, account.payoutAccountId),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey })
+      notify('Đã xác minh tài khoản nhận tiền.')
+    },
+  })
+  const confirmVerification = async (account: { creatorProfileId: string; payoutAccountId: string }) => {
+    try {
+      await verification.mutateAsync(account)
+    } catch (error) {
+      if (extractApiError(error).outcomeUnknown) {
+        const latest = await query.refetch()
+        if (latest.data?.some(item => item.payoutAccountId === account.payoutAccountId && item.verified)) {
+          verification.reset()
+          notify('Tài khoản đã được xác minh.')
+          return
+        }
+      }
+      throw error
+    }
+  }
+  return <section className="panel mb-6">
+    <div className="panel-heading"><div><h2 className="font-semibold">Tài khoản nhận tiền của CC</h2><p className="mt-1 text-xs text-muted-foreground">Danh sách CC tự khai báo; tài khoản chưa xác minh được hiển thị trước.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { verification.reset(); void query.refetch() }}><RefreshCw className="size-4" />Làm mới</Button></div>
+    <div className="px-6 pb-6 pt-4">
+      {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : query.data?.length ?
+        <ul className="divide-y divide-border/60 rounded-lg border border-border/60">{query.data.map(account => <li key={account.payoutAccountId} className="flex flex-wrap items-center justify-between gap-4 p-4 text-sm">
+          <div><p className="font-semibold">{account.channelName} · {account.creatorName}</p><p className="mt-1 text-xs text-muted-foreground">{account.creatorEmail}</p><p className="mt-2">{account.accountMasked}</p><p className="mt-1 font-mono text-xs">{account.accountReference}</p><p className="mt-1 text-xs text-muted-foreground">{account.verified ? 'Đã xác minh' : 'Chưa xác minh'} · {account.active ? 'Đang hoạt động' : 'Không hoạt động'}</p></div>
+          {!account.verified && account.active && <ConfirmDialog trigger={<Button variant="outline" disabled={verification.isPending}>Xác minh</Button>} title="Xác minh tài khoản nhận tiền?" description="Chỉ xác minh sau khi đã đối soát chủ tài khoản và số tài khoản bên ngoài hệ thống." confirmLabel="Đã đối soát" confirmDisabled={verification.isPending} onConfirm={() => confirmVerification(account)} />}
+        </li>)}</ul> : <EmptyState title="Chưa có tài khoản" message="CC chưa khai báo tài khoản ngân hàng nhận tiền." />}
+      {verification.isError && <p role="alert" className="mt-3 field-error">{errorMessage(verification.error)}</p>}
+    </div>
+  </section>
 }
 
 function PayoutResultAction({ payout, onDone }: { payout: PayoutWithdrawal; onDone: () => void }) {
@@ -59,5 +90,5 @@ export function WithdrawalsPage() {
   const [selected, setSelected] = useState<string | null>(null)
   const query = useQuery({ queryKey: adminKeys.payouts(user?.id), enabled: user?.role === 'ADMIN', queryFn: ({ signal }) => backend.pendingPayouts(signal) })
   const data = query.data || []
-  return <><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Tài chính</p><h1 className="mt-2 text-3xl font-bold">Creator payouts</h1><p className="mt-2 text-sm text-muted-foreground">Xử lý các withdrawal đã giữ tiền theo payout contract hiện tại.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { void query.refetch() }}><RefreshCw className="size-4" />Làm mới</Button></div><PayoutAccountForm /><section className="panel"><div className="panel-heading"><div><h2 className="font-semibold">Withdrawal đang chờ payout</h2><p className="mt-1 text-xs text-muted-foreground">{query.data ? `${data.length} yêu cầu đang chờ` : 'Dữ liệu từ Backend'}</p></div></div>{query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : data.length ? <ul className="divide-y divide-border/60">{data.map(payout => <Fragment key={payout.withdrawalRequestId}><li className="flex flex-wrap items-center justify-between gap-4 p-5"><div className="min-w-0"><p className="font-semibold">{formatMoney(payout.amount, payout.currency)}</p><p className="mt-1 break-all font-mono text-xs text-muted-foreground">{payout.withdrawalRequestId}</p><p className="mt-1 text-sm">{payout.payoutMethod} · {payout.payoutAccountMasked}</p></div><div className="flex items-center gap-2"><span className="badge">{payout.status}</span><Button variant="outline" onClick={() => setSelected(selected === payout.withdrawalRequestId ? null : payout.withdrawalRequestId)}><Eye className="size-4" />Chi tiết</Button></div></li>{selected === payout.withdrawalRequestId && <li className="p-5"><PayoutDetail payout={payout} onClose={() => setSelected(null)} onDone={() => { setSelected(null); void query.refetch() }} /></li>}</Fragment>)}</ul> : <EmptyState title="Không có payout đang chờ" message="Các withdrawal Creator mới sẽ xuất hiện tại đây sau khi Backend giữ tiền." />}</section></>
+  return <><div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Tài chính</p><h1 className="mt-2 text-3xl font-bold">Creator payouts</h1><p className="mt-2 text-sm text-muted-foreground">Xử lý các withdrawal đã giữ tiền theo payout contract hiện tại.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { void query.refetch() }}><RefreshCw className="size-4" />Làm mới</Button></div><CreatorDeclaredAccounts /><section className="panel"><div className="panel-heading"><div><h2 className="font-semibold">Withdrawal đang chờ payout</h2><p className="mt-1 text-xs text-muted-foreground">{query.data ? `${data.length} yêu cầu đang chờ` : 'Dữ liệu từ Backend'}</p></div></div>{query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : data.length ? <ul className="divide-y divide-border/60">{data.map(payout => <Fragment key={payout.withdrawalRequestId}><li className="flex flex-wrap items-center justify-between gap-4 p-5"><div className="min-w-0"><p className="font-semibold">{formatMoney(payout.amount, payout.currency)}</p><p className="mt-1 break-all font-mono text-xs text-muted-foreground">{payout.withdrawalRequestId}</p><p className="mt-1 text-sm">{payout.payoutMethod} · {payout.payoutAccountMasked}</p></div><div className="flex items-center gap-2"><span className="badge">{payout.status}</span><Button variant="outline" onClick={() => setSelected(selected === payout.withdrawalRequestId ? null : payout.withdrawalRequestId)}><Eye className="size-4" />Chi tiết</Button></div></li>{selected === payout.withdrawalRequestId && <li className="p-5"><PayoutDetail payout={payout} onClose={() => setSelected(null)} onDone={() => { setSelected(null); void query.refetch() }} /></li>}</Fragment>)}</ul> : <EmptyState title="Không có payout đang chờ" message="Các withdrawal Creator mới sẽ xuất hiện tại đây sau khi Backend giữ tiền." />}</section></>
 }

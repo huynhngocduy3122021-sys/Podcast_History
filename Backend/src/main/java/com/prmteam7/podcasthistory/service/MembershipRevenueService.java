@@ -18,12 +18,14 @@ public class MembershipRevenueService {
   private final AppUserRepository users;
   private final UserWalletRepository wallets;
   private final WalletTransactionRepository transactions;
+  private final WalletTransactionRealtimePublisher walletRealtime;
 
   public MembershipRevenueService(AppUserRepository users, UserWalletRepository wallets,
-      WalletTransactionRepository transactions) {
+      WalletTransactionRepository transactions, WalletTransactionRealtimePublisher walletRealtime) {
     this.users = users;
     this.wallets = wallets;
     this.transactions = transactions;
+    this.walletRealtime = walletRealtime;
   }
 
   @Transactional
@@ -60,6 +62,7 @@ public class MembershipRevenueService {
     wallets.save(wallet);
     transactions.save(transaction(wallet, payment, "MEMBERSHIP_EARNING", "CREDIT", net,
         "MEMBERSHIP_CREATOR:" + payment.getPaymentId()));
+    walletRealtime.changed(wallet);
     if (fee.signum() > 0)
       transactions.save(transaction(null, payment, "PLATFORM_FEE", "CREDIT", fee,
           "MEMBERSHIP_FEE:" + payment.getPaymentId()));

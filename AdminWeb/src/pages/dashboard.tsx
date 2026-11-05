@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight, RefreshCw, Users, Mic, ShieldCheck, UserCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth'
@@ -8,10 +8,12 @@ import { formatMoney } from '../lib/finance-format'
 import { apiPrefix, isRole } from '../lib/permissions'
 import { Button } from '../components/ui/button'
 import { EmptyState, ErrorState, LoadingState } from '../components/states'
+import { DashboardRevenue } from './dashboard-revenue'
 
 const number = new Intl.NumberFormat('vi-VN')
 export function DashboardPage() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const role = user?.role
   const query = useQuery({
     queryKey: ['dashboard', user?.id, role],
@@ -30,7 +32,7 @@ export function DashboardPage() {
     { label: 'Báo cáo đang mở', value: data.pendingReports, detail: 'Chờ xử lý hoặc đang xem xét', icon: ShieldCheck },
   ] : []
   return <>
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Không gian làm việc / {role}</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Tổng quan vận hành</h1><p className="mt-2 text-sm text-muted-foreground">Theo dõi nội dung và các công việc cần xử lý.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { void query.refetch() }}><RefreshCw className={`size-4 ${query.isFetching ? 'motion-safe:animate-spin' : ''}`} />Làm mới</Button></div>
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Không gian làm việc / {role}</p><h1 className="mt-2 text-3xl font-bold tracking-tight">Tổng quan vận hành</h1><p className="mt-2 text-sm text-muted-foreground">Theo dõi nội dung và các công việc cần xử lý.</p></div><Button variant="outline" disabled={query.isFetching} onClick={() => { void Promise.all([query.refetch(), queryClient.invalidateQueries({ queryKey: ['dashboard-revenue-details', user?.id] })]) }}><RefreshCw className={`size-4 ${query.isFetching ? 'motion-safe:animate-spin' : ''}`} />Làm mới</Button></div>
     {query.isPending ? <LoadingState /> : query.isError ? <ErrorState message={errorMessage(query.error)} onRetry={() => { void query.refetch() }} /> : data && <>
       <div className="mb-8 flex items-center gap-2 text-xs text-muted-foreground"><span className="size-1.5 rounded-full bg-success" />Dữ liệu từ Backend · cập nhật {new Date(query.dataUpdatedAt).toLocaleTimeString('vi-VN')}</div>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(m => <section key={m.label} className="panel p-5"><div className="flex items-center justify-between"><h2 className="text-sm font-medium text-muted-foreground">{m.label}</h2><m.icon className="size-5 text-bronze" aria-hidden="true" /></div><p className="mt-5 text-4xl font-semibold tracking-tight">{number.format(m.value)}</p><p className="mt-3 text-xs text-muted-foreground">{m.detail}</p></section>)}</div>
@@ -41,6 +43,8 @@ export function DashboardPage() {
         ...(admin ? [{ label: 'Hồ sơ Creator', count: data.pendingCreators, path: '/creator-approval' }, { label: 'Yêu cầu rút tiền', count: data.pendingWithdrawals, path: '/withdrawals' }, { label: 'Tranh chấp đang mở', count: data.openDisputes, path: '/disputes' }] : []),
       ].map(item => <Link to={item.path} key={item.path} className="flex items-center gap-3 py-5 text-sm hover:text-primary"><span className="flex-1">{item.label}</span><span className="font-bold">{number.format(item.count)}</span><ArrowRight className="size-4" /></Link>)}</div><p className="border-t border-border px-6 py-4 text-xs text-muted-foreground">Theo dõi các chỉ số vận hành và hàng đợi cần xử lý theo quyền của tài khoản.</p></section></div>
       {admin && <section className="panel mt-6"><div className="panel-heading"><div><h2 className="font-semibold">Thanh toán đã thu</h2><p className="mt-1 text-xs text-muted-foreground">Theo từng loại tiền tệ</p></div></div>{data.collectedPayments.length ? <div className="flex flex-wrap gap-8 p-6">{data.collectedPayments.map(r => <div key={r.currency}><p className="text-xs text-muted-foreground">{r.currency}</p><p className="mt-1 text-2xl font-semibold">{formatMoney(r.amount, r.currency)}</p></div>)}</div> : <EmptyState title="Chưa có thanh toán đã thu" message="Không sử dụng số liệu mẫu." />}<p className="px-6 pb-5 text-xs text-muted-foreground">Đây là tổng thanh toán đã thu, không phải lợi nhuận hoặc số dư có thể rút. Các currency không được cộng chung.</p></section>}
+      {admin && <section className="panel mt-6"><div className="panel-heading"><h2 className="font-semibold">Doanh thu nền tảng</h2></div><div className="flex flex-wrap gap-8 p-6">{data.revenueBreakdown.map(row => <div key={row.currency}><p className="text-xs text-muted-foreground">{row.currency}</p><p className="mt-2 text-sm">Tổng giao dịch: {formatMoney(row.grossCollected, row.currency)}</p><p className="mt-1 text-sm">Phí app: {formatMoney(row.platformFees, row.currency)}</p><p className="mt-1 font-semibold">Doanh thu app: {formatMoney(row.netRevenue, row.currency)}</p></div>)}</div></section>}
+      {admin && <DashboardRevenue />}
     </>}
   </>
 }

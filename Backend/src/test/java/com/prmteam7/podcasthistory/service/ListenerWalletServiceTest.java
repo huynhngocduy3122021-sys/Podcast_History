@@ -39,13 +39,14 @@ class ListenerWalletServiceTest {
   @Mock CheckoutPaymentRepository checkouts;
   @Mock PaymentMethodRepository paymentMethods;
   @Mock SepayService sepay;
+  @Mock WalletTransactionRealtimePublisher walletRealtime;
   @Mock SeriesRequestRepository requests;
   ListenerWalletService service;
 
   @BeforeEach
   void setUp() {
     service = new ListenerWalletService(users, wallets, transactions, checkouts, paymentMethods,
-        requests, sepay);
+        requests, sepay, walletRealtime);
   }
 
   @Test

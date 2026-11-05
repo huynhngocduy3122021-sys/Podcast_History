@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { approveCreatorSchema, rejectCreatorSchema, categoryFormSchema, creatorApplicationSchema, categoriesSchema, canReviewApplication, safePortfolioUrl } from '../src/lib/admin-contracts.ts'
 import { pageSchema } from '../src/lib/pagination.ts'
-import { notificationsPageSchema, dashboardSchema, loginSchema } from '../src/lib/contracts.ts'
+import { notificationsPageSchema, dashboardSchema, loginSchema, revenueDetailsPageSchema } from '../src/lib/contracts.ts'
 import { z } from 'zod'
 
 test('login honors Java UTF-16 limits and preserves password whitespace', () => {
@@ -63,8 +63,26 @@ test('Spring page retains pagination metadata and rejects a List or missing meta
 
 test('new pagination schema does not change existing notification and dashboard mappings', () => {
   assert.deepEqual(notificationsPageSchema.parse({ content: [], number: 0, size: 20, totalElements: 0, totalPages: 0 }), { content: [], number: 0, size: 20, totalElements: 0, totalPages: 0 })
-  assert.equal(dashboardSchema.safeParse({ users: 0, activeUsers: 0, creators: 0, pendingCreators: 0, podcasts: 0, pendingPodcasts: 0, pendingReports: 0, pendingWithdrawals: 0, openDisputes: 0, podcastStatuses: [], collectedPayments: [] }).success, true)
+  assert.equal(dashboardSchema.safeParse({ users: 0, activeUsers: 0, creators: 0, pendingCreators: 0, podcasts: 0, pendingPodcasts: 0, pendingReports: 0, pendingWithdrawals: 0, openDisputes: 0, podcastStatuses: [], collectedPayments: [], revenueBreakdown: [] }).success, true)
   assert.equal(creatorApplicationSchema.safeParse({ applicationId: 'not-a-uuid' }).success, false)
+})
+
+test('revenue detail accepts paid creator checkout and preserves money precision', () => {
+  const detail = revenueDetailsPageSchema.parse({
+    content: [{
+      paymentId: null, checkoutId: '11111111-1111-4111-8111-111111111111',
+      sourceType: 'CREATOR_PLAN', sourceLabel: 'Studio Premium', sourceTypeLabel: 'Gói Premium CC',
+      status: 'PAID', statusLabel: 'Đã thu', paymentMethod: 'WALLET', paymentMethodLabel: 'Ví CC',
+      amount: '100000000000000000.25', platformFee: '100000000000000000.25', creatorNetAmount: '0',
+      netRevenue: '100000000000000000.25', currency: 'VND', paidAt: '2026-11-04T00:00:00Z',
+      buyerName: 'Creator', buyerEmail: null, creatorName: 'Creator', creatorChannelName: 'Kênh',
+      requestTitle: null, stageName: null, membershipPlanName: null, creatorPlanName: 'Premium',
+      paymentDescription: 'Thanh toán bằng ví',
+    }], number: 0, size: 20, totalElements: 1, totalPages: 1,
+  })
+  assert.equal(detail.content[0].amount, '100000000000000000.25')
+  assert.equal(detail.content[0].paymentMethod, 'WALLET')
+  assert.equal(revenueDetailsPageSchema.safeParse({ content: [], number: 0, size: 20, totalElements: 0 }).success, false)
 })
 
 test('portfolio links allow HTTP(S), never executable or invalid URLs', () => {

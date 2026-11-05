@@ -14,9 +14,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.prmteam7.podcasthistory.dto.request.RecordPayoutResultRequest;
+import com.prmteam7.podcasthistory.dto.request.CreateBankPayoutAccountRequest;
 import com.prmteam7.podcasthistory.dto.request.RegisterVerifiedPayoutAccountRequest;
 import com.prmteam7.podcasthistory.dto.request.WithdrawalRequestInput;
 import com.prmteam7.podcasthistory.dto.response.PayoutAccountResponse;
+import com.prmteam7.podcasthistory.dto.response.AdminPayoutAccountResponse;
 import com.prmteam7.podcasthistory.dto.response.AdminWithdrawalResponse;
 import com.prmteam7.podcasthistory.dto.response.ReleaseFundsResponse;
 import com.prmteam7.podcasthistory.dto.response.WalletBalanceResponse;
@@ -57,6 +59,7 @@ public class CreatorWalletService {
     private final WithdrawalRequestRepository withdrawalRepository;
     private final WalletTransactionRepository transactionRepository;
     private final PayoutPaymentRepository payoutPaymentRepository;
+    private final WalletTransactionRealtimePublisher walletRealtime;
 
     public CreatorWalletService(
             AppUserRepository userRepository,
@@ -65,7 +68,8 @@ public class CreatorWalletService {
             CreatorPayoutAccountRepository payoutAccountRepository,
             WithdrawalRequestRepository withdrawalRepository,
             WalletTransactionRepository transactionRepository,
-            PayoutPaymentRepository payoutPaymentRepository) {
+            PayoutPaymentRepository payoutPaymentRepository,
+            WalletTransactionRealtimePublisher walletRealtime) {
         this.userRepository = userRepository;
         this.creatorRepository = creatorRepository;
         this.walletRepository = walletRepository;
@@ -73,6 +77,7 @@ public class CreatorWalletService {
         this.withdrawalRepository = withdrawalRepository;
         this.transactionRepository = transactionRepository;
         this.payoutPaymentRepository = payoutPaymentRepository;
+        this.walletRealtime = walletRealtime;
     }
 
     @Transactional(readOnly = true)
@@ -134,6 +139,13 @@ public class CreatorWalletService {
                 description = "Tiền CC thực nhận từ gói thành viên sau phí nền tảng.";
                 movement = "AVAILABLE_CREDIT";
                 availableChange = amount;
+                heldChange = ZERO;
+            }
+            case "CREATOR_PLAN_PURCHASE" -> {
+                title = "Thanh toán gói Studio Premium";
+                description = "Tiền mua gói CC đã trừ từ số dư khả dụng của ví.";
+                movement = "AVAILABLE_DEBIT";
+                availableChange = amount.negate();
                 heldChange = ZERO;
             }
             case "WITHDRAWAL_HOLD" -> {
@@ -212,6 +224,7 @@ public class CreatorWalletService {
             transactionRepository.save(createTransaction(
                     wallet, payment, null, "RELEASE_FUNDS", "CREDIT", amount,
                     "COMPLETED", wallet.getBalance(), wallet.getHeldBalance()));
+            walletRealtime.changed(wallet);
         }
         walletRepository.save(wallet);
         return new ReleaseFundsResponse(
@@ -275,6 +288,7 @@ public class CreatorWalletService {
         transactionRepository.save(createTransaction(
                 wallet, null, savedWithdrawal, "WITHDRAWAL_HOLD", "DEBIT", amount,
                 "PENDING", wallet.getBalance(), wallet.getHeldBalance()));
+        walletRealtime.changed(wallet);
         return toWithdrawalResponse(savedWithdrawal);
     }
 
@@ -294,6 +308,70 @@ public class CreatorWalletService {
                 .findAllByProducerProfile_ProducerProfileIdAndActiveTrueOrderByCreatedAtDesc(
                         creator.getProducerProfileId())
                 .stream().map(this::toPayoutAccountResponse).toList();
+    }
+
+    @Transactional
+    public PayoutAccountResponse createBankPayoutAccount(
+            UUID creatorUserId, CreateBankPayoutAccountRequest input) {
+        ProducerProfile creator = requireCreator(creatorUserId);
+        lockUser(creatorUserId);
+        String bankCode = input.bankCode().trim().toUpperCase(Locale.ROOT);
+        String accountNumber = input.accountNumber().trim();
+        String accountHolder = input.accountHolderName().trim().replaceAll("\\s+", " ")
+                .toUpperCase(Locale.ROOT);
+        String reference = bankCode + ":" + accountNumber;
+        if (payoutAccountRepository.existsByAccountReference(reference)) {
+            throw new WalletWorkflowException("Tài khoản ngân hàng này đã được khai báo.");
+        }
+
+        CreatorPayoutAccount account = new CreatorPayoutAccount();
+        account.setProducerProfile(creator);
+        account.setPayoutMethod("BANK_TRANSFER");
+        account.setAccountReference(reference);
+        account.setAccountMasked(bankCode + " · " + accountHolder + " · ****"
+                + accountNumber.substring(Math.max(0, accountNumber.length() - 4)));
+        account.setCurrency("VND");
+        account.setVerified(false);
+        account.setActive(true);
+        return toPayoutAccountResponse(payoutAccountRepository.save(account));
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminPayoutAccountResponse> getCreatorPayoutAccounts(
+            UUID adminUserId, UUID creatorProfileId) {
+        requireAdmin(adminUserId);
+        if (!creatorRepository.existsById(creatorProfileId)) {
+            throw new PodcastWorkflowNotFoundException("Không tìm thấy hồ sơ Creator.");
+        }
+        return payoutAccountRepository
+                .findAllByProducerProfile_ProducerProfileIdOrderByCreatedAtDesc(creatorProfileId)
+                .stream().map(this::toAdminPayoutAccountResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdminPayoutAccountResponse> getAllPayoutAccounts(UUID adminUserId) {
+        requireAdmin(adminUserId);
+        return payoutAccountRepository.findAllByActiveTrueOrderByVerifiedAscCreatedAtDesc()
+                .stream().map(this::toAdminPayoutAccountResponse).toList();
+    }
+
+    @Transactional
+    public PayoutAccountResponse verifyBankPayoutAccount(
+            UUID adminUserId, UUID creatorProfileId, UUID accountId) {
+        requireAdmin(adminUserId);
+        CreatorPayoutAccount account = payoutAccountRepository
+                .findByCreatorPayoutAccountIdAndProducerProfile_ProducerProfileId(accountId, creatorProfileId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException(
+                        "Không tìm thấy tài khoản nhận tiền của Creator."));
+        if (!Boolean.TRUE.equals(account.getActive())) {
+            throw new WalletWorkflowException("Tài khoản nhận tiền không còn hoạt động.");
+        }
+        if (!Boolean.TRUE.equals(account.getVerified())) {
+            account.setVerified(true);
+            account.setVerifiedAt(Instant.now());
+            payoutAccountRepository.save(account);
+        }
+        return toPayoutAccountResponse(account);
     }
 
     @Transactional
@@ -351,6 +429,7 @@ public class CreatorWalletService {
         withdrawal.setProcessedAt(Instant.now());
         walletRepository.save(wallet);
         transactionRepository.save(holdTransaction);
+        walletRealtime.changed(wallet);
         return toWithdrawalResponse(withdrawalRepository.save(withdrawal));
     }
 
@@ -495,6 +574,30 @@ public class CreatorWalletService {
                 account.getCurrency(),
                 Boolean.TRUE.equals(account.getVerified()),
                 Boolean.TRUE.equals(account.getActive()));
+    }
+
+    private AdminPayoutAccountResponse toAdminPayoutAccountResponse(CreatorPayoutAccount account) {
+        ProducerProfile creator = account.getProducerProfile();
+        AppUser user = creator.getUser();
+        return new AdminPayoutAccountResponse(
+                account.getCreatorPayoutAccountId(),
+                creator.getProducerProfileId(),
+                creator.getChannelName(),
+                user.getDisplayName(),
+                user.getEmail(),
+                account.getPayoutMethod(),
+                account.getAccountReference(),
+                account.getAccountMasked(),
+                account.getCurrency(),
+                Boolean.TRUE.equals(account.getVerified()),
+                Boolean.TRUE.equals(account.getActive()));
+    }
+
+    private void requireAdmin(UUID adminUserId) {
+        AppUser admin = userRepository.findById(adminUserId)
+                .orElseThrow(() -> new PodcastWorkflowNotFoundException("Không tìm thấy tài khoản Admin."));
+        requireActive(admin);
+        requireRole(admin, UserRole.ADMIN);
     }
 
     private void requireWalletActive(UserWallet wallet) {

@@ -6,6 +6,8 @@ import static org.mockito.Mockito.*;
 
 import com.prmteam7.podcasthistory.exception.WalletWorkflowException;
 import com.prmteam7.podcasthistory.dto.request.RecordPayoutResultRequest;
+import com.prmteam7.podcasthistory.dto.request.CreateBankPayoutAccountRequest;
+import com.prmteam7.podcasthistory.dto.request.WithdrawalRequestInput;
 import com.prmteam7.podcasthistory.enums.PayoutResult;
 import com.prmteam7.podcasthistory.model.*;
 import com.prmteam7.podcasthistory.repository.*;
@@ -30,8 +32,156 @@ class CreatorWalletTransactionsTest {
     @Mock CreatorPayoutAccountRepository payoutAccounts;
     @Mock WithdrawalRequestRepository withdrawals;
     @Mock WalletTransactionRepository transactions;
+    @Mock WalletTransactionRealtimePublisher walletRealtime;
     @Mock PayoutPaymentRepository payments;
     @InjectMocks CreatorWalletService service;
+
+    @Test
+    void creatorCreatesUnverifiedBankAccountAndCannotWithdrawBeforeAdminVerification() {
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(creators.findByUser_UserId(creator.getUserId())).thenReturn(Optional.of(profile));
+        when(payoutAccounts.save(any(CreatorPayoutAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var created = service.createBankPayoutAccount(creator.getUserId(),
+                new CreateBankPayoutAccountRequest("vcb", "1234567890", "Nguyen Van A"));
+
+        assertFalse(created.verified());
+        assertEquals("VCB · NGUYEN VAN A · ****7890", created.accountMasked());
+        verify(payoutAccounts).save(argThat(account ->
+                "VCB:1234567890".equals(account.getAccountReference())
+                && !Boolean.TRUE.equals(account.getVerified())));
+
+        UserWallet wallet = new UserWallet();
+        wallet.setBalance(new BigDecimal("100000"));
+        wallet.setHeldBalance(BigDecimal.ZERO);
+        wallet.setCurrency("VND");
+        wallet.setStatus("ACTIVE");
+        CreatorPayoutAccount unverified = new CreatorPayoutAccount();
+        unverified.setActive(true);
+        unverified.setVerified(false);
+        when(wallets.findByUserIdForUpdate(creator.getUserId())).thenReturn(Optional.of(wallet));
+        UUID accountId = UUID.randomUUID();
+        when(payoutAccounts.findByCreatorPayoutAccountIdAndProducerProfile_ProducerProfileId(
+                accountId, profile.getProducerProfileId())).thenReturn(Optional.of(unverified));
+
+        assertThrows(WalletWorkflowException.class,
+                () -> service.requestWithdrawal(creator.getUserId(),
+                        new WithdrawalRequestInput(new BigDecimal("40000"), accountId)));
+        assertEquals(new BigDecimal("100000"), wallet.getBalance());
+        verifyNoInteractions(withdrawals, transactions);
+    }
+
+    @Test
+    void verifiedBankWithdrawalMovesAvailableMoneyToHeldExactlyOnce() {
+        AppUser creator = user("CREATOR");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setUser(creator);
+        UserWallet wallet = new UserWallet();
+        wallet.setBalance(new BigDecimal("100000"));
+        wallet.setHeldBalance(BigDecimal.ZERO);
+        wallet.setCurrency("VND");
+        wallet.setStatus("ACTIVE");
+        CreatorPayoutAccount account = new CreatorPayoutAccount();
+        account.setActive(true);
+        account.setVerified(true);
+        account.setCurrency("VND");
+        account.setPayoutMethod("BANK_TRANSFER");
+        account.setAccountMasked("VCB · ****7890");
+        account.setAccountReference("VCB:1234567890");
+        UUID accountId = UUID.randomUUID();
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(users.findByIdForUpdate(creator.getUserId())).thenReturn(Optional.of(creator));
+        when(creators.findByUser_UserId(creator.getUserId())).thenReturn(Optional.of(profile));
+        when(wallets.findByUserIdForUpdate(creator.getUserId())).thenReturn(Optional.of(wallet));
+        when(payoutAccounts.findByCreatorPayoutAccountIdAndProducerProfile_ProducerProfileId(
+                accountId, profile.getProducerProfileId())).thenReturn(Optional.of(account));
+        when(withdrawals.save(any(WithdrawalRequest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.requestWithdrawal(creator.getUserId(),
+                new WithdrawalRequestInput(new BigDecimal("40000"), accountId));
+
+        assertEquals("PENDING", result.status());
+        assertEquals(new BigDecimal("60000"), wallet.getBalance());
+        assertEquals(new BigDecimal("40000"), wallet.getHeldBalance());
+        verify(transactions, times(1)).save(argThat(tx ->
+                "WITHDRAWAL_HOLD".equals(tx.getTransactionType())
+                && tx.getBalanceAfter().compareTo(new BigDecimal("60000")) == 0));
+        verify(walletRealtime).changed(wallet);
+    }
+
+    @Test
+    void adminVerificationEnablesOnlyTheCreatorsOwnActiveBankAccount() {
+        AppUser admin = user("ADMIN");
+        UUID creatorProfileId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        CreatorPayoutAccount account = new CreatorPayoutAccount();
+        account.setActive(true);
+        account.setVerified(false);
+        account.setAccountMasked("VCB · ****7890");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(creatorProfileId);
+        account.setProducerProfile(profile);
+        when(users.findById(admin.getUserId())).thenReturn(Optional.of(admin));
+        when(payoutAccounts.findByCreatorPayoutAccountIdAndProducerProfile_ProducerProfileId(
+                accountId, creatorProfileId)).thenReturn(Optional.of(account));
+
+        var result = service.verifyBankPayoutAccount(admin.getUserId(), creatorProfileId, accountId);
+
+        assertTrue(result.verified());
+        assertNotNull(account.getVerifiedAt());
+        verify(payoutAccounts).save(account);
+        verify(payoutAccounts, never()).findById(any());
+    }
+
+    @Test
+    void adminListsCreatorDeclaredAccountsWithOwnerDetails() {
+        AppUser admin = user("ADMIN");
+        AppUser creator = user("CREATOR");
+        creator.setDisplayName("Nguyễn An");
+        creator.setEmail("an@example.com");
+        ProducerProfile profile = new ProducerProfile();
+        profile.setProducerProfileId(UUID.randomUUID());
+        profile.setChannelName("Kênh Lịch sử");
+        profile.setUser(creator);
+        CreatorPayoutAccount account = new CreatorPayoutAccount();
+        account.setCreatorPayoutAccountId(UUID.randomUUID());
+        account.setProducerProfile(profile);
+        account.setPayoutMethod("BANK_TRANSFER");
+        account.setAccountReference("VCB:1234567890");
+        account.setAccountMasked("VCB · NGUYEN AN · ****7890");
+        account.setCurrency("VND");
+        account.setVerified(false);
+        account.setActive(true);
+        when(users.findById(admin.getUserId())).thenReturn(Optional.of(admin));
+        when(payoutAccounts.findAllByActiveTrueOrderByVerifiedAscCreatedAtDesc())
+                .thenReturn(List.of(account));
+
+        var listed = service.getAllPayoutAccounts(admin.getUserId());
+
+        assertEquals(1, listed.size());
+        assertEquals("Kênh Lịch sử", listed.get(0).channelName());
+        assertEquals("Nguyễn An", listed.get(0).creatorName());
+        assertEquals("an@example.com", listed.get(0).creatorEmail());
+        assertEquals("VCB:1234567890", listed.get(0).accountReference());
+        assertFalse(listed.get(0).verified());
+    }
+
+    @Test
+    void creatorCannotReadAllPayoutAccounts() {
+        AppUser creator = user("CREATOR");
+        when(users.findById(creator.getUserId())).thenReturn(Optional.of(creator));
+
+        assertThrows(WalletWorkflowException.class,
+                () -> service.getAllPayoutAccounts(creator.getUserId()));
+
+        verifyNoInteractions(payoutAccounts);
+    }
 
     @Test
     void creatorSeesOwnContractCreditWithPaginationAndStatusFilter() {

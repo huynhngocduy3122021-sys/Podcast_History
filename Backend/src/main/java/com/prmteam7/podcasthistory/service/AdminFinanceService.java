@@ -31,6 +31,7 @@ public class AdminFinanceService {
   private final PackageFeatures packageFeatures;
   private final AudienceNotificationService audienceNotifications;
   private final MembershipRevenueService membershipRevenueService;
+  private final WalletTransactionRealtimePublisher walletRealtime;
 
   public AdminFinanceService(
       AdminSupportService support,
@@ -45,7 +46,8 @@ public class AdminFinanceService {
       ContractRepository contracts,
       PackageFeatures packageFeatures,
       AudienceNotificationService audienceNotifications,
-      MembershipRevenueService membershipRevenueService) {
+      MembershipRevenueService membershipRevenueService,
+      WalletTransactionRealtimePublisher walletRealtime) {
     this.support = support;
     this.withdrawals = withdrawals;
     this.reviews = reviews;
@@ -59,6 +61,7 @@ public class AdminFinanceService {
     this.packageFeatures = packageFeatures;
     this.audienceNotifications = audienceNotifications;
     this.membershipRevenueService = membershipRevenueService;
+    this.walletRealtime = walletRealtime;
   }
 
   public Page<WithdrawalItem> withdrawals(UUID actor, String status, int page, int size) {
@@ -126,6 +129,7 @@ public class AdminFinanceService {
     tx.setBalanceAfter(wallet.getBalance());
     tx.setReferenceCode("WITHDRAWAL:" + id);
     transactions.save(tx);
+    walletRealtime.changed(wallet);
     w.setFundsReserved(true);
     w.setStatus("PROCESSING");
     w.setNote(body.note());
@@ -163,6 +167,7 @@ public class AdminFinanceService {
     tx.setStatus("COMPLETED");
     tx.setReferenceCode(reference);
     tx.setBalanceAfter(wallet.getBalance());
+    walletRealtime.changed(wallet);
     w.setFundsReserved(false);
     w.setPayoutReference(reference);
     w.setStatus("COMPLETED");
@@ -183,6 +188,7 @@ public class AdminFinanceService {
     wallet.setBalance(wallet.getBalance().add(w.getAmount()));
     tx.setStatus("FAILED");
     tx.setBalanceAfter(wallet.getBalance());
+    walletRealtime.changed(wallet);
     w.setFundsReserved(false);
     w.setStatus("FAILED");
     w.setProcessedAt(Instant.now());
