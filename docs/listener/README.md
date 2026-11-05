@@ -75,7 +75,7 @@ Like comment chỉ áp dụng cho bình luận còn hiển thị của podcast �
 
 | Tác vụ | API | Body/query |
 |---|---|---|
-| Báo cáo podcast/comment/livestream | `POST /api/reports` | `targetType`: `PODCAST`, `COMMENT` hoặc `LIVESTREAM`; `targetId` UUID; `reasonCode` không rỗng ≤50; `description` tùy chọn ≤5.000 |
+| Báo cáo podcast/comment | `POST /api/reports` | `targetType`: `PODCAST` hoặc `COMMENT`; `targetId` UUID; `reasonCode` không rỗng ≤50; `description` tùy chọn ≤5.000 |
 | Lịch sử báo cáo | `GET /api/me/reports?page=0&size=20` | Không |
 | Sửa/rút báo cáo PENDING | `PATCH /api/me/reports/{reportId}` body `reasonCode`, `description`; `DELETE` cùng URL | Chỉ sửa/rút khi chưa xử lý |
 | Nguồn podcast | `GET /api/podcasts/{podcastId}/references` | Lấy `referenceId` |
