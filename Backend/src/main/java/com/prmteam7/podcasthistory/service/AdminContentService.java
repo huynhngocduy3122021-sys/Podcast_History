@@ -2,6 +2,8 @@ package com.prmteam7.podcasthistory.service;
 
 import com.prmteam7.podcasthistory.dto.request.AdminRequests.*;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
+import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.AgoraJoin;
+import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.Item;
 import com.prmteam7.podcasthistory.enums.*;
 import com.prmteam7.podcasthistory.exception.*;
 import com.prmteam7.podcasthistory.model.*;
@@ -21,6 +23,10 @@ public class AdminContentService {
   private final CommentRepository comments;
   private final ModerationReviewRepository reviews;
   private final PodcastAppealRepository appeals;
+  private final LivestreamRepository livestreams;
+  private final ProducerProfileRepository creators;
+  private final AgoraRtcTokenService agora;
+  private final RealtimeEventPublisher realtime;
 
   public AdminContentService(
       AdminSupportService support,
@@ -28,13 +34,21 @@ public class AdminContentService {
       PodcastRepository podcasts,
       CommentRepository comments,
       ModerationReviewRepository reviews,
-      PodcastAppealRepository appeals) {
+      PodcastAppealRepository appeals,
+      LivestreamRepository livestreams,
+      ProducerProfileRepository creators,
+      AgoraRtcTokenService agora,
+      RealtimeEventPublisher realtime) {
     this.support = support;
     this.reports = reports;
     this.podcasts = podcasts;
     this.comments = comments;
     this.reviews = reviews;
     this.appeals = appeals;
+    this.livestreams = livestreams;
+    this.creators = creators;
+    this.agora = agora;
+    this.realtime = realtime;
   }
 
   public Page<ReportItem> listReports(UUID actor, String status, int page, int size) {
@@ -51,6 +65,30 @@ public class AdminContentService {
             .findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy report.")),
         true);
+  }
+
+  public AgoraJoin joinReportedLivestream(UUID actor, UUID reportId) {
+    support.actor(actor, false);
+    Report report = reports.findById(reportId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy report."));
+    Livestream live = report.getLivestream();
+    if (live == null) throw new ResourceConflictException("Báo cáo này không thuộc livestream.");
+    if (!"LIVE".equalsIgnoreCase(live.getStatus()))
+      throw new ResourceConflictException("Livestream đã kết thúc.");
+    return agora.issue(live, actor, false);
+  }
+
+  public Item reportedLivestream(UUID actor, UUID reportId) {
+    support.actor(actor, false);
+    Report report = reports.findById(reportId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy report."));
+    Livestream live = report.getLivestream();
+    if (live == null) throw new ResourceConflictException("Báo cáo này không thuộc livestream.");
+    ProducerProfile creator = live.getProducerProfile();
+    return new Item(live.getLivestreamId(), creator.getProducerProfileId(),
+        creator.getChannelName(), live.getTitle(), live.getDescription(),
+        live.getStatus(), live.getScheduledAt(), live.getStartedAt(),
+        live.getEndedAt(), live.getCreatedAt(), live.getUpdatedAt());
   }
 
   @Transactional
@@ -78,6 +116,8 @@ public class AdminContentService {
         && !reviewer.getRole().getRoleCode().equals("ADMIN"))
       throw new ResourceConflictException("Report thuộc người xử lý khác.");
     report.setAssignedTo(reviewer);
+    if (request.action() == ReportAction.STOP_LIVESTREAM && report.getLivestream() == null)
+      throw new ResourceConflictException("Hành động này chỉ áp dụng cho báo cáo livestream.");
     if (request.action() != ReportAction.DISMISS) {
       if (report.getPodcast() != null) {
         Podcast podcast = lockPodcast(report.getPodcast().getPodcastId());
@@ -100,8 +140,30 @@ public class AdminContentService {
         recordReview(reviewer, null, report, request.action().name(), request.note());
         support.notify(
             comment.getUser(), "COMMENT_MODERATION", "Bình luận bị xử lý", request.note());
-      } else
-        throw new ResourceConflictException("Chưa hỗ trợ xử lý nội dung livestream qua API này.");
+      } else if (report.getLivestream() != null
+          && request.action() == ReportAction.STOP_LIVESTREAM) {
+        Livestream reportedLive = report.getLivestream();
+        UUID creatorId = reportedLive.getProducerProfile().getProducerProfileId();
+        creators.findByIdForUpdate(creatorId)
+            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy kênh Creator."));
+        Livestream live = livestreams.lockById(reportedLive.getLivestreamId())
+            .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy livestream."));
+        if (!"LIVE".equalsIgnoreCase(live.getStatus()))
+          throw new ResourceConflictException("Livestream đã kết thúc; không thể xác nhận vi phạm lần nữa.");
+        long warningCount = reports.countStoppedLivestreamsByCreator(creatorId) + 1;
+        live.setStatus("ENDED");
+        live.setEndedAt(Instant.now());
+        recordReview(reviewer, null, report, request.action().name(), request.note());
+        realtime.publishTopic("/topic/livestreams", "LIVESTREAM_UPDATED",
+            Map.of("livestreamId", live.getLivestreamId(), "status", "ENDED"));
+        support.notify(live.getUser(), "LIVESTREAM_MODERATION",
+            warningCount > 3 ? "Kênh bị cấm livestream" : "Cảnh báo livestream",
+            "Buổi phát đã bị tắt do vi phạm. Số lần vi phạm: " + warningCount
+                + (warningCount > 3 ? ". Kênh không thể bắt đầu livestream mới." : "/3.")
+                + " Lý do: " + request.note());
+      } else {
+        throw new ResourceConflictException("Hành động không áp dụng cho đối tượng báo cáo này.");
+      }
     } else recordReview(reviewer, null, report, "DISMISS", request.note());
     report.setStatus(request.action() == ReportAction.DISMISS ? "DISMISSED" : "RESOLVED");
     report.setResolvedAt(Instant.now());

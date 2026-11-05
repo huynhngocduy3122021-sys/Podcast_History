@@ -55,7 +55,8 @@ class LivestreamNotificationTest {
     RealtimeEventPublisher realtime = mock(RealtimeEventPublisher.class);
     AudienceNotificationService audience = mock(AudienceNotificationService.class);
     LivestreamService service = new LivestreamService(livestreams, creators,
-        mock(AppUserRepository.class), agora, mock(AgoraChatTokenService.class), realtime, audience);
+        mock(AppUserRepository.class), agora, mock(AgoraChatTokenService.class), realtime, audience,
+        mock(ReportRepository.class));
     Livestream live = live();
     live.setStatus("DRAFT");
     AppUser creator = live.getProducerProfile().getUser();
