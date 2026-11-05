@@ -10,7 +10,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:podcast_history/core/network/api_client.dart' show ApiException;
 import 'package:podcast_history/core/theme/app_colors.dart';
 import 'package:podcast_history/core/theme/app_spacing.dart';
-import 'package:podcast_history/core/utils/image_url_helper.dart' show resolveImageUrl;
+import 'package:podcast_history/core/utils/image_url_helper.dart'
+    show resolveImageUrl;
 import 'package:podcast_history/core/widgets/app_button.dart';
 import 'package:podcast_history/core/widgets/app_text_field.dart';
 import 'package:podcast_history/core/widgets/status_chip.dart';
@@ -51,6 +52,8 @@ class _CreatorLivestreamScreenState
 
   // Timer & Stats
   Timer? _durationTimer;
+  Timer? _statusTimer;
+  bool _checkingStatus = false;
   int _liveSeconds = 0;
 
   // Form Controllers
@@ -72,6 +75,7 @@ class _CreatorLivestreamScreenState
   @override
   void dispose() {
     _durationTimer?.cancel();
+    _statusTimer?.cancel();
     _titleController.dispose();
     _descController.dispose();
     _disposeAgoraEngine();
@@ -183,6 +187,8 @@ class _CreatorLivestreamScreenState
 
   Future<void> _disposeAgoraEngine() async {
     _stopDurationTimer();
+    _statusTimer?.cancel();
+    _statusTimer = null;
     if (_videoViewController != null) {
       try {
         await _videoViewController!.dispose();
@@ -280,6 +286,7 @@ class _CreatorLivestreamScreenState
         _isLive = true;
         _isLoading = false;
       });
+      _startStatusTimer();
     } catch (e) {
       await _disposeAgoraEngine();
       setState(() => _isLoading = false);
@@ -320,6 +327,7 @@ class _CreatorLivestreamScreenState
         _isLive = true;
         _isLoading = false;
       });
+      _startStatusTimer();
     } catch (e) {
       await _disposeAgoraEngine();
       setState(() => _isLoading = false);
@@ -522,6 +530,49 @@ class _CreatorLivestreamScreenState
     });
   }
 
+  void _startStatusTimer() {
+    _statusTimer?.cancel();
+    _statusTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      unawaited(_checkActiveLiveStatus());
+    });
+  }
+
+  Future<void> _checkActiveLiveStatus() async {
+    final id = _activeLivestreamId;
+    if (id == null || !_isLive || _isLoading || _checkingStatus) return;
+    _checkingStatus = true;
+    try {
+      final live = await ref
+          .read(creatorRepositoryProvider)
+          .getLivestreamById(id);
+      if (!mounted || id != _activeLivestreamId || _isLoading || live.isLive) {
+        return;
+      }
+      await _disposeAgoraEngine();
+      if (!mounted) return;
+      setState(() {
+        _isLive = false;
+        _activeLivestreamId = null;
+        _activeChannelName = null;
+        _activeTitle = null;
+        _connectionStatus = 'Đã kết thúc trên máy chủ';
+      });
+      unawaited(
+        ref.read(creatorLivestreamsProvider.notifier).loadLivestreams(),
+      );
+      ScaffoldMessenger.of(context).showTopSnackBar(
+        const SnackBar(
+          content: Text('Livestream đã được kết thúc trên máy chủ.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } catch (error) {
+      debugPrint('Không kiểm tra được trạng thái livestream: $error');
+    } finally {
+      _checkingStatus = false;
+    }
+  }
+
   void _stopDurationTimer() {
     _durationTimer?.cancel();
     _durationTimer = null;
@@ -589,121 +640,127 @@ class _CreatorLivestreamScreenState
           ? null
           : AppBar(
               title: const Text('Livestream Studio'),
-        actions: [
-          // Nút Series
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SeriesManagementScreen(),
-                  ),
-                ),
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
+              actions: [
+                // Nút Series
+                Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
+                    vertical: 10,
+                    horizontal: 4,
                   ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.surfaceVariantDark
-                        : const Color(0xFFF3ECE4),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isDark
-                          ? AppColors.outlineDark
-                          : const Color(0xFFDFD4C8),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.video_collection_rounded,
-                        size: 15,
-                        color: isDark
-                            ? AppColors.primaryDark
-                            : AppColors.primaryLight,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Series',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isDark
-                              ? AppColors.onSurfaceDark
-                              : AppColors.onSurfaceLight,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const SeriesManagementScreen(),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // Nút Ví tiền
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const WalletScreen())),
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? AppColors.surfaceVariantDark
-                        : const Color(0xFFF3ECE4),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isDark
-                          ? AppColors.outlineDark
-                          : const Color(0xFFDFD4C8),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.account_balance_wallet_rounded,
-                        size: 15,
-                        color: isDark
-                            ? AppColors.primaryDark
-                            : AppColors.primaryLight,
-                      ),
-                      const SizedBox(width: 5),
-                      Text(
-                        wallet != null
-                            ? '${(wallet.available / 1000).toStringAsFixed(0)}k đ'
-                            : 'Ví tiền',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
                           color: isDark
-                              ? AppColors.onSurfaceDark
-                              : AppColors.onSurfaceLight,
+                              ? AppColors.surfaceVariantDark
+                              : const Color(0xFFF3ECE4),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark
+                                ? AppColors.outlineDark
+                                : const Color(0xFFDFD4C8),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.video_collection_rounded,
+                              size: 15,
+                              color: isDark
+                                  ? AppColors.primaryDark
+                                  : AppColors.primaryLight,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              'Series',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? AppColors.onSurfaceDark
+                                    : AppColors.onSurfaceLight,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                // Nút Ví tiền
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 10,
+                    horizontal: 4,
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const WalletScreen()),
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppColors.surfaceVariantDark
+                              : const Color(0xFFF3ECE4),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isDark
+                                ? AppColors.outlineDark
+                                : const Color(0xFFDFD4C8),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.account_balance_wallet_rounded,
+                              size: 15,
+                              color: isDark
+                                  ? AppColors.primaryDark
+                                  : AppColors.primaryLight,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              wallet != null
+                                  ? '${(wallet.available / 1000).toStringAsFixed(0)}k đ'
+                                  : 'Ví tiền',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? AppColors.onSurfaceDark
+                                    : AppColors.onSurfaceLight,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const CreatorNotificationButton(),
+                const SizedBox(width: AppSpacing.sm),
+              ],
             ),
-          ),
-          const CreatorNotificationButton(),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-      ),
       body: _isLive
           ? _buildLiveBroadcastingView(isDark)
           : _buildStudioSetupView(isDark),
@@ -871,107 +928,104 @@ class _CreatorLivestreamScreenState
                       ? 'Kênh: $_activeChannelName • $_connectionStatus'
                       : _connectionStatus,
                   child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: Colors.white24,
-                      width: 0.8,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Colors.white24, width: 0.8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: AppColors.primaryLight,
+                          backgroundImage:
+                              (avatarUrl != null && avatarUrl.trim().isNotEmpty)
+                              ? NetworkImage(resolveImageUrl(avatarUrl))
+                              : null,
+                          child: (avatarUrl == null || avatarUrl.trim().isEmpty)
+                              ? const Icon(
+                                  Icons.person,
+                                  size: 18,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                        const SizedBox(width: 8),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 150),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                displayName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 1.5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE53935),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text(
+                                      'LIVE',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    _formatDuration(_liveSeconds),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                  if (_connectionStatus != 'Đang phát sóng' &&
+                                      _connectionStatus != 'Sẵn sàng') ...[
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '• $_connectionStatus',
+                                      style: const TextStyle(
+                                        color: Colors.white60,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: AppColors.primaryLight,
-                        backgroundImage: (avatarUrl != null &&
-                                avatarUrl.trim().isNotEmpty)
-                            ? NetworkImage(resolveImageUrl(avatarUrl))
-                            : null,
-                        child: (avatarUrl == null || avatarUrl.trim().isEmpty)
-                            ? const Icon(
-                                Icons.person,
-                                size: 18,
-                                color: Colors.white,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 8),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 150),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              displayName,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1.5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE53935),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: const Text(
-                                    'LIVE',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 0.4,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  _formatDuration(_liveSeconds),
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                                if (_connectionStatus != 'Đang phát sóng' &&
-                                    _connectionStatus != 'Sẵn sàng') ...[
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '• $_connectionStatus',
-                                    style: const TextStyle(
-                                      color: Colors.white60,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                  ),
                 ),
-              ),
 
                 const Spacer(),
 
@@ -993,10 +1047,7 @@ class _CreatorLivestreamScreenState
                       decoration: BoxDecoration(
                         color: Colors.black.withValues(alpha: 0.45),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: Colors.white24,
-                          width: 0.8,
-                        ),
+                        border: Border.all(color: Colors.white24, width: 0.8),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
@@ -1035,10 +1086,7 @@ class _CreatorLivestreamScreenState
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.black.withValues(alpha: 0.45),
-                        border: Border.all(
-                          color: Colors.white24,
-                          width: 0.8,
-                        ),
+                        border: Border.all(color: Colors.white24, width: 0.8),
                       ),
                       child: const Icon(
                         Icons.close_rounded,
@@ -1077,11 +1125,7 @@ class _CreatorLivestreamScreenState
               ),
             )
           else
-            Positioned(
-              right: 12,
-              bottom: 12,
-              child: controlButtons,
-            ),
+            Positioned(right: 12, bottom: 12, child: controlButtons),
 
           // 6. Loading overlay if busy
           if (_isLoading)

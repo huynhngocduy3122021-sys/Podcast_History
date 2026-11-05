@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import axios, { AxiosError } from 'axios'
 import { createModerationApi } from '../src/lib/moderation-api.ts'
 import { confirmedNoContent } from '../src/lib/api-mutation.ts'
-import { canModeratePodcast, canResolveAppeal, isPodcastReportTarget, linkExpired, reportActions, reportCacheKeys, sameModerator } from '../src/lib/moderation-rules.ts'
+import { canModeratePodcast, canResolveAppeal, isPodcastReportTarget, linkExpired, reportActions, reportCacheKeys, reportReasonLabel, sameModerator } from '../src/lib/moderation-rules.ts'
 import { moderationNoteSchema, podcastDetailSchema, previewSchema, resolveReportSchema, reviewsPageSchema } from '../src/lib/moderation-contracts.ts'
 
 const podcastId = '11111111-1111-4111-8111-111111111111'
@@ -42,6 +42,8 @@ test('state and role rules keep unsupported actions hidden', () => {
   assert.deepEqual(reportActions('STAFF', reporterId, report), ['DISMISS'])
   assert.deepEqual(reportActions('STAFF', reporterId, report, { ...podcast, status: 'APPROVED' }), ['DISMISS', 'HIDE_CONTENT', 'DELETE_CONTENT'])
   assert.deepEqual(reportActions('STAFF', reporterId, { ...report, targetType: 'LIVESTREAM' }), ['DISMISS'])
+  assert.deepEqual(reportActions('STAFF', reporterId, { ...report, targetType: 'LIVESTREAM' }, undefined, true), ['DISMISS', 'STOP_LIVESTREAM'])
+  assert.equal(reportReasonLabel('FALSE_HISTORY'), 'Thông tin lịch sử sai hoặc xuyên tạc')
   assert.equal(canResolveAppeal('STAFF', appeal, 'ACCEPT', { ...podcast, status: 'HIDDEN' }), true)
   assert.equal(canResolveAppeal('STAFF', appeal, 'ACCEPT', { ...podcast, status: 'APPROVED' }), false)
   assert.equal(canResolveAppeal('STAFF', { ...appeal, status: 'ACCEPTED' }, 'REJECT', podcast), false)
@@ -110,6 +112,18 @@ test('claim validates the confirmed response and preserves 403, 404 and 409 erro
       return true
     })
   }
+})
+
+test('reported livestream endpoints use status and audience token contracts', async () => {
+  const status = transport({ livestreamId: podcastId, title: 'Live lịch sử', status: 'LIVE' })
+  assert.equal((await status.api.reportedLivestream(reporterId)).status, 'LIVE')
+  assert.equal(status.calls[0].url, `/api/admin/reports/${reporterId}/livestream`)
+  const token = transport({ livestreamId: podcastId, appId: 'agora-app', channelName: 'live-channel',
+    userAccount: reporterId, role: 'audience', token: 'short-lived-token', expiresAt: '2026-10-14T10:00:00Z' })
+  assert.equal((await token.api.joinReportedLivestream(reporterId)).role, 'audience')
+  assert.equal(token.calls[0].url, `/api/admin/reports/${reporterId}/livestream/join`)
+  assert.equal(token.calls[0].method, 'post')
+  assert.equal(resolveReportSchema.safeParse({ action: 'STOP_LIVESTREAM', note: 'Đã xem và xác nhận vi phạm' }).success, true)
 })
 
 test('session guard blocks stale moderation success after identity or role changes', () => {

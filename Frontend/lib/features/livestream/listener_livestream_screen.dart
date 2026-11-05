@@ -274,11 +274,12 @@ class _ListenerLivestreamFeedPageState
         (_) => _checkLivestreamStatus(item.livestreamId),
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = e.toString();
         });
+      }
     }
   }
 
@@ -450,6 +451,12 @@ class _ListenerLivestreamFeedPageState
                           label: 'Chat',
                           onTap: () => _showComments(item),
                         ),
+                        const SizedBox(height: 16),
+                        _LiveAction(
+                          icon: Icons.flag_outlined,
+                          label: 'Báo cáo',
+                          onTap: () => _reportLivestream(item),
+                        ),
                       ],
                     ),
                   ),
@@ -512,10 +519,156 @@ class _ListenerLivestreamFeedPageState
 
   void _showComments(ListenerLivestream item) {
     if (item.livestreamId != widget.livestreams[_index].livestreamId ||
-        _chatSessionEnded)
+        _chatSessionEnded) {
       return;
+    }
     setState(() => _chatOpen = true);
   }
+
+  Future<void> _reportLivestream(ListenerLivestream item) async {
+    if (item.livestreamId != widget.livestreams[_index].livestreamId ||
+        _chatSessionEnded) {
+      return;
+    }
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _LivestreamReportSheet(api: widget.api, item: item),
+    );
+    if (!mounted || sent != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Đã gửi báo cáo livestream cho người quản trị.'),
+      ),
+    );
+  }
+}
+
+class _LivestreamReportSheet extends StatefulWidget {
+  const _LivestreamReportSheet({required this.api, required this.item});
+  final ListenerApi api;
+  final ListenerLivestream item;
+
+  @override
+  State<_LivestreamReportSheet> createState() => _LivestreamReportSheetState();
+}
+
+class _LivestreamReportSheetState extends State<_LivestreamReportSheet> {
+  static const _reasons = <String, String>{
+    'FALSE_HISTORY': 'Thông tin lịch sử sai hoặc xuyên tạc',
+    'OFF_TOPIC': 'Nội dung không liên quan',
+    'INAPPROPRIATE_SPEECH': 'Lời nói không phù hợp',
+    'OTHER': 'Khác',
+  };
+  final _description = TextEditingController();
+  String _reasonCode = 'FALSE_HISTORY';
+  bool _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _description.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final description = _description.text.trim();
+    if (description.isEmpty) {
+      setState(
+        () => _error = 'Hãy mô tả lời nói hoặc thời điểm xảy ra để người quản trị kiểm tra.',
+      );
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await widget.api.createReport(
+        targetType: 'LIVESTREAM',
+        targetId: widget.item.livestreamId,
+        reasonCode: _reasonCode,
+        description: description,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Không thể gửi báo cáo: $error');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        8,
+        20,
+        MediaQuery.viewInsetsOf(context).bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Báo cáo livestream',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 6),
+            Text(widget.item.title),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _reasonCode,
+              decoration: const InputDecoration(labelText: 'Lý do báo cáo'),
+              items: _reasons.entries
+                  .map(
+                    (entry) => DropdownMenuItem(
+                      value: entry.key,
+                      child: Text(entry.value),
+                    ),
+                  )
+                  .toList(),
+              onChanged: _sending
+                  ? null
+                  : (value) {
+                      if (value != null) setState(() => _reasonCode = value);
+                    },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _description,
+              enabled: !_sending,
+              minLines: 3,
+              maxLines: 5,
+              maxLength: 5000,
+              decoration: const InputDecoration(
+                labelText: 'Mô tả chi tiết',
+                hintText:
+                    'Nội dung đã nói và thời điểm gần đúng trong buổi live',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            if (_error != null)
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _sending ? null : _submit,
+                child: Text(_sending ? 'Đang gửi…' : 'Gửi báo cáo'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _LiveAction extends StatelessWidget {

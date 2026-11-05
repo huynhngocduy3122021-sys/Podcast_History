@@ -12,9 +12,9 @@ export function canHandleReport(role: unknown, actorId: string | undefined, repo
   return isRole(role) && !!actorId && ['PENDING', 'UNDER_REVIEW'].includes(report.status)
     && (role === 'ADMIN' || !report.assigneeId || report.assigneeId === actorId)
 }
-export function reportActions(role: unknown, actorId: string | undefined, report: Report, podcast?: Podcast): ReportAction[] {
+export function reportActions(role: unknown, actorId: string | undefined, report: Report, podcast?: Podcast, liveReady = false): ReportAction[] {
   if (!canHandleReport(role, actorId, report)) return []
-  if (report.targetType === 'LIVESTREAM') return ['DISMISS']
+  if (report.targetType === 'LIVESTREAM') return liveReady ? ['DISMISS', 'STOP_LIVESTREAM'] : ['DISMISS']
   if (report.targetType === 'PODCAST' && (!podcast || podcast.podcastId !== report.targetId || !['APPROVED', 'PUBLISHED', 'HIDDEN'].includes(podcast.status))) return ['DISMISS']
   return ['DISMISS', 'HIDE_CONTENT', 'DELETE_CONTENT']
 }
@@ -54,7 +54,15 @@ export const podcastStatusLabels = { DRAFT: 'Bản nháp', PENDING_REVIEW: 'Ch�
 export const reportStatusLabels = { PENDING: 'Chờ xử lý', UNDER_REVIEW: 'Đang xử lý', DISMISSED: 'Đã bác bỏ', RESOLVED: 'Đã xử lý' }
 export const appealStatusLabels = { PENDING: 'Chờ xử lý', ACCEPTED: 'Đã chấp nhận', REJECTED: 'Đã từ chối' }
 export const targetLabels = { PODCAST: 'Podcast', COMMENT: 'Bình luận', LIVESTREAM: 'Livestream' }
-export const reportActionLabels = { DISMISS: 'Bác bỏ báo cáo', HIDE_CONTENT: 'Ẩn nội dung', DELETE_CONTENT: 'Gỡ nội dung' }
+const reportReasonLabels: Record<string, string> = {
+  FALSE_HISTORY: 'Thông tin lịch sử sai hoặc xuyên tạc',
+  OFF_TOPIC: 'Nội dung không liên quan',
+  INAPPROPRIATE_SPEECH: 'Lời nói không phù hợp',
+}
+export function reportReasonLabel(code: string | null) {
+  return code ? reportReasonLabels[code] ?? code : 'Không rõ lý do'
+}
+export const reportActionLabels = { DISMISS: 'Bác bỏ báo cáo', HIDE_CONTENT: 'Ẩn nội dung', DELETE_CONTENT: 'Gỡ nội dung', STOP_LIVESTREAM: 'Tắt livestream và cảnh báo kênh' }
 export const podcastActionLabels = { approve: 'Duyệt podcast', reject: 'Từ chối podcast', hide: 'Ẩn podcast', restore: 'Đưa về chờ duyệt', delete: 'Gỡ podcast' }
 export const moderationSuccessMessages = {
   approve: 'Đã duyệt podcast thành công. Podcast chưa được xuất bản.',
@@ -67,6 +75,7 @@ export const moderationSuccessMessages = {
   DISMISS: 'Đã bác bỏ báo cáo vi phạm.',
   HIDE_CONTENT: 'Đã ẩn nội dung và xử lý báo cáo.',
   DELETE_CONTENT: 'Đã gỡ nội dung và xử lý báo cáo.',
+  STOP_LIVESTREAM: 'Đã tắt livestream, lưu cảnh báo và thông báo cho Creator.',
   ACCEPT: 'Đã chấp nhận khiếu nại và chuyển podcast về chờ duyệt.',
   REJECT: 'Đã từ chối khiếu nại.',
 } as const

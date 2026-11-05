@@ -5,7 +5,7 @@ import {
   appealsPageSchema, appealSchema, moderationNoteSchema, optionalModerationNoteSchema, podcastDetailSchema,
   podcastReviewResultSchema, podcastsPageSchema, previewSchema, referenceFileSchema, referenceSchema, reviewsPageSchema,
   reportsPageSchema, reportSchema, resolveAppealSchema, resolveReportSchema, podcastTranscriptSchema, aiModerationPageSchema,
-  aiModerationSchema,
+  aiModerationSchema, reportedLivestreamSchema, reportedLivestreamJoinSchema,
 } from './moderation-contracts.ts'
 import type { AppealDecision, PodcastAction, ReportAction } from './moderation-contracts.ts'
 
@@ -62,6 +62,12 @@ export function createModerationApi(client: Pick<AxiosInstance, 'get' | 'post' |
     },
     async report(id: string, signal?: AbortSignal) {
       return reportSchema.parse((await client.get(`${reports}/${encodeURIComponent(id)}`, { signal })).data)
+    },
+    async reportedLivestream(id: string, signal?: AbortSignal) {
+      return reportedLivestreamSchema.parse((await client.get(`${reports}/${encodeURIComponent(id)}/livestream`, { signal })).data)
+    },
+    async joinReportedLivestream(id: string) {
+      return reportedLivestreamJoinSchema.parse((await client.post(`${reports}/${encodeURIComponent(id)}/livestream/join`)).data)
     },
     claimReport(id: string) {
       return confirmedMutation(() => client.post(`${reports}/${encodeURIComponent(id)}/claim`), reportSchema, 200, data => data.reportId === id && data.status === 'UNDER_REVIEW')

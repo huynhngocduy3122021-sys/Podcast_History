@@ -21,7 +21,9 @@ class AdminContentReportResponseTest {
     ReportRepository reports = mock(ReportRepository.class);
     AdminContentService service = new AdminContentService(
         support, reports, mock(PodcastRepository.class), mock(CommentRepository.class),
-        mock(ModerationReviewRepository.class), mock(PodcastAppealRepository.class));
+        mock(ModerationReviewRepository.class), mock(PodcastAppealRepository.class),
+        mock(LivestreamRepository.class), mock(ProducerProfileRepository.class),
+        mock(AgoraRtcTokenService.class), mock(RealtimeEventPublisher.class));
 
     AppUser reporter = mock(AppUser.class);
     when(reporter.getUserId()).thenReturn(UUID.randomUUID());
