@@ -2,6 +2,8 @@ package com.prmteam7.podcasthistory.controller;
 
 import com.prmteam7.podcasthistory.dto.request.AdminRequests.*;
 import com.prmteam7.podcasthistory.dto.response.AdminResponses.*;
+import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.AgoraJoin;
+import com.prmteam7.podcasthistory.dto.response.LivestreamResponses.Item;
 import com.prmteam7.podcasthistory.service.AdminContentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -47,8 +49,22 @@ public class AdminContentController {
     return service.claim(id(jwt), reportId);
   }
 
+  @PostMapping("/reports/{reportId}/livestream/join")
+  @Operation(summary = "Admin/Staff xem livestream đang bị báo cáo qua Agora token audience")
+  public AgoraJoin joinReportedLivestream(@AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID reportId) {
+    return service.joinReportedLivestream(id(jwt), reportId);
+  }
+
+  @GetMapping("/reports/{reportId}/livestream")
+  @Operation(summary = "Xem trạng thái livestream được báo cáo")
+  public Item reportedLivestream(@AuthenticationPrincipal Jwt jwt,
+      @PathVariable UUID reportId) {
+    return service.reportedLivestream(id(jwt), reportId);
+  }
+
   @PostMapping("/reports/{reportId}/resolve")
-  @Operation(summary = "DISMISS, HIDE_CONTENT hoặc DELETE_CONTENT")
+  @Operation(summary = "DISMISS, HIDE_CONTENT, DELETE_CONTENT hoặc STOP_LIVESTREAM")
   public ReportItem resolve(
       @AuthenticationPrincipal Jwt jwt,
       @PathVariable UUID reportId,

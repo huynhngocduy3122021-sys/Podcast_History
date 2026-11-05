@@ -7,7 +7,7 @@ const nullableText = z.string().nullable()
 export const podcastStatusSchema = z.enum(['DRAFT', 'PENDING_REVIEW', 'APPROVED', 'PUBLISHED', 'REJECTED', 'HIDDEN', 'DELETED'])
 export const reportStatusSchema = z.enum(['PENDING', 'UNDER_REVIEW', 'DISMISSED', 'RESOLVED'])
 export const appealStatusSchema = z.enum(['PENDING', 'ACCEPTED', 'REJECTED'])
-export const reportActionSchema = z.enum(['DISMISS', 'HIDE_CONTENT', 'DELETE_CONTENT'])
+export const reportActionSchema = z.enum(['DISMISS', 'HIDE_CONTENT', 'DELETE_CONTENT', 'STOP_LIVESTREAM'])
 export const appealDecisionSchema = z.enum(['ACCEPT', 'REJECT'])
 export const optionalModerationNoteSchema = z.object({ note: textWithLimit(5000, 'Ghi chú tối đa 5.000 ký tự').trim() })
 export const moderationNoteSchema = z.object({ note: textWithLimit(5000, 'Ghi chú tối đa 5.000 ký tự').trim().min(1, 'Nhập lý do xử lý') })
@@ -64,6 +64,14 @@ export const reportSchema = z.object({
   assigneeId: z.uuid().nullable(), assigneeName: nullableText, createdAt: instant, resolvedAt: instant.nullable(), reviews: z.array(reviewSchema),
 })
 export const reportsPageSchema = pageSchema(reportSchema)
+export const reportedLivestreamSchema = z.object({
+  livestreamId: z.uuid(), title: z.string(), status: z.string(),
+})
+export const reportedLivestreamJoinSchema = z.object({
+  livestreamId: z.uuid(), appId: z.string().min(1), channelName: z.string().min(1),
+  userAccount: z.string().min(1), role: z.literal('audience'), token: z.string().min(1),
+  expiresAt: instant,
+})
 export const appealSchema = z.object({
   appealId: z.uuid(), podcastId: z.uuid(), applicantId: z.uuid(), reason: z.string(),
   status: appealStatusSchema, note: nullableText, reviewerId: z.uuid().nullable(),

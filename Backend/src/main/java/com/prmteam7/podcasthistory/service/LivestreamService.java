@@ -13,6 +13,7 @@ import com.prmteam7.podcasthistory.model.ProducerProfile;
 import com.prmteam7.podcasthistory.repository.AppUserRepository;
 import com.prmteam7.podcasthistory.repository.LivestreamRepository;
 import com.prmteam7.podcasthistory.repository.ProducerProfileRepository;
+import com.prmteam7.podcasthistory.repository.ReportRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,10 +31,12 @@ public class LivestreamService {
   private final AgoraChatTokenService chat;
   private final RealtimeEventPublisher realtime;
   private final AudienceNotificationService audienceNotifications;
+  private final ReportRepository reports;
 
   public LivestreamService(LivestreamRepository livestreams, ProducerProfileRepository creators,
       AppUserRepository users, AgoraRtcTokenService agora, AgoraChatTokenService chat,
-      RealtimeEventPublisher realtime, AudienceNotificationService audienceNotifications) {
+      RealtimeEventPublisher realtime, AudienceNotificationService audienceNotifications,
+      ReportRepository reports) {
     this.livestreams = livestreams;
     this.creators = creators;
     this.users = users;
@@ -41,6 +44,7 @@ public class LivestreamService {
     this.chat = chat;
     this.realtime = realtime;
     this.audienceNotifications = audienceNotifications;
+    this.reports = reports;
   }
 
   @Transactional
@@ -74,6 +78,9 @@ public class LivestreamService {
   public AgoraJoin start(UUID userId, UUID livestreamId) {
     ProducerProfile creator = approvedCreator(userId, true);
     Livestream live = owned(creator, livestreamId);
+    if (reports.countStoppedLivestreamsByCreator(creator.getProducerProfileId()) > 3) {
+      throw new ResourceForbiddenException("Kênh đã bị cấm livestream vì quá 3 lần vi phạm.");
+    }
     if ("LIVE".equals(live.getStatus())) {
       return agora.issue(live, userId, true);
     }
@@ -130,7 +137,19 @@ public class LivestreamService {
 
   @Transactional(readOnly = true)
   public Item visible(UUID livestreamId) {
-    return item(visibleLive(livestreamId));
+    Livestream live = livestreams.findById(livestreamId)
+        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy livestream."));
+    // The viewer polls this endpoint to leave Agora after an Admin stops the stream.
+    if (!"LIVE".equalsIgnoreCase(live.getStatus())
+        && !"ENDED".equalsIgnoreCase(live.getStatus())) {
+      throw new ResourceNotFoundException("Không tìm thấy livestream.");
+    }
+    ProducerProfile creator = live.getProducerProfile();
+    if (!"APPROVED".equalsIgnoreCase(creator.getVerificationStatus())
+        || !Boolean.TRUE.equals(creator.getUser().getIsActive())) {
+      throw new ResourceNotFoundException("Không tìm thấy livestream.");
+    }
+    return item(live);
   }
 
   @Transactional(readOnly = true)

@@ -34,6 +34,7 @@ import com.prmteam7.podcasthistory.model.Comment;
 import com.prmteam7.podcasthistory.model.CommentLike;
 import com.prmteam7.podcasthistory.model.Follow;
 import com.prmteam7.podcasthistory.model.ListeningHistory;
+import com.prmteam7.podcasthistory.model.Livestream;
 import com.prmteam7.podcasthistory.model.MembershipPlan;
 import com.prmteam7.podcasthistory.model.Payment;
 import com.prmteam7.podcasthistory.model.Podcast;
@@ -49,6 +50,7 @@ import com.prmteam7.podcasthistory.repository.CommentRepository;
 import com.prmteam7.podcasthistory.repository.CommentLikeRepository;
 import com.prmteam7.podcasthistory.repository.FollowRepository;
 import com.prmteam7.podcasthistory.repository.ListeningHistoryRepository;
+import com.prmteam7.podcasthistory.repository.LivestreamRepository;
 import com.prmteam7.podcasthistory.repository.MembershipPlanRepository;
 import com.prmteam7.podcasthistory.repository.PaymentRepository;
 import com.prmteam7.podcasthistory.repository.PodcastLikeRepository;
@@ -93,6 +95,7 @@ public class ListenerFlowService {
   private final CommentRepository commentRepository;
   private final CommentLikeRepository commentLikeRepository;
   private final ReportRepository reportRepository;
+  private final LivestreamRepository livestreamRepository;
   private final RequestResponseRepository requestResponseRepository;
   private final FollowRepository followRepository;
   private final SavedPodcastRepository savedPodcastRepository;
@@ -119,6 +122,7 @@ public class ListenerFlowService {
       CommentRepository commentRepository,
       CommentLikeRepository commentLikeRepository,
       ReportRepository reportRepository,
+      LivestreamRepository livestreamRepository,
       RequestResponseRepository requestResponseRepository,
       FollowRepository followRepository,
       SavedPodcastRepository savedPodcastRepository,
@@ -143,6 +147,7 @@ public class ListenerFlowService {
     this.commentRepository = commentRepository;
     this.commentLikeRepository = commentLikeRepository;
     this.reportRepository = reportRepository;
+    this.livestreamRepository = livestreamRepository;
     this.requestResponseRepository = requestResponseRepository;
     this.followRepository = followRepository;
     this.savedPodcastRepository = savedPodcastRepository;
@@ -425,8 +430,17 @@ public class ListenerFlowService {
       report.setPodcast(requirePublishedPodcast(request.targetId()));
     } else if (targetType.equals("COMMENT")) {
       report.setComment(requireComment(request.targetId()));
+    } else if (targetType.equals("LIVESTREAM")) {
+      Livestream live = livestreamRepository.findById(request.targetId())
+          .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy livestream đang phát."));
+      if (!"LIVE".equalsIgnoreCase(live.getStatus())
+          || !"APPROVED".equalsIgnoreCase(live.getProducerProfile().getVerificationStatus())
+          || !Boolean.TRUE.equals(live.getProducerProfile().getUser().getIsActive())) {
+        throw new ResourceNotFoundException("Không tìm thấy livestream đang phát.");
+      }
+      report.setLivestream(live);
     } else {
-      throw new InvalidFlowRequestException("targetType chỉ nhận PODCAST hoặc COMMENT.");
+      throw new InvalidFlowRequestException("targetType chỉ nhận PODCAST, COMMENT hoặc LIVESTREAM.");
     }
     report.setReasonCode(request.reasonCode().trim().toUpperCase(Locale.ROOT));
     report.setDescription(trimToNull(request.description()));
